@@ -124,6 +124,10 @@ CREATE TYPE "subscription_status" AS ENUM (
   'PAST_DUE'
 );
 
+-- HISTORICAL DESIGN REFERENCE ONLY.
+-- Django models and migrations are the executable schema source of truth.
+-- See docs/DEVELOPMENT.md before changing the database schema.
+
 CREATE TABLE "users" (
   "id" uuid PRIMARY KEY,
   "email" varchar(255) UNIQUE NOT NULL,

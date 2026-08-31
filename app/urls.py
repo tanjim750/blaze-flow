@@ -1,7 +1,43 @@
 from django.urls import path
 
-from .views import health_check
+from .views import (
+    current_user,
+    health_check,
+    login_user,
+    logout_user,
+    media_version_detail,
+    media_version_list_create,
+    accept_workspace_invitation,
+    project_detail,
+    project_access_detail,
+    project_access_list_create,
+    project_list_create,
+    register,
+    workspace_invitations,
+    workspace_list_create,
+    workspace_member_detail,
+    workspace_members,
+    workspace_roles,
+    workspace_role_detail,
+)
 
 urlpatterns = [
     path('health/', health_check, name='api-health'),
+    path('auth/register/', register, name='api-register'),
+    path('auth/login/', login_user, name='api-login'),
+    path('auth/logout/', logout_user, name='api-logout'),
+    path('auth/me/', current_user, name='api-current-user'),
+    path('workspaces/', workspace_list_create, name='api-workspaces'),
+    path('workspace-invitations/accept/', accept_workspace_invitation, name='api-workspace-invite-accept'),
+    path('workspaces/<uuid:workspace_id>/roles/', workspace_roles, name='api-workspace-roles'),
+    path('workspaces/<uuid:workspace_id>/roles/<uuid:role_id>/', workspace_role_detail, name='api-workspace-role-detail'),
+    path('workspaces/<uuid:workspace_id>/members/', workspace_members, name='api-workspace-members'),
+    path('workspaces/<uuid:workspace_id>/members/<uuid:membership_id>/', workspace_member_detail, name='api-workspace-member-detail'),
+    path('workspaces/<uuid:workspace_id>/invitations/', workspace_invitations, name='api-workspace-invitations'),
+    path('workspaces/<uuid:workspace_id>/projects/', project_list_create, name='api-projects'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/', project_detail, name='api-project-detail'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/access/', project_access_list_create, name='api-project-access'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/access/<uuid:grant_id>/', project_access_detail, name='api-project-access-detail'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/', media_version_list_create, name='api-media-versions'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/', media_version_detail, name='api-media-version-detail'),
 ]

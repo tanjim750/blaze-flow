@@ -39,7 +39,10 @@ Blaze Flow is currently under active development.
 
 > More technical documentation, architecture details, setup instructions, and API documentation will be added as development progresses.
 
+## Developer documentation
+
+Start with the [developer guide](docs/DEVELOPMENT.md) for setup, architecture, conventions, and the contribution workflow. Delivery decisions and completed foundation work are recorded in the [implementation log](docs/implementation-log.md).
+
 ---
 
 **Blaze Flow** — One workspace for creative work, collaboration, and agency operations.
-

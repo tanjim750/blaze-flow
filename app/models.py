@@ -1,4 +1,11 @@
+import uuid
+
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Lower
+
+from .managers import UserManager
 
 
 class UserStatus(models.TextChoices):
@@ -127,34 +134,41 @@ class SubscriptionStatus(models.TextChoices):
     PAST_DUE = 'PAST_DUE'
 
 
-class User(models.Model):
-    id = models.UUIDField(primary_key=True)
-    email = models.CharField(max_length=255, unique=True)
+class User(AbstractBaseUser, PermissionsMixin):
+    """The single identity used by the domain and Django authentication."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email = models.EmailField(max_length=255, unique=True)
     first_name = models.CharField(max_length=150)
     last_name = models.CharField(max_length=150)
     avatar_url = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=UserStatus.choices, default=UserStatus.ACTIVE)
     email_verified_at = models.DateTimeField(null=True, blank=True)
     timezone = models.CharField(max_length=100, null=True, blank=True)
-    last_login_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
+    is_staff = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = UserManager()
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['first_name', 'last_name']
+
+    @property
+    def is_active(self):
+        return self.status == UserStatus.ACTIVE
+
+    def get_full_name(self):
+        return f'{self.first_name} {self.last_name}'.strip()
+
+    def get_short_name(self):
+        return self.first_name
 
     class Meta:
         db_table = 'users'
-
-
-class PasswordCredential(models.Model):
-    id = models.UUIDField(primary_key=True)
-    user = models.OneToOneField(User, on_delete=models.DO_NOTHING, db_column='user_id', related_name='+')
-    password_hash = models.CharField(max_length=255)
-    password_set_at = models.DateTimeField()
-    password_changed_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
-
-    class Meta:
-        db_table = 'password_credentials'
+        constraints = [
+            models.UniqueConstraint(Lower('email'), name='users_email_case_insensitive_uniq')
+        ]
 
 
 class OAuthIdentity(models.Model):
@@ -297,6 +311,7 @@ class Role(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
     name = models.CharField(max_length=100)
     description = models.TextField(null=True, blank=True)
+    is_system = models.BooleanField(default=False)
     status = models.CharField(max_length=20, choices=RoleStatus.choices, default=RoleStatus.ACTIVE)
     created_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='created_by_user_id', related_name='+')
     created_at = models.DateTimeField()
@@ -304,7 +319,14 @@ class Role(models.Model):
 
     class Meta:
         db_table = 'roles'
-        constraints = [models.UniqueConstraint(fields=['workspace', 'name'], name='roles_workspace_name_uniq')]
+        constraints = [
+            models.UniqueConstraint(fields=['workspace', 'name'], name='roles_workspace_name_uniq'),
+            models.UniqueConstraint(
+                models.F('workspace'),
+                Lower('name'),
+                name='roles_workspace_name_case_insensitive_uniq',
+            ),
+        ]
 
 
 class RolePermission(models.Model):
@@ -367,12 +389,119 @@ class WorkspaceMembership(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['workspace', 'user'], name='workspace_memberships_workspace_user_uniq'),
             models.UniqueConstraint(fields=['workspace', 'client_team'], name='workspace_memberships_workspace_client_team_uniq'),
+            models.CheckConstraint(
+                check=(
+                    models.Q(
+                        principal_type=WorkspacePrincipalType.USER,
+                        user__isnull=False,
+                        client_team__isnull=True,
+                    )
+                    | models.Q(
+                        principal_type=WorkspacePrincipalType.CLIENT_TEAM,
+                        user__isnull=True,
+                        client_team__isnull=False,
+                    )
+                ),
+                name='workspace_memberships_principal_matches_type',
+            ),
+            models.CheckConstraint(
+                check=(
+                    models.Q(is_primary_owner=False)
+                    | models.Q(
+                        principal_type=WorkspacePrincipalType.USER,
+                        user__isnull=False,
+                        client_team__isnull=True,
+                        status=WorkspaceMembershipStatus.ACTIVE,
+                    )
+                ),
+                name='workspace_memberships_owner_is_active_user',
+            ),
+            models.UniqueConstraint(
+                fields=['workspace'],
+                condition=models.Q(
+                    is_primary_owner=True,
+                    status=WorkspaceMembershipStatus.ACTIVE,
+                ),
+                name='workspace_memberships_one_active_owner',
+            ),
         ]
         indexes = [
             models.Index(fields=['workspace']),
             models.Index(fields=['user']),
             models.Index(fields=['client_team']),
         ]
+
+    def clean(self):
+        errors = {}
+        if self.role_id and self.workspace_id and self.role.workspace_id != self.workspace_id:
+            errors['role'] = 'The role must belong to the membership workspace.'
+        if (
+            self.client_team_id
+            and self.workspace_id
+            and self.client_team.workspace_id != self.workspace_id
+        ):
+            errors['client_team'] = 'The client team must belong to the membership workspace.'
+        if errors:
+            raise ValidationError(errors)
+
+
+class WorkspaceInvite(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, related_name='+')
+    email = models.EmailField(max_length=255)
+    role = models.ForeignKey(Role, on_delete=models.DO_NOTHING, related_name='+')
+    project_access_mode = models.CharField(
+        max_length=20,
+        choices=ProjectAccessMode.choices,
+        default=ProjectAccessMode.ALL,
+    )
+    token_hash = models.CharField(max_length=64, unique=True)
+    invited_by_membership = models.ForeignKey(
+        WorkspaceMembership,
+        on_delete=models.DO_NOTHING,
+        related_name='+',
+    )
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_by_user = models.ForeignKey(
+        User,
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'workspace_invites'
+        indexes = [
+            models.Index(fields=['workspace', 'email']),
+            models.Index(fields=['expires_at']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(accepted_at__isnull=True, accepted_by_user__isnull=True)
+                    | models.Q(accepted_at__isnull=False, accepted_by_user__isnull=False)
+                ),
+                name='workspace_invites_acceptance_pair',
+            )
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.role_id and self.workspace_id and self.role.workspace_id != self.workspace_id:
+            errors['role'] = 'The role must belong to the invitation workspace.'
+        if (
+            self.invited_by_membership_id
+            and self.workspace_id
+            and self.invited_by_membership.workspace_id != self.workspace_id
+        ):
+            errors['invited_by_membership'] = 'The inviter must belong to the invitation workspace.'
+        if errors:
+            raise ValidationError(errors)
 
 
 class Project(models.Model):
@@ -409,6 +538,16 @@ class ResourceAccess(models.Model):
         db_table = 'resource_access'
         constraints = [models.UniqueConstraint(fields=['workspace_membership', 'project'], name='resource_access_membership_project_uniq')]
         indexes = [models.Index(fields=['project'])]
+
+    def clean(self):
+        if (
+            self.workspace_membership_id
+            and self.project_id
+            and self.workspace_membership.workspace_id != self.project.workspace_id
+        ):
+            raise ValidationError(
+                {'project': 'The project and membership must belong to the same workspace.'}
+            )
 
 
 class WorkflowStage(models.Model):
@@ -489,12 +628,37 @@ class MediaVersionStageEntry(models.Model):
 
     class Meta:
         db_table = 'media_version_stage_entries'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['media_version'],
+                condition=models.Q(exited_at__isnull=True),
+                name='media_stage_entries_one_open_entry',
+            )
+        ]
         indexes = [
             models.Index(fields=['media_version']),
             models.Index(fields=['workflow_stage']),
             models.Index(fields=['workflow_stage_status']),
             models.Index(fields=['media_version', 'entered_at']),
         ]
+
+    def clean(self):
+        errors = {}
+        project_workspace_id = self.media_version.project.workspace_id if self.media_version_id else None
+        if (
+            self.workflow_stage_id
+            and project_workspace_id
+            and self.workflow_stage.workspace_id != project_workspace_id
+        ):
+            errors['workflow_stage'] = 'The workflow stage must belong to the media workspace.'
+        if (
+            self.workflow_stage_status_id
+            and self.workflow_stage_id
+            and self.workflow_stage_status.workflow_stage_id != self.workflow_stage_id
+        ):
+            errors['workflow_stage_status'] = 'The status must belong to the selected stage.'
+        if errors:
+            raise ValidationError(errors)
 
 
 class ReviewComment(models.Model):
@@ -516,6 +680,15 @@ class ReviewComment(models.Model):
 
     class Meta:
         db_table = 'review_comments'
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(author_user__isnull=False, author_guest_session__isnull=True)
+                    | models.Q(author_user__isnull=True, author_guest_session__isnull=False)
+                ),
+                name='review_comments_exactly_one_author',
+            )
+        ]
         indexes = [
             models.Index(fields=['media_version']),
             models.Index(fields=['parent_comment']),
@@ -578,6 +751,15 @@ class Annotation(models.Model):
 
     class Meta:
         db_table = 'annotations'
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(author_user__isnull=False, author_guest_session__isnull=True)
+                    | models.Q(author_user__isnull=True, author_guest_session__isnull=False)
+                ),
+                name='annotations_exactly_one_author',
+            )
+        ]
         indexes = [
             models.Index(fields=['media_version']),
             models.Index(fields=['review_comment']),
@@ -655,6 +837,21 @@ class Task(models.Model):
             models.Index(fields=['project', 'status']),
         ]
 
+    def clean(self):
+        errors = {}
+        if self.project_id and self.workspace_id and self.project.workspace_id != self.workspace_id:
+            errors['project'] = 'The project must belong to the task workspace.'
+        if (
+            self.created_by_workspace_membership_id
+            and self.workspace_id
+            and self.created_by_workspace_membership.workspace_id != self.workspace_id
+        ):
+            errors['created_by_workspace_membership'] = (
+                'The creator membership must belong to the task workspace.'
+            )
+        if errors:
+            raise ValidationError(errors)
+
 
 class TaskAssignee(models.Model):
     id = models.UUIDField(primary_key=True)
@@ -669,6 +866,16 @@ class TaskAssignee(models.Model):
             models.Index(fields=['task']),
             models.Index(fields=['workspace_membership']),
         ]
+
+    def clean(self):
+        if (
+            self.task_id
+            and self.workspace_membership_id
+            and self.task.workspace_id != self.workspace_membership.workspace_id
+        ):
+            raise ValidationError(
+                {'workspace_membership': 'The assignee must belong to the task workspace.'}
+            )
 
 
 class TaskAttachment(models.Model):
@@ -686,6 +893,16 @@ class TaskAttachment(models.Model):
             models.Index(fields=['file']),
             models.Index(fields=['attached_by_workspace_membership']),
         ]
+
+    def clean(self):
+        if (
+            self.task_id
+            and self.attached_by_workspace_membership_id
+            and self.task.workspace_id != self.attached_by_workspace_membership.workspace_id
+        ):
+            raise ValidationError(
+                {'attached_by_workspace_membership': 'The attaching member must belong to the task workspace.'}
+            )
 
 
 class FileVariant(models.Model):
@@ -736,6 +953,21 @@ class ProjectFolder(models.Model):
             models.Index(fields=['deleted_at']),
         ]
 
+    def clean(self):
+        errors = {}
+        if self.parent_folder_id and self.project_id and self.parent_folder.project_id != self.project_id:
+            errors['parent_folder'] = 'The parent folder must belong to the same project.'
+        if (
+            self.created_by_workspace_membership_id
+            and self.project_id
+            and self.created_by_workspace_membership.workspace_id != self.project.workspace_id
+        ):
+            errors['created_by_workspace_membership'] = (
+                'The creator membership must belong to the project workspace.'
+            )
+        if errors:
+            raise ValidationError(errors)
+
 
 class ProjectFile(models.Model):
     id = models.UUIDField(primary_key=True)
@@ -757,6 +989,21 @@ class ProjectFile(models.Model):
             models.Index(fields=['added_by_workspace_membership']),
             models.Index(fields=['deleted_at']),
         ]
+
+    def clean(self):
+        errors = {}
+        if self.folder_id and self.project_id and self.folder.project_id != self.project_id:
+            errors['folder'] = 'The folder must belong to the same project.'
+        if (
+            self.added_by_workspace_membership_id
+            and self.project_id
+            and self.added_by_workspace_membership.workspace_id != self.project.workspace_id
+        ):
+            errors['added_by_workspace_membership'] = (
+                'The adding membership must belong to the project workspace.'
+            )
+        if errors:
+            raise ValidationError(errors)
 
 
 class ClientTeamMember(models.Model):
@@ -936,6 +1183,15 @@ class UserSubscription(models.Model):
 
     class Meta:
         db_table = 'user_subscriptions'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=models.Q(
+                    status__in=[SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE]
+                ),
+                name='user_subscriptions_one_current',
+            )
+        ]
         indexes = [
             models.Index(fields=['user']),
             models.Index(fields=['provider_subscription_id']),
