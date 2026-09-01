@@ -10,11 +10,13 @@ from app.models import (
     GuestInvite, GuestInvitePermission, GuestReviewAccess,
     GuestReviewAccessPermission, GuestSession,
 )
+from .audit import record_user_audit
 
 
 GUEST_ALLOWED_PERMISSIONS = frozenset({
     'media.read', 'media.download', 'review.comment.read',
-    'review.comment.create', 'annotation.read', 'annotation.create',
+    'review.comment.create', 'review.attachment.create',
+    'annotation.read', 'annotation.create',
 })
 
 
@@ -89,3 +91,43 @@ def authenticate_guest_access(*, project, access_key, permission):
     GuestReviewAccess.objects.filter(id=access.id).update(last_accessed_at=now, updated_at=now)
     GuestSession.objects.filter(id=access.guest_session_id).update(last_seen_at=now, updated_at=now)
     return access
+
+
+@transaction.atomic
+def revoke_guest_invite(*, invite, membership, user):
+    locked = GuestInvite.objects.select_for_update().select_related('project__workspace').get(id=invite.id)
+    if locked.revoked_at is not None:
+        raise GuestAccessError('This guest invitation is already revoked.')
+    now = timezone.now()
+    locked.revoked_at = now
+    locked.revoked_by_workspace_membership = membership
+    locked.updated_at = now
+    locked.save(update_fields=['revoked_at', 'revoked_by_workspace_membership', 'updated_at'])
+    GuestReviewAccess.objects.filter(guest_invite=locked, revoked_at__isnull=True).update(
+        revoked_at=now, revoked_by_workspace_membership=membership, updated_at=now,
+    )
+    record_user_audit(
+        user=user, workspace=locked.project.workspace, action='guest.invite.revoked',
+        entity_type='guest_invite', entity_id=locked.id,
+    )
+    return locked
+
+
+@transaction.atomic
+def revoke_guest_review_access(*, access, membership, user):
+    locked = GuestReviewAccess.objects.select_for_update().select_related(
+        'guest_invite__project__workspace'
+    ).get(id=access.id)
+    if locked.revoked_at is not None:
+        raise GuestAccessError('This guest access is already revoked.')
+    now = timezone.now()
+    locked.revoked_at = now
+    locked.revoked_by_workspace_membership = membership
+    locked.updated_at = now
+    locked.save(update_fields=['revoked_at', 'revoked_by_workspace_membership', 'updated_at'])
+    record_user_audit(
+        user=user, workspace=locked.guest_invite.project.workspace,
+        action='guest.access.revoked', entity_type='guest_review_access',
+        entity_id=locked.id,
+    )
+    return locked

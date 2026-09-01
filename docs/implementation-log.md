@@ -4,6 +4,34 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-01 — Three milestones: guest lifecycle, guest files, and retention cleanup
+
+### Delivered
+
+- Added manager-only guest invite/access listing without exposing stored token hashes.
+- Added audited revocation for one exchanged access or an invite plus all active access derived from it.
+- Added `review.attachment.create` guest scope and guest multipart uploads restricted to comments authored by that exact Guest Session.
+- Routed guest uploads through the existing signature validation, SHA-256, quarantine, malware scan, preview, and private download workflow.
+- Soft deletion now marks generated variants alongside the attachment File.
+- Added bounded, age-gated physical retention cleanup with dry-run, storage-failure reporting, idempotent metadata markers, and an operator command.
+- Updated Postman variables/requests and developer/operator documentation.
+
+### Decisions and boundaries
+
+- Invite revocation is terminal and cascades logically to active derived access. Individual access revocation leaves the invite usable for other reviewers.
+- Guests cannot attach to member comments or another guest session's comments, even when the link grants attachment creation.
+- Physical cleanup preserves database and audit history; only private storage objects are removed. The service targets review attachments, not general project/media files.
+- Cleanup is an explicit scheduled operator action, not web-request work.
+
+### Known limitations
+
+- Guest token rotation, attachment deletion, and guest-authored comment/annotation editing remain unimplemented.
+- Rich decoded thumbnails/waveforms and retention-policy administration remain follow-ups.
+
+### Next recommended milestone
+
+Add decoded image/PDF/audio derivatives, guest token rotation, and production object-storage/scanner adapters.
+
 ## 2026-09-01 — Four milestones: quarantine, previews, guests, and operational alerts
 
 ### Delivered

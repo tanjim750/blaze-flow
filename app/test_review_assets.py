@@ -1,14 +1,19 @@
 import hashlib
+import io
 import shutil
 import tempfile
+from datetime import timedelta
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.files.storage import default_storage
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import Annotation, AnnotationRevision, AuditLog, File, FileSecurityScan, FileVariant, OutboxEvent, ReviewCommentContent
 from .services.outbox import process_outbox_events
+from .services.retention import purge_deleted_review_files
 from .test_access_projects import WorkspaceAccessSetupMixin
 
 
@@ -84,6 +89,39 @@ class ReviewAssetsApiTests(WorkspaceAccessSetupMixin, TestCase):
         attachment = ReviewCommentContent.objects.get(id=content_id)
         self.assertIsNotNone(attachment.deleted_at)
         self.assertIsNotNone(attachment.file.deleted_at)
+
+    def test_retention_dry_run_then_physically_purges_deleted_attachment_and_preview(self):
+        uploaded = self.client.post(
+            self.attachment_upload_url(),
+            {'file': SimpleUploadedFile('old.pdf', b'%PDF-1.7\nold', content_type='application/pdf')},
+            format='multipart',
+        )
+        process_outbox_events()
+        process_outbox_events()
+        attachment = ReviewCommentContent.objects.get(id=uploaded.json()['id'])
+        variant = FileVariant.objects.get(file=attachment.file)
+        detail_url = reverse('api-review-attachment-detail', args=[self.workspace.id, self.project_id, self.media_id, self.comment_id, attachment.id])
+        self.client.delete(detail_url)
+        old = timezone.now() - timedelta(days=31)
+        File.objects.filter(id=attachment.file_id).update(deleted_at=old)
+        ReviewCommentContent.objects.filter(id=attachment.id).update(deleted_at=old)
+        self.assertTrue(default_storage.exists(attachment.file.object_key))
+        self.assertTrue(default_storage.exists(variant.object_key))
+
+        command_output = io.StringIO()
+        call_command('purge_review_files', older_than_days=30, dry_run=True, stdout=command_output)
+        preview = purge_deleted_review_files(older_than_days=30, dry_run=True)
+        purged = purge_deleted_review_files(older_than_days=30)
+
+        self.assertIn('"dry_run": true', command_output.getvalue())
+        self.assertEqual(preview['examined'], 1)
+        self.assertEqual(preview['purged'], 0)
+        self.assertEqual(purged['purged'], 1)
+        self.assertFalse(default_storage.exists(attachment.file.object_key))
+        self.assertFalse(default_storage.exists(variant.object_key))
+        attachment.file.refresh_from_db()
+        self.assertIn('physical_deleted_at', attachment.file.metadata)
+        self.assertEqual(purge_deleted_review_files(older_than_days=30)['examined'], 0)
 
     def test_spoofed_or_oversized_attachment_is_rejected_without_file_row(self):
         initial_files = File.objects.count()

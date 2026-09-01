@@ -39,6 +39,9 @@ In Postman, select **Import**, choose `Postman_Collection.json`, and open the **
 | `guest_invite_token` | Automatic | One-time guest invite token |
 | `guest_access_key` | Automatic | Guest API key sent in `X-Guest-Access-Key` |
 | `guest_comment_id` | Automatic | Comment created by the guest flow |
+| `guest_invite_id` | Automatic | Guest invite used by lifecycle requests |
+| `guest_access_id` | Automatic | Exchanged access selected by List Guest Invites |
+| `guest_attachment_content_id` | Automatic | Attachment uploaded by the guest |
 
 Postman retains Django's `sessionid` and `csrftoken` cookies. Login saves the response's `csrf_token`, and unsafe requests send it through `X-CSRFToken`.
 
@@ -88,7 +91,9 @@ The worker performs scan and preview events in separate batches. With Compose it
 
 ## 4. Guest review flow
 
-While authenticated as the owner, run **Guest Reviews → Create Guest Invite**. Then run **Exchange Guest Invite**, **Open Guest Review**, **Create Guest Comment**, and **Create Guest Annotation**. The exchange and guest endpoints deliberately do not use the owner session or CSRF header; they authenticate with the one-time captured guest access key.
+While authenticated as the owner, run **Guest Reviews → Create Guest Invite**. Then run **Exchange Guest Invite**, **Open Guest Review**, **Create Guest Comment**, **Create Guest Annotation**, and **Upload Guest Attachment**. The exchange and guest endpoints deliberately do not use the owner session or CSRF header; they authenticate with the one-time captured guest access key.
+
+Run the outbox processor twice, then log back in as the owner and run **List Guest Invites and Access**. Run **Revoke Guest Access** or **Revoke Guest Invite** last; the existing guest key must immediately return `403` afterward.
 
 Run **Delete Comment Attachment**, **Delete Annotation**, and **Delete Comment Thread** last, in that order.
 
@@ -198,6 +203,6 @@ The membership must be active, belong to the same workspace, and use `SELECTED` 
 - Access-grant detail supports `DELETE` only.
 - The built-in EICAR-aware scanner is a development contract, not a production malware engine or deep decoder.
 - Local media storage is development-only; production requires private durable object storage.
-- Pagination, guest attachment upload, invite revocation/rotation, and guest-authored editing are not implemented yet.
+- Pagination, guest token rotation, guest attachment deletion, and guest-authored editing are not implemented yet.
 - HTML/localized email, push/WebSocket delivery, and external metrics export are not implemented yet.
-- Decoded thumbnails/waveforms and physical retention cleanup are not implemented yet.
+- Decoded thumbnails/waveforms and a retention-policy administration UI are not implemented yet.

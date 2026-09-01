@@ -6,9 +6,9 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 from django.utils import timezone
 
-from app.models import File, FileSecurityScan, FileStatus, ReviewCommentContent, ReviewCommentContentType
+from app.models import File, FileSecurityScan, FileStatus, FileVariant, ReviewCommentContent, ReviewCommentContentType
 
-from .audit import record_user_audit
+from .audit import record_guest_audit, record_user_audit
 from .media import _storage_backend, detect_media_type, sha256_upload
 from .file_processing import SCAN_TOPIC, enqueue_file_event
 
@@ -45,7 +45,9 @@ def validate_attachment(upload):
     return detected
 
 
-def upload_review_attachment(*, comment, user, upload):
+def upload_review_attachment(*, comment, upload, user=None, guest_session=None):
+    if (user is None) == (guest_session is None):
+        raise ReviewAttachmentError('Exactly one attachment actor is required.')
     mime_type = validate_attachment(upload)
     checksum = sha256_upload(upload)
     clean_name = Path(upload.name).name or 'attachment'
@@ -76,8 +78,10 @@ def upload_review_attachment(*, comment, user, upload):
                     review_comment=comment, deleted_at__isnull=True
                 ).count(), created_at=now, updated_at=now,
             )
-            record_user_audit(
-                user=user, workspace=project.workspace, action='review.attachment.uploaded',
+            audit = record_user_audit if user is not None else record_guest_audit
+            audit(
+                **({'user': user} if user is not None else {'guest_session': guest_session}),
+                workspace=project.workspace, action='review.attachment.uploaded',
                 entity_type='review_comment_content', entity_id=content.id,
                 metadata={'comment_id': str(comment.id), 'file_id': str(file_record.id), 'checksum_sha256': checksum},
             )
@@ -103,6 +107,9 @@ def delete_review_attachment(*, content, user):
     locked.file.deleted_at = now
     locked.file.updated_at = now
     locked.file.save(update_fields=['deleted_at', 'updated_at'])
+    FileVariant.objects.filter(file=locked.file, deleted_at__isnull=True).update(
+        deleted_at=now, updated_at=now,
+    )
     record_user_audit(
         user=user, workspace=locked.review_comment.media_version.project.workspace,
         action='review.attachment.deleted', entity_type='review_comment_content', entity_id=locked.id,

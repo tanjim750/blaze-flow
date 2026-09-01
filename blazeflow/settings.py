@@ -167,6 +167,7 @@ FILE_SECURITY_SCANNER = os.environ.get(
     'FILE_SECURITY_SCANNER', 'app.services.file_processing.EicarAwareScanner'
 )
 OPERATIONS_STALE_MINUTES = int(os.environ.get('OPERATIONS_STALE_MINUTES', '15'))
+REVIEW_FILE_RETENTION_DAYS = int(os.environ.get('REVIEW_FILE_RETENTION_DAYS', '30'))
 if OUTBOX_MAX_ATTEMPTS < 1:
     raise ImproperlyConfigured('OUTBOX_MAX_ATTEMPTS must be at least 1.')
 if OUTBOX_RETRY_BASE_SECONDS < 1:
@@ -175,6 +176,8 @@ if OUTBOX_RETRY_MAX_SECONDS < OUTBOX_RETRY_BASE_SECONDS:
     raise ImproperlyConfigured(
         'OUTBOX_RETRY_MAX_SECONDS must be greater than or equal to OUTBOX_RETRY_BASE_SECONDS.'
     )
+if REVIEW_FILE_RETENTION_DAYS < 1:
+    raise ImproperlyConfigured('REVIEW_FILE_RETENTION_DAYS must be at least 1.')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

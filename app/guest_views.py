@@ -8,17 +8,24 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import (
-    Annotation, FileStatus, FileVariant, GuestInvitePermission, MediaVersion, Project,
+    Annotation, FileStatus, FileVariant, GuestInvite, GuestInvitePermission,
+    GuestReviewAccess, GuestReviewAccessPermission, MediaVersion, Project,
     ReviewComment, ReviewCommentContent,
 )
 from .permissions import REVIEW_COMMENT_MANAGE, active_memberships_for_user, has_project_permission
-from .serializers import AnnotationSerializer, AnnotationWriteSerializer, ReviewCommentCreateSerializer, ReviewCommentSerializer
+from .serializers import (
+    AnnotationSerializer, AnnotationWriteSerializer, ReviewAttachmentSerializer,
+    ReviewAttachmentUploadSerializer, ReviewCommentCreateSerializer,
+    ReviewCommentSerializer,
+)
 from .services.annotations import AnnotationError, create_guest_annotation
 from .services.comments import ReviewCommentError, create_guest_review_comment
 from .services.guest_access import (
     GUEST_ALLOWED_PERMISSIONS, GuestAccessError, authenticate_guest_access,
-    create_guest_invite, exchange_guest_invite,
+    create_guest_invite, exchange_guest_invite, revoke_guest_invite,
+    revoke_guest_review_access,
 )
+from .services.review_assets import ReviewAttachmentError, upload_review_attachment
 
 
 class GuestInviteCreateSerializer(serializers.Serializer):
@@ -47,25 +54,74 @@ def _guest_access(request, project, permission):
         raise PermissionDenied(str(exc)) from exc
 
 
-@api_view(['POST'])
+def _invite_data(invite):
+    accesses = GuestReviewAccess.objects.filter(guest_invite=invite).select_related(
+        'guest_session'
+    ).order_by('created_at')
+    return {
+        'id': str(invite.id), 'project_id': str(invite.project_id), 'label': invite.label,
+        'permissions': list(GuestInvitePermission.objects.filter(guest_invite=invite).values_list('permission_key', flat=True)),
+        'expires_at': invite.expires_at, 'revoked_at': invite.revoked_at,
+        'created_at': invite.created_at,
+        'accesses': [{
+            'id': str(access.id), 'guest_session_id': str(access.guest_session_id),
+            'name': access.guest_session.name, 'email': access.guest_session.email,
+            'permissions': list(GuestReviewAccessPermission.objects.filter(guest_review_access=access).values_list('permission_key', flat=True)),
+            'last_accessed_at': access.last_accessed_at, 'revoked_at': access.revoked_at,
+            'created_at': access.created_at,
+        } for access in accesses],
+    }
+
+
+def _guest_manager(request, project):
+    if not has_project_permission(user=request.user, project=project, permission_key=REVIEW_COMMENT_MANAGE):
+        raise PermissionDenied('You do not have permission to manage guest review links.')
+    return active_memberships_for_user(user=request.user, workspace=project.workspace).first()
+
+
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def project_guest_invites(request, workspace_id, project_id):
     project = get_object_or_404(Project.objects.select_related('workspace'), id=project_id, workspace_id=workspace_id)
-    if not has_project_permission(user=request.user, project=project, permission_key=REVIEW_COMMENT_MANAGE):
-        raise PermissionDenied('You do not have permission to create guest review links.')
-    membership = active_memberships_for_user(user=request.user, workspace=project.workspace).first()
+    membership = _guest_manager(request, project)
+    if request.method == 'GET':
+        invites = GuestInvite.objects.filter(project=project).order_by('-created_at')
+        return Response([_invite_data(invite) for invite in invites])
     serializer = GuestInviteCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     try:
         invite, token = create_guest_invite(project=project, membership=membership, **serializer.validated_data)
     except GuestAccessError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    return Response({
-        'id': str(invite.id), 'project_id': str(project.id), 'label': invite.label,
-        'permissions': list(GuestInvitePermission.objects.filter(guest_invite=invite).values_list('permission_key', flat=True)),
-        'expires_at': invite.expires_at, 'token': token,
-        'warning': 'The token is returned only once. Store and share it securely.',
-    }, status=status.HTTP_201_CREATED)
+    data = _invite_data(invite)
+    data.update({'token': token, 'warning': 'The token is returned only once. Store and share it securely.'})
+    return Response(data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def project_guest_invite_detail(request, workspace_id, project_id, invite_id):
+    project = get_object_or_404(Project.objects.select_related('workspace'), id=project_id, workspace_id=workspace_id)
+    membership = _guest_manager(request, project)
+    invite = get_object_or_404(GuestInvite, id=invite_id, project=project)
+    try:
+        revoke_guest_invite(invite=invite, membership=membership, user=request.user)
+    except GuestAccessError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def project_guest_access_detail(request, workspace_id, project_id, access_id):
+    project = get_object_or_404(Project.objects.select_related('workspace'), id=project_id, workspace_id=workspace_id)
+    membership = _guest_manager(request, project)
+    access = get_object_or_404(GuestReviewAccess, id=access_id, guest_invite__project=project)
+    try:
+        revoke_guest_review_access(access=access, membership=membership, user=request.user)
+    except GuestAccessError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(['POST'])
@@ -146,6 +202,28 @@ def guest_annotations(request, project_id, media_version_id):
     except AnnotationError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(AnnotationSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def guest_attachment_upload(request, project_id, media_version_id, comment_id):
+    project = get_object_or_404(Project, id=project_id)
+    media = get_object_or_404(MediaVersion, id=media_version_id, project=project, status='ACTIVE')
+    access = _guest_access(request, project, 'review.attachment.create')
+    comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media, deleted_at__isnull=True)
+    if comment.author_guest_session_id != access.guest_session_id:
+        raise PermissionDenied('Guests can attach files only to their own comments.')
+    serializer = ReviewAttachmentUploadSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        content = upload_review_attachment(
+            comment=comment, guest_session=access.guest_session,
+            upload=serializer.validated_data['file'],
+        )
+    except ReviewAttachmentError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ReviewAttachmentSerializer(content).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(['GET'])

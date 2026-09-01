@@ -109,6 +109,21 @@
       "key": "guest_comment_id",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "guest_invite_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_access_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_attachment_content_id",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -1498,7 +1513,7 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "if (pm.response.code === 201) { pm.collectionVariables.set(\"guest_invite_token\", pm.response.json().token); }"
+                  "if (pm.response.code === 201) { const data = pm.response.json(); pm.collectionVariables.set(\"guest_invite_token\", data.token); pm.collectionVariables.set(\"guest_invite_id\", data.id); }"
                 ]
               }
             }
@@ -1517,7 +1532,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"label\": \"Client reviewer\",\n  \"permissions\": [\"media.read\", \"media.download\", \"review.comment.read\", \"review.comment.create\", \"annotation.read\", \"annotation.create\"],\n  \"expires_in_hours\": 168\n}"
+              "raw": "{\n  \"label\": \"Client reviewer\",\n  \"permissions\": [\"media.read\", \"media.download\", \"review.comment.read\", \"review.comment.create\", \"review.attachment.create\", \"annotation.read\", \"annotation.create\"],\n  \"expires_in_hours\": 168\n}"
             },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/guest-invites/"
           },
@@ -1616,6 +1631,96 @@
               "raw": "{\n  \"review_comment_id\": \"{{guest_comment_id}}\",\n  \"elements\": [{\"element_type\": \"POINT\", \"geometry\": {\"x\": 0.25, \"y\": 0.4}}]\n}"
             },
             "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/annotations/"
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Guest Attachment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"guest_attachment_content_id\", pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select a PNG, JPEG, GIF, WebP, PDF, WAV, or MP3"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/{{guest_comment_id}}/attachments/",
+            "description": "Uploads to the guest own comment and enters quarantine scanning"
+          },
+          "response": []
+        },
+        {
+          "name": "List Guest Invites and Access",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const invite = pm.response.json().find(item => item.id === pm.collectionVariables.get(\"guest_invite_id\"));",
+                  "if (invite && invite.accesses.length) pm.collectionVariables.set(\"guest_access_id\", invite.accesses[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/guest-invites/",
+            "description": "Manager-only invite and exchanged-access lifecycle view"
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Guest Access",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/guest-access/{{guest_access_id}}/",
+            "description": "Revokes one exchanged guest session; run lifecycle deletes last"
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Guest Invite",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/guest-invites/{{guest_invite_id}}/",
+            "description": "Revokes the invite and all still-active access issued from it"
           },
           "response": []
         }

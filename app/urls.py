@@ -41,8 +41,9 @@ from .views import (
     workspace_workflow_stages,
 )
 from .guest_views import (
-    guest_annotations, guest_attachment_download, guest_attachment_preview, guest_comments, guest_exchange,
-    guest_review, project_guest_invites,
+    guest_annotations, guest_attachment_download, guest_attachment_preview,
+    guest_attachment_upload, guest_comments, guest_exchange, guest_review,
+    project_guest_access_detail, project_guest_invite_detail, project_guest_invites,
 )
 
 urlpatterns = [
@@ -59,6 +60,7 @@ urlpatterns = [
     path('guest/reviews/<uuid:project_id>/', guest_review, name='api-guest-review'),
     path('guest/reviews/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/', guest_comments, name='api-guest-comments'),
     path('guest/reviews/<uuid:project_id>/media-versions/<uuid:media_version_id>/annotations/', guest_annotations, name='api-guest-annotations'),
+    path('guest/reviews/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/attachments/', guest_attachment_upload, name='api-guest-attachment-upload'),
     path('guest/reviews/<uuid:project_id>/attachments/<uuid:content_id>/', guest_attachment_download, name='api-guest-attachment'),
     path('guest/reviews/<uuid:project_id>/attachments/<uuid:content_id>/previews/<uuid:variant_id>/', guest_attachment_preview, name='api-guest-attachment-preview'),
     path('workspaces/', workspace_list_create, name='api-workspaces'),
@@ -74,6 +76,8 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/projects/', project_list_create, name='api-projects'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/', project_detail, name='api-project-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/guest-invites/', project_guest_invites, name='api-project-guest-invites'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/guest-invites/<uuid:invite_id>/', project_guest_invite_detail, name='api-project-guest-invite-detail'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/guest-access/<uuid:access_id>/', project_guest_access_detail, name='api-project-guest-access-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/access/', project_access_list_create, name='api-project-access'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/access/<uuid:grant_id>/', project_access_detail, name='api-project-access-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/', media_version_list_create, name='api-media-versions'),

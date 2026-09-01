@@ -128,6 +128,9 @@ All request and response bodies use JSON. Authentication uses Django's session c
 | `POST` | `/api/workspace-invitations/accept/` | Authenticated | Accept an invitation matching the user's email |
 | `GET/POST` | `/api/workspaces/{workspace_id}/projects/` | Authorized member | List accessible projects or create a project |
 | `GET/PATCH/DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/` | Authorized member | Read, update, or archive a project |
+| `GET/POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/guest-invites/` | Comment manager | List guest lifecycle state or create an invite |
+| `DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/guest-invites/{invite_id}/` | Comment manager | Revoke an invite and all active derived access |
+| `DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/guest-access/{access_id}/` | Comment manager | Revoke one exchanged guest access session |
 | `GET/POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/access/` | Member manager | List or create explicit project grants |
 | `DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/access/{grant_id}/` | Member manager | Revoke an explicit grant |
 | `GET/POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/` | Authorized member | List media or upload a video/image version |
@@ -228,13 +231,24 @@ Only a comment's registered author can add attachments. Active collaborators wit
 
 Attachment objects use opaque private keys and store SHA-256 checksums. New objects remain `PENDING` and cannot be downloaded until the outbox worker processes `file.security-scan.requested`. Clean files become `READY`; infected or scan-failed files become `FAILED`. A clean scan queues an idempotent preview event that creates a private SVG review-card File Variant.
 
-`FILE_SECURITY_SCANNER` selects a scanner class with a `name` attribute and `scan(stream)` method returning at least `{"clean": true|false}`. The default `EicarAwareScanner` is only a development/test integration backend. Configure a maintained malware product or service before production. Storage writes are compensated if database creation fails. Soft deletion leaves physical objects for a future retention worker.
+`FILE_SECURITY_SCANNER` selects a scanner class with a `name` attribute and `scan(stream)` method returning at least `{"clean": true|false}`. The default `EicarAwareScanner` is only a development/test integration backend. Configure a maintained malware product or service before production. Storage writes are compensated if database creation fails.
+
+Soft deletion marks an attachment, its File, and generated variants. `REVIEW_FILE_RETENTION_DAYS` defaults to 30. Operators should preview and then schedule physical cleanup:
+
+```bash
+python manage.py purge_review_files --dry-run
+python manage.py purge_review_files --limit 100
+```
+
+The cleanup service only targets soft-deleted review attachments older than the retention window. It deletes the private original and all variants but preserves database and audit rows with `metadata.physical_deleted_at`. Storage failures produce a non-zero command exit and remain retryable.
 
 ## Guest reviews
 
 Workspace collaborators with `review.comment.manage` can create a project guest invite. The raw invite token is returned once. Exchange it at `POST /api/guest-access/exchange/`; the resulting access key is also returned once and must be sent as `X-Guest-Access-Key` to `/api/guest/reviews/...` endpoints.
 
-Supported scoped permissions are `media.read`, `media.download`, `review.comment.read`, `review.comment.create`, `annotation.read`, and `annotation.create`. Invite permissions are copied onto the access grant at exchange so later invite edits cannot silently broaden an active guest session. Both secret types are stored only as SHA-256 hashes.
+Supported scoped permissions are `media.read`, `media.download`, `review.comment.read`, `review.comment.create`, `review.attachment.create`, `annotation.read`, and `annotation.create`. Guests with the attachment capability can upload only to their own comments; uploads enter the same quarantine, scan, and preview pipeline as member uploads.
+
+Invite permissions are copied onto the access grant at exchange so later invite edits cannot silently broaden an active guest session. Both secret types are stored only as SHA-256 hashes. Managers can list invites and exchanged sessions, revoke one access session, or revoke an invite and all active access derived from it. Revocation is immediate and audited.
 
 ## Visual annotations
 
@@ -306,7 +320,7 @@ CI runs these checks on every push and pull request.
 
 1. Add email delivery, CSRF-aware frontend integration, authentication throttling, and password-reset APIs.
 2. Configure private cloud storage and a production malware scanner backend.
-3. Add decoded thumbnails/waveforms and physical retention cleanup.
-4. Add guest invite revocation/rotation and export metrics to the production observability platform.
+3. Add decoded thumbnails/waveforms and retention-policy administration.
+4. Add guest token rotation and export metrics to the production observability platform.
 
 Avoid implementing all documented domains at once. Complete and test one end-to-end workflow before expanding the surface area.
