@@ -5,7 +5,10 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Annotation, AuditLog, ReviewComment
+from .models import (
+    Annotation, AnnotationRevision, AuditLog, ReviewComment,
+    ReviewCommentContent, ReviewCommentRevision,
+)
 from .services.outbox import process_outbox_events
 from .test_access_projects import WorkspaceAccessSetupMixin
 
@@ -78,6 +81,72 @@ class GuestReviewApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(self.client.post(comments_url, {'text': 'Blocked'}, format='json', **headers).status_code, 403)
         self.assertEqual(self.client.get(reverse('api-guest-review', args=[self.project_id])).status_code, 403)
 
+    def test_guest_rotates_access_key_and_old_key_stops_immediately(self):
+        old_headers = self.issue_access(['media.read'])
+        rotate_url = reverse('api-guest-access-key-rotate', args=[self.project_id])
+        rotated = self.client.post(rotate_url, format='json', **old_headers)
+        new_headers = {'HTTP_X_GUEST_ACCESS_KEY': rotated.json()['access_key']}
+        review_url = reverse('api-guest-review', args=[self.project_id])
+        self.assertEqual(rotated.status_code, 200)
+        self.assertNotEqual(rotated.json()['access_key'], self.latest_access_key)
+        self.assertEqual(self.client.get(review_url, **old_headers).status_code, 403)
+        self.assertEqual(self.client.get(review_url, **new_headers).status_code, 200)
+        self.assertTrue(AuditLog.objects.filter(action='guest.access_key.rotated', actor_type='GUEST').exists())
+
+    def test_guest_edits_and_deletes_own_review_content_with_revisions(self):
+        headers = self.issue_access([
+            'review.comment.read', 'review.comment.create', 'review.comment.edit',
+            'review.comment.delete', 'annotation.read', 'annotation.create',
+            'annotation.edit', 'annotation.delete',
+        ])
+        comments_url = reverse('api-guest-comments', args=[self.project_id, self.media_id])
+        created_comment = self.client.post(comments_url, {'text': 'Original'}, format='json', **headers)
+        comment_id = created_comment.json()['id']
+        comment_url = reverse('api-guest-comment-detail', args=[self.project_id, self.media_id, comment_id])
+        edited_comment = self.client.patch(comment_url, {'text': 'Updated'}, format='json', **headers)
+        comment_revisions_url = reverse('api-guest-comment-revisions', args=[self.project_id, self.media_id, comment_id])
+        comment_revisions = self.client.get(comment_revisions_url, **headers)
+
+        annotations_url = reverse('api-guest-annotations', args=[self.project_id, self.media_id])
+        created_annotation = self.client.post(
+            annotations_url,
+            {'elements': [{'element_type': 'POINT', 'geometry': {'x': 0.1, 'y': 0.2}}]},
+            format='json', **headers,
+        )
+        annotation_id = created_annotation.json()['id']
+        annotation_url = reverse('api-guest-annotation-detail', args=[self.project_id, self.media_id, annotation_id])
+        edited_annotation = self.client.patch(
+            annotation_url,
+            {'elements': [{'element_type': 'POINT', 'geometry': {'x': 0.8, 'y': 0.7}}]},
+            format='json', **headers,
+        )
+        annotation_revisions_url = reverse('api-guest-annotation-revisions', args=[self.project_id, self.media_id, annotation_id])
+        annotation_revisions = self.client.get(annotation_revisions_url, **headers)
+
+        self.assertEqual(edited_comment.status_code, 200)
+        self.assertEqual(edited_comment.json()['text'], 'Updated')
+        self.assertEqual(comment_revisions.status_code, 200)
+        self.assertIsNotNone(comment_revisions.json()[0]['edited_by_guest_session_id'])
+        self.assertEqual(edited_annotation.status_code, 200)
+        self.assertEqual(edited_annotation.json()['elements'][0]['geometry']['x'], 0.8)
+        self.assertIsNotNone(annotation_revisions.json()[0]['edited_by_guest_session_id'])
+        self.assertEqual(ReviewCommentRevision.objects.count(), 1)
+        self.assertEqual(AnnotationRevision.objects.count(), 1)
+        self.assertEqual(self.client.delete(annotation_url, **headers).status_code, 204)
+        self.assertEqual(self.client.delete(comment_url, **headers).status_code, 204)
+        self.assertTrue(AuditLog.objects.filter(action='review.comment.deleted', actor_type='GUEST').exists())
+
+    def test_guest_cannot_change_another_guest_content(self):
+        permissions = ['review.comment.create', 'review.comment.edit', 'review.comment.delete']
+        first_headers = self.issue_access(permissions)
+        comments_url = reverse('api-guest-comments', args=[self.project_id, self.media_id])
+        comment = self.client.post(comments_url, {'text': 'First guest'}, format='json', **first_headers)
+        self.client.force_authenticate(self.owner)
+        second_headers = self.issue_access(permissions)
+        detail_url = reverse('api-guest-comment-detail', args=[self.project_id, self.media_id, comment.json()['id']])
+        self.assertEqual(self.client.patch(detail_url, {'text': 'Hijacked'}, format='json', **second_headers).status_code, 403)
+        self.assertEqual(self.client.delete(detail_url, **second_headers).status_code, 403)
+
     def test_manager_can_list_and_revoke_access_or_entire_invite(self):
         headers = self.issue_access(['media.read'])
         self.client.force_authenticate(self.owner)
@@ -107,6 +176,7 @@ class GuestReviewApiTests(WorkspaceAccessSetupMixin, TestCase):
         headers = self.issue_access([
             'media.read', 'media.download', 'review.comment.read',
             'review.comment.create', 'review.attachment.create',
+            'review.attachment.delete',
         ])
         comments_url = reverse('api-guest-comments', args=[self.project_id, self.media_id])
         comment = self.client.post(comments_url, {'text': 'File reference'}, format='json', **headers)
@@ -131,4 +201,22 @@ class GuestReviewApiTests(WorkspaceAccessSetupMixin, TestCase):
         download = self.client.get(download_url, **headers)
         self.assertEqual(download.status_code, 200)
         self.assertEqual(b''.join(download.streaming_content), b'%PDF-1.7\nguest')
+        deleted = self.client.delete(download_url, **headers)
+        self.assertEqual(deleted.status_code, 204)
+        self.assertEqual(self.client.get(download_url, **headers).status_code, 404)
+        self.assertIsNotNone(
+            ReviewCommentContent.objects.get(id=uploaded.json()['id']).deleted_by_guest_session_id
+        )
         self.assertTrue(AuditLog.objects.filter(action='review.attachment.uploaded', actor_type='GUEST').exists())
+        self.assertTrue(AuditLog.objects.filter(action='review.attachment.deleted', actor_type='GUEST').exists())
+
+    def test_guest_comment_list_uses_bounded_pagination(self):
+        headers = self.issue_access(['review.comment.read', 'review.comment.create'])
+        url = reverse('api-guest-comments', args=[self.project_id, self.media_id])
+        for index in range(3):
+            self.client.post(url, {'text': f'Guest comment {index}'}, format='json', **headers)
+        response = self.client.get(f'{url}?limit=1&offset=1', **headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+        self.assertEqual(response['X-Pagination-Total'], '3')
+        self.assertEqual(response['X-Pagination-Next-Offset'], '2')

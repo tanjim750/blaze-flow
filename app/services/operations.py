@@ -4,7 +4,11 @@ from django.conf import settings
 from django.db.models import Count
 from django.utils import timezone
 
-from app.models import FileSecurityScan, NotificationDelivery, OutboxEvent, ReviewCommentContent
+from app.models import (
+    FileSecurityScan, FileSecurityScanStatus, NotificationDelivery,
+    NotificationDeliveryStatus, OutboxEvent, OutboxEventStatus,
+    ReviewCommentContent,
+)
 
 
 def workspace_operations_report(*, workspace):
@@ -38,3 +42,40 @@ def workspace_operations_report(*, workspace):
         'alerts': alerts, 'status': 'critical' if any(a['severity'] == 'critical' for a in alerts) else ('warning' if alerts else 'healthy'),
         'checked_at': timezone.now(),
     }
+
+
+def workspace_prometheus_metrics(*, workspace):
+    report = workspace_operations_report(workspace=workspace)
+    workspace_label = str(workspace.id)
+    lines = [
+        '# HELP blazeflow_file_security_scans_total File security scans by status.',
+        '# TYPE blazeflow_file_security_scans_total gauge',
+    ]
+    for value, _label in FileSecurityScanStatus.choices:
+        lines.append(f'blazeflow_file_security_scans_total{{workspace_id="{workspace_label}",status="{value}"}} {report["scans"].get(value, 0)}')
+    lines.extend([
+        '# HELP blazeflow_notification_deliveries_total Notification deliveries by status.',
+        '# TYPE blazeflow_notification_deliveries_total gauge',
+    ])
+    for value, _label in NotificationDeliveryStatus.choices:
+        lines.append(f'blazeflow_notification_deliveries_total{{workspace_id="{workspace_label}",status="{value}"}} {report["deliveries"].get(value, 0)}')
+    lines.extend([
+        '# HELP blazeflow_outbox_events_total Outbox events by status.',
+        '# TYPE blazeflow_outbox_events_total gauge',
+    ])
+    for value, _label in OutboxEventStatus.choices:
+        lines.append(f'blazeflow_outbox_events_total{{workspace_id="{workspace_label}",status="{value}"}} {report["outbox"].get(value, 0)}')
+    lines.extend([
+        '# HELP blazeflow_operations_alerts Active operational alerts by severity.',
+        '# TYPE blazeflow_operations_alerts gauge',
+    ])
+    for severity in ('warning', 'critical'):
+        count = sum(alert['count'] for alert in report['alerts'] if alert['severity'] == severity)
+        lines.append(f'blazeflow_operations_alerts{{workspace_id="{workspace_label}",severity="{severity}"}} {count}')
+    lines.extend([
+        '# HELP blazeflow_operations_health Current workspace operations health state.',
+        '# TYPE blazeflow_operations_health gauge',
+    ])
+    for state in ('healthy', 'warning', 'critical'):
+        lines.append(f'blazeflow_operations_health{{workspace_id="{workspace_label}",state="{state}"}} {int(report["status"] == state)}')
+    return '\n'.join(lines) + '\n'

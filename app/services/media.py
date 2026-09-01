@@ -70,14 +70,15 @@ def sha256_upload(upload):
 
 
 def _storage_backend(now):
-    backend = StorageBackend.objects.filter(provider='django-default').first()
+    provider = settings.STORAGE_PROVIDER
+    backend = StorageBackend.objects.filter(provider=provider).first()
     if backend:
         return backend
     return StorageBackend.objects.create(
         id=uuid.uuid4(),
-        name='Django default storage',
-        provider='django-default',
-        config={},
+        name='S3-compatible private storage' if provider == 's3-compatible' else 'Django default storage',
+        provider=provider,
+        config=settings.STORAGE_PUBLIC_METADATA,
         created_at=now,
         updated_at=now,
     )

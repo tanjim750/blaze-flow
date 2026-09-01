@@ -91,6 +91,55 @@ def update_annotation(*, annotation, user, elements, review_comment=None, start_
 
 
 @transaction.atomic
+def update_guest_annotation(*, annotation, guest_session, elements, review_comment=None, start_time_ms=None, end_time_ms=None):
+    locked = Annotation.objects.select_for_update().select_related('media_version__project__workspace').get(id=annotation.id)
+    if locked.deleted_at:
+        raise AnnotationError('Deleted annotations cannot be edited.')
+    if locked.author_guest_session_id != guest_session.id:
+        raise AnnotationError('Guests can edit only their own annotations.')
+    if review_comment and review_comment.media_version_id != locked.media_version_id:
+        raise AnnotationError('The linked comment must belong to this media version.')
+    now = timezone.now()
+    revision = AnnotationRevision.objects.create(
+        id=uuid.uuid4(), annotation=locked,
+        edited_by_guest_session=guest_session,
+        snapshot=annotation_snapshot(locked), created_at=now,
+    )
+    locked.review_comment = review_comment
+    locked.start_time_ms = start_time_ms
+    locked.end_time_ms = end_time_ms
+    locked.updated_at = now
+    locked.save(update_fields=['review_comment', 'start_time_ms', 'end_time_ms', 'updated_at'])
+    AnnotationElement.objects.filter(annotation=locked).delete()
+    _create_elements(locked, elements, now)
+    record_guest_audit(
+        guest_session=guest_session, workspace=locked.media_version.project.workspace,
+        action='annotation.edited', entity_type='annotation', entity_id=locked.id,
+        metadata={'revision_id': str(revision.id)},
+    )
+    return locked
+
+
+@transaction.atomic
+def delete_guest_annotation(*, annotation, guest_session):
+    locked = Annotation.objects.select_for_update().select_related('media_version__project__workspace').get(id=annotation.id)
+    if locked.deleted_at:
+        raise AnnotationError('This annotation is already deleted.')
+    if locked.author_guest_session_id != guest_session.id:
+        raise AnnotationError('Guests can delete only their own annotations.')
+    now = timezone.now()
+    locked.deleted_at = now
+    locked.deleted_by_guest_session = guest_session
+    locked.updated_at = now
+    locked.save(update_fields=['deleted_at', 'deleted_by_guest_session', 'updated_at'])
+    record_guest_audit(
+        guest_session=guest_session, workspace=locked.media_version.project.workspace,
+        action='annotation.deleted', entity_type='annotation', entity_id=locked.id,
+    )
+    return locked
+
+
+@transaction.atomic
 def delete_annotation(*, annotation, user):
     locked = Annotation.objects.select_for_update().select_related('media_version__project__workspace').get(id=annotation.id)
     if locked.deleted_at:

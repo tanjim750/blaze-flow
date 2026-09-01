@@ -42,6 +42,9 @@ ALLOWED_HOSTS = [
     for host in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
     if host.strip()
 ]
+THROTTLE_TRUSTED_PROXY_COUNT = int(os.environ.get('THROTTLE_TRUSTED_PROXY_COUNT', '0'))
+if THROTTLE_TRUSTED_PROXY_COUNT < 0:
+    raise ImproperlyConfigured('THROTTLE_TRUSTED_PROXY_COUNT cannot be negative.')
 
 
 # Application definition
@@ -144,6 +147,57 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 MAX_MEDIA_UPLOAD_BYTES = int(os.environ.get('MAX_MEDIA_UPLOAD_BYTES', 1024 * 1024 * 1024))
 MAX_REVIEW_ATTACHMENT_BYTES = int(os.environ.get('MAX_REVIEW_ATTACHMENT_BYTES', 25 * 1024 * 1024))
+REVIEW_PAGE_SIZE = int(os.environ.get('REVIEW_PAGE_SIZE', '50'))
+REVIEW_MAX_PAGE_SIZE = int(os.environ.get('REVIEW_MAX_PAGE_SIZE', '200'))
+PREVIEW_MAX_PIXELS = int(os.environ.get('PREVIEW_MAX_PIXELS', '40000000'))
+PREVIEW_MAX_WIDTH = int(os.environ.get('PREVIEW_MAX_WIDTH', '1280'))
+PREVIEW_MAX_HEIGHT = int(os.environ.get('PREVIEW_MAX_HEIGHT', '720'))
+PDF_PREVIEW_COMMAND = os.environ.get('PDF_PREVIEW_COMMAND', 'pdftoppm')
+FFMPEG_COMMAND = os.environ.get('FFMPEG_COMMAND', 'ffmpeg')
+PREVIEW_DECODER_TIMEOUT_SECONDS = int(os.environ.get('PREVIEW_DECODER_TIMEOUT_SECONDS', '30'))
+PREVIEW_DECODER_MAX_INPUT_BYTES = int(os.environ.get('PREVIEW_DECODER_MAX_INPUT_BYTES', str(MAX_REVIEW_ATTACHMENT_BYTES)))
+PREVIEW_DECODER_MAX_OUTPUT_BYTES = int(os.environ.get('PREVIEW_DECODER_MAX_OUTPUT_BYTES', str(20 * 1024 * 1024)))
+PREVIEW_AUDIO_MAX_SECONDS = int(os.environ.get('PREVIEW_AUDIO_MAX_SECONDS', '600'))
+
+STORAGE_DRIVER = os.environ.get('STORAGE_DRIVER', 'local').lower()
+if STORAGE_DRIVER not in {'local', 's3'}:
+    raise ImproperlyConfigured('STORAGE_DRIVER must be local or s3.')
+STORAGE_PROVIDER = 's3-compatible' if STORAGE_DRIVER == 's3' else 'django-default'
+STORAGE_PUBLIC_METADATA = {'driver': STORAGE_DRIVER}
+if STORAGE_DRIVER == 's3':
+    AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
+    if not AWS_STORAGE_BUCKET_NAME:
+        raise ImproperlyConfigured('AWS_STORAGE_BUCKET_NAME is required when STORAGE_DRIVER=s3.')
+    AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME') or None
+    AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL') or None
+    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID') or None
+    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY') or None
+    AWS_S3_ADDRESSING_STYLE = os.environ.get('AWS_S3_ADDRESSING_STYLE', 'auto')
+    AWS_QUERYSTRING_EXPIRE = int(os.environ.get('AWS_QUERYSTRING_EXPIRE', '300'))
+    STORAGE_PUBLIC_METADATA.update({
+        'bucket': AWS_STORAGE_BUCKET_NAME, 'region': AWS_S3_REGION_NAME,
+        'endpoint': AWS_S3_ENDPOINT_URL,
+    })
+    STORAGES = {
+        'default': {
+            'BACKEND': 'storages.backends.s3.S3Storage',
+            'OPTIONS': {
+                'bucket_name': AWS_STORAGE_BUCKET_NAME,
+                'region_name': AWS_S3_REGION_NAME,
+                'endpoint_url': AWS_S3_ENDPOINT_URL,
+                'access_key': AWS_ACCESS_KEY_ID,
+                'secret_key': AWS_SECRET_ACCESS_KEY,
+                'addressing_style': AWS_S3_ADDRESSING_STYLE,
+                'default_acl': None,
+                'querystring_auth': True,
+                'querystring_expire': AWS_QUERYSTRING_EXPIRE,
+                'file_overwrite': False,
+            },
+        },
+        'staticfiles': {
+            'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        },
+    }
 
 APP_BASE_URL = os.environ.get('APP_BASE_URL', 'http://localhost:8000').rstrip('/')
 EMAIL_BACKEND = os.environ.get(
@@ -157,8 +211,12 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=False)
 EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', default=False)
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Blaze Flow <no-reply@localhost>')
+PASSWORD_RESET_URL = os.environ.get('PASSWORD_RESET_URL', f'{APP_BASE_URL}/reset-password')
+PASSWORD_RESET_TTL_MINUTES = int(os.environ.get('PASSWORD_RESET_TTL_MINUTES', '30'))
 if EMAIL_USE_TLS and EMAIL_USE_SSL:
     raise ImproperlyConfigured('EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be enabled.')
+if PASSWORD_RESET_TTL_MINUTES < 1:
+    raise ImproperlyConfigured('PASSWORD_RESET_TTL_MINUTES must be at least 1.')
 
 OUTBOX_MAX_ATTEMPTS = int(os.environ.get('OUTBOX_MAX_ATTEMPTS', '5'))
 OUTBOX_RETRY_BASE_SECONDS = int(os.environ.get('OUTBOX_RETRY_BASE_SECONDS', '60'))
@@ -166,6 +224,10 @@ OUTBOX_RETRY_MAX_SECONDS = int(os.environ.get('OUTBOX_RETRY_MAX_SECONDS', '3600'
 FILE_SECURITY_SCANNER = os.environ.get(
     'FILE_SECURITY_SCANNER', 'app.services.file_processing.EicarAwareScanner'
 )
+CLAMAV_HOST = os.environ.get('CLAMAV_HOST', 'clamav')
+CLAMAV_PORT = int(os.environ.get('CLAMAV_PORT', '3310'))
+CLAMAV_TIMEOUT_SECONDS = float(os.environ.get('CLAMAV_TIMEOUT_SECONDS', '30'))
+CLAMAV_MAX_STREAM_BYTES = int(os.environ.get('CLAMAV_MAX_STREAM_BYTES', str(MAX_REVIEW_ATTACHMENT_BYTES)))
 OPERATIONS_STALE_MINUTES = int(os.environ.get('OPERATIONS_STALE_MINUTES', '15'))
 REVIEW_FILE_RETENTION_DAYS = int(os.environ.get('REVIEW_FILE_RETENTION_DAYS', '30'))
 if OUTBOX_MAX_ATTEMPTS < 1:
@@ -178,6 +240,16 @@ if OUTBOX_RETRY_MAX_SECONDS < OUTBOX_RETRY_BASE_SECONDS:
     )
 if REVIEW_FILE_RETENTION_DAYS < 1:
     raise ImproperlyConfigured('REVIEW_FILE_RETENTION_DAYS must be at least 1.')
+if REVIEW_PAGE_SIZE < 1 or REVIEW_MAX_PAGE_SIZE < REVIEW_PAGE_SIZE:
+    raise ImproperlyConfigured('Review pagination sizes must be positive and max must cover default.')
+if PREVIEW_MAX_PIXELS < 1 or PREVIEW_MAX_WIDTH < 1 or PREVIEW_MAX_HEIGHT < 1:
+    raise ImproperlyConfigured('Preview limits must be positive integers.')
+if PREVIEW_DECODER_TIMEOUT_SECONDS < 1 or PREVIEW_DECODER_MAX_INPUT_BYTES < 1 or PREVIEW_DECODER_MAX_OUTPUT_BYTES < 1 or PREVIEW_AUDIO_MAX_SECONDS < 1:
+    raise ImproperlyConfigured('Preview decoder limits must be positive integers.')
+if CLAMAV_PORT < 1 or CLAMAV_TIMEOUT_SECONDS <= 0 or CLAMAV_MAX_STREAM_BYTES < 1:
+    raise ImproperlyConfigured('ClamAV port, timeout, and stream limit must be positive.')
+if STORAGE_DRIVER == 's3' and AWS_QUERYSTRING_EXPIRE < 1:
+    raise ImproperlyConfigured('AWS_QUERYSTRING_EXPIRE must be at least 1 second.')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -185,6 +257,7 @@ if REVIEW_FILE_RETENTION_DAYS < 1:
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
+    'NUM_PROXIES': THROTTLE_TRUSTED_PROXY_COUNT,
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
     ],
@@ -195,4 +268,9 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
+    'DEFAULT_THROTTLE_RATES': {
+        'registration': os.environ.get('REGISTRATION_THROTTLE_RATE', '5/hour'),
+        'login': os.environ.get('LOGIN_THROTTLE_RATE', '20/hour'),
+        'password_reset': os.environ.get('PASSWORD_RESET_THROTTLE_RATE', '5/hour'),
+    },
 }

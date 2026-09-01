@@ -1,11 +1,11 @@
-from django.contrib.auth import login, logout
+from django.contrib.auth import login, logout, update_session_auth_hash
 from django.core.files.storage import default_storage
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.middleware.csrf import get_token
 from django.utils import timezone
-from rest_framework.decorators import api_view, authentication_classes
+from rest_framework.decorators import api_view, authentication_classes, throttle_classes
 from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -13,8 +13,12 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 
 from .events import DomainEvent, dispatch
+from .pagination import paginated_response
 from .serializers import (
     LoginSerializer,
+    PasswordChangeSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
     AnnotationRevisionSerializer,
     AnnotationSerializer,
     AnnotationWriteSerializer,
@@ -52,6 +56,10 @@ from .serializers import (
     WorkspaceMembershipUpdateSerializer,
     WorkspaceSerializer,
 )
+from .services.passwords import (
+    PasswordError, change_password, confirm_password_reset, request_password_reset,
+)
+from .throttles import LoginThrottle, PasswordResetThrottle, RegistrationThrottle
 from .models import (
     MediaVersion,
     FileVariant,
@@ -149,6 +157,7 @@ def health_check(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@throttle_classes([RegistrationThrottle])
 def register(request):
     serializer = RegistrationSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -159,6 +168,7 @@ def register(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@throttle_classes([LoginThrottle])
 def login_user(request):
     serializer = LoginSerializer(data=request.data, context={'request': request})
     serializer.is_valid(raise_exception=True)
@@ -167,6 +177,47 @@ def login_user(request):
     data = UserSerializer(user).data
     data['csrf_token'] = get_token(request)
     return Response(data)
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@throttle_classes([PasswordResetThrottle])
+def password_reset_request(request):
+    serializer = PasswordResetRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    request_password_reset(email=serializer.validated_data['email'])
+    return Response(
+        {'detail': 'If an active account exists, password-reset instructions have been sent.'},
+        status=status.HTTP_202_ACCEPTED,
+    )
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@throttle_classes([PasswordResetThrottle])
+def password_reset_confirm(request):
+    serializer = PasswordResetConfirmSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        confirm_password_reset(**serializer.validated_data)
+    except PasswordError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def password_change(request):
+    serializer = PasswordChangeSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        change_password(user=request.user, **serializer.validated_data)
+    except PasswordError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    update_session_auth_hash(request, request.user)
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(['POST'])
@@ -634,7 +685,10 @@ def review_comment_list_create(request, workspace_id, project_id, media_version_
             media_version=media_version,
             deleted_at__isnull=True,
         ).select_related('author_user').order_by('created_at')
-        return Response(ReviewCommentSerializer(comments, many=True).data)
+        return paginated_response(
+            request=request, queryset=comments,
+            serializer_class=ReviewCommentSerializer,
+        )
 
     serializer = ReviewCommentCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -910,7 +964,9 @@ def annotation_list_create(request, workspace_id, project_id, media_version_id):
     _require_project_permission(request, project, permission_key, 'You do not have permission to access annotations.')
     if request.method == 'GET':
         items = Annotation.objects.filter(media_version=media_version, deleted_at__isnull=True).order_by('created_at')
-        return Response(AnnotationSerializer(items, many=True).data)
+        return paginated_response(
+            request=request, queryset=items, serializer_class=AnnotationSerializer,
+        )
     serializer = AnnotationWriteSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data.copy()
@@ -985,3 +1041,15 @@ def operations_health(request, workspace_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
     _require_workspace_permission(request, workspace, WORKSPACE_MANAGE)
     return Response(workspace_operations_report(workspace=workspace))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def operations_metrics(request, workspace_id):
+    from .services.operations import workspace_prometheus_metrics
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    _require_workspace_permission(request, workspace, WORKSPACE_MANAGE)
+    return HttpResponse(
+        workspace_prometheus_metrics(workspace=workspace),
+        content_type='text/plain; version=0.0.4; charset=utf-8',
+    )

@@ -21,6 +21,8 @@ In Postman, select **Import**, choose `Postman_Collection.json`, and open the **
 | `base_url` | `http://localhost:8000` | Local API origin |
 | `email` | `owner@example.com` | Account used by Register and Login |
 | `password` | `a-secure-test-password` | Account password |
+| `new_password` | `a-new-secure-test-password` | Replacement used by password reset/change |
+| `reset_token` | Manual from reset email | One-time token consumed by reset confirmation |
 | `invitation_email` | `member@example.com` | Invited member account |
 | `csrf_token` | Automatic | Captured after Login |
 | `workspace_id` | Automatic | Captured after workspace creation |
@@ -44,6 +46,8 @@ In Postman, select **Import**, choose `Postman_Collection.json`, and open the **
 | `guest_attachment_content_id` | Automatic | Attachment uploaded by the guest |
 
 Postman retains Django's `sessionid` and `csrftoken` cookies. Login saves the response's `csrf_token`, and unsafe requests send it through `X-CSRFToken`.
+
+Password-reset request responses never reveal whether an email exists. With the development console email backend, copy the `token` query parameter from the server output into `reset_token`, then run **Confirm Password Reset**. Successful reset/change requests update the collection's `password` variable to `new_password`.
 
 Register and Login deliberately ignore any stale session authentication, so they remain usable when Postman already holds cookies from an earlier test account. If behavior appears inconsistent after changing servers or databases, clear the cookies for `localhost` and log in again.
 
@@ -93,7 +97,7 @@ The worker performs scan and preview events in separate batches. With Compose it
 
 While authenticated as the owner, run **Guest Reviews → Create Guest Invite**. Then run **Exchange Guest Invite**, **Open Guest Review**, **Create Guest Comment**, **Create Guest Annotation**, and **Upload Guest Attachment**. The exchange and guest endpoints deliberately do not use the owner session or CSRF header; they authenticate with the one-time captured guest access key.
 
-Run the outbox processor twice, then log back in as the owner and run **List Guest Invites and Access**. Run **Revoke Guest Access** or **Revoke Guest Invite** last; the existing guest key must immediately return `403` afterward.
+Run the outbox processor twice, then log back in as the owner and run **List Guest Invites and Access**. **Rotate Guest Access Key** captures the one-time replacement and invalidates the previous key. Run **Revoke Guest Access** or **Revoke Guest Invite** last; the current guest key must immediately return `403` afterward.
 
 Run **Delete Comment Attachment**, **Delete Annotation**, and **Delete Comment Thread** last, in that order.
 
@@ -201,8 +205,14 @@ The membership must be active, belong to the same workspace, and use `SELECTED` 
 - Project and role deletion are lifecycle archival operations.
 - Member removal uses `PATCH {"status":"REMOVED"}`.
 - Access-grant detail supports `DELETE` only.
-- The built-in EICAR-aware scanner is a development contract, not a production malware engine or deep decoder.
-- Local media storage is development-only; production requires private durable object storage.
-- Pagination, guest token rotation, guest attachment deletion, and guest-authored editing are not implemented yet.
-- HTML/localized email, push/WebSocket delivery, and external metrics export are not implemented yet.
-- Decoded thumbnails/waveforms and a retention-policy administration UI are not implemented yet.
+- The built-in EICAR-aware scanner is a development contract; configure the ClamAV adapter or another maintained scanner in production.
+- Local storage is the development default; the S3-compatible adapter still requires a private bucket and production credentials.
+- A retention-policy administration UI is not implemented yet.
+- HTML/localized email and push/WebSocket delivery are not implemented yet.
+- PDF/MP3 decoding requires Poppler and FFmpeg; Docker includes both, while local non-Docker setups must install them or will receive fallback preview cards.
+
+## Guest mutation and metrics checks
+
+Create a guest invite with the comment/annotation `edit` and `delete` permissions, exchange it, then run the guest create, edit, revision-list, and delete requests in order. The API permits changes only for content owned by that exact guest session. Run **Operations → Prometheus Metrics** while logged in as a workspace manager; the response is Prometheus text format rather than JSON.
+
+Guest attachment deletion requires `review.attachment.delete` and works only for attachments on that guest session's own comment. Comment and annotation list requests can add `?limit=50&offset=0`; inspect the `X-Pagination-*` response headers for totals and the next offset.

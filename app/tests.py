@@ -1,8 +1,11 @@
 import uuid
+import re
 from unittest.mock import patch
 
 from django.contrib.auth import authenticate, get_user_model
 from django.core.exceptions import ValidationError
+from django.core import mail
+from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
@@ -32,6 +35,7 @@ from .models import (
     WorkspacePrincipalType,
 )
 from .services import OWNER_PERMISSION_KEYS, create_workspace
+from .throttles import RegistrationThrottle
 
 
 class UserAuthenticationTests(TestCase):
@@ -176,6 +180,74 @@ class AuthenticationApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+    def test_password_reset_is_enumeration_safe_single_use_and_changes_login(self):
+        user = get_user_model().objects.create_user(
+            email='reset@example.com', password='old-secure-password-123',
+            first_name='Reset', last_name='User',
+        )
+        request_url = reverse('api-password-reset-request')
+        existing = self.client.post(request_url, {'email': user.email}, format='json')
+        unknown = self.client.post(request_url, {'email': 'unknown@example.com'}, format='json')
+        self.assertEqual(existing.status_code, 202)
+        self.assertEqual(unknown.status_code, 202)
+        self.assertEqual(existing.json(), unknown.json())
+        self.assertEqual(len(mail.outbox), 1)
+        token = re.search(r'token=([^\s]+)', mail.outbox[0].body).group(1)
+        confirm_url = reverse('api-password-reset-confirm')
+        confirmed = self.client.post(
+            confirm_url,
+            {'token': token, 'new_password': 'new-secure-password-456'},
+            format='json',
+        )
+        replayed = self.client.post(
+            confirm_url,
+            {'token': token, 'new_password': 'another-secure-password-789'},
+            format='json',
+        )
+        self.assertEqual(confirmed.status_code, 204)
+        self.assertEqual(replayed.status_code, 400)
+        self.assertEqual(self.client.post(reverse('api-login'), {'email': user.email, 'password': 'old-secure-password-123'}, format='json').status_code, 400)
+        self.assertEqual(self.client.post(reverse('api-login'), {'email': user.email, 'password': 'new-secure-password-456'}, format='json').status_code, 200)
+
+    def test_authenticated_password_change_checks_current_password(self):
+        user = get_user_model().objects.create_user(
+            email='change@example.com', password='current-secure-password-123',
+            first_name='Change', last_name='User',
+        )
+        self.client.force_authenticate(user)
+        url = reverse('api-password-change')
+        denied = self.client.post(
+            url,
+            {'current_password': 'wrong-password', 'new_password': 'replacement-secure-password-456'},
+            format='json',
+        )
+        changed = self.client.post(
+            url,
+            {'current_password': 'current-secure-password-123', 'new_password': 'replacement-secure-password-456'},
+            format='json',
+        )
+        user.refresh_from_db()
+        self.assertEqual(denied.status_code, 400)
+        self.assertEqual(changed.status_code, 204)
+        self.assertTrue(user.check_password('replacement-secure-password-456'))
+
+    def test_registration_is_throttled_by_client_address(self):
+        cache.clear()
+        with patch.object(RegistrationThrottle, 'rate', '1/min', create=True):
+            first = self.client.post(
+                reverse('api-register'),
+                {'email': 'rate-one@example.com', 'password': 'secure-password-123', 'first_name': 'Rate', 'last_name': 'One'},
+                format='json', REMOTE_ADDR='203.0.113.10',
+            )
+            second = self.client.post(
+                reverse('api-register'),
+                {'email': 'rate-two@example.com', 'password': 'secure-password-456', 'first_name': 'Rate', 'last_name': 'Two'},
+                format='json', REMOTE_ADDR='203.0.113.10',
+            )
+        cache.clear()
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 429)
 
     def test_session_writes_require_the_login_csrf_token(self):
         get_user_model().objects.create_user(

@@ -230,6 +230,66 @@ def edit_review_comment(*, comment, user, text, mentioned_user_ids=None):
 
 
 @transaction.atomic
+def edit_guest_review_comment(*, comment, guest_session, text):
+    locked = ReviewComment.objects.select_for_update().get(id=comment.id)
+    if locked.deleted_at is not None:
+        raise ReviewCommentError('Deleted comments cannot be edited.')
+    if locked.author_guest_session_id != guest_session.id:
+        raise ReviewCommentError('Guests can edit only their own comments.')
+    normalized_text = text.strip()
+    if not normalized_text:
+        raise ReviewCommentError('Comment text cannot be empty.')
+    content = ReviewCommentContent.objects.select_for_update().filter(
+        review_comment=locked, content_type=ReviewCommentContentType.TEXT,
+    ).order_by('sort_order', 'created_at').first()
+    if content is None:
+        raise ReviewCommentError('This comment has no editable text content.')
+    if content.text_content == normalized_text:
+        raise ReviewCommentError('The comment text has not changed.')
+    now = timezone.now()
+    revision = ReviewCommentRevision.objects.create(
+        id=uuid.uuid4(), review_comment=locked,
+        edited_by_guest_session=guest_session,
+        snapshot=_comment_snapshot(locked), created_at=now,
+    )
+    content.text_content = normalized_text
+    content.updated_at = now
+    content.save(update_fields=['text_content', 'updated_at'])
+    locked.updated_at = now
+    locked.save(update_fields=['updated_at'])
+    record_guest_audit(
+        guest_session=guest_session,
+        workspace=locked.media_version.project.workspace,
+        action='review.comment.edited', entity_type='review_comment',
+        entity_id=locked.id, metadata={'revision_id': str(revision.id)},
+    )
+    return locked
+
+
+@transaction.atomic
+def delete_guest_review_comment(*, comment, guest_session):
+    locked = ReviewComment.objects.select_for_update().get(id=comment.id)
+    if locked.deleted_at is not None:
+        raise ReviewCommentError('This comment is already deleted.')
+    if locked.author_guest_session_id != guest_session.id:
+        raise ReviewCommentError('Guests can delete only their own comments.')
+    if ReviewComment.objects.filter(parent_comment=locked, deleted_at__isnull=True).exists():
+        raise ReviewCommentError('This comment has active replies and cannot be deleted.')
+    now = timezone.now()
+    locked.deleted_at = now
+    locked.deleted_by_guest_session = guest_session
+    locked.updated_at = now
+    locked.save(update_fields=['deleted_at', 'deleted_by_guest_session', 'updated_at'])
+    record_guest_audit(
+        guest_session=guest_session,
+        workspace=locked.media_version.project.workspace,
+        action='review.comment.deleted', entity_type='review_comment',
+        entity_id=locked.id,
+    )
+    return locked
+
+
+@transaction.atomic
 def set_review_comment_resolution(*, comment, user, resolved):
     locked = ReviewComment.objects.select_for_update().get(id=comment.id)
     if locked.deleted_at is not None:

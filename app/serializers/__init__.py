@@ -1,4 +1,7 @@
-from .auth import LoginSerializer, RegistrationSerializer, UserSerializer
+from .auth import (
+    LoginSerializer, PasswordChangeSerializer, PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer, RegistrationSerializer, UserSerializer,
+)
 from .annotations import AnnotationRevisionSerializer, AnnotationSerializer, AnnotationWriteSerializer
 from .access import (
     RoleSerializer,
@@ -35,6 +38,9 @@ from .workspaces import WorkspaceCreateSerializer, WorkspaceSerializer
 
 __all__ = [
     'LoginSerializer',
+    'PasswordChangeSerializer',
+    'PasswordResetConfirmSerializer',
+    'PasswordResetRequestSerializer',
     'AnnotationRevisionSerializer',
     'AnnotationSerializer',
     'AnnotationWriteSerializer',

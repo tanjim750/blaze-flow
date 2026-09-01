@@ -142,7 +142,8 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
 
 class ReviewCommentRevisionSerializer(serializers.ModelSerializer):
     edited_by_user_id = serializers.UUIDField(allow_null=True)
+    edited_by_guest_session_id = serializers.UUIDField(allow_null=True)
 
     class Meta:
         model = ReviewCommentRevision
-        fields = ('id', 'edited_by_user_id', 'snapshot', 'created_at')
+        fields = ('id', 'edited_by_user_id', 'edited_by_guest_session_id', 'snapshot', 'created_at')

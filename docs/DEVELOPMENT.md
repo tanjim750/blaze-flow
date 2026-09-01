@@ -96,6 +96,10 @@ The ignore files prevent metadata from being committed, but ignore rules cannot 
 | `POSTGRES_HOST` | No | Defaults to `localhost`; Compose sets `db` |
 | `POSTGRES_PORT` | No | Defaults to `5432` |
 | `MAX_MEDIA_UPLOAD_BYTES` | No | Defaults to 1 GiB |
+| `PASSWORD_RESET_URL` | No | Frontend reset page used in reset emails |
+| `PASSWORD_RESET_TTL_MINUTES` | No | Reset-token lifetime; defaults to 30 minutes |
+| `REVIEW_PAGE_SIZE` | No | Default comment/annotation page size; defaults to 50 |
+| `REVIEW_MAX_PAGE_SIZE` | No | Maximum requested review page size; defaults to 200 |
 
 Never commit `.env`. Deployment secrets belong in the target platform's secret manager.
 
@@ -104,6 +108,8 @@ Never commit `.env`. Deployment secrets belong in the target platform's secret m
 `app.User` is the one authoritative registered-user identity and is configured through `AUTH_USER_MODEL`. Email is the login identifier. Passwords are stored in Django's built-in encoded password field and must only be set through `set_password()`, `create_user()`, or `create_superuser()`.
 
 User lifecycle status controls authentication: only `ACTIVE` users are considered active by Django's default authentication backend. `SUSPENDED` and `DELETED` users cannot authenticate.
+
+Registration, login, and password-reset endpoints are independently throttled by client address. Rates are environment-configurable. `THROTTLE_TRUSTED_PROXY_COUNT` defaults to zero so forwarded headers are not trusted; set it to the exact proxy depth only when each listed proxy normalizes the forwarding chain. Password-reset requests always return the same `202` response to prevent account enumeration. Reset tokens are returned only through email, stored as SHA-256 hashes, expire, are single-use, and invalidate earlier active reset tokens. Authenticated password changes require the current password and preserve the caller's current session.
 
 OAuth providers should link through `OAuthIdentity`. An OAuth-only account must use `set_unusable_password()` until the owner configures a password. Do not introduce a second user or password table.
 
@@ -116,6 +122,9 @@ All request and response bodies use JSON. Authentication uses Django's session c
 | `GET` | `/api/health/` | Public | Application health response |
 | `POST` | `/api/auth/register/` | Public | Register an email/password user |
 | `POST` | `/api/auth/login/` | Public | Start a session |
+| `POST` | `/api/auth/password-reset/request/` | Public | Send enumeration-safe reset instructions |
+| `POST` | `/api/auth/password-reset/confirm/` | Public | Consume a reset token and replace the password |
+| `POST` | `/api/auth/password/change/` | Authenticated | Replace password after current-password verification |
 | `POST` | `/api/auth/logout/` | Authenticated | End the current session |
 | `GET` | `/api/auth/me/` | Authenticated | Return the current user |
 | `POST` | `/api/workspaces/` | Authenticated | Create a workspace and owner authorization graph |
@@ -131,6 +140,8 @@ All request and response bodies use JSON. Authentication uses Django's session c
 | `GET/POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/guest-invites/` | Comment manager | List guest lifecycle state or create an invite |
 | `DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/guest-invites/{invite_id}/` | Comment manager | Revoke an invite and all active derived access |
 | `DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/guest-access/{access_id}/` | Comment manager | Revoke one exchanged guest access session |
+| `POST` | `/api/guest/reviews/{project_id}/access-key/rotate/` | Active guest key | Replace the current guest access key |
+| `DELETE` | `/api/guest/reviews/{project_id}/attachments/{content_id}/` | Owning guest with delete scope | Soft-delete an attachment and its previews |
 | `GET/POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/access/` | Member manager | List or create explicit project grants |
 | `DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/access/{grant_id}/` | Member manager | Revoke an explicit grant |
 | `GET/POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/` | Authorized member | List media or upload a video/image version |
@@ -154,6 +165,8 @@ All request and response bodies use JSON. Authentication uses Django's session c
 | `POST` | `/api/notifications/read-all/` | Authenticated recipient | Mark all own unread notifications read |
 
 Registration fields are `email`, `password`, `first_name`, `last_name`, and optional `timezone`. Workspace creation fields are `name`, optional `slug`, and a required IANA `timezone` such as `Europe/London`.
+
+Comment and annotation list endpoints accept `limit` and `offset`. JSON remains a list for compatibility. Pagination state is returned in `X-Pagination-Limit`, `X-Pagination-Offset`, `X-Pagination-Total`, and, when another page exists, `X-Pagination-Next-Offset`.
 
 Workspace creation is one database transaction. It provisions an `Owner` role, the initial permission keys, and an active direct-user membership with `ALL` project access and `is_primary_owner=True`. If any step fails, the entire workspace creation is rolled back.
 
@@ -231,7 +244,9 @@ Only a comment's registered author can add attachments. Active collaborators wit
 
 Attachment objects use opaque private keys and store SHA-256 checksums. New objects remain `PENDING` and cannot be downloaded until the outbox worker processes `file.security-scan.requested`. Clean files become `READY`; infected or scan-failed files become `FAILED`. A clean scan queues an idempotent preview event that creates a private SVG review-card File Variant.
 
-`FILE_SECURITY_SCANNER` selects a scanner class with a `name` attribute and `scan(stream)` method returning at least `{"clean": true|false}`. The default `EicarAwareScanner` is only a development/test integration backend. Configure a maintained malware product or service before production. Storage writes are compensated if database creation fails.
+Preview processing decodes valid images into bounded JPEG thumbnails and valid WAV files into SVG waveforms. Pixel and output bounds are controlled by `PREVIEW_MAX_PIXELS`, `PREVIEW_MAX_WIDTH`, and `PREVIEW_MAX_HEIGHT`. PDF, MP3, corrupt, or unsupported decoder inputs receive the safe metadata review card instead.
+
+`FILE_SECURITY_SCANNER` selects a scanner class with a `name` attribute and `scan(stream)` method returning at least `{"clean": true|false}`. The default `EicarAwareScanner` is only a development/test integration backend. `app.services.file_processing.ClamAVTcpScanner` implements ClamAV's bounded INSTREAM protocol using `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT_SECONDS`, and `CLAMAV_MAX_STREAM_BYTES`. Django system checks reject an invalid scanner class. Storage writes are compensated if database creation fails.
 
 Soft deletion marks an attachment, its File, and generated variants. `REVIEW_FILE_RETENTION_DAYS` defaults to 30. Operators should preview and then schedule physical cleanup:
 
@@ -246,9 +261,15 @@ The cleanup service only targets soft-deleted review attachments older than the 
 
 Workspace collaborators with `review.comment.manage` can create a project guest invite. The raw invite token is returned once. Exchange it at `POST /api/guest-access/exchange/`; the resulting access key is also returned once and must be sent as `X-Guest-Access-Key` to `/api/guest/reviews/...` endpoints.
 
-Supported scoped permissions are `media.read`, `media.download`, `review.comment.read`, `review.comment.create`, `review.attachment.create`, `annotation.read`, and `annotation.create`. Guests with the attachment capability can upload only to their own comments; uploads enter the same quarantine, scan, and preview pipeline as member uploads.
+Supported scoped permissions are `media.read`, `media.download`, `review.comment.read`, `review.comment.create`, `review.comment.edit`, `review.comment.delete`, `review.attachment.create`, `annotation.read`, `annotation.create`, `annotation.edit`, and `annotation.delete`. Guests can mutate only records authored by their exact guest session. Each edit stores the previous snapshot with guest attribution. Comment deletion is leaf-only and is rejected while the comment has any active reply. Guests with the attachment capability can upload only to their own comments; uploads enter the same quarantine, scan, and preview pipeline as member uploads.
 
 Invite permissions are copied onto the access grant at exchange so later invite edits cannot silently broaden an active guest session. Both secret types are stored only as SHA-256 hashes. Managers can list invites and exchanged sessions, revoke one access session, or revoke an invite and all active access derived from it. Revocation is immediate and audited.
+
+An active guest can rotate its key at `POST /api/guest/reviews/{project_id}/access-key/rotate/`. The current key is supplied in `X-Guest-Access-Key`; the old hash is replaced transactionally and the new raw key is returned once.
+
+## Private production storage
+
+`STORAGE_DRIVER=local` remains the development default. Set `STORAGE_DRIVER=s3` with `AWS_STORAGE_BUCKET_NAME` to activate django-storages' private S3 backend. Region, endpoint, credentials, addressing style, and signed-query expiry are environment-driven, allowing AWS S3 or compatible providers. IAM/container credentials work when explicit keys are omitted. Database Storage Backend metadata records only bucket/region/endpoint—not secrets.
 
 ## Visual annotations
 
@@ -278,6 +299,12 @@ python manage.py check_operational_alerts --workspace-id <uuid> --fail-on-critic
 ```
 
 Critical state currently means an infected attachment or dead-letter event. Failed/stale scans produce warnings. `OPERATIONS_STALE_MINUTES` controls the pending-scan threshold.
+
+Prometheus-compatible metrics are exposed at the manager-protected `GET /api/workspaces/{workspace_id}/operations/metrics/` endpoint. It reports bounded status labels for scans, deliveries, outbox events, alerts, and the current health state.
+
+## Decoded review previews
+
+Images and WAV files are decoded in process. PDF first pages use Poppler's `pdftoppm`; MP3 waveforms use `ffmpeg` to produce bounded mono PCM before SVG generation. The Docker image installs both tools. Decoder command names, timeout, input/output limits, and maximum decoded audio duration are configured through the `PREVIEW_*`, `PDF_PREVIEW_COMMAND`, and `FFMPEG_COMMAND` variables in `.env.example`. A decoder failure safely produces the generic review card instead of failing file processing.
 
 ## Schema and migrations
 

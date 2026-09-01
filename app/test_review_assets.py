@@ -1,7 +1,9 @@
 import hashlib
 import io
 import shutil
+import struct
 import tempfile
+import wave
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -11,8 +13,11 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from .models import Annotation, AnnotationRevision, AuditLog, File, FileSecurityScan, FileVariant, OutboxEvent, ReviewCommentContent
+from .services.file_processing import ClamAVTcpScanner
+from .services.media import _storage_backend
 from .services.outbox import process_outbox_events
 from .services.retention import purge_deleted_review_files
 from .test_access_projects import WorkspaceAccessSetupMixin
@@ -23,6 +28,28 @@ class FailingTestScanner:
 
     def scan(self, stream):
         raise RuntimeError('scanner unavailable')
+
+
+class FakeClamAVSocket:
+    def __init__(self, response):
+        self.response = response
+        self.sent = bytearray()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return None
+
+    def settimeout(self, timeout):
+        self.timeout = timeout
+
+    def sendall(self, data):
+        self.sent.extend(data)
+
+    def recv(self, size):
+        response, self.response = self.response, b''
+        return response
 
 
 class ReviewAssetsApiTests(WorkspaceAccessSetupMixin, TestCase):
@@ -145,6 +172,99 @@ class ReviewAssetsApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(uploaded.status_code, 201)
         self.assertEqual(self.client.get(detail_url).status_code, 409)
         self.assertEqual(FileSecurityScan.objects.get(file_id=uploaded.json()['file']['id']).status, 'INFECTED')
+
+    def test_real_image_and_wav_generate_decoded_derivatives(self):
+        image_bytes = io.BytesIO()
+        Image.new('RGB', (1600, 900), '#2563eb').save(image_bytes, format='PNG')
+        image_upload = self.client.post(
+            self.attachment_upload_url(),
+            {'file': SimpleUploadedFile('large.png', image_bytes.getvalue(), content_type='image/png')},
+            format='multipart',
+        )
+        wav_bytes = io.BytesIO()
+        with wave.open(wav_bytes, 'wb') as audio:
+            audio.setparams((1, 2, 8000, 0, 'NONE', 'not compressed'))
+            audio.writeframes(b''.join(struct.pack('<h', 16000 if index % 20 < 10 else -16000) for index in range(8000)))
+        wav_upload = self.client.post(
+            self.attachment_upload_url(),
+            {'file': SimpleUploadedFile('voice.wav', wav_bytes.getvalue(), content_type='audio/wav')},
+            format='multipart',
+        )
+        process_outbox_events()
+        process_outbox_events()
+        image_variant = FileVariant.objects.get(file_id=image_upload.json()['file']['id'])
+        audio_variant = FileVariant.objects.get(file_id=wav_upload.json()['file']['id'])
+        self.assertEqual(image_variant.metadata['variant_type'], 'IMAGE_THUMBNAIL')
+        self.assertEqual(image_variant.mime_type, 'image/jpeg')
+        self.assertLessEqual(image_variant.metadata['width'], 1280)
+        self.assertEqual(audio_variant.metadata['variant_type'], 'AUDIO_WAVEFORM')
+        self.assertEqual(audio_variant.metadata['duration_ms'], 1000)
+
+    def test_pdf_and_mp3_generate_decoder_backed_previews(self):
+        pdf_upload = self.client.post(
+            self.attachment_upload_url(),
+            {'file': SimpleUploadedFile('brief.pdf', b'%PDF-1.7\nbrief', content_type='application/pdf')},
+            format='multipart',
+        )
+        mp3_upload = self.client.post(
+            self.attachment_upload_url(),
+            {'file': SimpleUploadedFile('voice.mp3', b'ID3\x04\x00\x00\x00\x00\x00\x00audio', content_type='audio/mpeg')},
+            format='multipart',
+        )
+        process_outbox_events()
+
+        def fake_decoder(command, **kwargs):
+            if 'pdftoppm' in command[0]:
+                Image.new('RGB', (900, 1200), '#ffffff').save(f'{command[-1]}.jpg', format='JPEG')
+            else:
+                with open(command[-1], 'wb') as output:
+                    output.write(b''.join(struct.pack('<h', 12000 if index % 40 < 20 else -12000) for index in range(8000)))
+
+        with patch('app.services.file_processing.shutil.which', side_effect=lambda command: command), patch(
+            'app.services.file_processing.subprocess.run', side_effect=fake_decoder,
+        ):
+            process_outbox_events()
+        pdf_variant = FileVariant.objects.get(file_id=pdf_upload.json()['file']['id'])
+        mp3_variant = FileVariant.objects.get(file_id=mp3_upload.json()['file']['id'])
+        self.assertEqual(pdf_variant.metadata['variant_type'], 'PDF_FIRST_PAGE')
+        self.assertEqual(pdf_variant.mime_type, 'image/jpeg')
+        self.assertEqual(pdf_variant.metadata['page'], 1)
+        self.assertEqual(mp3_variant.metadata['variant_type'], 'MP3_WAVEFORM')
+        self.assertEqual(mp3_variant.metadata['duration_ms'], 1000)
+
+    def test_prometheus_metrics_are_manager_protected(self):
+        metrics_url = reverse('api-operations-metrics', args=[self.workspace.id])
+        owner_response = self.client.get(metrics_url)
+        self.assertEqual(owner_response.status_code, 200)
+        self.assertTrue(owner_response['Content-Type'].startswith('text/plain'))
+        self.assertIn('blazeflow_operations_health', owner_response.content.decode())
+        self.invite_and_accept()
+        denied = self.client.get(metrics_url)
+        self.assertEqual(denied.status_code, 403)
+
+    @override_settings(
+        CLAMAV_HOST='scanner.internal', CLAMAV_PORT=3310,
+        CLAMAV_TIMEOUT_SECONDS=5, CLAMAV_MAX_STREAM_BYTES=1024,
+    )
+    def test_clamav_adapter_streams_and_parses_threat_response(self):
+        connection = FakeClamAVSocket(b'stream: Win.Test.EICAR_HDB-1 FOUND\0')
+        with patch('app.services.file_processing.socket.create_connection', return_value=connection) as connect:
+            result = ClamAVTcpScanner().scan(io.BytesIO(b'test payload'))
+        self.assertFalse(result['clean'])
+        self.assertEqual(result['threat'], 'Win.Test.EICAR_HDB-1')
+        self.assertTrue(connection.sent.startswith(b'zINSTREAM\0'))
+        connect.assert_called_once_with(('scanner.internal', 3310), timeout=5)
+
+    @override_settings(
+        STORAGE_PROVIDER='s3-compatible',
+        STORAGE_PUBLIC_METADATA={'driver': 's3', 'bucket': 'private-assets', 'region': 'eu-west-2'},
+    )
+    def test_storage_backend_records_s3_metadata_without_credentials(self):
+        backend = _storage_backend(timezone.now())
+        self.assertEqual(backend.provider, 's3-compatible')
+        self.assertEqual(backend.config['bucket'], 'private-assets')
+        self.assertNotIn('access_key', backend.config)
+        self.assertNotIn('secret_key', backend.config)
 
     @override_settings(FILE_SECURITY_SCANNER='app.test_review_assets.FailingTestScanner')
     def test_scanner_outage_is_observable_and_retried(self):

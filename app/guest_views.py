@@ -8,24 +8,33 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import (
-    Annotation, FileStatus, FileVariant, GuestInvite, GuestInvitePermission,
+    Annotation, AnnotationElement, AnnotationRevision, FileStatus, FileVariant, GuestInvite, GuestInvitePermission,
     GuestReviewAccess, GuestReviewAccessPermission, MediaVersion, Project,
-    ReviewComment, ReviewCommentContent,
+    ReviewComment, ReviewCommentContent, ReviewCommentRevision,
 )
 from .permissions import REVIEW_COMMENT_MANAGE, active_memberships_for_user, has_project_permission
+from .pagination import paginated_response
 from .serializers import (
-    AnnotationSerializer, AnnotationWriteSerializer, ReviewAttachmentSerializer,
+    AnnotationRevisionSerializer, AnnotationSerializer, AnnotationWriteSerializer, ReviewAttachmentSerializer,
     ReviewAttachmentUploadSerializer, ReviewCommentCreateSerializer,
-    ReviewCommentSerializer,
+    ReviewCommentRevisionSerializer, ReviewCommentSerializer,
 )
-from .services.annotations import AnnotationError, create_guest_annotation
-from .services.comments import ReviewCommentError, create_guest_review_comment
+from .services.annotations import (
+    AnnotationError, create_guest_annotation, delete_guest_annotation,
+    update_guest_annotation,
+)
+from .services.comments import (
+    ReviewCommentError, create_guest_review_comment, delete_guest_review_comment,
+    edit_guest_review_comment,
+)
 from .services.guest_access import (
     GUEST_ALLOWED_PERMISSIONS, GuestAccessError, authenticate_guest_access,
     create_guest_invite, exchange_guest_invite, revoke_guest_invite,
-    revoke_guest_review_access,
+    revoke_guest_review_access, rotate_guest_access_key,
 )
-from .services.review_assets import ReviewAttachmentError, upload_review_attachment
+from .services.review_assets import (
+    ReviewAttachmentError, delete_guest_review_attachment, upload_review_attachment,
+)
 
 
 class GuestInviteCreateSerializer(serializers.Serializer):
@@ -41,6 +50,10 @@ class GuestExchangeSerializer(serializers.Serializer):
     token = serializers.CharField(max_length=255)
     name = serializers.CharField(max_length=150)
     email = serializers.EmailField(max_length=255)
+
+
+class GuestReviewCommentEditSerializer(serializers.Serializer):
+    text = serializers.CharField(max_length=10000)
 
 
 def _guest_access(request, project, permission):
@@ -157,6 +170,23 @@ def guest_review(request, project_id):
     })
 
 
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def guest_access_key_rotate(request, project_id):
+    project = get_object_or_404(Project.objects.select_related('workspace'), id=project_id)
+    try:
+        access, access_key = rotate_guest_access_key(
+            project=project, access_key=request.headers.get('X-Guest-Access-Key', ''),
+        )
+    except GuestAccessError as exc:
+        raise PermissionDenied(str(exc)) from exc
+    return Response({
+        'guest_session_id': str(access.guest_session_id), 'access_key': access_key,
+        'warning': 'The previous key is invalid. This replacement is returned only once.',
+    })
+
+
 @api_view(['GET', 'POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -167,7 +197,10 @@ def guest_comments(request, project_id, media_version_id):
     access = _guest_access(request, project, permission)
     if request.method == 'GET':
         comments = ReviewComment.objects.filter(media_version=media, deleted_at__isnull=True).select_related('author_user', 'author_guest_session').order_by('created_at')
-        return Response(ReviewCommentSerializer(comments, many=True).data)
+        return paginated_response(
+            request=request, queryset=comments,
+            serializer_class=ReviewCommentSerializer,
+        )
     serializer = ReviewCommentCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data.copy()
@@ -181,6 +214,44 @@ def guest_comments(request, project_id, media_version_id):
     return Response(ReviewCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
 
 
+@api_view(['PATCH', 'DELETE'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def guest_comment_detail(request, project_id, media_version_id, comment_id):
+    project = get_object_or_404(Project, id=project_id)
+    media = get_object_or_404(MediaVersion, id=media_version_id, project=project, status='ACTIVE')
+    permission = 'review.comment.edit' if request.method == 'PATCH' else 'review.comment.delete'
+    access = _guest_access(request, project, permission)
+    comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media, deleted_at__isnull=True)
+    if comment.author_guest_session_id != access.guest_session_id:
+        raise PermissionDenied('Guests can change only their own comments.')
+    try:
+        if request.method == 'PATCH':
+            serializer = GuestReviewCommentEditSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            comment = edit_guest_review_comment(
+                comment=comment, guest_session=access.guest_session,
+                text=serializer.validated_data['text'],
+            )
+            return Response(ReviewCommentSerializer(comment).data)
+        delete_guest_review_comment(comment=comment, guest_session=access.guest_session)
+    except ReviewCommentError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def guest_comment_revisions(request, project_id, media_version_id, comment_id):
+    project = get_object_or_404(Project, id=project_id)
+    media = get_object_or_404(MediaVersion, id=media_version_id, project=project, status='ACTIVE')
+    _guest_access(request, project, 'review.comment.read')
+    comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media)
+    revisions = ReviewCommentRevision.objects.filter(review_comment=comment).order_by('created_at')
+    return Response(ReviewCommentRevisionSerializer(revisions, many=True).data)
+
+
 @api_view(['GET', 'POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
@@ -191,7 +262,9 @@ def guest_annotations(request, project_id, media_version_id):
     access = _guest_access(request, project, permission)
     if request.method == 'GET':
         items = Annotation.objects.filter(media_version=media, deleted_at__isnull=True).order_by('created_at')
-        return Response(AnnotationSerializer(items, many=True).data)
+        return paginated_response(
+            request=request, queryset=items, serializer_class=AnnotationSerializer,
+        )
     serializer = AnnotationWriteSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data.copy()
@@ -202,6 +275,54 @@ def guest_annotations(request, project_id, media_version_id):
     except AnnotationError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(AnnotationSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['PATCH', 'DELETE'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def guest_annotation_detail(request, project_id, media_version_id, annotation_id):
+    project = get_object_or_404(Project, id=project_id)
+    media = get_object_or_404(MediaVersion, id=media_version_id, project=project, status='ACTIVE')
+    permission = 'annotation.edit' if request.method == 'PATCH' else 'annotation.delete'
+    access = _guest_access(request, project, permission)
+    annotation = get_object_or_404(Annotation, id=annotation_id, media_version=media, deleted_at__isnull=True)
+    if annotation.author_guest_session_id != access.guest_session_id:
+        raise PermissionDenied('Guests can change only their own annotations.')
+    if request.method == 'DELETE':
+        delete_guest_annotation(annotation=annotation, guest_session=access.guest_session)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    payload = request.data.copy()
+    if 'elements' not in payload:
+        payload['elements'] = list(AnnotationElement.objects.filter(annotation=annotation).order_by('sort_order').values('element_type', 'geometry', 'style', 'payload'))
+    for field in ('review_comment_id', 'start_time_ms', 'end_time_ms'):
+        value = getattr(annotation, field)
+        if field not in payload and value is not None:
+            payload[field] = str(value) if field == 'review_comment_id' else value
+    serializer = AnnotationWriteSerializer(data=payload)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data.copy()
+    comment_id = data.pop('review_comment_id', annotation.review_comment_id)
+    comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media, deleted_at__isnull=True) if comment_id else None
+    try:
+        annotation = update_guest_annotation(
+            annotation=annotation, guest_session=access.guest_session,
+            review_comment=comment, **data,
+        )
+    except AnnotationError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(AnnotationSerializer(annotation).data)
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def guest_annotation_revisions(request, project_id, media_version_id, annotation_id):
+    project = get_object_or_404(Project, id=project_id)
+    media = get_object_or_404(MediaVersion, id=media_version_id, project=project, status='ACTIVE')
+    _guest_access(request, project, 'annotation.read')
+    annotation = get_object_or_404(Annotation, id=annotation_id, media_version=media)
+    revisions = AnnotationRevision.objects.filter(annotation=annotation).order_by('created_at')
+    return Response(AnnotationRevisionSerializer(revisions, many=True).data)
 
 
 @api_view(['POST'])
@@ -226,17 +347,28 @@ def guest_attachment_upload(request, project_id, media_version_id, comment_id):
     return Response(ReviewAttachmentSerializer(content).data, status=status.HTTP_201_CREATED)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'DELETE'])
 @authentication_classes([])
 @permission_classes([AllowAny])
 def guest_attachment_download(request, project_id, content_id):
     project = get_object_or_404(Project, id=project_id)
-    _guest_access(request, project, 'media.download')
+    permission = 'media.download' if request.method == 'GET' else 'review.attachment.delete'
+    access = _guest_access(request, project, permission)
     content = get_object_or_404(
         ReviewCommentContent.objects.select_related('file'), id=content_id,
         review_comment__media_version__project=project, file__isnull=False,
-        file__status=FileStatus.READY, file__deleted_at__isnull=True, deleted_at__isnull=True,
+        file__deleted_at__isnull=True, deleted_at__isnull=True,
     )
+    if request.method == 'DELETE':
+        if content.review_comment.author_guest_session_id != access.guest_session_id:
+            raise PermissionDenied('Guests can delete attachments only from their own comments.')
+        try:
+            delete_guest_review_attachment(content=content, guest_session=access.guest_session)
+        except ReviewAttachmentError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    if content.file.status != FileStatus.READY:
+        return Response({'detail': 'This attachment is still being processed.'}, status=status.HTTP_409_CONFLICT)
     if not default_storage.exists(content.file.object_key):
         raise Http404('The stored attachment was not found.')
     return FileResponse(default_storage.open(content.file.object_key, 'rb'), as_attachment=True, filename=content.file.original_name, content_type=content.file.mime_type)

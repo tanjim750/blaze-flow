@@ -117,3 +117,33 @@ def delete_review_attachment(*, content, user):
         action='review.attachment.deleted', entity_type='review_comment_content', entity_id=locked.id,
     )
     return locked
+
+
+@transaction.atomic
+def delete_guest_review_attachment(*, content, guest_session):
+    locked = ReviewCommentContent.objects.select_for_update().select_related(
+        'review_comment__media_version__project__workspace'
+    ).get(id=content.id)
+    if locked.deleted_at is not None:
+        raise ReviewAttachmentError('This attachment is already deleted.')
+    if locked.review_comment.author_guest_session_id != guest_session.id:
+        raise ReviewAttachmentError('Guests can delete attachments only from their own comments.')
+    file_record = File.objects.select_for_update().get(id=locked.file_id)
+    now = timezone.now()
+    locked.deleted_at = now
+    locked.deleted_by_guest_session = guest_session
+    locked.updated_at = now
+    locked.save(update_fields=['deleted_at', 'deleted_by_guest_session', 'updated_at'])
+    file_record.deleted_at = now
+    file_record.updated_at = now
+    file_record.save(update_fields=['deleted_at', 'updated_at'])
+    FileVariant.objects.filter(file=file_record, deleted_at__isnull=True).update(
+        deleted_at=now, updated_at=now,
+    )
+    record_guest_audit(
+        guest_session=guest_session,
+        workspace=locked.review_comment.media_version.project.workspace,
+        action='review.attachment.deleted', entity_type='review_comment_content',
+        entity_id=locked.id,
+    )
+    return locked

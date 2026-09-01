@@ -4,6 +4,61 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-01 — Six milestones: identity recovery and bounded review APIs
+
+### Delivered
+
+- Added independent IP throttles for registration, login, and password-reset traffic with environment-controlled rates.
+- Added enumeration-safe reset requests, expiring hashed single-use reset tokens, email delivery, token replay denial, and invalidation of older active tokens.
+- Added authenticated password changes requiring the current password while preserving the active session.
+- Added guest-owned attachment deletion with a dedicated permission, exact-session ownership, soft deletion of file variants, and guest audit attribution.
+- Added bounded limit/offset pagination to member and guest comment/annotation lists while preserving list-shaped JSON and exposing navigation metadata through headers.
+- Added migration `0012`, Postman requests, environment examples, and positive/negative coverage for the six behaviors.
+
+### Decisions and boundaries
+
+- Reset delivery failures are logged and invalidate the undelivered token while the HTTP response remains enumeration-safe.
+- Password validation continues to use Django's configured validators; no parallel credential rules are introduced.
+- Review pagination uses response headers to avoid breaking existing clients that consume a top-level JSON list.
+
+### Verification
+
+- The complete SQLite suite passes (91 tests), Django system checks pass, migration drift is clean, the Postman collection parses, and `git diff --check` is clean.
+- PostgreSQL execution remains blocked by the previously recorded Docker Desktop content-store `input/output error`; inspecting the cached `postgres:16-alpine` image reproduces the missing-blob failure before containers start.
+
+### Next recommended milestone
+
+Add email-verification lifecycle APIs, reset-token cleanup, review reactions, and retention-policy administration after Docker storage is repaired and PostgreSQL validation can resume.
+
+
+## 2026-09-01 — Three milestones: decoded previews, key rotation, and production adapters
+
+### Delivered
+
+- Added bounded Pillow decoding for actual JPEG thumbnail variants with EXIF orientation handling and first-frame behavior.
+- Added standard-library WAV decoding and deterministic SVG waveform variants with duration/channel/rate metadata.
+- Retained safe review-card fallback for corrupt, unsupported, PDF, and MP3 inputs.
+- Added guest access-key rotation with transactional hash replacement, one-time raw-key response, immediate old-key invalidation, and guest audit logging.
+- Added environment-driven private S3-compatible storage through django-storages, with non-secret backend metadata and local defaults.
+- Added a bounded ClamAV TCP INSTREAM adapter, scanner startup validation, timeout/stream limits, and an optional Compose malware profile.
+- Added compatible pinned dependencies, Postman key rotation, environment examples, and deployment documentation.
+
+### Decisions and boundaries
+
+- Preview decoding runs only after a clean malware result and preserves idempotent one-variant behavior.
+- Decoder failure is non-fatal and produces a safe review card; it never changes a clean original back to failed.
+- Raw guest keys remain one-time responses and only their SHA-256 hashes are stored.
+- S3 credentials stay in the provider/environment chain and are never written into Storage Backend records.
+
+### Known limitations
+
+- PDF rasterization and MP3 waveform decoding need explicit production decoder adapters.
+- S3 and ClamAV integration tests use configuration/protocol doubles; deployment smoke tests require real infrastructure.
+
+### Next recommended milestone
+
+Add guest-owned edit/delete flows, PDF/MP3 decoder adapters, and external metrics export.
+
 ## 2026-09-01 — Three milestones: guest lifecycle, guest files, and retention cleanup
 
 ### Delivered
@@ -457,3 +512,24 @@ Implement permission evaluation and workspace membership administration, then ex
 ### Next recommended milestone
 
 Add database constraints for principal/authorship/ownership invariants, followed by a tested registration and workspace-creation transaction.
+## 2026-09-01 — Guest ownership, decoded previews, and metrics
+
+### Delivered
+
+- Added guest-owned comment and annotation edit/delete APIs with explicit scoped permissions, exact-session ownership, audit events, and guest-attributed revision snapshots.
+- Added guest revision-history endpoints; protected comment threads from deletion when another reviewer has replied.
+- Added bounded Poppler PDF first-page rasterization and FFmpeg MP3 waveform decoding, with safe fallback cards when a decoder is unavailable or rejects input.
+- Added a manager-protected Prometheus text endpoint for scan, delivery, outbox, alert, and workspace health metrics.
+- Expanded Postman examples, environment documentation, and positive/negative tests for all four additions.
+
+### Decisions
+
+- Decoder processes receive argument arrays without a shell, private objects are copied into isolated temporary directories, and limits constrain time plus input/output size.
+- Metrics use a fixed label vocabulary to avoid unbounded status cardinality.
+- Guest identity is a `GuestSession`, not an email address; a different exchanged session cannot mutate content even if it represents the same email.
+
+### Verification
+
+- Focused guest-review and review-asset tests pass (22 tests).
+- The full SQLite suite passes (86 tests), Django system checks pass, migration drift is clean, and the Postman collection parses as valid JSON.
+- The Docker build installed Poppler/FFmpeg successfully but Docker Desktop failed while unpacking the resulting layer with a host `input/output error`; the same daemon storage error prevented the final PostgreSQL run. This is an environment limitation, not an application test failure.

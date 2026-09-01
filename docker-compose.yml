@@ -59,6 +59,16 @@ services:
     depends_on:
       - db
 
+  clamav:
+    image: clamav/clamav:stable
+    profiles: ["malware"]
+    restart: unless-stopped
+    expose:
+      - "3310"
+    volumes:
+      - clamav_data:/var/lib/clamav
+
 volumes:
   postgres_data:
   pgadmin_data:
+  clamav_data:

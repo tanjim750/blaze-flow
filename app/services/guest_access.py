@@ -10,13 +10,15 @@ from app.models import (
     GuestInvite, GuestInvitePermission, GuestReviewAccess,
     GuestReviewAccessPermission, GuestSession,
 )
-from .audit import record_user_audit
+from .audit import record_guest_audit, record_user_audit
 
 
 GUEST_ALLOWED_PERMISSIONS = frozenset({
     'media.read', 'media.download', 'review.comment.read',
-    'review.comment.create', 'review.attachment.create',
+    'review.comment.create', 'review.comment.edit', 'review.comment.delete',
+    'review.attachment.create', 'review.attachment.delete',
     'annotation.read', 'annotation.create',
+    'annotation.edit', 'annotation.delete',
 })
 
 
@@ -91,6 +93,34 @@ def authenticate_guest_access(*, project, access_key, permission):
     GuestReviewAccess.objects.filter(id=access.id).update(last_accessed_at=now, updated_at=now)
     GuestSession.objects.filter(id=access.guest_session_id).update(last_seen_at=now, updated_at=now)
     return access
+
+
+@transaction.atomic
+def rotate_guest_access_key(*, project, access_key):
+    now = timezone.now()
+    session = GuestSession.objects.select_for_update().filter(
+        access_key_hash=_hash(access_key or ''), workspace=project.workspace,
+    ).first()
+    if session is None:
+        raise GuestAccessError('Guest access is invalid or expired.')
+    access = GuestReviewAccess.objects.select_related('guest_invite').filter(
+        guest_session=session, guest_invite__project=project,
+        guest_invite__revoked_at__isnull=True, revoked_at__isnull=True,
+    ).first()
+    if access is None or (access.guest_invite.expires_at and access.guest_invite.expires_at <= now):
+        raise GuestAccessError('Guest access is invalid or expired.')
+    new_key = secrets.token_urlsafe(40)
+    session.access_key_hash = _hash(new_key)
+    session.last_seen_at = now
+    session.updated_at = now
+    session.save(update_fields=['access_key_hash', 'last_seen_at', 'updated_at'])
+    GuestReviewAccess.objects.filter(id=access.id).update(last_accessed_at=now, updated_at=now)
+    record_guest_audit(
+        guest_session=session, workspace=project.workspace,
+        action='guest.access_key.rotated', entity_type='guest_review_access',
+        entity_id=access.id,
+    )
+    return access, new_key
 
 
 @transaction.atomic

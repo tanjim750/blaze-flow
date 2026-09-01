@@ -738,6 +738,7 @@ class ReviewCommentContent(models.Model):
     sort_order = models.IntegerField(default=0)
     deleted_at = models.DateTimeField(null=True, blank=True)
     deleted_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='deleted_by_user_id', null=True, blank=True, related_name='+')
+    deleted_by_guest_session = models.ForeignKey(GuestSession, on_delete=models.DO_NOTHING, db_column='deleted_by_guest_session_id', null=True, blank=True, related_name='+')
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 

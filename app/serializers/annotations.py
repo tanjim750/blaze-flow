@@ -85,4 +85,4 @@ class AnnotationSerializer(serializers.ModelSerializer):
 class AnnotationRevisionSerializer(serializers.ModelSerializer):
     class Meta:
         model = AnnotationRevision
-        fields = ('id', 'edited_by_user_id', 'snapshot', 'created_at')
+        fields = ('id', 'edited_by_user_id', 'edited_by_guest_session_id', 'snapshot', 'created_at')

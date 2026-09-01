@@ -15,3 +15,12 @@ PASSWORD_HASHERS = [
 ]
 
 EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+
+REST_FRAMEWORK = {
+    **REST_FRAMEWORK,  # noqa: F405
+    'DEFAULT_THROTTLE_RATES': {
+        'registration': '10000/hour',
+        'login': '10000/hour',
+        'password_reset': '10000/hour',
+    },
+}

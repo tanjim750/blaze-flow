@@ -79,6 +79,17 @@ class ReviewCommentApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(created.json()['author']['email'], self.owner.email)
         self.assertTrue(AuditLog.objects.filter(action='review.comment.created').exists())
 
+    def test_comment_list_is_bounded_and_reports_pagination_headers(self):
+        for index in range(3):
+            self.create_comment(text=f'Comment {index}')
+        response = self.client.get(f'{self.comments_url()}?limit=2&offset=1')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 2)
+        self.assertEqual(response['X-Pagination-Total'], '3')
+        self.assertEqual(response['X-Pagination-Offset'], '1')
+        self.assertNotIn('X-Pagination-Next-Offset', response)
+        self.assertEqual(self.client.get(f'{self.comments_url()}?limit=9999').status_code, 400)
+
     def test_reply_inherits_timing_and_parent_must_match_media(self):
         parent = self.create_comment(start_time_ms=500).json()
         invalid_reply = self.client.post(

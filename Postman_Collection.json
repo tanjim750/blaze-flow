@@ -124,6 +124,21 @@
       "key": "guest_attachment_content_id",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "guest_annotation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "new_password",
+      "value": "a-new-secure-test-password",
+      "type": "string"
+    },
+    {
+      "key": "reset_token",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -215,6 +230,87 @@
             "header": [],
             "url": "{{base_url}}/api/auth/me/",
             "description": "Return the authenticated user"
+          },
+          "response": []
+        },
+        {
+          "name": "Request Password Reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/password-reset/request/",
+            "description": "Always returns 202. Copy the token query parameter from the delivered development email into reset_token."
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Password Reset",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 204) pm.collectionVariables.set(\"password\", pm.collectionVariables.get(\"new_password\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{reset_token}}\",\n  \"new_password\": \"{{new_password}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/password-reset/confirm/"
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 204) pm.collectionVariables.set(\"password\", pm.collectionVariables.get(\"new_password\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"{{password}}\",\n  \"new_password\": \"{{new_password}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/password/change/"
           },
           "response": []
         },
@@ -1401,6 +1497,16 @@
             "description": "Manager-only scan, preview/outbox, delivery, and alert-state report"
           },
           "response": []
+        },
+        {
+          "name": "Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/operations/metrics/",
+            "description": "Manager-only Prometheus text exposition for workspace operations."
+          },
+          "response": []
         }
       ]
     },
@@ -1532,7 +1638,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"label\": \"Client reviewer\",\n  \"permissions\": [\"media.read\", \"media.download\", \"review.comment.read\", \"review.comment.create\", \"review.attachment.create\", \"annotation.read\", \"annotation.create\"],\n  \"expires_in_hours\": 168\n}"
+              "raw": "{\n  \"label\": \"Client reviewer\",\n  \"permissions\": [\"media.read\", \"media.download\", \"review.comment.read\", \"review.comment.create\", \"review.comment.edit\", \"review.comment.delete\", \\\"review.attachment.create\\\", \\\"review.attachment.delete\\\", \"annotation.read\", \"annotation.create\", \"annotation.edit\", \"annotation.delete\"],\n  \"expires_in_hours\": 168\n}"
             },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/guest-invites/"
           },
@@ -1632,6 +1738,89 @@
             },
             "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/annotations/"
           },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"guest_annotation_id\", pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Edit Guest Comment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Updated guest review feedback\"\n}"
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/{{guest_comment_id}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "List Guest Comment Revisions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/{{guest_comment_id}}/revisions/"
+          },
+          "response": []
+        },
+        {
+          "name": "Edit Guest Annotation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"elements\": [{\"element_type\": \"POINT\", \"geometry\": {\"x\": 0.35, \"y\": 0.5}}]\n}"
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{guest_annotation_id}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "List Guest Annotation Revisions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{guest_annotation_id}}/revisions/"
+          },
           "response": []
         },
         {
@@ -1673,6 +1862,50 @@
           "response": []
         },
         {
+          "name": "Delete Guest Attachment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/attachments/{{guest_attachment_content_id}}/",
+            "description": "Soft-deletes an attachment owned by the current guest session and its generated previews."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Guest Annotation",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{guest_annotation_id}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Guest Comment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/{{guest_comment_id}}/"
+          },
+          "description": "Run after attachment tests because deleting the comment hides its attachments.",
+          "response": []
+        },
+        {
           "name": "List Guest Invites and Access",
           "event": [
             {
@@ -1691,6 +1924,32 @@
             "header": [],
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/guest-invites/",
             "description": "Manager-only invite and exchanged-access lifecycle view"
+          },
+          "response": []
+        },
+        {
+          "name": "Rotate Guest Access Key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"guest_access_key\", pm.response.json().access_key);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/access-key/rotate/",
+            "description": "Replaces the guest key immediately and captures the one-time replacement"
           },
           "response": []
         },
