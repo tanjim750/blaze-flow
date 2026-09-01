@@ -1,8 +1,10 @@
 from django.contrib.auth import login, logout
+from django.core.files.storage import default_storage
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.middleware.csrf import get_token
 from django.utils import timezone
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes
 from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -15,6 +17,16 @@ from .serializers import (
     MessageSerializer,
     MediaUploadSerializer,
     MediaVersionSerializer,
+    NotificationSerializer,
+    ReviewCommentCreateSerializer,
+    ReviewCommentEditSerializer,
+    ReviewCommentResolutionSerializer,
+    ReviewCommentRevisionSerializer,
+    ReviewCommentSerializer,
+    RevisionRequestSerializer,
+    StageHistorySerializer,
+    WorkflowStageSerializer,
+    WorkflowTransitionSerializer,
     ProjectCreateSerializer,
     ProjectSerializer,
     ProjectUpdateSerializer,
@@ -35,11 +47,16 @@ from .serializers import (
 )
 from .models import (
     MediaVersion,
+    MediaVersionStageEntry,
     Project,
     ResourceAccess,
+    ReviewComment,
+    ReviewCommentRevision,
+    Notification,
     Role,
     RoleStatus,
     WorkflowStage,
+    WorkflowStageStatus,
     WorkflowStageStatusState,
     Workspace,
     WorkspaceMembership,
@@ -50,7 +67,12 @@ from .permissions import (
     PROJECT_READ,
     PROJECT_UPDATE,
     MEDIA_CREATE,
+    MEDIA_DOWNLOAD,
     MEDIA_READ,
+    MEDIA_TRANSITION,
+    REVIEW_COMMENT_CREATE,
+    REVIEW_COMMENT_MANAGE,
+    REVIEW_COMMENT_READ,
     ROLE_MANAGE,
     WORKSPACE_MEMBERS_MANAGE,
     WORKSPACE_READ,
@@ -65,15 +87,26 @@ from .services import (
     MediaUploadError,
     ResourceAccessError,
     RoleError,
+    ReviewCommentError,
+    WorkflowTransitionError,
     WorkspaceSlugConflict,
     accept_invitation,
     archive_project,
     archive_role,
     create_invitation,
     create_project,
+    create_review_comment,
     create_role,
     create_workspace,
     grant_project_access,
+    delete_review_comment_tree,
+    edit_review_comment,
+    mark_all_notifications_read,
+    mark_notification_read,
+    record_user_audit,
+    request_media_revision,
+    set_review_comment_resolution,
+    transition_media_version,
     update_role,
     upload_media_version,
     update_project,
@@ -88,6 +121,7 @@ def health_check(request):
 
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def register(request):
     serializer = RegistrationSerializer(data=request.data)
@@ -97,6 +131,7 @@ def register(request):
 
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def login_user(request):
     serializer = LoginSerializer(data=request.data, context={'request': request})
@@ -183,6 +218,18 @@ def workspace_roles(request, workspace_id):
     except RoleError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(RoleSerializer(role).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def workspace_workflow_stages(request, workspace_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    _require_workspace_permission(request, workspace, WORKSPACE_READ)
+    stages = WorkflowStage.objects.filter(
+        workspace=workspace,
+        status=WorkflowStageStatusState.ACTIVE,
+    ).order_by('sort_order', 'name')
+    return Response(WorkflowStageSerializer(stages, many=True).data)
 
 
 @api_view(['PATCH', 'DELETE'])
@@ -457,3 +504,286 @@ def media_version_detail(request, workspace_id, project_id, media_version_id):
     ):
         raise PermissionDenied('You do not have permission to access this media version.')
     return Response(MediaVersionSerializer(media_version).data)
+
+
+def _media_from_route(workspace_id, project_id, media_version_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    project = get_object_or_404(Project, id=project_id, workspace=workspace)
+    media_version = get_object_or_404(
+        MediaVersion.objects.select_related('original_file', 'project__workspace'),
+        id=media_version_id,
+        project=project,
+    )
+    return workspace, project, media_version
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def media_version_download(request, workspace_id, project_id, media_version_id):
+    workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
+    if not has_project_permission(user=request.user, project=project, permission_key=MEDIA_DOWNLOAD):
+        raise PermissionDenied('You do not have permission to download this media version.')
+    if not media_version.allow_download:
+        raise PermissionDenied('Downloading is disabled for this media version.')
+    file_record = media_version.original_file
+    if not default_storage.exists(file_record.object_key):
+        raise Http404('The stored media object was not found.')
+    record_user_audit(
+        user=request.user,
+        workspace=workspace,
+        action='media.downloaded',
+        entity_type='media_version',
+        entity_id=media_version.id,
+        metadata={'file_id': str(file_record.id)},
+    )
+    return FileResponse(
+        default_storage.open(file_record.object_key, 'rb'),
+        as_attachment=True,
+        filename=file_record.original_name,
+        content_type=file_record.mime_type,
+    )
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def media_version_workflow(request, workspace_id, project_id, media_version_id):
+    workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
+    permission_key = MEDIA_READ if request.method == 'GET' else MEDIA_TRANSITION
+    if not has_project_permission(user=request.user, project=project, permission_key=permission_key):
+        raise PermissionDenied('You do not have permission to access this workflow.')
+    if request.method == 'GET':
+        entries = MediaVersionStageEntry.objects.filter(media_version=media_version).select_related(
+            'workflow_stage', 'workflow_stage_status'
+        ).order_by('entered_at')
+        return Response(StageHistorySerializer(entries, many=True).data)
+
+    serializer = WorkflowTransitionSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    stage = get_object_or_404(
+        WorkflowStage,
+        id=serializer.validated_data['workflow_stage_id'],
+        workspace=workspace,
+    )
+    stage_status = None
+    if serializer.validated_data.get('workflow_stage_status_id'):
+        stage_status = get_object_or_404(
+            WorkflowStageStatus,
+            id=serializer.validated_data['workflow_stage_status_id'],
+            workflow_stage=stage,
+        )
+    try:
+        entry = transition_media_version(
+            media_version=media_version,
+            stage=stage,
+            stage_status=stage_status,
+            user=request.user,
+        )
+    except WorkflowTransitionError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(StageHistorySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+def _require_project_permission(request, project, permission_key, message):
+    if not has_project_permission(
+        user=request.user,
+        project=project,
+        permission_key=permission_key,
+    ):
+        raise PermissionDenied(message)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def review_comment_list_create(request, workspace_id, project_id, media_version_id):
+    workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
+    permission_key = REVIEW_COMMENT_READ if request.method == 'GET' else REVIEW_COMMENT_CREATE
+    _require_project_permission(
+        request,
+        project,
+        permission_key,
+        'You do not have permission to access comments for this media version.',
+    )
+    if request.method == 'GET':
+        comments = ReviewComment.objects.filter(
+            media_version=media_version,
+            deleted_at__isnull=True,
+        ).select_related('author_user').order_by('created_at')
+        return Response(ReviewCommentSerializer(comments, many=True).data)
+
+    serializer = ReviewCommentCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data.copy()
+    parent_comment_id = data.pop('parent_comment_id', None)
+    parent_comment = None
+    if parent_comment_id:
+        parent_comment = get_object_or_404(
+            ReviewComment,
+            id=parent_comment_id,
+            media_version=media_version,
+            deleted_at__isnull=True,
+        )
+    try:
+        comment = create_review_comment(
+            media_version=media_version,
+            user=request.user,
+            parent_comment=parent_comment,
+            **data,
+        )
+    except ReviewCommentError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ReviewCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
+
+
+def _comment_from_route(workspace_id, project_id, media_version_id, comment_id):
+    workspace, project, media_version = _media_from_route(
+        workspace_id, project_id, media_version_id
+    )
+    comment = get_object_or_404(
+        ReviewComment.objects.select_related('author_user', 'media_version__project__workspace'),
+        id=comment_id,
+        media_version=media_version,
+        deleted_at__isnull=True,
+    )
+    return workspace, project, media_version, comment
+
+
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def review_comment_detail(request, workspace_id, project_id, media_version_id, comment_id):
+    workspace, project, media_version, comment = _comment_from_route(
+        workspace_id, project_id, media_version_id, comment_id
+    )
+    if request.method == 'PATCH':
+        _require_project_permission(
+            request,
+            project,
+            REVIEW_COMMENT_CREATE,
+            'You do not have permission to edit comments.',
+        )
+        if comment.author_user_id != request.user.id:
+            raise PermissionDenied('Only the original author can edit this comment.')
+        serializer = ReviewCommentEditSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            comment = edit_review_comment(
+                comment=comment,
+                user=request.user,
+                **serializer.validated_data,
+            )
+        except ReviewCommentError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(ReviewCommentSerializer(comment).data)
+
+    _require_project_permission(
+        request,
+        project,
+        REVIEW_COMMENT_MANAGE,
+        'You do not have permission to delete comments.',
+    )
+    try:
+        delete_review_comment_tree(comment=comment, user=request.user)
+    except ReviewCommentError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def review_comment_resolution(request, workspace_id, project_id, media_version_id, comment_id):
+    workspace, project, media_version, comment = _comment_from_route(
+        workspace_id, project_id, media_version_id, comment_id
+    )
+    _require_project_permission(
+        request,
+        project,
+        REVIEW_COMMENT_MANAGE,
+        'You do not have permission to resolve or reopen comments.',
+    )
+    serializer = ReviewCommentResolutionSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        comment = set_review_comment_resolution(
+            comment=comment,
+            user=request.user,
+            **serializer.validated_data,
+        )
+    except ReviewCommentError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ReviewCommentSerializer(comment).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def review_comment_revisions(request, workspace_id, project_id, media_version_id, comment_id):
+    workspace, project, media_version, comment = _comment_from_route(
+        workspace_id, project_id, media_version_id, comment_id
+    )
+    _require_project_permission(
+        request,
+        project,
+        REVIEW_COMMENT_READ,
+        'You do not have permission to read comment revisions.',
+    )
+    revisions = ReviewCommentRevision.objects.filter(review_comment=comment).order_by('created_at')
+    return Response(ReviewCommentRevisionSerializer(revisions, many=True).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def media_revision_request(request, workspace_id, project_id, media_version_id):
+    workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
+    for permission_key in (REVIEW_COMMENT_CREATE, MEDIA_TRANSITION):
+        _require_project_permission(
+            request,
+            project,
+            permission_key,
+            'You do not have permission to request a revision.',
+        )
+    serializer = RevisionRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        comment, entry, transitioned = request_media_revision(
+            media_version=media_version,
+            user=request.user,
+            **serializer.validated_data,
+        )
+    except (ReviewCommentError, WorkflowTransitionError) as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(
+        {
+            'comment': ReviewCommentSerializer(comment).data,
+            'workflow': StageHistorySerializer(entry).data,
+            'workflow_transitioned': transitioned,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def notification_list(request):
+    notifications = Notification.objects.filter(recipient_user=request.user).select_related(
+        'actor_user'
+    ).order_by('-created_at')
+    if request.query_params.get('unread', '').lower() == 'true':
+        notifications = notifications.filter(read_at__isnull=True)
+    return Response(NotificationSerializer(notifications, many=True).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def notification_read(request, notification_id):
+    notification = get_object_or_404(
+        Notification,
+        id=notification_id,
+        recipient_user=request.user,
+    )
+    notification = mark_notification_read(notification=notification)
+    return Response(NotificationSerializer(notification).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def notification_read_all(request):
+    updated_count = mark_all_notifications_read(user=request.user)
+    return Response({'updated_count': updated_count})

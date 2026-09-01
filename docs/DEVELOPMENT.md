@@ -16,6 +16,7 @@ The currently supported behavior is:
 - additive workspace/project permission evaluation with `ALL` and `SELECTED` project scope
 - authorized project listing, creation, detail, update, and archival
 - protected system roles, custom role administration, and explicit project-access grants
+- default-storage media uploads with project-wide version allocation and initial workflow history
 - database constraints for principal, author, ownership, workflow, and subscription invariants
 - a public `GET /api/health/` endpoint
 - automated foundation checks and tests
@@ -34,6 +35,8 @@ The currently supported behavior is:
 | `app/tests.py` | Current foundation tests; split by domain as the suite grows |
 | `docs/implementations/` | Product/domain intent |
 | `docs/implementation-log.md` | Chronological delivery and decision record |
+| `Postman_Collection.json` | Executable manual API requests with automatic variable capture |
+| `POSTMAN_TESTING_GUIDE.md` | Session, CSRF, owner/member, grant, and media testing workflow |
 | `database-schema.sql` | Historical design reference, not an executable schema source |
 
 ## Local setup with Docker
@@ -92,6 +95,7 @@ The ignore files prevent metadata from being committed, but ignore rules cannot 
 | `POSTGRES_PASSWORD` | Yes | PostgreSQL password |
 | `POSTGRES_HOST` | No | Defaults to `localhost`; Compose sets `db` |
 | `POSTGRES_PORT` | No | Defaults to `5432` |
+| `MAX_MEDIA_UPLOAD_BYTES` | No | Defaults to 1 GiB |
 
 Never commit `.env`. Deployment secrets belong in the target platform's secret manager.
 
@@ -116,6 +120,7 @@ All request and response bodies use JSON. Authentication uses Django's session c
 | `GET` | `/api/auth/me/` | Authenticated | Return the current user |
 | `POST` | `/api/workspaces/` | Authenticated | Create a workspace and owner authorization graph |
 | `GET/POST` | `/api/workspaces/{workspace_id}/roles/` | Reader/role manager | List or create roles |
+| `GET` | `/api/workspaces/{workspace_id}/workflow-stages/` | Workspace reader | List active workflow stages and statuses |
 | `PATCH/DELETE` | `/api/workspaces/{workspace_id}/roles/{role_id}/` | Role manager | Update or archive a custom role |
 | `GET` | `/api/workspaces/{workspace_id}/members/` | Workspace reader | List workspace principals |
 | `PATCH` | `/api/workspaces/{workspace_id}/members/{membership_id}/` | Member manager | Change a non-owner role, scope, or status |
@@ -125,6 +130,18 @@ All request and response bodies use JSON. Authentication uses Django's session c
 | `GET/PATCH/DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/` | Authorized member | Read, update, or archive a project |
 | `GET/POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/access/` | Member manager | List or create explicit project grants |
 | `DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/access/{grant_id}/` | Member manager | Revoke an explicit grant |
+| `GET/POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/` | Authorized member | List media or upload a video/image version |
+| `GET` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/` | Authorized member | Read media metadata and its current stage |
+| `GET` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/download/` | Media downloader | Download an enabled private media object |
+| `GET/POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/workflow/` | Media reader/transitioner | Read history or transition to another stage |
+| `GET/POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/` | Comment reader/creator | List active comments or create a comment/reply |
+| `PATCH/DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/` | Author/comment manager | Edit own text or soft-delete a thread |
+| `POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/resolution/` | Comment manager | Resolve or reopen a top-level thread |
+| `GET` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/revisions/` | Comment reader | Read immutable edit snapshots |
+| `POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/revision-requests/` | Comment creator/media transitioner | Create feedback and request a workflow revision |
+| `GET` | `/api/notifications/` | Authenticated recipient | List own notifications; `?unread=true` filters unread |
+| `POST` | `/api/notifications/{notification_id}/read/` | Notification recipient | Idempotently mark one notification read |
+| `POST` | `/api/notifications/read-all/` | Authenticated recipient | Mark all own unread notifications read |
 
 Registration fields are `email`, `password`, `first_name`, `last_name`, and optional `timezone`. Workspace creation fields are `name`, optional `slug`, and a required IANA `timezone` such as `Europe/London`.
 
@@ -139,6 +156,53 @@ Workspace invitation tokens are returned only by the creation response and store
 The permission registry in `app/permissions.py` is authoritative. Role APIs reject unknown keys. `Owner` and `Member` are protected system roles; custom roles may be updated or archived, but an active membership must be reassigned before its role can be archived. Role deletion is lifecycle archival rather than physical deletion.
 
 Explicit project grants are valid only for active memberships using `SELECTED` scope. An `ALL` membership does not need grant rows. Grant creation validates workspace consistency, and revocation immediately removes that access unless another additive membership still authorizes the user.
+
+## Media storage and versioning
+
+Media uploads use Django's configured `default_storage`. Local development writes beneath `MEDIA_ROOT`; production must configure durable private storage before accepting real client assets. The `StorageBackend` database row records logical provenance but does not configure storage credentials.
+
+Uploads accept supported PNG, JPEG, GIF, WebP, MP4, QuickTime, and WebM signatures up to `MAX_MEDIA_UPLOAD_BYTES`. The service verifies the byte signature against the declared MIME type and stores a SHA-256 checksum. Objects use opaque workspace/project paths, while API responses expose safe file metadata rather than internal object keys.
+
+Object storage cannot join a PostgreSQL transaction, so the service writes the object first and performs a compensating delete if database work fails. The database transaction locks the Project row, advances `next_media_version_number`, creates the File and Media Version, and creates exactly one open initial stage-history entry.
+
+New and existing workspaces receive Queued, In Progress, In Review, Revision, Approval, and Approved stages. The earliest active stage is the upload default unless another active stage in the same workspace is selected.
+
+The workflow-stage list endpoint exposes valid transition IDs. A transition locks the Media Version and its open entry, closes that entry, and creates one new open history entry in a single database transaction. Re-entering the same stage/status is rejected. Uploads, downloads, and transitions write workspace audit records.
+
+Downloads are never exposed as direct storage URLs. The application checks `media.download`, project scope, and `allow_download` before opening the object through `default_storage`. Production deployments must use private durable storage; signature verification and checksums do not replace malware scanning.
+
+## Review comments and revision requests
+
+Top-level text comments may omit timing, target a single `start_time_ms`, or target an inclusive range with `start_time_ms` and `end_time_ms`. Times are non-negative milliseconds, an end requires a start, and the end cannot precede the start. Replies use `parent_comment_id`, must belong to the same Media Version, and cannot declare separate timing.
+
+`review.comment.read` controls active comment and revision-history reads. `review.comment.create` controls creation and author-only editing. `review.comment.manage` controls top-level resolution/reopening and recursive soft deletion. Deleted rows, contents, and revisions remain stored, while normal lists omit the deleted subtree.
+
+Before an edit changes text, the service captures the previous timing, resolution state, and complete ordered content collection in `ReviewCommentRevision.snapshot`. The edit, revision, and audit event share one transaction.
+
+A revision request requires both `review.comment.create` and `media.transition`. It atomically creates a top-level feedback comment and transitions the Media Version to the active `revision` stage. If the workflow operation fails, the comment and its audit record roll back. If the media is already in Revision, the feedback is created without a duplicate stage-history entry.
+
+## Mentions, notifications, and the outbox
+
+Comment creation, editing, and revision requests accept structured mention IDs:
+
+```json
+{
+  "text": "Please review this update.",
+  "mentioned_user_ids": ["00000000-0000-0000-0000-000000000000"]
+}
+```
+
+The service deduplicates IDs, ignores the author, and requires every remaining user to be active and authorized for `review.comment.read` on the Project. An invalid or unauthorized target fails the whole operation. Edit snapshots include the previous mention set.
+
+Each new Comment Mention creates one recipient-owned Notification and one `notification.created` Outbox Event in the same transaction. Unique constraints prevent duplicate active mentions and duplicate per-comment delivery. Removing a mention retains the historical notification; re-adding it does not send the same notification again.
+
+The processor claims pending/failed events with row locking, records attempts and errors, retries failures, and reclaims stale `PROCESSING` events after five minutes by default:
+
+```bash
+python manage.py process_outbox --limit 100 --reclaim-after-seconds 300
+```
+
+Delivery is at-least-once, so subscribers must be idempotent. The current command publishes through the in-process domain-event dispatcher. Production email/push delivery requires a real subscriber and continuous or scheduled execution.
 
 ## Schema and migrations
 
@@ -180,8 +244,8 @@ CI runs these checks on every push and pull request.
 ## Suggested implementation order
 
 1. Add email delivery, CSRF-aware frontend integration, authentication throttling, and password-reset APIs.
-2. Implement the file-storage adapter and media upload transaction.
-3. Add project-wide media version allocation and initial workflow-stage history.
-4. Build workflow transitions and the media review experience.
+2. Configure private cloud storage, malware scanning, thumbnails, and asynchronous media processing.
+3. Register email/push delivery consumers, preferences, retry backoff, and dead-letter monitoring.
+4. Implement safe comment attachments and visual annotations.
 
 Avoid implementing all documented domains at once. Complete and test one end-to-end workflow before expanding the surface area.

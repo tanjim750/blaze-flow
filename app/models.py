@@ -122,6 +122,17 @@ class AuditActorType(models.TextChoices):
     SYSTEM = 'SYSTEM'
 
 
+class NotificationKind(models.TextChoices):
+    REVIEW_COMMENT_MENTION = 'REVIEW_COMMENT_MENTION'
+
+
+class OutboxEventStatus(models.TextChoices):
+    PENDING = 'PENDING'
+    PROCESSING = 'PROCESSING'
+    PUBLISHED = 'PUBLISHED'
+    FAILED = 'FAILED'
+
+
 class SubscriptionPlan(models.TextChoices):
     FREE = 'FREE'
     PRO = 'PRO'
@@ -735,6 +746,26 @@ class ReviewCommentRevision(models.Model):
         ]
 
 
+class ReviewCommentMention(models.Model):
+    id = models.UUIDField(primary_key=True)
+    review_comment = models.ForeignKey(ReviewComment, on_delete=models.DO_NOTHING, db_column='review_comment_id', related_name='+')
+    user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='user_id', related_name='+')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'review_comment_mentions'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['review_comment', 'user'],
+                name='review_comment_mentions_comment_user_uniq',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['review_comment']),
+            models.Index(fields=['user', 'created_at']),
+        ]
+
+
 class Annotation(models.Model):
     id = models.UUIDField(primary_key=True)
     media_version = models.ForeignKey(MediaVersion, on_delete=models.DO_NOTHING, db_column='media_version_id', related_name='+')
@@ -1162,6 +1193,58 @@ class AuditLog(models.Model):
             models.Index(fields=['actor_guest_session']),
             models.Index(fields=['action']),
             models.Index(fields=['request_id']),
+        ]
+
+
+class Notification(models.Model):
+    id = models.UUIDField(primary_key=True)
+    recipient_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='recipient_user_id', related_name='+')
+    workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
+    actor_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='actor_user_id', null=True, blank=True, related_name='+')
+    kind = models.CharField(max_length=100, choices=NotificationKind.choices)
+    entity_type = models.CharField(max_length=100)
+    entity_id = models.CharField(max_length=255)
+    payload = models.JSONField(default=dict)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'notifications'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['recipient_user', 'kind', 'entity_type', 'entity_id'],
+                name='notifications_recipient_kind_entity_uniq',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['recipient_user', 'created_at']),
+            models.Index(fields=['recipient_user', 'read_at']),
+            models.Index(fields=['workspace', 'created_at']),
+        ]
+
+
+class OutboxEvent(models.Model):
+    id = models.UUIDField(primary_key=True)
+    topic = models.CharField(max_length=255)
+    aggregate_type = models.CharField(max_length=100)
+    aggregate_id = models.CharField(max_length=255)
+    deduplication_key = models.CharField(max_length=500, unique=True)
+    payload = models.JSONField(default=dict)
+    status = models.CharField(max_length=20, choices=OutboxEventStatus.choices, default=OutboxEventStatus.PENDING)
+    attempts = models.PositiveIntegerField(default=0)
+    available_at = models.DateTimeField()
+    locked_at = models.DateTimeField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'outbox_events'
+        indexes = [
+            models.Index(fields=['status', 'available_at']),
+            models.Index(fields=['aggregate_type', 'aggregate_id']),
+            models.Index(fields=['created_at']),
         ]
 
 

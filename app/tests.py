@@ -207,6 +207,29 @@ class AuthenticationApiTests(TestCase):
         self.assertEqual(rejected.status_code, 403)
         self.assertEqual(accepted.status_code, 201)
 
+    def test_registration_ignores_a_stale_authenticated_session(self):
+        existing_user = get_user_model().objects.create_user(
+            email='stale-session@example.com',
+            password='a-secure-test-password',
+            first_name='Stale',
+            last_name='Session',
+        )
+        csrf_client = APIClient(enforce_csrf_checks=True)
+        csrf_client.force_login(existing_user)
+
+        response = csrf_client.post(
+            reverse('api-register'),
+            {
+                'email': 'fresh-registration@example.com',
+                'password': 'another-secure-password',
+                'first_name': 'Fresh',
+                'last_name': 'Registration',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+
 
 class WorkspaceCreationTests(TestCase):
     def setUp(self):

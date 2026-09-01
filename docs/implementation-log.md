@@ -4,6 +4,169 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-01 — Structured mentions and durable notification outbox
+
+### Delivered
+
+- Added structured `mentioned_user_ids` to comment creation, editing, and revision requests.
+- Added durable Comment Mention rows with per-comment/per-user uniqueness.
+- Restricted mention targets to active users who currently have `review.comment.read` access to the Project; self-mentions are ignored and duplicate IDs are deduplicated.
+- Added recipient-owned in-app notifications with unread filtering, idempotent single-read, and read-all endpoints.
+- Added a transactional outbox with deduplication keys, delivery status, attempts, error capture, locking, retry, and stale-claim recovery.
+- Added `process_outbox` to publish durable events through the existing domain-event dispatcher.
+- Made comment, mention, notification, and outbox creation one transaction.
+- Preserved notifications when mentions are removed and prevented repeat delivery when the same user is re-mentioned on the same comment.
+- Added migration `0008`, Postman mention/inbox requests, and end-to-end notification tests.
+
+### Decisions
+
+- Mentions are explicit user UUIDs, not names parsed from free text. This avoids ambiguous identity and keeps rendering separate from notification delivery.
+- The in-app Notification is the immediate user-facing record. The Outbox Event is the durable integration hook for email, push, WebSocket, or other handlers.
+- Outbox delivery is at-least-once. Consumers must process the notification ID idempotently.
+- Removed mentions remove the active relationship but do not retract historical notifications.
+
+### Known limitations
+
+- No email, push, WebSocket, or mobile handler is registered yet; the processor publishes only to configured domain-event subscribers.
+- Failed events retry on the next processor run without exponential backoff or a dead-letter threshold.
+- Notification lists are not paginated and there are no per-user delivery preferences.
+- Reply-author, assignment, workflow, and resolution notifications are not implemented yet.
+
+### Verification
+
+- Sixty-one tests pass with migrations `0001` through `0008` applied.
+- Tests cover mention eligibility, self/duplicate handling, edit synchronization, notification deduplication, inbox isolation, idempotent reads, outbox failure/retry, stale-claim recovery, and transaction rollback.
+- Django checks, migration drift checks, Postman JSON validation, Compose validation, Python compilation, and whitespace checks pass.
+
+### Next recommended milestone
+
+Register an email delivery consumer with retry backoff and preferences, then implement safely stored review attachments and visual annotations.
+
+## 2026-09-01 — Timestamped review comments and revision requests
+
+### Delivered
+
+- Added `review.comment.read`, `review.comment.create`, and `review.comment.manage` permissions to the application registry and system roles, with migration `0007` for existing workspaces.
+- Added authorized creation and listing of general, point-in-time, and time-range text comments.
+- Added arbitrary-depth replies scoped to the same Media Version; replies inherit timing from their parent thread.
+- Added author-only text editing with an immutable full-content snapshot written before every meaningful edit.
+- Added comment revision-history reads.
+- Added manager-controlled thread resolution/reopening and recursive soft deletion of descendant replies.
+- Added an atomic revision-request operation that creates feedback and moves the Media Version to the workspace's active Revision stage.
+- Added durable audit records for comment creation, editing, resolution, reopening, deletion, and revision requests.
+- Expanded the Postman collection and testing guide for the complete review-comment lifecycle.
+
+### Decisions
+
+- This milestone exposes text comment content only. The existing multi-content schema remains the extension point for later audio, image, and file attachments.
+- `review.comment.create` also authorizes editing, but the service independently enforces original-user authorship.
+- `review.comment.manage` controls resolution, reopening, and deletion; authorship alone does not grant moderation.
+- Revision requests compose the existing comment and workflow domains in one database transaction instead of adding a duplicate revision-request table.
+- Requesting another revision while already in the Revision stage creates the additional feedback without manufacturing a no-op workflow history entry.
+
+### Known limitations
+
+- Guest-session commenting, reactions, pagination, and comment attachments are not implemented; the later notification entry supersedes the mention/notification limitation.
+- Active comments are returned as a flat creation-ordered list with `parent_comment_id`; clients assemble the visible thread tree.
+- Deleted comments and their retained revisions do not yet have a moderator-facing recovery/history endpoint.
+- Comment lists currently use straightforward per-comment content/revision lookups and will need prefetching or denormalized counts before high-volume use.
+
+### Verification
+
+- Fifty-four tests pass with migrations `0001` through `0007` applied.
+- Review tests cover timestamp ranges, reply inheritance, cross-media parents, author-only editing, immutable snapshots, management permission, resolve/reopen, recursive soft deletion, outsider denial, revision-stage behavior, and transactional rollback.
+- Django checks, migration drift checks, Postman JSON validation, Compose validation, and whitespace checks pass.
+
+### Next recommended milestone
+
+See the later structured-mentions and durable-notification-outbox milestone above.
+
+## 2026-09-01 — Verified media, private downloads, and workflow transitions
+
+### Delivered
+
+- Added byte-signature detection for PNG, JPEG, GIF, WebP, MP4, QuickTime, and WebM uploads and rejected declared MIME types that do not match their contents.
+- Persisted a SHA-256 checksum for every accepted media file.
+- Added `media.download` and `media.transition` permissions to new system roles and migration `0006` to backfill existing system roles.
+- Added authorized private downloads gated by both project permission and the Media Version `allow_download` flag.
+- Added a read-only workspace workflow-stage endpoint so clients can discover valid transition targets.
+- Added transactional workflow transitions that lock the Media Version, close its current entry, create one new open entry, and reject no-op transitions.
+- Added ordered stage-history responses and durable audit records for upload, download, and transition actions.
+- Expanded the Postman collection and manual guide to cover stage discovery, download, transition, and history.
+
+### Decisions
+
+- API responses expose safe file metadata, never storage object keys or public URLs.
+- Content verification uses an explicit supported-signature allowlist; a client-provided MIME header is not trusted by itself.
+- Downloads remain application-authorized and storage-agnostic through Django `default_storage`.
+- Audit creation participates in the same database transaction as uploads and workflow transitions.
+
+### Known limitations
+
+- Signature inspection is not malware scanning or deep media decoding; production storage still requires antivirus scanning and quarantine handling.
+- Local `FileSystemStorage` is suitable only for development. Production needs private durable object storage and deployment-specific delivery controls.
+- Download audit creation occurs before the streaming response completes, so it records authorization/start rather than confirmed full transfer.
+- Workflow-stage administration is not yet implemented; the later review-comments entry supersedes the comment limitation.
+
+### Verification
+
+- Forty-six tests pass with migrations `0001` through `0006` applied.
+- Tests cover MIME spoofing, checksums, upload/download/transition audits, download policy, ordered stage discovery, transition history, and duplicate-transition rejection.
+- Django checks, migration drift checks, collection JSON validation, Compose validation, and whitespace checks pass.
+
+### Next recommended milestone
+
+See the later timestamped review-comments and revision-request milestone above.
+
+## 2026-09-01 — Postman collection aligned with executable API
+
+- Fixed public Register/Login so an existing stale session cookie does not trigger SessionAuthentication CSRF rejection before `AllowAny` is evaluated.
+- Rebuilt the Postman collection from the current Django routes and serializer contracts.
+- Removed unsupported role/member/invitation/access methods and corrected role, grant, project, and media payloads.
+- Added collection variables and response scripts for CSRF, workspace, role, membership, invitation, project, grant, and media identifiers.
+- Added correct session switching instructions for the owner and invited-member flow.
+- Replaced the pre-created administrator claim with the actual registration workflow.
+- Documented cleanup ordering so archival or revocation requests do not invalidate later manual tests.
+
+## 2026-09-01 — Transactional media upload and workflow initialization
+
+### Delivered
+
+- Added `media.create` and `media.read` permission keys to system roles and the permission registry.
+- Provisioned six default workflow stages for new workspaces and backfilled existing workspaces.
+- Added configurable media roots and upload-size limits.
+- Implemented authorized multipart image/video upload, list, and detail endpoints.
+- Added opaque default-storage object paths and centralized File persistence.
+- Implemented project-row locking and monotonically increasing project-wide version allocation.
+- Created the File, Media Version, counter update, and initial open stage entry in one database transaction.
+- Added compensating object deletion when database work fails after storage succeeds.
+- Added migration `0005` for existing system-role permissions and workspace stages.
+
+### Decisions
+
+- Django `default_storage` is the runtime abstraction; StorageBackend rows provide provenance rather than credentials.
+- Storage keys remain internal and are not returned by media serializers.
+- Every review upload creates a new immutable Media Version.
+- Version allocation uses the locked Project counter rather than `MAX(version_number) + 1`.
+- Storage failures use explicit compensation because object stores cannot participate in PostgreSQL transactions.
+
+### Known limitations
+
+- This entry records the upload milestone at the time it shipped; later entries supersede its MIME/checksum/download limitations.
+- Malware scanning, transcoding, thumbnails, cloud credentials, and progress reporting are not implemented.
+- PostgreSQL row-lock concurrency does not yet have a dedicated parallel integration test.
+- Workflow transitions and review comments are not implemented.
+
+### Verification
+
+- Forty tests pass with migrations `0001` through `0005` applied.
+- Tests cover version sequencing, initial history, invalid files, selected-project authorization, cross-user denial, transaction rollback, counter rollback, and compensating storage deletion.
+- Django checks, migration drift checks, Compose validation, and whitespace checks pass.
+
+### Next recommended milestone
+
+See the later verified-media and workflow-transition milestone above.
+
 ## 2026-08-31 — Custom roles and explicit project-access administration
 
 ### Delivered
