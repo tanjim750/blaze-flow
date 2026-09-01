@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
-from .models import Annotation, AnnotationRevision, AuditLog, File, FileSecurityScan, FileVariant, OutboxEvent, ReviewCommentContent
+from .models import Annotation, AnnotationRevision, AuditLog, File, FileSecurityScan, FileVariant, OutboxEvent, ReviewCommentContent, WorkspaceRetentionPolicy
 from .services.file_processing import ClamAVTcpScanner
 from .services.media import _storage_backend
 from .services.outbox import process_outbox_events
@@ -150,6 +150,52 @@ class ReviewAssetsApiTests(WorkspaceAccessSetupMixin, TestCase):
         attachment.file.refresh_from_db()
         self.assertIn('physical_deleted_at', attachment.file.metadata)
         self.assertEqual(purge_deleted_review_files(older_than_days=30)['examined'], 0)
+
+    def test_workspace_manager_administers_policy_and_cleanup_uses_it(self):
+        policy_url = reverse('api-workspace-retention-policy', args=[self.workspace.id])
+        default_policy = self.client.get(policy_url)
+        configured = self.client.patch(
+            policy_url,
+            {'review_file_cleanup_enabled': False, 'review_file_retention_days': 60},
+            format='json',
+        )
+        self.assertEqual(default_policy.status_code, 200)
+        self.assertEqual(default_policy.json()['source'], 'environment_default')
+        self.assertEqual(configured.status_code, 200)
+        self.assertEqual(configured.json()['source'], 'workspace')
+        self.assertEqual(configured.json()['review_file_retention_days'], 60)
+        self.assertFalse(configured.json()['review_file_cleanup_enabled'])
+        self.assertTrue(
+            AuditLog.objects.filter(action='workspace.retention_policy.updated').exists()
+        )
+
+        uploaded = self.client.post(
+            self.attachment_upload_url(),
+            {'file': SimpleUploadedFile('policy.pdf', b'%PDF-1.7\npolicy', content_type='application/pdf')},
+            format='multipart',
+        )
+        attachment = ReviewCommentContent.objects.get(id=uploaded.json()['id'])
+        detail_url = reverse(
+            'api-review-attachment-detail',
+            args=[self.workspace.id, self.project_id, self.media_id, self.comment_id, attachment.id],
+        )
+        self.client.delete(detail_url)
+        old = timezone.now() - timedelta(days=31)
+        File.objects.filter(id=attachment.file_id).update(deleted_at=old)
+        ReviewCommentContent.objects.filter(id=attachment.id).update(deleted_at=old)
+        self.assertEqual(purge_deleted_review_files()['examined'], 0)
+
+        self.client.patch(
+            policy_url, {'review_file_cleanup_enabled': True}, format='json'
+        )
+        self.assertEqual(purge_deleted_review_files()['examined'], 0)
+        self.client.patch(policy_url, {'review_file_retention_days': 30}, format='json')
+        self.assertEqual(purge_deleted_review_files()['purged'], 1)
+        self.assertEqual(WorkspaceRetentionPolicy.objects.count(), 1)
+
+        self.invite_and_accept()
+        self.client.force_authenticate(self.member_user)
+        self.assertEqual(self.client.get(policy_url).status_code, 403)
 
     def test_spoofed_or_oversized_attachment_is_rejected_without_file_row(self):
         initial_files = File.objects.count()

@@ -4,7 +4,9 @@ from app.models import (
     ReviewComment,
     ReviewCommentContent,
     ReviewCommentMention,
+    ReviewCommentReaction,
     ReviewCommentRevision,
+    ReviewReactionEmoji,
     FileVariant,
 )
 
@@ -61,6 +63,10 @@ class ReviewCommentResolutionSerializer(serializers.Serializer):
     resolved = serializers.BooleanField()
 
 
+class ReviewReactionWriteSerializer(serializers.Serializer):
+    emoji = serializers.ChoiceField(choices=ReviewReactionEmoji.choices)
+
+
 class ReviewCommentSerializer(serializers.ModelSerializer):
     parent_comment_id = serializers.UUIDField(allow_null=True)
     author = serializers.SerializerMethodField()
@@ -68,12 +74,13 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
     revision_count = serializers.SerializerMethodField()
     mentions = serializers.SerializerMethodField()
     attachments = serializers.SerializerMethodField()
+    reactions = serializers.SerializerMethodField()
 
     class Meta:
         model = ReviewComment
         fields = (
             'id', 'parent_comment_id', 'author', 'text', 'start_time_ms', 'end_time_ms',
-            'resolved', 'resolved_by_user_id', 'resolved_at', 'mentions', 'attachments', 'revision_count',
+            'resolved', 'resolved_by_user_id', 'resolved_at', 'mentions', 'attachments', 'reactions', 'revision_count',
             'created_at', 'updated_at',
         )
 
@@ -138,6 +145,31 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
             }
             for content in contents
         ]
+
+    def get_reactions(self, comment):
+        reactions = ReviewCommentReaction.objects.filter(
+            review_comment=comment
+        ).select_related('reacted_by_user', 'reacted_by_guest_session').order_by(
+            'created_at', 'id'
+        )
+        grouped = {}
+        for reaction in reactions:
+            group = grouped.setdefault(
+                reaction.emoji,
+                {'emoji': reaction.emoji, 'count': 0, 'reactors': []},
+            )
+            group['count'] += 1
+            if reaction.reacted_by_user:
+                actor = reaction.reacted_by_user
+                group['reactors'].append({
+                    'id': str(actor.id), 'name': actor.get_full_name(), 'type': 'user',
+                })
+            else:
+                actor = reaction.reacted_by_guest_session
+                group['reactors'].append({
+                    'id': str(actor.id), 'name': actor.name, 'type': 'guest',
+                })
+        return list(grouped.values())
 
 
 class ReviewCommentRevisionSerializer(serializers.ModelSerializer):

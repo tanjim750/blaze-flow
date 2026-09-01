@@ -44,3 +44,15 @@ class WorkspaceCreateSerializer(serializers.Serializer):
                 )
             attrs['slug'] = generated_slug
         return attrs
+
+
+class WorkspaceRetentionPolicyUpdateSerializer(serializers.Serializer):
+    review_file_cleanup_enabled = serializers.BooleanField(required=False)
+    review_file_retention_days = serializers.IntegerField(
+        required=False, min_value=1, max_value=3650
+    )
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError('Provide at least one retention-policy field.')
+        return attrs

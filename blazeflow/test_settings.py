@@ -22,5 +22,6 @@ REST_FRAMEWORK = {
         'registration': '10000/hour',
         'login': '10000/hour',
         'password_reset': '10000/hour',
+        'email_verification': '10000/hour',
     },
 }

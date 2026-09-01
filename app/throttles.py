@@ -11,3 +11,7 @@ class LoginThrottle(AnonRateThrottle):
 
 class PasswordResetThrottle(AnonRateThrottle):
     scope = 'password_reset'
+
+
+class EmailVerificationThrottle(AnonRateThrottle):
+    scope = 'email_verification'

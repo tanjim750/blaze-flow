@@ -98,6 +98,8 @@ The ignore files prevent metadata from being committed, but ignore rules cannot 
 | `MAX_MEDIA_UPLOAD_BYTES` | No | Defaults to 1 GiB |
 | `PASSWORD_RESET_URL` | No | Frontend reset page used in reset emails |
 | `PASSWORD_RESET_TTL_MINUTES` | No | Reset-token lifetime; defaults to 30 minutes |
+| `EMAIL_VERIFICATION_URL` | No | Frontend verification page used in verification emails |
+| `EMAIL_VERIFICATION_TTL_MINUTES` | No | Verification-token lifetime; defaults to 1,440 minutes |
 | `REVIEW_PAGE_SIZE` | No | Default comment/annotation page size; defaults to 50 |
 | `REVIEW_MAX_PAGE_SIZE` | No | Maximum requested review page size; defaults to 200 |
 
@@ -109,7 +111,16 @@ Never commit `.env`. Deployment secrets belong in the target platform's secret m
 
 User lifecycle status controls authentication: only `ACTIVE` users are considered active by Django's default authentication backend. `SUSPENDED` and `DELETED` users cannot authenticate.
 
-Registration, login, and password-reset endpoints are independently throttled by client address. Rates are environment-configurable. `THROTTLE_TRUSTED_PROXY_COUNT` defaults to zero so forwarded headers are not trusted; set it to the exact proxy depth only when each listed proxy normalizes the forwarding chain. Password-reset requests always return the same `202` response to prevent account enumeration. Reset tokens are returned only through email, stored as SHA-256 hashes, expire, are single-use, and invalidate earlier active reset tokens. Authenticated password changes require the current password and preserve the caller's current session.
+Registration, login, password-reset, and email-verification endpoints are independently throttled by client address. Rates are environment-configurable. `THROTTLE_TRUSTED_PROXY_COUNT` defaults to zero so forwarded headers are not trusted; set it to the exact proxy depth only when each listed proxy normalizes the forwarding chain. Password-reset and verification requests always return the same `202` response to prevent account enumeration.
+
+Registration sends a verification email. Verification tokens are stored only as SHA-256 hashes, expire, are single-use, and a resend invalidates earlier active tokens. Verification is currently an account signal exposed through `email_verified_at`; it does not block login while product onboarding policies are still being defined. Reset tokens follow the same hashed, expiring, single-use lifecycle. Authenticated password changes require the current password and preserve the caller's current session.
+
+Expired identity tokens can be previewed and deleted in bounded batches:
+
+```bash
+python manage.py purge_auth_tokens --dry-run --limit 1000
+python manage.py purge_auth_tokens --limit 1000
+```
 
 OAuth providers should link through `OAuthIdentity`. An OAuth-only account must use `set_unusable_password()` until the owner configures a password. Do not introduce a second user or password table.
 
@@ -124,6 +135,8 @@ All request and response bodies use JSON. Authentication uses Django's session c
 | `POST` | `/api/auth/login/` | Public | Start a session |
 | `POST` | `/api/auth/password-reset/request/` | Public | Send enumeration-safe reset instructions |
 | `POST` | `/api/auth/password-reset/confirm/` | Public | Consume a reset token and replace the password |
+| `POST` | `/api/auth/email-verification/request/` | Public | Send enumeration-safe verification instructions |
+| `POST` | `/api/auth/email-verification/confirm/` | Public | Consume a verification token |
 | `POST` | `/api/auth/password/change/` | Authenticated | Replace password after current-password verification |
 | `POST` | `/api/auth/logout/` | Authenticated | End the current session |
 | `GET` | `/api/auth/me/` | Authenticated | Return the current user |
@@ -152,6 +165,7 @@ All request and response bodies use JSON. Authentication uses Django's session c
 | `PATCH/DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/` | Author/comment manager | Edit own text or soft-delete a thread |
 | `POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/resolution/` | Comment manager | Resolve or reopen a top-level thread |
 | `GET` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/revisions/` | Comment reader | Read immutable edit snapshots |
+| `POST/DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/reactions/` | Reaction creator | Add or remove the caller's reaction |
 | `POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/revision-requests/` | Comment creator/media transitioner | Create feedback and request a workflow revision |
 | `POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/attachments/` | Comment author | Upload a verified private attachment |
 | `GET/DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/attachments/{content_id}/` | Comment reader/author-manager | Download or soft-delete an attachment |
@@ -159,6 +173,7 @@ All request and response bodies use JSON. Authentication uses Django's session c
 | `PATCH/DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/annotations/{annotation_id}/` | Author/annotation manager | Replace own markup or soft-delete it |
 | `GET` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/annotations/{annotation_id}/revisions/` | Annotation reader | Read immutable annotation snapshots |
 | `GET` | `/api/workspaces/{workspace_id}/delivery-health/` | Workspace manager | Read delivery/outbox status counts |
+| `GET/PATCH` | `/api/workspaces/{workspace_id}/retention-policy/` | Workspace manager | Read or update review-file cleanup policy |
 | `GET` | `/api/notifications/` | Authenticated recipient | List own notifications; `?unread=true` filters unread |
 | `GET/PATCH` | `/api/notification-preferences/` | Authenticated user | Read or update mention-email preference |
 | `POST` | `/api/notifications/{notification_id}/read/` | Notification recipient | Idempotently mark one notification read |
@@ -204,6 +219,8 @@ Before an edit changes text, the service captures the previous timing, resolutio
 
 A revision request requires both `review.comment.create` and `media.transition`. It atomically creates a top-level feedback comment and transitions the Media Version to the active `revision` stage. If the workflow operation fails, the comment and its audit record roll back. If the media is already in Revision, the feedback is created without a duplicate stage-history entry.
 
+`review.reaction.create` allows registered collaborators to add or remove their own reaction. Guest links use the same `review.reaction.create` scope. Supported reactions are 👍, ❤️, 😂, 😮, 😢, and 🎉. Adding the same emoji twice is idempotent, deletion affects only the caller's matching reaction, and comment responses expose grouped counts and reactor names. Reaction changes are audited.
+
 ## Mentions, notifications, and the outbox
 
 Comment creation, editing, and revision requests accept structured mention IDs:
@@ -248,20 +265,23 @@ Preview processing decodes valid images into bounded JPEG thumbnails and valid W
 
 `FILE_SECURITY_SCANNER` selects a scanner class with a `name` attribute and `scan(stream)` method returning at least `{"clean": true|false}`. The default `EicarAwareScanner` is only a development/test integration backend. `app.services.file_processing.ClamAVTcpScanner` implements ClamAV's bounded INSTREAM protocol using `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT_SECONDS`, and `CLAMAV_MAX_STREAM_BYTES`. Django system checks reject an invalid scanner class. Storage writes are compensated if database creation fails.
 
-Soft deletion marks an attachment, its File, and generated variants. `REVIEW_FILE_RETENTION_DAYS` defaults to 30. Operators should preview and then schedule physical cleanup:
+Soft deletion marks an attachment, its File, and generated variants. `REVIEW_FILE_RETENTION_DAYS` defaults to 30 and is used when a workspace has no explicit policy. Workspace managers can enable or disable cleanup and select a 1–3,650 day window through the retention-policy API. Changes are audited.
+
+Operators should preview and then schedule policy-aware physical cleanup:
 
 ```bash
 python manage.py purge_review_files --dry-run
 python manage.py purge_review_files --limit 100
+python manage.py purge_review_files --workspace-id <workspace-uuid> --dry-run
 ```
 
-The cleanup service only targets soft-deleted review attachments older than the retention window. It deletes the private original and all variants but preserves database and audit rows with `metadata.physical_deleted_at`. Storage failures produce a non-zero command exit and remain retryable.
+The cleanup service resolves the workspace policy for each attachment, skips disabled workspaces, and only targets soft-deleted review attachments older than every applicable workspace window. `--workspace-id` scopes a run. `--older-than-days` remains an explicit operator override and bypasses workspace enable/window settings, so it should be used only for deliberate recovery or compliance actions. Cleanup deletes the private original and all variants but preserves database and audit rows with `metadata.physical_deleted_at`. Storage failures produce a non-zero command exit and remain retryable.
 
 ## Guest reviews
 
 Workspace collaborators with `review.comment.manage` can create a project guest invite. The raw invite token is returned once. Exchange it at `POST /api/guest-access/exchange/`; the resulting access key is also returned once and must be sent as `X-Guest-Access-Key` to `/api/guest/reviews/...` endpoints.
 
-Supported scoped permissions are `media.read`, `media.download`, `review.comment.read`, `review.comment.create`, `review.comment.edit`, `review.comment.delete`, `review.attachment.create`, `annotation.read`, `annotation.create`, `annotation.edit`, and `annotation.delete`. Guests can mutate only records authored by their exact guest session. Each edit stores the previous snapshot with guest attribution. Comment deletion is leaf-only and is rejected while the comment has any active reply. Guests with the attachment capability can upload only to their own comments; uploads enter the same quarantine, scan, and preview pipeline as member uploads.
+Supported scoped permissions are `media.read`, `media.download`, `review.comment.read`, `review.comment.create`, `review.comment.edit`, `review.comment.delete`, `review.reaction.create`, `review.attachment.create`, `review.attachment.delete`, `annotation.read`, `annotation.create`, `annotation.edit`, and `annotation.delete`. Guests can mutate only records authored by their exact guest session and can remove only their own reactions. Each edit stores the previous snapshot with guest attribution. Comment deletion is leaf-only and is rejected while the comment has any active reply. Guests with the attachment capability can upload only to their own comments; uploads enter the same quarantine, scan, and preview pipeline as member uploads.
 
 Invite permissions are copied onto the access grant at exchange so later invite edits cannot silently broaden an active guest session. Both secret types are stored only as SHA-256 hashes. Managers can list invites and exchanged sessions, revoke one access session, or revoke an invite and all active access derived from it. Revocation is immediate and audited.
 

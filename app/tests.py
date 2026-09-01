@@ -1,5 +1,7 @@
 import uuid
 import re
+from datetime import timedelta
+from io import StringIO
 from unittest.mock import patch
 
 from django.contrib.auth import authenticate, get_user_model
@@ -7,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.core import mail
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -14,6 +17,7 @@ from rest_framework.test import APIClient
 
 from .models import (
     Annotation,
+    EmailVerificationToken,
     File,
     FileStatus,
     MediaVersion,
@@ -24,6 +28,7 @@ from .models import (
     ResourceAccess,
     Role,
     RolePermission,
+    PasswordResetToken,
     StorageBackend,
     SubscriptionStatus,
     UserSubscription,
@@ -209,6 +214,73 @@ class AuthenticationApiTests(TestCase):
         self.assertEqual(replayed.status_code, 400)
         self.assertEqual(self.client.post(reverse('api-login'), {'email': user.email, 'password': 'old-secure-password-123'}, format='json').status_code, 400)
         self.assertEqual(self.client.post(reverse('api-login'), {'email': user.email, 'password': 'new-secure-password-456'}, format='json').status_code, 200)
+
+    def test_registration_sends_single_use_email_verification(self):
+        registration = self.client.post(
+            reverse('api-register'),
+            {
+                'email': 'verify@example.com',
+                'password': 'a-secure-test-password',
+                'first_name': 'Verify',
+                'last_name': 'User',
+            },
+            format='json',
+        )
+        self.assertEqual(registration.status_code, 201)
+        self.assertIsNone(registration.json()['email_verified_at'])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertNotIn('verify@example.com', EmailVerificationToken.objects.get().token_hash)
+        token = re.search(r'token=([^\s]+)', mail.outbox[0].body).group(1)
+
+        confirmed = self.client.post(
+            reverse('api-email-verification-confirm'), {'token': token}, format='json'
+        )
+        replayed = self.client.post(
+            reverse('api-email-verification-confirm'), {'token': token}, format='json'
+        )
+        user = get_user_model().objects.get(email='verify@example.com')
+        self.assertEqual(confirmed.status_code, 204)
+        self.assertEqual(replayed.status_code, 400)
+        self.assertIsNotNone(user.email_verified_at)
+
+    def test_email_verification_request_is_enumeration_safe_and_rotates_token(self):
+        user = get_user_model().objects.create_user(
+            email='resend@example.com', password='a-secure-test-password',
+            first_name='Resend', last_name='User',
+        )
+        url = reverse('api-email-verification-request')
+        first = self.client.post(url, {'email': user.email}, format='json')
+        first_token = EmailVerificationToken.objects.get()
+        unknown = self.client.post(url, {'email': 'unknown@example.com'}, format='json')
+        second = self.client.post(url, {'email': user.email}, format='json')
+        first_token.refresh_from_db()
+        self.assertEqual(first.status_code, 202)
+        self.assertEqual(first.json(), unknown.json())
+        self.assertEqual(second.status_code, 202)
+        self.assertIsNotNone(first_token.invalidated_at)
+        self.assertEqual(EmailVerificationToken.objects.count(), 2)
+
+    def test_purge_auth_tokens_dry_run_and_delete_expired_tokens(self):
+        user = get_user_model().objects.create_user(
+            email='cleanup@example.com', password='a-secure-test-password',
+            first_name='Cleanup', last_name='User',
+        )
+        expired_at = timezone.now() - timedelta(minutes=1)
+        PasswordResetToken.objects.create(
+            id=uuid.uuid4(), user=user, token_hash='reset-expired',
+            expires_at=expired_at, created_at=expired_at,
+        )
+        EmailVerificationToken.objects.create(
+            id=uuid.uuid4(), user=user, token_hash='verification-expired',
+            expires_at=expired_at, created_at=expired_at,
+        )
+        output = StringIO()
+        call_command('purge_auth_tokens', '--dry-run', stdout=output)
+        self.assertEqual(PasswordResetToken.objects.count(), 1)
+        self.assertEqual(EmailVerificationToken.objects.count(), 1)
+        call_command('purge_auth_tokens', stdout=output)
+        self.assertEqual(PasswordResetToken.objects.count(), 0)
+        self.assertEqual(EmailVerificationToken.objects.count(), 0)
 
     def test_authenticated_password_change_checks_current_password(self):
         user = get_user_model().objects.create_user(

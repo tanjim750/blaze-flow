@@ -1,4 +1,5 @@
 import json
+import uuid
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -10,6 +11,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--older-than-days', type=int)
+        parser.add_argument('--workspace-id', type=uuid.UUID)
         parser.add_argument('--limit', type=int, default=100)
         parser.add_argument('--dry-run', action='store_true')
 
@@ -17,7 +19,7 @@ class Command(BaseCommand):
         try:
             result = purge_deleted_review_files(
                 older_than_days=options['older_than_days'], limit=options['limit'],
-                dry_run=options['dry_run'],
+                workspace_id=options['workspace_id'], dry_run=options['dry_run'],
             )
         except ValueError as exc:
             raise CommandError(str(exc)) from exc

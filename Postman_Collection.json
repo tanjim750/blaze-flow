@@ -139,6 +139,11 @@
       "key": "reset_token",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "verification_token",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -278,6 +283,43 @@
               "raw": "{\n  \"token\": \"{{reset_token}}\",\n  \"new_password\": \"{{new_password}}\"\n}"
             },
             "url": "{{base_url}}/api/auth/password-reset/confirm/"
+          },
+          "response": []
+        },
+        {
+          "name": "Request Email Verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/email-verification/request/",
+            "description": "Always returns 202. Copy the token query parameter from the delivered development email into verification_token."
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Email Verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{verification_token}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/email-verification/confirm/"
           },
           "response": []
         },
@@ -1090,6 +1132,52 @@
           "response": []
         },
         {
+          "name": "Add Comment Reaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"👍\"\n}"
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/reactions/",
+            "description": "Idempotently add the current user's reaction and return updated comment aggregates"
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Comment Reaction",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"👍\"\n}"
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/reactions/",
+            "description": "Remove only the current user's matching reaction"
+          },
+          "response": []
+        },
+        {
           "name": "Upload Comment Attachment",
           "event": [
             {
@@ -1489,6 +1577,39 @@
           "response": []
         },
         {
+          "name": "Get Retention Policy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/retention-policy/",
+            "description": "Read the workspace override or effective environment-default review-file policy"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Retention Policy",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"review_file_cleanup_enabled\": true,\n  \"review_file_retention_days\": 30\n}"
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/retention-policy/",
+            "description": "Create or update the audited workspace review-file retention override"
+          },
+          "response": []
+        },
+        {
           "name": "Operations Health and Alerts",
           "request": {
             "method": "GET",
@@ -1638,7 +1759,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"label\": \"Client reviewer\",\n  \"permissions\": [\"media.read\", \"media.download\", \"review.comment.read\", \"review.comment.create\", \"review.comment.edit\", \"review.comment.delete\", \\\"review.attachment.create\\\", \\\"review.attachment.delete\\\", \"annotation.read\", \"annotation.create\", \"annotation.edit\", \"annotation.delete\"],\n  \"expires_in_hours\": 168\n}"
+              "raw": "{\n  \"label\": \"Client reviewer\",\n  \"permissions\": [\"media.read\", \"media.download\", \"review.comment.read\", \"review.comment.create\", \"review.comment.edit\", \"review.comment.delete\", \"review.reaction.create\", \\\"review.attachment.create\\\", \\\"review.attachment.delete\\\", \"annotation.read\", \"annotation.create\", \"annotation.edit\", \"annotation.delete\"],\n  \"expires_in_hours\": 168\n}"
             },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/guest-invites/"
           },
@@ -1715,6 +1836,52 @@
               "raw": "{\n  \"text\": \"Guest review feedback\",\n  \"start_time_ms\": 1500\n}"
             },
             "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Guest Reaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"❤️\"\n}"
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/{{guest_comment_id}}/reactions/",
+            "description": "Idempotently add the current guest session's reaction"
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Guest Reaction",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"❤️\"\n}"
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/{{guest_comment_id}}/reactions/",
+            "description": "Remove only the current guest session's matching reaction"
           },
           "response": []
         },

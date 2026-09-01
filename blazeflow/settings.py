@@ -213,10 +213,18 @@ EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', default=False)
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Blaze Flow <no-reply@localhost>')
 PASSWORD_RESET_URL = os.environ.get('PASSWORD_RESET_URL', f'{APP_BASE_URL}/reset-password')
 PASSWORD_RESET_TTL_MINUTES = int(os.environ.get('PASSWORD_RESET_TTL_MINUTES', '30'))
+EMAIL_VERIFICATION_URL = os.environ.get(
+    'EMAIL_VERIFICATION_URL', f'{APP_BASE_URL}/verify-email'
+)
+EMAIL_VERIFICATION_TTL_MINUTES = int(
+    os.environ.get('EMAIL_VERIFICATION_TTL_MINUTES', '1440')
+)
 if EMAIL_USE_TLS and EMAIL_USE_SSL:
     raise ImproperlyConfigured('EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be enabled.')
 if PASSWORD_RESET_TTL_MINUTES < 1:
     raise ImproperlyConfigured('PASSWORD_RESET_TTL_MINUTES must be at least 1.')
+if EMAIL_VERIFICATION_TTL_MINUTES < 1:
+    raise ImproperlyConfigured('EMAIL_VERIFICATION_TTL_MINUTES must be at least 1.')
 
 OUTBOX_MAX_ATTEMPTS = int(os.environ.get('OUTBOX_MAX_ATTEMPTS', '5'))
 OUTBOX_RETRY_BASE_SECONDS = int(os.environ.get('OUTBOX_RETRY_BASE_SECONDS', '60'))
@@ -272,5 +280,6 @@ REST_FRAMEWORK = {
         'registration': os.environ.get('REGISTRATION_THROTTLE_RATE', '5/hour'),
         'login': os.environ.get('LOGIN_THROTTLE_RATE', '20/hour'),
         'password_reset': os.environ.get('PASSWORD_RESET_THROTTLE_RATE', '5/hour'),
+        'email_verification': os.environ.get('EMAIL_VERIFICATION_THROTTLE_RATE', '5/hour'),
     },
 }

@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from .models import (
     Annotation, AnnotationRevision, AuditLog, ReviewComment,
-    ReviewCommentContent, ReviewCommentRevision,
+    ReviewCommentContent, ReviewCommentReaction, ReviewCommentRevision,
 )
 from .services.outbox import process_outbox_events
 from .test_access_projects import WorkspaceAccessSetupMixin
@@ -80,6 +80,37 @@ class GuestReviewApiTests(WorkspaceAccessSetupMixin, TestCase):
         comments_url = reverse('api-guest-comments', args=[self.project_id, self.media_id])
         self.assertEqual(self.client.post(comments_url, {'text': 'Blocked'}, format='json', **headers).status_code, 403)
         self.assertEqual(self.client.get(reverse('api-guest-review', args=[self.project_id])).status_code, 403)
+
+    def test_guest_reactions_are_scoped_idempotent_and_attributed(self):
+        owner_comment = self.client.post(
+            reverse('api-review-comments', args=[self.workspace.id, self.project_id, self.media_id]),
+            {'text': 'Choose this frame'}, format='json',
+        )
+        headers = self.issue_access(['review.comment.read', 'review.reaction.create'])
+        url = reverse(
+            'api-guest-comment-reactions',
+            args=[self.project_id, self.media_id, owner_comment.json()['id']],
+        )
+        created = self.client.post(url, {'emoji': '❤️'}, format='json', **headers)
+        duplicate = self.client.post(url, {'emoji': '❤️'}, format='json', **headers)
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertEqual(created.json()['reactions'][0]['count'], 1)
+        self.assertEqual(created.json()['reactions'][0]['reactors'][0]['type'], 'guest')
+        self.assertEqual(ReviewCommentReaction.objects.count(), 1)
+        self.assertEqual(
+            self.client.delete(url, {'emoji': '❤️'}, format='json', **headers).status_code,
+            204,
+        )
+        self.assertEqual(ReviewCommentReaction.objects.count(), 0)
+        self.assertTrue(AuditLog.objects.filter(action='review.reaction.created', actor_type='GUEST').exists())
+
+        self.client.force_authenticate(self.owner)
+        blocked_headers = self.issue_access(['review.comment.read'])
+        self.assertEqual(
+            self.client.post(url, {'emoji': '👍'}, format='json', **blocked_headers).status_code,
+            403,
+        )
 
     def test_guest_rotates_access_key_and_old_key_stops_immediately(self):
         old_headers = self.issue_access(['media.read'])

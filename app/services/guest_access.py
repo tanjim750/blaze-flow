@@ -16,6 +16,7 @@ from .audit import record_guest_audit, record_user_audit
 GUEST_ALLOWED_PERMISSIONS = frozenset({
     'media.read', 'media.download', 'review.comment.read',
     'review.comment.create', 'review.comment.edit', 'review.comment.delete',
+    'review.reaction.create',
     'review.attachment.create', 'review.attachment.delete',
     'annotation.read', 'annotation.create',
     'annotation.edit', 'annotation.delete',

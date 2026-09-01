@@ -18,6 +18,7 @@ from .serializers import (
     AnnotationRevisionSerializer, AnnotationSerializer, AnnotationWriteSerializer, ReviewAttachmentSerializer,
     ReviewAttachmentUploadSerializer, ReviewCommentCreateSerializer,
     ReviewCommentRevisionSerializer, ReviewCommentSerializer,
+    ReviewReactionWriteSerializer,
 )
 from .services.annotations import (
     AnnotationError, create_guest_annotation, delete_guest_annotation,
@@ -34,6 +35,9 @@ from .services.guest_access import (
 )
 from .services.review_assets import (
     ReviewAttachmentError, delete_guest_review_attachment, upload_review_attachment,
+)
+from .services.reactions import (
+    ReviewReactionError, add_guest_reaction, remove_guest_reaction,
 )
 
 
@@ -250,6 +254,41 @@ def guest_comment_revisions(request, project_id, media_version_id, comment_id):
     comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media)
     revisions = ReviewCommentRevision.objects.filter(review_comment=comment).order_by('created_at')
     return Response(ReviewCommentRevisionSerializer(revisions, many=True).data)
+
+
+@api_view(['POST', 'DELETE'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def guest_comment_reactions(request, project_id, media_version_id, comment_id):
+    project = get_object_or_404(Project, id=project_id)
+    media = get_object_or_404(
+        MediaVersion, id=media_version_id, project=project, status='ACTIVE'
+    )
+    access = _guest_access(request, project, 'review.reaction.create')
+    comment = get_object_or_404(
+        ReviewComment, id=comment_id, media_version=media, deleted_at__isnull=True
+    )
+    serializer = ReviewReactionWriteSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        if request.method == 'POST':
+            _, created = add_guest_reaction(
+                comment=comment,
+                guest_session=access.guest_session,
+                **serializer.validated_data,
+            )
+            return Response(
+                ReviewCommentSerializer(comment).data,
+                status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+            )
+        remove_guest_reaction(
+            comment=comment,
+            guest_session=access.guest_session,
+            **serializer.validated_data,
+        )
+    except ReviewReactionError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(['GET', 'POST'])

@@ -15,6 +15,8 @@ from rest_framework.exceptions import PermissionDenied
 from .events import DomainEvent, dispatch
 from .pagination import paginated_response
 from .serializers import (
+    EmailVerificationConfirmSerializer,
+    EmailVerificationRequestSerializer,
     LoginSerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
@@ -30,6 +32,7 @@ from .serializers import (
     ReviewCommentCreateSerializer,
     ReviewCommentEditSerializer,
     ReviewCommentResolutionSerializer,
+    ReviewReactionWriteSerializer,
     ReviewCommentRevisionSerializer,
     ReviewCommentSerializer,
     ReviewAttachmentSerializer,
@@ -49,6 +52,7 @@ from .serializers import (
     RoleUpdateSerializer,
     UserSerializer,
     WorkspaceCreateSerializer,
+    WorkspaceRetentionPolicyUpdateSerializer,
     WorkspaceInviteAcceptSerializer,
     WorkspaceInviteCreateSerializer,
     WorkspaceInviteSerializer,
@@ -59,7 +63,18 @@ from .serializers import (
 from .services.passwords import (
     PasswordError, change_password, confirm_password_reset, request_password_reset,
 )
-from .throttles import LoginThrottle, PasswordResetThrottle, RegistrationThrottle
+from .services.email_verification import (
+    EmailVerificationError, confirm_email_verification, request_email_verification,
+)
+from .services.reactions import (
+    ReviewReactionError, add_user_reaction, remove_user_reaction,
+)
+from .services.retention import (
+    update_workspace_retention_policy, workspace_retention_policy_data,
+)
+from .throttles import (
+    EmailVerificationThrottle, LoginThrottle, PasswordResetThrottle, RegistrationThrottle,
+)
 from .models import (
     MediaVersion,
     FileVariant,
@@ -97,6 +112,7 @@ from .permissions import (
     REVIEW_COMMENT_CREATE,
     REVIEW_COMMENT_MANAGE,
     REVIEW_COMMENT_READ,
+    REVIEW_REACTION_CREATE,
     ROLE_MANAGE,
     WORKSPACE_MEMBERS_MANAGE,
     WORKSPACE_MANAGE,
@@ -162,6 +178,7 @@ def register(request):
     serializer = RegistrationSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     user = serializer.save()
+    request_email_verification(email=user.email)
     return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
@@ -203,6 +220,34 @@ def password_reset_confirm(request):
     try:
         confirm_password_reset(**serializer.validated_data)
     except PasswordError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@throttle_classes([EmailVerificationThrottle])
+def email_verification_request(request):
+    serializer = EmailVerificationRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    request_email_verification(email=serializer.validated_data['email'])
+    return Response(
+        {'detail': 'If an unverified active account exists, verification instructions have been sent.'},
+        status=status.HTTP_202_ACCEPTED,
+    )
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@throttle_classes([EmailVerificationThrottle])
+def email_verification_confirm(request):
+    serializer = EmailVerificationConfirmSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        confirm_email_verification(**serializer.validated_data)
+    except EmailVerificationError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -808,6 +853,37 @@ def review_comment_revisions(request, workspace_id, project_id, media_version_id
     return Response(ReviewCommentRevisionSerializer(revisions, many=True).data)
 
 
+@api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def review_comment_reactions(request, workspace_id, project_id, media_version_id, comment_id):
+    workspace, project, media_version, comment = _comment_from_route(
+        workspace_id, project_id, media_version_id, comment_id
+    )
+    _require_project_permission(
+        request,
+        project,
+        REVIEW_REACTION_CREATE,
+        'You do not have permission to react to comments.',
+    )
+    serializer = ReviewReactionWriteSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        if request.method == 'POST':
+            _, created = add_user_reaction(
+                comment=comment, user=request.user, **serializer.validated_data
+            )
+            return Response(
+                ReviewCommentSerializer(comment).data,
+                status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+            )
+        remove_user_reaction(
+            comment=comment, user=request.user, **serializer.validated_data
+        )
+    except ReviewReactionError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def media_revision_request(request, workspace_id, project_id, media_version_id):
@@ -1053,3 +1129,18 @@ def operations_metrics(request, workspace_id):
         workspace_prometheus_metrics(workspace=workspace),
         content_type='text/plain; version=0.0.4; charset=utf-8',
     )
+
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def workspace_retention_policy(request, workspace_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    _require_workspace_permission(request, workspace, WORKSPACE_MANAGE)
+    if request.method == 'GET':
+        return Response(workspace_retention_policy_data(workspace=workspace))
+    serializer = WorkspaceRetentionPolicyUpdateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    update_workspace_retention_policy(
+        workspace=workspace, user=request.user, **serializer.validated_data
+    )
+    return Response(workspace_retention_policy_data(workspace=workspace))

@@ -11,6 +11,7 @@ from .models import (
     MediaVersionStageEntry,
     ReviewComment,
     ReviewCommentContent,
+    ReviewCommentReaction,
     ReviewCommentRevision,
     RolePermission,
 )
@@ -78,6 +79,34 @@ class ReviewCommentApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(created.json()['start_time_ms'], 1250)
         self.assertEqual(created.json()['author']['email'], self.owner.email)
         self.assertTrue(AuditLog.objects.filter(action='review.comment.created').exists())
+
+    def test_members_add_idempotent_aggregated_reactions_and_remove_own(self):
+        comment_id = self.create_comment().json()['id']
+        reactions_url = reverse(
+            'api-review-comment-reactions',
+            args=[self.workspace.id, self.project_id, self.media_id, comment_id],
+        )
+        created = self.client.post(reactions_url, {'emoji': '👍'}, format='json')
+        duplicate = self.client.post(reactions_url, {'emoji': '👍'}, format='json')
+        invalid = self.client.post(reactions_url, {'emoji': '🔥'}, format='json')
+
+        self.invite_and_accept()
+        self.client.force_authenticate(self.member_user)
+        member_created = self.client.post(reactions_url, {'emoji': '👍'}, format='json')
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(member_created.status_code, 201)
+        self.assertEqual(member_created.json()['reactions'][0]['count'], 2)
+        self.assertEqual(ReviewCommentReaction.objects.count(), 2)
+        self.assertEqual(
+            self.client.delete(reactions_url, {'emoji': '👍'}, format='json').status_code,
+            204,
+        )
+        self.assertEqual(ReviewCommentReaction.objects.count(), 1)
+        self.assertTrue(AuditLog.objects.filter(action='review.reaction.created').exists())
+        self.assertTrue(AuditLog.objects.filter(action='review.reaction.deleted').exists())
 
     def test_comment_list_is_bounded_and_reports_pagination_headers(self):
         for index in range(3):

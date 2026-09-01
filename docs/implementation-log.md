@@ -4,6 +4,82 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-01 — Workspace retention-policy administration
+
+### Delivered
+
+- Added manager-only effective-policy reads and audited workspace overrides for review-file cleanup enablement and retention days.
+- Added a 1–3,650 day validated window with environment-default inheritance when no workspace override exists.
+- Made physical review-file cleanup policy-aware across workspaces while retaining dry-run, batch limits, storage-failure reporting, and idempotent metadata markers.
+- Added optional workspace-scoped cleanup and retained `--older-than-days` as an explicit operator override.
+- Added migration `0015`, authorization and cleanup integration tests, Postman requests, schema notes, and operator documentation.
+
+### Decisions and boundaries
+
+- A disabled workspace policy prevents automatic cleanup but does not alter logical soft deletion.
+- Files referenced across workspaces are purged only after every applicable workspace policy permits it.
+- The explicit age override bypasses workspace settings and is intentionally available only through the operator command, not the web API.
+
+### Verification
+
+- The complete SQLite suite passes (97 tests), Django system checks pass, migration drift is clean, the Postman collection parses, project Python sources compile, and `git diff --check` is clean.
+- PostgreSQL execution remains unavailable in the local host environment because of the previously recorded Docker storage issue.
+
+### Next recommended milestone
+
+Define and enforce which product actions require a verified email.
+
+## 2026-09-01 — Member and guest review reactions
+
+### Delivered
+
+- Added actor-attributed comment reactions for registered users and guest sessions.
+- Added `review.reaction.create` to the permission registry, system roles, and guest-link scopes.
+- Added idempotent add and own-reaction removal APIs with audited changes.
+- Added grouped reaction counts and named reactors to comment responses.
+- Restricted input to six supported reactions and enforced one actor plus per-actor/comment/emoji uniqueness in the database.
+- Added migration `0014`, member/guest tests, Postman requests, schema notes, and developer documentation.
+
+### Decisions and boundaries
+
+- Reaction removal is self-service; comment managers do not currently moderate another actor's reaction.
+- The supported emoji set is controlled to prevent visually equivalent Unicode variants from fragmenting counts.
+- Reaction changes do not generate notifications in this milestone.
+
+### Verification
+
+- The complete SQLite suite passes (96 tests), Django system checks pass, migration drift is clean, the Postman collection parses, project Python sources compile, and `git diff --check` is clean.
+- PostgreSQL execution remains unavailable in the local host environment because of the previously recorded Docker storage issue.
+
+### Next recommended milestone
+
+Add workspace retention-policy administration, then define which product actions require a verified email.
+
+## 2026-09-01 — Email verification and identity-token cleanup
+
+### Delivered
+
+- Added automatic registration verification email plus enumeration-safe resend and single-use confirmation APIs.
+- Added hashed, expiring verification tokens with active-token rotation and delivery-failure invalidation.
+- Added independent verification throttling and environment-controlled frontend URL and lifetime settings.
+- Added bounded dry-run-capable cleanup for expired password-reset and email-verification tokens.
+- Added migration `0013`, identity lifecycle tests, schema notes, and operator documentation.
+
+### Decisions and boundaries
+
+- Verification records account ownership in `email_verified_at` but does not yet block login or workspace creation.
+- Registration remains successful if email delivery fails; the undelivered token is invalidated and the failure is logged.
+- Cleanup deletes only expired tokens and is an explicit scheduled operator action.
+
+### Verification
+
+- The complete SQLite suite passes (94 tests), Django system checks pass, migration drift is clean, the Postman collection parses, tracked Python sources compile, and `git diff --check` is clean.
+- PostgreSQL execution was not available in the local host environment; the existing Docker storage blocker remains outside this milestone.
+
+### Next recommended milestone
+
+Add review reactions and retention-policy administration, then define which product actions require a verified email.
+
 ## 2026-09-01 — Six milestones: identity recovery and bounded review APIs
 
 ### Delivered

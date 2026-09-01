@@ -82,6 +82,15 @@ class ReviewCommentContentType(models.TextChoices):
     FILE = 'FILE'
 
 
+class ReviewReactionEmoji(models.TextChoices):
+    THUMBS_UP = '👍', 'Thumbs up'
+    HEART = '❤️', 'Heart'
+    LAUGH = '😂', 'Laugh'
+    SURPRISED = '😮', 'Surprised'
+    SAD = '😢', 'Sad'
+    CELEBRATE = '🎉', 'Celebrate'
+
+
 class TaskStatus(models.TextChoices):
     TODO = 'TODO'
     IN_PROGRESS = 'IN_PROGRESS'
@@ -238,6 +247,20 @@ class PasswordResetToken(models.Model):
         indexes = [models.Index(fields=['user', 'created_at'])]
 
 
+class EmailVerificationToken(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='user_id', related_name='+')
+    token_hash = models.CharField(max_length=255, unique=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    invalidated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'email_verification_tokens'
+        indexes = [models.Index(fields=['user', 'created_at'])]
+
+
 class Workspace(models.Model):
     id = models.UUIDField(primary_key=True)
     name = models.CharField(max_length=150)
@@ -273,6 +296,19 @@ class WorkspaceProfile(models.Model):
 
     class Meta:
         db_table = 'workspace_profiles'
+
+
+class WorkspaceRetentionPolicy(models.Model):
+    id = models.UUIDField(primary_key=True)
+    workspace = models.OneToOneField(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
+    review_file_cleanup_enabled = models.BooleanField(default=True)
+    review_file_retention_days = models.PositiveIntegerField()
+    updated_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='updated_by_user_id', related_name='+')
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'workspace_retention_policies'
 
 
 class GuestSession(models.Model):
@@ -786,6 +822,42 @@ class ReviewCommentMention(models.Model):
         indexes = [
             models.Index(fields=['review_comment']),
             models.Index(fields=['user', 'created_at']),
+        ]
+
+
+class ReviewCommentReaction(models.Model):
+    id = models.UUIDField(primary_key=True)
+    review_comment = models.ForeignKey(ReviewComment, on_delete=models.DO_NOTHING, db_column='review_comment_id', related_name='+')
+    emoji = models.CharField(max_length=16, choices=ReviewReactionEmoji.choices)
+    reacted_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='reacted_by_user_id', null=True, blank=True, related_name='+')
+    reacted_by_guest_session = models.ForeignKey(GuestSession, on_delete=models.DO_NOTHING, db_column='reacted_by_guest_session_id', null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'review_comment_reactions'
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(reacted_by_user__isnull=False, reacted_by_guest_session__isnull=True)
+                    | models.Q(reacted_by_user__isnull=True, reacted_by_guest_session__isnull=False)
+                ),
+                name='review_reactions_exactly_one_actor',
+            ),
+            models.UniqueConstraint(
+                fields=['review_comment', 'emoji', 'reacted_by_user'],
+                condition=models.Q(reacted_by_user__isnull=False),
+                name='review_reactions_comment_emoji_user_uniq',
+            ),
+            models.UniqueConstraint(
+                fields=['review_comment', 'emoji', 'reacted_by_guest_session'],
+                condition=models.Q(reacted_by_guest_session__isnull=False),
+                name='review_reactions_comment_emoji_guest_uniq',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['review_comment', 'emoji']),
+            models.Index(fields=['reacted_by_user']),
+            models.Index(fields=['reacted_by_guest_session']),
         ]
 
 

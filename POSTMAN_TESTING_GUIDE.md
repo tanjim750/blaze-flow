@@ -23,6 +23,7 @@ In Postman, select **Import**, choose `Postman_Collection.json`, and open the **
 | `password` | `a-secure-test-password` | Account password |
 | `new_password` | `a-new-secure-test-password` | Replacement used by password reset/change |
 | `reset_token` | Manual from reset email | One-time token consumed by reset confirmation |
+| `verification_token` | Manual from verification email | One-time token consumed by verification confirmation |
 | `invitation_email` | `member@example.com` | Invited member account |
 | `csrf_token` | Automatic | Captured after Login |
 | `workspace_id` | Automatic | Captured after workspace creation |
@@ -49,6 +50,8 @@ Postman retains Django's `sessionid` and `csrftoken` cookies. Login saves the re
 
 Password-reset request responses never reveal whether an email exists. With the development console email backend, copy the `token` query parameter from the server output into `reset_token`, then run **Confirm Password Reset**. Successful reset/change requests update the collection's `password` variable to `new_password`.
 
+Registration automatically sends a verification message. Copy its `token` query parameter into `verification_token`, then run **Confirm Email Verification**. **Request Email Verification** resends safely without revealing whether the account exists and invalidates the previous active token.
+
 Register and Login deliberately ignore any stale session authentication, so they remain usable when Postman already holds cookies from an earlier test account. If behavior appears inconsistent after changing servers or databases, clear the cookies for `localhost` and log in again.
 
 ## 3. Test the owner flow
@@ -56,7 +59,7 @@ Register and Login deliberately ignore any stale session authentication, so they
 Run these requests individually in order:
 
 1. **Health → Health Check**
-2. **Authentication → Register**
+2. **Authentication → Register**, then **Confirm Email Verification** after setting `verification_token`
 3. **Authentication → Login**
 4. **Authentication → Current User**
 5. **Workspaces → Create Workspace**
@@ -74,7 +77,7 @@ Run these requests individually in order:
 17. **Media Versions → Transition to In Review**
 18. **Media Versions → Workflow History** again to see the closed and open entries
 19. **Review Comments → Create Timestamped Comment**
-20. **Review Comments → List Active Comments**
+20. **Review Comments → List Active Comments**, then **Add Comment Reaction**
 21. **Review Comments → Reply to Comment**
 22. **Review Comments → Edit Own Comment**
 23. **Review Comments → Comment Revision History**
@@ -88,18 +91,21 @@ Run these requests individually in order:
 31. **Annotations → List Annotations**
 32. **Annotations → Edit Own Annotation**
 33. **Annotations → Annotation Revision History**
-34. **Operations → Delivery Health**
-35. **Operations → Operations Health and Alerts**
+34. **Operations → Get Retention Policy**, then **Update Retention Policy** if you want a workspace override
+35. **Operations → Delivery Health**
+36. **Operations → Operations Health and Alerts**
 
 The worker performs scan and preview events in separate batches. With Compose it runs continuously; for deterministic manual testing run `docker compose exec web python manage.py process_outbox` twice after an attachment upload.
 
+Retention-policy reads show `source: environment_default` until a manager saves an override. Physical cleanup remains an operator command; use `purge_review_files --workspace-id <uuid> --dry-run` before a real workspace-scoped run.
+
 ## 4. Guest review flow
 
-While authenticated as the owner, run **Guest Reviews → Create Guest Invite**. Then run **Exchange Guest Invite**, **Open Guest Review**, **Create Guest Comment**, **Create Guest Annotation**, and **Upload Guest Attachment**. The exchange and guest endpoints deliberately do not use the owner session or CSRF header; they authenticate with the one-time captured guest access key.
+While authenticated as the owner, run **Guest Reviews → Create Guest Invite**. Then run **Exchange Guest Invite**, **Open Guest Review**, **Create Guest Comment**, **Add Guest Reaction**, **Create Guest Annotation**, and **Upload Guest Attachment**. The exchange and guest endpoints deliberately do not use the owner session or CSRF header; they authenticate with the one-time captured guest access key.
 
 Run the outbox processor twice, then log back in as the owner and run **List Guest Invites and Access**. **Rotate Guest Access Key** captures the one-time replacement and invalidates the previous key. Run **Revoke Guest Access** or **Revoke Guest Invite** last; the current guest key must immediately return `403` afterward.
 
-Run **Delete Comment Attachment**, **Delete Annotation**, and **Delete Comment Thread** last, in that order.
+Run **Remove Guest Reaction**, **Delete Comment Attachment**, **Delete Annotation**, and **Delete Comment Thread** last, in that order.
 
 For media upload, select a PNG, JPEG, GIF, WebP, MP4, QuickTime, or WebM file in the `file` form-data row. The request enables downloads by default for this manual flow. The server verifies its signature, records a SHA-256 checksum, and rejects a spoofed MIME declaration.
 
