@@ -139,6 +139,12 @@ All request and response bodies use JSON. Authentication uses Django's session c
 | `POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/resolution/` | Comment manager | Resolve or reopen a top-level thread |
 | `GET` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/revisions/` | Comment reader | Read immutable edit snapshots |
 | `POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/revision-requests/` | Comment creator/media transitioner | Create feedback and request a workflow revision |
+| `POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/attachments/` | Comment author | Upload a verified private attachment |
+| `GET/DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/attachments/{content_id}/` | Comment reader/author-manager | Download or soft-delete an attachment |
+| `GET/POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/annotations/` | Annotation reader/creator | List or create visual markup |
+| `PATCH/DELETE` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/annotations/{annotation_id}/` | Author/annotation manager | Replace own markup or soft-delete it |
+| `GET` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/annotations/{annotation_id}/revisions/` | Annotation reader | Read immutable annotation snapshots |
+| `GET` | `/api/workspaces/{workspace_id}/delivery-health/` | Workspace manager | Read delivery/outbox status counts |
 | `GET` | `/api/notifications/` | Authenticated recipient | List own notifications; `?unread=true` filters unread |
 | `GET/PATCH` | `/api/notification-preferences/` | Authenticated user | Read or update mention-email preference |
 | `POST` | `/api/notifications/{notification_id}/read/` | Notification recipient | Idempotently mark one notification read |
@@ -216,6 +222,33 @@ python manage.py requeue_dead_letters --limit 100
 
 Email preferences do not hide in-app notifications. A disabled mention-email preference creates a `SKIPPED` delivery record so processing remains observable and idempotent.
 
+## Review attachments
+
+Only a comment's registered author can add attachments. Active collaborators with `review.comment.read` and project access can download them; the author or a user with `review.comment.manage` can soft-delete them. Uploads support verified PNG, JPEG, GIF, WebP, PDF, WAV, and MP3 signatures up to `MAX_REVIEW_ATTACHMENT_BYTES`.
+
+Attachment objects use opaque private keys and store SHA-256 checksums. Storage writes are compensated if the database transaction fails. Soft deletion marks both Comment Content and File metadata but intentionally leaves the physical object for a future retention/quarantine worker. Signature verification is not malware scanning.
+
+## Visual annotations
+
+Annotations can optionally link to an active comment on the same Media Version and can target a general frame, a point in milliseconds, or a time range. Supported element contracts are:
+
+- `POINT` and `TEXT`: normalized `x`, `y`; TEXT also requires `payload.text`.
+- `RECTANGLE` and `ELLIPSE`: normalized `x`, `y`, `width`, `height`, fully inside the canvas.
+- `ARROW`: normalized `start` and `end` points.
+- `PATH`: 2–500 normalized points.
+
+`annotation.create` permits creation and author-only replacement edits. `annotation.manage` permits soft deletion. Every edit replaces the ordered element set transactionally and stores the previous targeting/link/elements in Annotation Revision.
+
+## Outbox worker and delivery health
+
+Compose now starts a restartable `worker` service running:
+
+```bash
+python manage.py run_outbox_worker --batch-size 100 --interval-seconds 5
+```
+
+The command closes stale database connections between polls and uses the existing row-locking, retries, dead letters, and stale-claim recovery. `--once` is available for cron/serverless execution. The workspace delivery-health endpoint is manager-only and returns grouped email-delivery and outbox status counts.
+
 ## Schema and migrations
 
 Django models and migrations are the database source of truth. `database-schema.sql` is retained only as historical design context.
@@ -257,7 +290,7 @@ CI runs these checks on every push and pull request.
 
 1. Add email delivery, CSRF-aware frontend integration, authentication throttling, and password-reset APIs.
 2. Configure private cloud storage, malware scanning, thumbnails, and asynchronous media processing.
-3. Implement safe comment attachments and visual annotations.
-4. Add production worker supervision, delivery monitoring, and push/WebSocket consumers.
+3. Add attachment malware scanning, quarantine, previews, and physical retention cleanup.
+4. Implement guest review access and production metrics/alerting.
 
 Avoid implementing all documented domains at once. Complete and test one end-to-end workflow before expanding the surface area.

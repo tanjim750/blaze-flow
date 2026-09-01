@@ -61,6 +61,16 @@
       "type": "string"
     },
     {
+      "key": "attachment_content_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "annotation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "mentioned_user_id",
       "value": "",
       "type": "string"
@@ -942,6 +952,38 @@
           "response": []
         },
         {
+          "name": "Upload Comment Attachment",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["const data = pm.response.json();", "if (data.id) pm.collectionVariables.set(\"attachment_content_id\", data.id);"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}],
+            "body": {"mode": "formdata", "formdata": [{"key": "file", "type": "file", "src": [], "description": "Select a PNG, JPEG, GIF, WebP, PDF, WAV, or MP3"}]},
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/attachments/",
+            "description": "Upload a signature-verified private attachment to your own comment"
+          },
+          "response": []
+        },
+        {
+          "name": "Download Comment Attachment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/attachments/{{attachment_content_id}}/",
+            "description": "Download an attachment through project-scoped authorization"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Comment Attachment",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/attachments/{{attachment_content_id}}/",
+            "description": "Soft-delete as the comment author or comment manager; run after download testing"
+          },
+          "response": []
+        },
+        {
           "name": "Create Comment with Mention",
           "request": {
             "method": "POST",
@@ -1063,6 +1105,43 @@
           },
           "response": []
         }
+      ]
+    },
+    {
+      "name": "Annotations",
+      "item": [
+        {
+          "name": "Create Annotation",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["const data = pm.response.json();", "if (data.id) pm.collectionVariables.set(\"annotation_id\", data.id);"]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}, {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}],
+            "body": {"mode": "raw", "raw": "{\n  \"review_comment_id\": \"{{comment_id}}\",\n  \"start_time_ms\": 1200,\n  \"elements\": [\n    {\n      \"element_type\": \"RECTANGLE\",\n      \"geometry\": {\"x\": 0.1, \"y\": 0.2, \"width\": 0.3, \"height\": 0.4},\n      \"style\": {\"color\": \"#ff0000\"}\n    }\n  ]\n}", "options": {"raw": {"language": "json"}}},
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/",
+            "description": "Create normalized visual markup and capture its ID"
+          },
+          "response": []
+        },
+        {"name": "List Annotations", "request": {"method": "GET", "header": [], "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/", "description": "List active markup for the media version"}, "response": []},
+        {
+          "name": "Edit Own Annotation",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}, {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}],
+            "body": {"mode": "raw", "raw": "{\n  \"elements\": [\n    {\n      \"element_type\": \"ARROW\",\n      \"geometry\": {\"start\": {\"x\": 0.1, \"y\": 0.1}, \"end\": {\"x\": 0.9, \"y\": 0.9}}\n    }\n  ]\n}", "options": {"raw": {"language": "json"}}},
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{annotation_id}}/",
+            "description": "Replace annotation elements and preserve the previous snapshot"
+          },
+          "response": []
+        },
+        {"name": "Annotation Revision History", "request": {"method": "GET", "header": [], "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{annotation_id}}/revisions/", "description": "Read immutable pre-edit annotation snapshots"}, "response": []},
+        {"name": "Delete Annotation", "request": {"method": "DELETE", "header": [{"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}], "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{annotation_id}}/", "description": "Soft-delete using annotation.manage; run last"}, "response": []}
+      ]
+    },
+    {
+      "name": "Operations",
+      "item": [
+        {"name": "Delivery Health", "request": {"method": "GET", "header": [], "url": "{{base_url}}/api/workspaces/{{workspace_id}}/delivery-health/", "description": "Workspace-manager view of outbox and delivery counts"}, "response": []}
       ]
     },
     {

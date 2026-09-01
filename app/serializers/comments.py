@@ -66,12 +66,13 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
     text = serializers.SerializerMethodField()
     revision_count = serializers.SerializerMethodField()
     mentions = serializers.SerializerMethodField()
+    attachments = serializers.SerializerMethodField()
 
     class Meta:
         model = ReviewComment
         fields = (
             'id', 'parent_comment_id', 'author', 'text', 'start_time_ms', 'end_time_ms',
-            'resolved', 'resolved_by_user_id', 'resolved_at', 'mentions', 'revision_count',
+            'resolved', 'resolved_by_user_id', 'resolved_at', 'mentions', 'attachments', 'revision_count',
             'created_at', 'updated_at',
         )
 
@@ -106,6 +107,27 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
                 'name': mention.user.get_full_name(),
             }
             for mention in mentions
+        ]
+
+    def get_attachments(self, comment):
+        contents = ReviewCommentContent.objects.filter(
+            review_comment=comment,
+            file__isnull=False,
+            deleted_at__isnull=True,
+        ).select_related('file').order_by('sort_order', 'created_at')
+        return [
+            {
+                'id': str(content.id),
+                'content_type': content.content_type,
+                'file': {
+                    'id': str(content.file.id),
+                    'name': content.file.original_name,
+                    'mime_type': content.file.mime_type,
+                    'size_bytes': content.file.size_bytes,
+                    'checksum_sha256': content.file.checksum,
+                },
+            }
+            for content in contents
         ]
 
 

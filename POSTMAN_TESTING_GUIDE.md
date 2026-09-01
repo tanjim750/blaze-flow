@@ -31,6 +31,8 @@ In Postman, select **Import**, choose `Postman_Collection.json`, and open the **
 | `grant_id` | Automatic | Captured after access creation |
 | `media_version_id` | Automatic | Captured after media upload |
 | `comment_id` | Automatic | Captured after creating a timestamped comment |
+| `attachment_content_id` | Automatic | Captured after uploading a comment attachment |
+| `annotation_id` | Automatic | Captured after creating visual markup |
 | `mentioned_user_id` | Automatic | Captured by List Members for `invitation_email` |
 | `notification_id` | Automatic | Captured from the invited user's unread inbox |
 | `workflow_stage_id` | Automatic | Captured as In Review by List Workflow Stages |
@@ -70,8 +72,15 @@ Run these requests individually in order:
 25. **Review Comments → Reopen Comment Thread**
 26. **Review Comments → Request Media Revision**
 27. **Media Versions → Workflow History** to confirm the Revision stage
+28. **Review Comments → Upload Comment Attachment** after selecting a supported file
+29. **Review Comments → Download Comment Attachment**
+30. **Annotations → Create Annotation**
+31. **Annotations → List Annotations**
+32. **Annotations → Edit Own Annotation**
+33. **Annotations → Annotation Revision History**
+34. **Operations → Delivery Health**
 
-Run **Delete Comment Thread** last. It soft-deletes the captured top-level comment and its reply subtree.
+Run **Delete Comment Attachment**, **Delete Annotation**, and **Delete Comment Thread** last, in that order.
 
 For media upload, select a PNG, JPEG, GIF, WebP, MP4, QuickTime, or WebM file in the `file` form-data row. The request enables downloads by default for this manual flow. The server verifies its signature, records a SHA-256 checksum, and rejects a spoofed MIME declaration.
 
@@ -128,6 +137,8 @@ After correcting a terminal delivery problem, requeue dead letters explicitly:
 docker compose exec web python manage.py requeue_dead_letters --limit 100
 ```
 
+The Compose stack also starts a continuous `worker` service. Use `docker compose logs -f worker` to inspect processing output.
+
 ## 6. Correct payload formats
 
 Roles use `permission_keys` and dot-separated application keys:
@@ -177,4 +188,5 @@ The membership must be active, belong to the same workspace, and use `SELECTED` 
 - Media signature validation and checksums do not replace malware scanning or deep decoder validation.
 - Local media storage is development-only; production requires private durable object storage.
 - Comment attachments, guest comments, pagination, and annotations are not implemented yet.
-- HTML/localized email, push/WebSocket delivery, worker supervision, and dead-letter alerting are not implemented yet.
+- HTML/localized email, push/WebSocket delivery, production metrics, and dead-letter alerting are not implemented yet.
+- Attachment malware scanning, previews, physical cleanup, and guest-authored annotations are not implemented yet.

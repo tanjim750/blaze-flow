@@ -729,6 +729,8 @@ class ReviewCommentContent(models.Model):
     text_content = models.TextField(null=True, blank=True)
     file = models.ForeignKey(File, on_delete=models.DO_NOTHING, db_column='file_id', null=True, blank=True, related_name='+')
     sort_order = models.IntegerField(default=0)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='deleted_by_user_id', null=True, blank=True, related_name='+')
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -738,6 +740,7 @@ class ReviewCommentContent(models.Model):
             models.Index(fields=['review_comment']),
             models.Index(fields=['file']),
             models.Index(fields=['review_comment', 'sort_order']),
+            models.Index(fields=['deleted_at']),
         ]
 
 

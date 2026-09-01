@@ -143,6 +143,7 @@ STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 MAX_MEDIA_UPLOAD_BYTES = int(os.environ.get('MAX_MEDIA_UPLOAD_BYTES', 1024 * 1024 * 1024))
+MAX_REVIEW_ATTACHMENT_BYTES = int(os.environ.get('MAX_REVIEW_ATTACHMENT_BYTES', 25 * 1024 * 1024))
 
 APP_BASE_URL = os.environ.get('APP_BASE_URL', 'http://localhost:8000').rstrip('/')
 EMAIL_BACKEND = os.environ.get(

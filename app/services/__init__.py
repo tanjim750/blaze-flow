@@ -2,6 +2,7 @@ from app.permissions import OWNER_PERMISSION_KEYS
 
 from .invitations import InvitationError, accept_invitation, create_invitation
 from .audit import record_user_audit
+from .annotations import AnnotationError, create_annotation, delete_annotation, update_annotation
 from .comments import (
     ReviewCommentError,
     create_review_comment,
@@ -22,6 +23,7 @@ from .notifications import (
     mark_notification_read,
 )
 from .outbox import process_outbox_events, requeue_dead_letter_events
+from .review_assets import ReviewAttachmentError, delete_review_attachment, upload_review_attachment
 from .projects import archive_project, create_project, update_project
 from .resource_access import ResourceAccessError, grant_project_access
 from .roles import RoleError, archive_role, create_role, update_role
@@ -31,17 +33,20 @@ from .workflow import WorkflowTransitionError, transition_media_version
 __all__ = [
     'OWNER_PERMISSION_KEYS',
     'InvitationError',
+    'AnnotationError',
     'MediaUploadError',
     'NotificationError',
     'ResourceAccessError',
     'RoleError',
     'ReviewCommentError',
+    'ReviewAttachmentError',
     'WorkspaceSlugConflict',
     'WorkflowTransitionError',
     'accept_invitation',
     'archive_project',
     'archive_role',
     'create_invitation',
+    'create_annotation',
     'create_project',
     'create_review_comment',
     'create_role',
@@ -52,6 +57,8 @@ __all__ = [
     'mark_all_notifications_read',
     'mark_notification_read',
     'delete_review_comment_tree',
+    'delete_annotation',
+    'delete_review_attachment',
     'edit_review_comment',
     'record_user_audit',
     'process_outbox_events',
@@ -61,6 +68,8 @@ __all__ = [
     'update_role',
     'update_notification_preference',
     'upload_media_version',
+    'upload_review_attachment',
+    'update_annotation',
     'transition_media_version',
     'update_project',
 ]

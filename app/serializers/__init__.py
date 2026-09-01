@@ -1,4 +1,5 @@
 from .auth import LoginSerializer, RegistrationSerializer, UserSerializer
+from .annotations import AnnotationRevisionSerializer, AnnotationSerializer, AnnotationWriteSerializer
 from .access import (
     RoleSerializer,
     RoleCreateSerializer,
@@ -28,11 +29,15 @@ from .media import (
     WorkflowTransitionSerializer,
 )
 from .notifications import NotificationPreferenceSerializer, NotificationSerializer
+from .review_assets import ReviewAttachmentSerializer, ReviewAttachmentUploadSerializer
 from .projects import ProjectCreateSerializer, ProjectSerializer, ProjectUpdateSerializer
 from .workspaces import WorkspaceCreateSerializer, WorkspaceSerializer
 
 __all__ = [
     'LoginSerializer',
+    'AnnotationRevisionSerializer',
+    'AnnotationSerializer',
+    'AnnotationWriteSerializer',
     'MessageSerializer',
     'ReviewCommentCreateSerializer',
     'ReviewCommentEditSerializer',
@@ -44,6 +49,8 @@ __all__ = [
     'MediaVersionSerializer',
     'NotificationSerializer',
     'NotificationPreferenceSerializer',
+    'ReviewAttachmentSerializer',
+    'ReviewAttachmentUploadSerializer',
     'StageHistorySerializer',
     'WorkflowStageSerializer',
     'WorkflowTransitionSerializer',

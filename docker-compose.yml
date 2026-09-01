@@ -16,6 +16,24 @@ services:
       db:
         condition: service_healthy
 
+  worker:
+    build: .
+    command: python manage.py run_outbox_worker --batch-size 100 --interval-seconds 5
+    restart: unless-stopped
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: blazeflow.settings
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+
   db:
     image: postgres:16-alpine
     volumes:

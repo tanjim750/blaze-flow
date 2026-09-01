@@ -1,6 +1,7 @@
 from django.contrib.auth import login, logout
 from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.middleware.csrf import get_token
 from django.utils import timezone
@@ -14,6 +15,9 @@ from rest_framework.exceptions import PermissionDenied
 from .events import DomainEvent, dispatch
 from .serializers import (
     LoginSerializer,
+    AnnotationRevisionSerializer,
+    AnnotationSerializer,
+    AnnotationWriteSerializer,
     MessageSerializer,
     MediaUploadSerializer,
     MediaVersionSerializer,
@@ -24,6 +28,8 @@ from .serializers import (
     ReviewCommentResolutionSerializer,
     ReviewCommentRevisionSerializer,
     ReviewCommentSerializer,
+    ReviewAttachmentSerializer,
+    ReviewAttachmentUploadSerializer,
     RevisionRequestSerializer,
     StageHistorySerializer,
     WorkflowStageSerializer,
@@ -48,12 +54,17 @@ from .serializers import (
 )
 from .models import (
     MediaVersion,
+    Annotation,
+    AnnotationRevision,
     MediaVersionStageEntry,
     Project,
     ResourceAccess,
     ReviewComment,
+    ReviewCommentContent,
     ReviewCommentRevision,
     Notification,
+    NotificationDelivery,
+    OutboxEvent,
     Role,
     RoleStatus,
     WorkflowStage,
@@ -71,11 +82,15 @@ from .permissions import (
     MEDIA_DOWNLOAD,
     MEDIA_READ,
     MEDIA_TRANSITION,
+    ANNOTATION_CREATE,
+    ANNOTATION_MANAGE,
+    ANNOTATION_READ,
     REVIEW_COMMENT_CREATE,
     REVIEW_COMMENT_MANAGE,
     REVIEW_COMMENT_READ,
     ROLE_MANAGE,
     WORKSPACE_MEMBERS_MANAGE,
+    WORKSPACE_MANAGE,
     WORKSPACE_READ,
     accessible_projects,
     has_project_permission,
@@ -89,6 +104,8 @@ from .services import (
     ResourceAccessError,
     RoleError,
     ReviewCommentError,
+    AnnotationError,
+    ReviewAttachmentError,
     WorkflowTransitionError,
     WorkspaceSlugConflict,
     accept_invitation,
@@ -97,10 +114,13 @@ from .services import (
     create_invitation,
     create_project,
     create_review_comment,
+    create_annotation,
     create_role,
     create_workspace,
     grant_project_access,
     delete_review_comment_tree,
+    delete_annotation,
+    delete_review_attachment,
     edit_review_comment,
     mark_all_notifications_read,
     mark_notification_read,
@@ -109,6 +129,8 @@ from .services import (
     request_media_revision,
     set_review_comment_resolution,
     update_notification_preference,
+    update_annotation,
+    upload_review_attachment,
     transition_media_version,
     update_role,
     upload_media_version,
@@ -812,3 +834,129 @@ def notification_preferences(request):
         ),
     )
     return Response(NotificationPreferenceSerializer(preference).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def review_attachment_upload(request, workspace_id, project_id, media_version_id, comment_id):
+    workspace, project, media_version, comment = _comment_from_route(workspace_id, project_id, media_version_id, comment_id)
+    _require_project_permission(request, project, REVIEW_COMMENT_CREATE, 'You do not have permission to attach review files.')
+    if comment.author_user_id != request.user.id:
+        raise PermissionDenied('Only the comment author can add attachments.')
+    serializer = ReviewAttachmentUploadSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        content = upload_review_attachment(comment=comment, user=request.user, upload=serializer.validated_data['file'])
+    except ReviewAttachmentError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ReviewAttachmentSerializer(content).data, status=status.HTTP_201_CREATED)
+
+
+def _attachment_from_route(workspace_id, project_id, media_version_id, comment_id, content_id):
+    workspace, project, media_version, comment = _comment_from_route(workspace_id, project_id, media_version_id, comment_id)
+    content = get_object_or_404(
+        ReviewCommentContent.objects.select_related('file'), id=content_id,
+        review_comment=comment, file__isnull=False, deleted_at__isnull=True,
+    )
+    return workspace, project, media_version, comment, content
+
+
+@api_view(['GET', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def review_attachment_detail(request, workspace_id, project_id, media_version_id, comment_id, content_id):
+    workspace, project, media_version, comment, content = _attachment_from_route(workspace_id, project_id, media_version_id, comment_id, content_id)
+    if request.method == 'GET':
+        _require_project_permission(request, project, REVIEW_COMMENT_READ, 'You do not have permission to download this attachment.')
+        if not default_storage.exists(content.file.object_key):
+            raise Http404('The stored attachment was not found.')
+        record_user_audit(user=request.user, workspace=workspace, action='review.attachment.downloaded', entity_type='review_comment_content', entity_id=content.id)
+        return FileResponse(default_storage.open(content.file.object_key, 'rb'), as_attachment=True, filename=content.file.original_name, content_type=content.file.mime_type)
+    can_manage = has_project_permission(user=request.user, project=project, permission_key=REVIEW_COMMENT_MANAGE)
+    can_delete_as_author = (
+        comment.author_user_id == request.user.id
+        and has_project_permission(
+            user=request.user,
+            project=project,
+            permission_key=REVIEW_COMMENT_CREATE,
+        )
+    )
+    if not can_delete_as_author and not can_manage:
+        raise PermissionDenied('Only the author or a comment manager can delete attachments.')
+    delete_review_attachment(content=content, user=request.user)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def annotation_list_create(request, workspace_id, project_id, media_version_id):
+    workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
+    permission_key = ANNOTATION_READ if request.method == 'GET' else ANNOTATION_CREATE
+    _require_project_permission(request, project, permission_key, 'You do not have permission to access annotations.')
+    if request.method == 'GET':
+        items = Annotation.objects.filter(media_version=media_version, deleted_at__isnull=True).order_by('created_at')
+        return Response(AnnotationSerializer(items, many=True).data)
+    serializer = AnnotationWriteSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data.copy()
+    comment_id = data.pop('review_comment_id', None)
+    comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media_version, deleted_at__isnull=True) if comment_id else None
+    try:
+        item = create_annotation(media_version=media_version, user=request.user, review_comment=comment, **data)
+    except AnnotationError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(AnnotationSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+def _annotation_from_route(workspace_id, project_id, media_version_id, annotation_id):
+    workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
+    annotation = get_object_or_404(Annotation, id=annotation_id, media_version=media_version, deleted_at__isnull=True)
+    return workspace, project, media_version, annotation
+
+
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def annotation_detail(request, workspace_id, project_id, media_version_id, annotation_id):
+    workspace, project, media_version, annotation = _annotation_from_route(workspace_id, project_id, media_version_id, annotation_id)
+    if request.method == 'PATCH':
+        _require_project_permission(request, project, ANNOTATION_CREATE, 'You do not have permission to edit annotations.')
+        if annotation.author_user_id != request.user.id:
+            raise PermissionDenied('Only the original author can edit this annotation.')
+        payload = request.data.copy()
+        if 'review_comment_id' not in payload and annotation.review_comment_id:
+            payload['review_comment_id'] = str(annotation.review_comment_id)
+        if 'start_time_ms' not in payload and annotation.start_time_ms is not None:
+            payload['start_time_ms'] = annotation.start_time_ms
+        if 'end_time_ms' not in payload and annotation.end_time_ms is not None:
+            payload['end_time_ms'] = annotation.end_time_ms
+        serializer = AnnotationWriteSerializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data.copy()
+        comment_id = data.pop('review_comment_id', annotation.review_comment_id)
+        data['start_time_ms'] = data.get('start_time_ms', annotation.start_time_ms)
+        data['end_time_ms'] = data.get('end_time_ms', annotation.end_time_ms)
+        comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media_version, deleted_at__isnull=True) if comment_id else None
+        item = update_annotation(annotation=annotation, user=request.user, review_comment=comment, **data)
+        return Response(AnnotationSerializer(item).data)
+    _require_project_permission(request, project, ANNOTATION_MANAGE, 'You do not have permission to delete annotations.')
+    delete_annotation(annotation=annotation, user=request.user)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def annotation_revisions(request, workspace_id, project_id, media_version_id, annotation_id):
+    workspace, project, media_version, annotation = _annotation_from_route(workspace_id, project_id, media_version_id, annotation_id)
+    _require_project_permission(request, project, ANNOTATION_READ, 'You do not have permission to read annotation revisions.')
+    revisions = AnnotationRevision.objects.filter(annotation=annotation).order_by('created_at')
+    return Response(AnnotationRevisionSerializer(revisions, many=True).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def delivery_health(request, workspace_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    _require_workspace_permission(request, workspace, WORKSPACE_MANAGE)
+    notification_ids = Notification.objects.filter(workspace=workspace).values_list('id', flat=True)
+    delivery_counts = dict(NotificationDelivery.objects.filter(notification_id__in=notification_ids).values_list('status').annotate(count=Count('id')))
+    outbox_counts = dict(OutboxEvent.objects.filter(aggregate_id__in=[str(item) for item in notification_ids]).values_list('status').annotate(count=Count('id')))
+    return Response({'workspace_id': str(workspace.id), 'deliveries': delivery_counts, 'outbox': outbox_counts, 'checked_at': timezone.now()})

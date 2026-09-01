@@ -2,6 +2,10 @@ from django.urls import path
 
 from .views import (
     current_user,
+    annotation_detail,
+    annotation_list_create,
+    annotation_revisions,
+    delivery_health,
     health_check,
     login_user,
     logout_user,
@@ -18,6 +22,8 @@ from .views import (
     review_comment_list_create,
     review_comment_resolution,
     review_comment_revisions,
+    review_attachment_detail,
+    review_attachment_upload,
     accept_workspace_invitation,
     project_detail,
     project_access_detail,
@@ -47,6 +53,7 @@ urlpatterns = [
     path('workspace-invitations/accept/', accept_workspace_invitation, name='api-workspace-invite-accept'),
     path('workspaces/<uuid:workspace_id>/roles/', workspace_roles, name='api-workspace-roles'),
     path('workspaces/<uuid:workspace_id>/workflow-stages/', workspace_workflow_stages, name='api-workflow-stages'),
+    path('workspaces/<uuid:workspace_id>/delivery-health/', delivery_health, name='api-delivery-health'),
     path('workspaces/<uuid:workspace_id>/roles/<uuid:role_id>/', workspace_role_detail, name='api-workspace-role-detail'),
     path('workspaces/<uuid:workspace_id>/members/', workspace_members, name='api-workspace-members'),
     path('workspaces/<uuid:workspace_id>/members/<uuid:membership_id>/', workspace_member_detail, name='api-workspace-member-detail'),
@@ -63,5 +70,10 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/', review_comment_detail, name='api-review-comment-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/resolution/', review_comment_resolution, name='api-review-comment-resolution'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/revisions/', review_comment_revisions, name='api-review-comment-revisions'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/attachments/', review_attachment_upload, name='api-review-attachment-upload'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/attachments/<uuid:content_id>/', review_attachment_detail, name='api-review-attachment-detail'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/annotations/', annotation_list_create, name='api-annotations'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/annotations/<uuid:annotation_id>/', annotation_detail, name='api-annotation-detail'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/annotations/<uuid:annotation_id>/revisions/', annotation_revisions, name='api-annotation-revisions'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/revision-requests/', media_revision_request, name='api-media-revision-request'),
 ]

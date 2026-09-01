@@ -4,6 +4,50 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-01 — Three milestones: attachments, annotations, and worker operations
+
+### Delivered
+
+1. **Secure review attachments**
+   - Added author-scoped multipart attachment upload to existing Review Comment Content and File records.
+   - Added byte-signature verification for PNG, JPEG, GIF, WebP, PDF, WAV, and MP3, a separate size limit, SHA-256 checksums, opaque storage keys, and storage compensation on database failure.
+   - Added project-authorized private download, author/manager soft deletion, attachment metadata in comment responses, and upload/download/delete audit events.
+2. **Visual annotations**
+   - Added `annotation.read`, `annotation.create`, and `annotation.manage` permissions with migration `0010` backfill.
+   - Added create/list/edit/delete/history APIs using the existing Annotation, Element, and Revision schema.
+   - Added POINT, RECTANGLE, ELLIPSE, ARROW, PATH, and TEXT validation with normalized `0..1` coordinates, shape bounds, path limits, deterministic element order, optional comment linkage, and millisecond targeting.
+   - Enforced author-only editing with full pre-edit snapshots and manager-controlled soft deletion.
+3. **Worker supervision and delivery monitoring**
+   - Added a continuous `run_outbox_worker` command with bounded batch/interval settings and stale-connection cleanup.
+   - Added a restartable Compose worker service using the same application image and environment.
+   - Added a workspace-manager delivery-health endpoint with outbox and email-delivery status counts.
+
+### Decisions
+
+- Attachment object keys and storage URLs remain private; attachment downloads always pass through application authorization.
+- Attachment deletion is logical. Database/storage metadata remains available for audit and later retention cleanup.
+- Annotation edits replace the full ordered element collection and preserve the prior complete state as one immutable revision.
+- Geometry validation is tool-specific and normalized so markup remains resolution-independent.
+- Worker supervision belongs to the deployment process, while event claiming/retry/idempotency stays in the domain service.
+
+### Known limitations
+
+- Attachment malware scanning, quarantine, thumbnail/waveform generation, physical retention cleanup, and cloud multipart upload are not implemented.
+- PDF/audio verification is signature-level and does not deeply decode content.
+- Annotation style/payload schemas are intentionally open beyond required TEXT payload and normalized geometry rules; frontend tool versioning is not implemented.
+- Delivery health is a count snapshot, not metrics export, alerting, or a dead-letter inspection dashboard.
+- The development Compose worker is supervised by Docker restart policy; production should use its platform's process manager and observability stack.
+
+### Verification
+
+- Seventy tests pass with migrations `0001` through `0010` applied.
+- New tests cover signature/checksum attachment behavior, private download, soft deletion, spoof rejection, normalized geometry, author-only annotation edits, immutable annotation revisions, manager deletion, delivery-health authorization, and worker command loading.
+- Django checks, migration drift checks, Postman JSON validation, Compose validation, Python compilation, and whitespace checks pass.
+
+### Next recommended milestone
+
+Add malware scanning/quarantine and asynchronous attachment previews, then implement guest review access for comments, attachments, and annotations.
+
 ## 2026-09-01 — Email notification delivery, preferences, and dead letters
 
 ### Delivered
@@ -40,7 +84,7 @@ Each entry should state what changed, why, verification performed, known limitat
 
 ### Next recommended milestone
 
-Implement safely verified review-comment attachments and visual annotations, then add production worker supervision and delivery monitoring.
+See the later three-milestone entry for attachments, annotations, worker supervision, and delivery health.
 
 ## 2026-09-01 — Structured mentions and durable notification outbox
 
