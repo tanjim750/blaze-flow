@@ -94,6 +94,21 @@
       "key": "invitation_token",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "guest_invite_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_access_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_comment_id",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -928,13 +943,25 @@
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Content-Type", "value": "application/json", "type": "text"},
-              {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"text\": \"Please tighten this edit.\",\n  \"start_time_ms\": 1250,\n  \"end_time_ms\": 2400\n}",
-              "options": {"raw": {"language": "json"}}
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/",
             "description": "Create a top-level time-range comment and capture its ID"
@@ -953,11 +980,38 @@
         },
         {
           "name": "Upload Comment Attachment",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["const data = pm.response.json();", "if (data.id) pm.collectionVariables.set(\"attachment_content_id\", data.id);"]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"attachment_content_id\", data.id);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}],
-            "body": {"mode": "formdata", "formdata": [{"key": "file", "type": "file", "src": [], "description": "Select a PNG, JPEG, GIF, WebP, PDF, WAV, or MP3"}]},
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select a PNG, JPEG, GIF, WebP, PDF, WAV, or MP3"
+                }
+              ]
+            },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/attachments/",
             "description": "Upload a signature-verified private attachment to your own comment"
           },
@@ -977,7 +1031,13 @@
           "name": "Delete Comment Attachment",
           "request": {
             "method": "DELETE",
-            "header": [{"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}],
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/attachments/{{attachment_content_id}}/",
             "description": "Soft-delete as the comment author or comment manager; run after download testing"
           },
@@ -988,13 +1048,25 @@
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Content-Type", "value": "application/json", "type": "text"},
-              {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"text\": \"Please review this update.\",\n  \"mentioned_user_ids\": [\"{{mentioned_user_id}}\"]\n}",
-              "options": {"raw": {"language": "json"}}
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/",
             "description": "Create a structured mention after the invited member has project read access"
@@ -1006,13 +1078,25 @@
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Content-Type", "value": "application/json", "type": "text"},
-              {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"text\": \"I will update this section.\",\n  \"parent_comment_id\": \"{{comment_id}}\"\n}",
-              "options": {"raw": {"language": "json"}}
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/",
             "description": "Reply without separate timing; replies inherit their thread context"
@@ -1024,13 +1108,25 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Content-Type", "value": "application/json", "type": "text"},
-              {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"text\": \"Please tighten this edit and soften the transition.\"\n}",
-              "options": {"raw": {"language": "json"}}
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/",
             "description": "Edit the original author's comment and preserve its previous snapshot"
@@ -1052,10 +1148,26 @@
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Content-Type", "value": "application/json", "type": "text"},
-              {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
             ],
-            "body": {"mode": "raw", "raw": "{\n  \"resolved\": true\n}", "options": {"raw": {"language": "json"}}},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resolved\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/resolution/",
             "description": "Resolve a top-level thread; requires review.comment.manage"
           },
@@ -1066,10 +1178,26 @@
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Content-Type", "value": "application/json", "type": "text"},
-              {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
             ],
-            "body": {"mode": "raw", "raw": "{\n  \"resolved\": false\n}", "options": {"raw": {"language": "json"}}},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resolved\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/resolution/",
             "description": "Reopen a resolved top-level thread"
           },
@@ -1080,13 +1208,25 @@
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Content-Type", "value": "application/json", "type": "text"},
-              {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"text\": \"Please replace the final frame.\",\n  \"start_time_ms\": 9000\n}",
-              "options": {"raw": {"language": "json"}}
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/revision-requests/",
             "description": "Atomically create feedback and move the media to the Revision stage"
@@ -1098,7 +1238,11 @@
           "request": {
             "method": "DELETE",
             "header": [
-              {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
             ],
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/",
             "description": "Soft-delete the comment and all active descendants; run last"
@@ -1112,36 +1256,137 @@
       "item": [
         {
           "name": "Create Annotation",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["const data = pm.response.json();", "if (data.id) pm.collectionVariables.set(\"annotation_id\", data.id);"]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"annotation_id\", data.id);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}, {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}],
-            "body": {"mode": "raw", "raw": "{\n  \"review_comment_id\": \"{{comment_id}}\",\n  \"start_time_ms\": 1200,\n  \"elements\": [\n    {\n      \"element_type\": \"RECTANGLE\",\n      \"geometry\": {\"x\": 0.1, \"y\": 0.2, \"width\": 0.3, \"height\": 0.4},\n      \"style\": {\"color\": \"#ff0000\"}\n    }\n  ]\n}", "options": {"raw": {"language": "json"}}},
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"review_comment_id\": \"{{comment_id}}\",\n  \"start_time_ms\": 1200,\n  \"elements\": [\n    {\n      \"element_type\": \"RECTANGLE\",\n      \"geometry\": {\"x\": 0.1, \"y\": 0.2, \"width\": 0.3, \"height\": 0.4},\n      \"style\": {\"color\": \"#ff0000\"}\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/",
             "description": "Create normalized visual markup and capture its ID"
           },
           "response": []
         },
-        {"name": "List Annotations", "request": {"method": "GET", "header": [], "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/", "description": "List active markup for the media version"}, "response": []},
+        {
+          "name": "List Annotations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/",
+            "description": "List active markup for the media version"
+          },
+          "response": []
+        },
         {
           "name": "Edit Own Annotation",
           "request": {
             "method": "PATCH",
-            "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}, {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}],
-            "body": {"mode": "raw", "raw": "{\n  \"elements\": [\n    {\n      \"element_type\": \"ARROW\",\n      \"geometry\": {\"start\": {\"x\": 0.1, \"y\": 0.1}, \"end\": {\"x\": 0.9, \"y\": 0.9}}\n    }\n  ]\n}", "options": {"raw": {"language": "json"}}},
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"elements\": [\n    {\n      \"element_type\": \"ARROW\",\n      \"geometry\": {\"start\": {\"x\": 0.1, \"y\": 0.1}, \"end\": {\"x\": 0.9, \"y\": 0.9}}\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{annotation_id}}/",
             "description": "Replace annotation elements and preserve the previous snapshot"
           },
           "response": []
         },
-        {"name": "Annotation Revision History", "request": {"method": "GET", "header": [], "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{annotation_id}}/revisions/", "description": "Read immutable pre-edit annotation snapshots"}, "response": []},
-        {"name": "Delete Annotation", "request": {"method": "DELETE", "header": [{"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}], "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{annotation_id}}/", "description": "Soft-delete using annotation.manage; run last"}, "response": []}
+        {
+          "name": "Annotation Revision History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{annotation_id}}/revisions/",
+            "description": "Read immutable pre-edit annotation snapshots"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Annotation",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{annotation_id}}/",
+            "description": "Soft-delete using annotation.manage; run last"
+          },
+          "response": []
+        }
       ]
     },
     {
       "name": "Operations",
       "item": [
-        {"name": "Delivery Health", "request": {"method": "GET", "header": [], "url": "{{base_url}}/api/workspaces/{{workspace_id}}/delivery-health/", "description": "Workspace-manager view of outbox and delivery counts"}, "response": []}
+        {
+          "name": "Delivery Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/delivery-health/",
+            "description": "Workspace-manager view of outbox and delivery counts"
+          },
+          "response": []
+        },
+        {
+          "name": "Operations Health and Alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/operations/health/",
+            "description": "Manager-only scan, preview/outbox, delivery, and alert-state report"
+          },
+          "response": []
+        }
       ]
     },
     {
@@ -1162,13 +1407,25 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Content-Type", "value": "application/json", "type": "text"},
-              {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email_mentions_enabled\": true\n}",
-              "options": {"raw": {"language": "json"}}
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{base_url}}/api/notification-preferences/",
             "description": "Enable or disable mention emails without affecting the in-app inbox"
@@ -1202,7 +1459,11 @@
           "request": {
             "method": "POST",
             "header": [
-              {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
             ],
             "url": "{{base_url}}/api/notifications/{{notification_id}}/read/",
             "description": "Idempotently mark one recipient-owned notification as read"
@@ -1214,10 +1475,147 @@
           "request": {
             "method": "POST",
             "header": [
-              {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
             ],
             "url": "{{base_url}}/api/notifications/read-all/",
             "description": "Mark all unread notifications for the authenticated user as read"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Guest Reviews",
+      "item": [
+        {
+          "name": "Create Guest Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) { pm.collectionVariables.set(\"guest_invite_token\", pm.response.json().token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Client reviewer\",\n  \"permissions\": [\"media.read\", \"media.download\", \"review.comment.read\", \"review.comment.create\", \"annotation.read\", \"annotation.create\"],\n  \"expires_in_hours\": 168\n}"
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/guest-invites/"
+          },
+          "response": []
+        },
+        {
+          "name": "Exchange Guest Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) { pm.collectionVariables.set(\"guest_access_key\", pm.response.json().access_key); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{guest_invite_token}}\",\n  \"name\": \"Client Reviewer\",\n  \"email\": \"reviewer@example.com\"\n}"
+            },
+            "url": "{{base_url}}/api/guest-access/exchange/"
+          },
+          "response": []
+        },
+        {
+          "name": "Open Guest Review",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Guest Comment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) { pm.collectionVariables.set(\"guest_comment_id\", pm.response.json().id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Guest review feedback\",\n  \"start_time_ms\": 1500\n}"
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Guest Annotation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"review_comment_id\": \"{{guest_comment_id}}\",\n  \"elements\": [{\"element_type\": \"POINT\", \"geometry\": {\"x\": 0.25, \"y\": 0.4}}]\n}"
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/annotations/"
           },
           "response": []
         }

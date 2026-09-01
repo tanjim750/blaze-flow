@@ -5,6 +5,7 @@ from app.models import (
     ReviewCommentContent,
     ReviewCommentMention,
     ReviewCommentRevision,
+    FileVariant,
 )
 
 
@@ -78,12 +79,15 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
 
     def get_author(self, comment):
         user = comment.author_user
+        if user is None and comment.author_guest_session:
+            guest = comment.author_guest_session
+            return {'id': str(guest.id), 'email': guest.email, 'name': guest.name, 'type': 'guest'}
         if user is None:
             return None
         return {
             'id': str(user.id),
             'email': user.email,
-            'name': user.get_full_name(),
+            'name': user.get_full_name(), 'type': 'user',
         }
 
     def get_text(self, comment):
@@ -125,6 +129,11 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
                     'mime_type': content.file.mime_type,
                     'size_bytes': content.file.size_bytes,
                     'checksum_sha256': content.file.checksum,
+                    'status': content.file.status,
+                    'previews': [
+                        {'id': str(variant.id), 'mime_type': variant.mime_type, 'status': variant.status}
+                        for variant in FileVariant.objects.filter(file=content.file, deleted_at__isnull=True)
+                    ],
                 },
             }
             for content in contents

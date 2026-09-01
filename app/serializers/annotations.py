@@ -66,13 +66,14 @@ class AnnotationWriteSerializer(serializers.Serializer):
 
 
 class AnnotationSerializer(serializers.ModelSerializer):
-    author_user_id = serializers.UUIDField()
+    author_user_id = serializers.UUIDField(allow_null=True)
+    author_guest_session_id = serializers.UUIDField(allow_null=True)
     elements = serializers.SerializerMethodField()
     revision_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Annotation
-        fields = ('id', 'review_comment_id', 'author_user_id', 'start_time_ms', 'end_time_ms', 'elements', 'revision_count', 'created_at', 'updated_at')
+        fields = ('id', 'review_comment_id', 'author_user_id', 'author_guest_session_id', 'start_time_ms', 'end_time_ms', 'elements', 'revision_count', 'created_at', 'updated_at')
 
     def get_elements(self, annotation):
         return list(AnnotationElement.objects.filter(annotation=annotation).order_by('sort_order').values('id', 'element_type', 'sort_order', 'geometry', 'style', 'payload'))

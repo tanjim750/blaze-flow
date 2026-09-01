@@ -95,6 +95,13 @@ class FileStatus(models.TextChoices):
     FAILED = 'FAILED'
 
 
+class FileSecurityScanStatus(models.TextChoices):
+    PENDING = 'PENDING'
+    CLEAN = 'CLEAN'
+    INFECTED = 'INFECTED'
+    FAILED = 'FAILED'
+
+
 class StorageBackendStatus(models.TextChoices):
     ACTIVE = 'ACTIVE'
     DISABLED = 'DISABLED'
@@ -977,6 +984,25 @@ class FileVariant(models.Model):
             models.Index(fields=['status']),
             models.Index(fields=['deleted_at']),
         ]
+
+
+class FileSecurityScan(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    file = models.OneToOneField(File, on_delete=models.DO_NOTHING, related_name='security_scan')
+    engine = models.CharField(max_length=255)
+    status = models.CharField(
+        max_length=20,
+        choices=FileSecurityScanStatus.choices,
+        default=FileSecurityScanStatus.PENDING,
+    )
+    result = models.JSONField(default=dict)
+    scanned_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'file_security_scans'
+        indexes = [models.Index(fields=['status', 'created_at'])]
 
 
 class ProjectFolder(models.Model):

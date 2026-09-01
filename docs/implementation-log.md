@@ -4,6 +4,34 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-01 — Four milestones: quarantine, previews, guests, and operational alerts
+
+### Delivered
+
+- Changed review attachment ingestion to create `PENDING` Files and durable `file.security-scan.requested` outbox events. Downloads return `409` until a scan marks the File `READY`.
+- Added one durable File Security Scan record per attachment, a configurable scanner backend contract, EICAR test-marker rejection, clean/infected/failed states, and worker-driven processing.
+- Added idempotent asynchronous `file.preview.requested` processing. Clean attachments receive a private SVG review-card File Variant without adding native decoder dependencies.
+- Added one-time, hashed, expiring project guest invites and one-time guest access keys. Guest permissions are snapshotted at exchange and checked for every project-scoped request.
+- Added guest review discovery, comment list/create, annotation list/create, and clean attachment download APIs. Guest authorship and audit logs use the existing guest identity columns.
+- Added manager-only workspace operational health with scan/delivery/outbox counters, stale/failed/infected/dead-letter alerts, and a monitoring command that can fail on critical state.
+- Added guest and operational requests and variables to the Postman collection.
+
+### Decisions and boundaries
+
+- `FILE_SECURITY_SCANNER` is a dotted Python class path. The built-in scanner only establishes the integration contract and detects the standard EICAR marker; production must configure a maintained malware engine or scanning service.
+- Originals stay at private opaque keys while pending or rejected. Physical deletion/retention remains separate from logical quarantine.
+- The initial preview is a safe metadata review card, not a decoded thumbnail, PDF raster, or audio waveform. Those richer variants can be added behind the same outbox/File Variant contract.
+- Invite and access secrets are shown once and stored only as SHA-256 hashes. Revocation/rotation management endpoints remain a follow-up.
+
+### Verification
+
+- Focused tests cover pending download denial, clean scan and preview generation, infected-file blocking, critical operational alert state, guest comment/annotation authorship, missing permissions, missing access keys, and project scope.
+- Full-suite, migration drift, system, Postman JSON, compilation, and whitespace checks are required before handoff.
+
+### Next recommended milestone
+
+Integrate a production scanner adapter and private object storage, then add invite revocation, guest attachment upload, decoded thumbnails/waveforms, and retention cleanup.
+
 ## 2026-09-01 — Three milestones: attachments, annotations, and worker operations
 
 ### Delivered

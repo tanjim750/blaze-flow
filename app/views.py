@@ -54,6 +54,7 @@ from .serializers import (
 )
 from .models import (
     MediaVersion,
+    FileVariant,
     Annotation,
     AnnotationRevision,
     MediaVersionStageEntry,
@@ -867,6 +868,8 @@ def review_attachment_detail(request, workspace_id, project_id, media_version_id
     workspace, project, media_version, comment, content = _attachment_from_route(workspace_id, project_id, media_version_id, comment_id, content_id)
     if request.method == 'GET':
         _require_project_permission(request, project, REVIEW_COMMENT_READ, 'You do not have permission to download this attachment.')
+        if content.file.status != 'READY':
+            return Response({'detail': 'This attachment is still being scanned or was rejected.'}, status=status.HTTP_409_CONFLICT)
         if not default_storage.exists(content.file.object_key):
             raise Http404('The stored attachment was not found.')
         record_user_audit(user=request.user, workspace=workspace, action='review.attachment.downloaded', entity_type='review_comment_content', entity_id=content.id)
@@ -884,6 +887,19 @@ def review_attachment_detail(request, workspace_id, project_id, media_version_id
         raise PermissionDenied('Only the author or a comment manager can delete attachments.')
     delete_review_attachment(content=content, user=request.user)
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def review_attachment_preview(request, workspace_id, project_id, media_version_id, comment_id, content_id, variant_id):
+    workspace, project, media_version, comment, content = _attachment_from_route(workspace_id, project_id, media_version_id, comment_id, content_id)
+    _require_project_permission(request, project, REVIEW_COMMENT_READ, 'You do not have permission to view this attachment preview.')
+    variant = get_object_or_404(
+        FileVariant, id=variant_id, file=content.file, status='READY', deleted_at__isnull=True,
+    )
+    if not default_storage.exists(variant.object_key):
+        raise Http404('The stored preview was not found.')
+    return FileResponse(default_storage.open(variant.object_key, 'rb'), filename=variant.original_name, content_type=variant.mime_type)
 
 
 @api_view(['GET', 'POST'])
@@ -960,3 +976,12 @@ def delivery_health(request, workspace_id):
     delivery_counts = dict(NotificationDelivery.objects.filter(notification_id__in=notification_ids).values_list('status').annotate(count=Count('id')))
     outbox_counts = dict(OutboxEvent.objects.filter(aggregate_id__in=[str(item) for item in notification_ids]).values_list('status').annotate(count=Count('id')))
     return Response({'workspace_id': str(workspace.id), 'deliveries': delivery_counts, 'outbox': outbox_counts, 'checked_at': timezone.now()})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def operations_health(request, workspace_id):
+    from .services.operations import workspace_operations_report
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    _require_workspace_permission(request, workspace, WORKSPACE_MANAGE)
+    return Response(workspace_operations_report(workspace=workspace))

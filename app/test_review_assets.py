@@ -7,8 +7,16 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Annotation, AnnotationRevision, AuditLog, File, ReviewCommentContent
+from .models import Annotation, AnnotationRevision, AuditLog, File, FileSecurityScan, FileVariant, OutboxEvent, ReviewCommentContent
+from .services.outbox import process_outbox_events
 from .test_access_projects import WorkspaceAccessSetupMixin
+
+
+class FailingTestScanner:
+    name = 'failing-test-scanner'
+
+    def scan(self, stream):
+        raise RuntimeError('scanner unavailable')
 
 
 class ReviewAssetsApiTests(WorkspaceAccessSetupMixin, TestCase):
@@ -56,11 +64,20 @@ class ReviewAssetsApiTests(WorkspaceAccessSetupMixin, TestCase):
         )
         content_id = uploaded.json()['id']
         detail_url = reverse('api-review-attachment-detail', args=[self.workspace.id, self.project_id, self.media_id, self.comment_id, content_id])
-        downloaded = self.client.get(detail_url)
-
         self.assertEqual(uploaded.status_code, 201)
+        self.assertEqual(uploaded.json()['file']['status'], 'PENDING')
         self.assertEqual(uploaded.json()['file']['checksum_sha256'], hashlib.sha256(content).hexdigest())
+        self.assertEqual(self.client.get(detail_url).status_code, 409)
+        process_outbox_events()
+        process_outbox_events()
+        downloaded = self.client.get(detail_url)
         self.assertEqual(b''.join(downloaded.streaming_content), content)
+        variant = FileVariant.objects.get(file_id=uploaded.json()['file']['id'])
+        self.assertEqual(variant.status, 'READY')
+        preview_url = reverse('api-review-attachment-preview', args=[self.workspace.id, self.project_id, self.media_id, self.comment_id, content_id, variant.id])
+        preview = self.client.get(preview_url)
+        self.assertEqual(preview.status_code, 200)
+        self.assertIn(b'<svg', b''.join(preview.streaming_content))
         self.assertTrue(AuditLog.objects.filter(action='review.attachment.downloaded').exists())
         self.assertEqual(self.client.delete(detail_url).status_code, 204)
         self.assertEqual(self.client.get(detail_url).status_code, 404)
@@ -77,6 +94,45 @@ class ReviewAssetsApiTests(WorkspaceAccessSetupMixin, TestCase):
         )
         self.assertEqual(spoofed.status_code, 400)
         self.assertEqual(File.objects.count(), initial_files)
+
+    def test_eicar_marker_is_quarantined_and_never_downloadable(self):
+        uploaded = self.client.post(
+            self.attachment_upload_url(),
+            {'file': SimpleUploadedFile('unsafe.pdf', b'%PDF-1.7\nEICAR-STANDARD-ANTIVIRUS-TEST-FILE', content_type='application/pdf')},
+            format='multipart',
+        )
+        process_outbox_events()
+        detail_url = reverse('api-review-attachment-detail', args=[self.workspace.id, self.project_id, self.media_id, self.comment_id, uploaded.json()['id']])
+        self.assertEqual(uploaded.status_code, 201)
+        self.assertEqual(self.client.get(detail_url).status_code, 409)
+        self.assertEqual(FileSecurityScan.objects.get(file_id=uploaded.json()['file']['id']).status, 'INFECTED')
+
+    @override_settings(FILE_SECURITY_SCANNER='app.test_review_assets.FailingTestScanner')
+    def test_scanner_outage_is_observable_and_retried(self):
+        uploaded = self.client.post(
+            self.attachment_upload_url(),
+            {'file': SimpleUploadedFile('retry.pdf', b'%PDF-1.7\nretry', content_type='application/pdf')},
+            format='multipart',
+        )
+        result = process_outbox_events(retry_base_seconds=1, retry_max_seconds=1)
+        scan = FileSecurityScan.objects.get(file_id=uploaded.json()['file']['id'])
+        event = OutboxEvent.objects.get(topic='file.security-scan.requested', aggregate_id=uploaded.json()['file']['id'])
+        self.assertEqual(result['failed'], 1)
+        self.assertEqual(scan.status, 'FAILED')
+        self.assertEqual(event.status, 'FAILED')
+        self.assertEqual(scan.file.status, 'PENDING')
+
+    def test_operations_health_reports_processing_alerts(self):
+        uploaded = self.client.post(
+            self.attachment_upload_url(),
+            {'file': SimpleUploadedFile('unsafe.pdf', b'%PDF-1.7\nEICAR-STANDARD-ANTIVIRUS-TEST-FILE', content_type='application/pdf')},
+            format='multipart',
+        )
+        process_outbox_events()
+        report = self.client.get(reverse('api-operations-health', args=[self.workspace.id]))
+        self.assertEqual(report.status_code, 200)
+        self.assertEqual(report.json()['status'], 'critical')
+        self.assertEqual(report.json()['scans']['INFECTED'], 1)
 
     def test_annotation_create_validates_normalized_geometry(self):
         valid = self.client.post(

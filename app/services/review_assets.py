@@ -6,10 +6,11 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 from django.utils import timezone
 
-from app.models import File, FileStatus, ReviewCommentContent, ReviewCommentContentType
+from app.models import File, FileSecurityScan, FileStatus, ReviewCommentContent, ReviewCommentContentType
 
 from .audit import record_user_audit
 from .media import _storage_backend, detect_media_type, sha256_upload
+from .file_processing import SCAN_TOPIC, enqueue_file_event
 
 
 class ReviewAttachmentError(Exception):
@@ -61,7 +62,10 @@ def upload_review_attachment(*, comment, user, upload):
                 id=uuid.uuid4(), storage_backend=_storage_backend(now), object_key=stored_key,
                 original_name=clean_name, mime_type=mime_type, size_bytes=upload.size,
                 checksum=checksum, checksum_algorithm='sha256', metadata={},
-                status=FileStatus.READY, created_at=now, updated_at=now,
+                status=FileStatus.PENDING, created_at=now, updated_at=now,
+            )
+            FileSecurityScan.objects.create(
+                file=file_record, engine=settings.FILE_SECURITY_SCANNER,
             )
             content_type = ReviewCommentContentType.IMAGE if mime_type.startswith('image/') else (
                 ReviewCommentContentType.AUDIO if mime_type.startswith('audio/') else ReviewCommentContentType.FILE
@@ -77,6 +81,7 @@ def upload_review_attachment(*, comment, user, upload):
                 entity_type='review_comment_content', entity_id=content.id,
                 metadata={'comment_id': str(comment.id), 'file_id': str(file_record.id), 'checksum_sha256': checksum},
             )
+            enqueue_file_event(file=file_record, topic=SCAN_TOPIC)
             return content
     except Exception:
         default_storage.delete(stored_key)

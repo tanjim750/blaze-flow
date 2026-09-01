@@ -36,6 +36,9 @@ In Postman, select **Import**, choose `Postman_Collection.json`, and open the **
 | `mentioned_user_id` | Automatic | Captured by List Members for `invitation_email` |
 | `notification_id` | Automatic | Captured from the invited user's unread inbox |
 | `workflow_stage_id` | Automatic | Captured as In Review by List Workflow Stages |
+| `guest_invite_token` | Automatic | One-time guest invite token |
+| `guest_access_key` | Automatic | Guest API key sent in `X-Guest-Access-Key` |
+| `guest_comment_id` | Automatic | Comment created by the guest flow |
 
 Postman retains Django's `sessionid` and `csrftoken` cookies. Login saves the response's `csrf_token`, and unsafe requests send it through `X-CSRFToken`.
 
@@ -73,12 +76,19 @@ Run these requests individually in order:
 26. **Review Comments → Request Media Revision**
 27. **Media Versions → Workflow History** to confirm the Revision stage
 28. **Review Comments → Upload Comment Attachment** after selecting a supported file
-29. **Review Comments → Download Comment Attachment**
+29. Wait for **Operations → Operations Health and Alerts** to show the attachment scan as `CLEAN`, then run **Review Comments → Download Comment Attachment**
 30. **Annotations → Create Annotation**
 31. **Annotations → List Annotations**
 32. **Annotations → Edit Own Annotation**
 33. **Annotations → Annotation Revision History**
 34. **Operations → Delivery Health**
+35. **Operations → Operations Health and Alerts**
+
+The worker performs scan and preview events in separate batches. With Compose it runs continuously; for deterministic manual testing run `docker compose exec web python manage.py process_outbox` twice after an attachment upload.
+
+## 4. Guest review flow
+
+While authenticated as the owner, run **Guest Reviews → Create Guest Invite**. Then run **Exchange Guest Invite**, **Open Guest Review**, **Create Guest Comment**, and **Create Guest Annotation**. The exchange and guest endpoints deliberately do not use the owner session or CSRF header; they authenticate with the one-time captured guest access key.
 
 Run **Delete Comment Attachment**, **Delete Annotation**, and **Delete Comment Thread** last, in that order.
 
@@ -86,7 +96,7 @@ For media upload, select a PNG, JPEG, GIF, WebP, MP4, QuickTime, or WebM file in
 
 Do not run **Archive Custom Role**, **Archive Project**, **Remove Member**, or **Revoke Project Access** until those resources are no longer needed.
 
-## 4. Test invitations and selected access
+## 5. Test invitations and selected access
 
 While logged in as the owner, run **Send Invitation**. The raw token is captured automatically.
 
@@ -107,7 +117,7 @@ Verify the member by changing `email` to `member@example.com`, logging in, and r
 
 The Reviewer role can read comments, create comments, and edit only their own comments. It cannot resolve, reopen, or delete threads because it does not have `review.comment.manage`. It also lacks media-upload, download, transition, and project-delete permissions; those operations should return `403 Forbidden`.
 
-## 5. Test mentions and notifications
+## 6. Test mentions and notifications
 
 After the member has accepted the invitation and the owner has granted project access:
 
@@ -139,7 +149,7 @@ docker compose exec web python manage.py requeue_dead_letters --limit 100
 
 The Compose stack also starts a continuous `worker` service. Use `docker compose logs -f worker` to inspect processing output.
 
-## 6. Correct payload formats
+## 7. Correct payload formats
 
 Roles use `permission_keys` and dot-separated application keys:
 
@@ -167,7 +177,7 @@ Explicit project access targets a Workspace Membership:
 
 The membership must be active, belong to the same workspace, and use `SELECTED` scope. `ALL` memberships do not need grants.
 
-## 7. Expected responses
+## 8. Expected responses
 
 | Code | Meaning |
 | --- | --- |
@@ -177,6 +187,7 @@ The membership must be active, belong to the same workspace, and use `SELECTED` 
 | `400` | Invalid fields, conflict, duplicate, or expired token |
 | `403` | Missing permission or CSRF token |
 | `404` | Resource does not exist within the routed workspace/project |
+| `409` | Attachment is still quarantined or was rejected by scanning |
 
 ## Limitations
 
@@ -185,8 +196,8 @@ The membership must be active, belong to the same workspace, and use `SELECTED` 
 - Project and role deletion are lifecycle archival operations.
 - Member removal uses `PATCH {"status":"REMOVED"}`.
 - Access-grant detail supports `DELETE` only.
-- Media signature validation and checksums do not replace malware scanning or deep decoder validation.
+- The built-in EICAR-aware scanner is a development contract, not a production malware engine or deep decoder.
 - Local media storage is development-only; production requires private durable object storage.
-- Comment attachments, guest comments, pagination, and annotations are not implemented yet.
-- HTML/localized email, push/WebSocket delivery, production metrics, and dead-letter alerting are not implemented yet.
-- Attachment malware scanning, previews, physical cleanup, and guest-authored annotations are not implemented yet.
+- Pagination, guest attachment upload, invite revocation/rotation, and guest-authored editing are not implemented yet.
+- HTML/localized email, push/WebSocket delivery, and external metrics export are not implemented yet.
+- Decoded thumbnails/waveforms and physical retention cleanup are not implemented yet.

@@ -14,7 +14,7 @@ from app.models import (
     WorkflowStageStatusState,
 )
 
-from .audit import record_user_audit
+from .audit import record_guest_audit, record_user_audit
 from .notifications import NotificationError, resolve_mention_users, set_comment_mentions
 from .workflow import transition_media_version
 
@@ -113,6 +113,43 @@ def create_review_comment(
             'parent_comment_id': str(parent_comment.id) if parent_comment else None,
             'mentioned_user_count': len(mentioned_users),
         },
+    )
+    return comment
+
+
+@transaction.atomic
+def create_guest_review_comment(
+    *, media_version, guest_session, text, parent_comment=None,
+    start_time_ms=None, end_time_ms=None,
+):
+    if not text.strip():
+        raise ReviewCommentError('Comment text cannot be empty.')
+    if parent_comment is not None:
+        if parent_comment.media_version_id != media_version.id or parent_comment.deleted_at is not None:
+            raise ReviewCommentError('Select an active parent comment from this media version.')
+        if start_time_ms is not None or end_time_ms is not None:
+            raise ReviewCommentError('Replies inherit timing from their parent comment.')
+    if end_time_ms is not None and start_time_ms is None:
+        raise ReviewCommentError('end_time_ms requires start_time_ms.')
+    if start_time_ms is not None and end_time_ms is not None and end_time_ms < start_time_ms:
+        raise ReviewCommentError('end_time_ms must be greater than or equal to start_time_ms.')
+    now = timezone.now()
+    comment = ReviewComment(
+        id=uuid.uuid4(), media_version=media_version, parent_comment=parent_comment,
+        author_guest_session=guest_session, start_time_ms=start_time_ms,
+        end_time_ms=end_time_ms, created_at=now, updated_at=now,
+    )
+    comment.full_clean()
+    comment.save()
+    ReviewCommentContent.objects.create(
+        id=uuid.uuid4(), review_comment=comment,
+        content_type=ReviewCommentContentType.TEXT, text_content=text.strip(),
+        sort_order=0, created_at=now, updated_at=now,
+    )
+    record_guest_audit(
+        guest_session=guest_session, workspace=media_version.project.workspace,
+        action='review.comment.created', entity_type='review_comment', entity_id=comment.id,
+        metadata={'media_version_id': str(media_version.id)},
     )
     return comment
 

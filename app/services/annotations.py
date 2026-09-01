@@ -4,7 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from app.models import Annotation, AnnotationElement, AnnotationRevision
-from .audit import record_user_audit
+from .audit import record_guest_audit, record_user_audit
 
 
 class AnnotationError(Exception):
@@ -44,6 +44,27 @@ def create_annotation(*, media_version, user, elements, review_comment=None, sta
     annotation.save()
     _create_elements(annotation, elements, now)
     record_user_audit(user=user, workspace=media_version.project.workspace, action='annotation.created', entity_type='annotation', entity_id=annotation.id, metadata={'element_count': len(elements)})
+    return annotation
+
+
+@transaction.atomic
+def create_guest_annotation(*, media_version, guest_session, elements, review_comment=None, start_time_ms=None, end_time_ms=None):
+    if review_comment and review_comment.media_version_id != media_version.id:
+        raise AnnotationError('The linked comment must belong to this media version.')
+    now = timezone.now()
+    annotation = Annotation(
+        id=uuid.uuid4(), media_version=media_version, review_comment=review_comment,
+        author_guest_session=guest_session, start_time_ms=start_time_ms,
+        end_time_ms=end_time_ms, created_at=now, updated_at=now,
+    )
+    annotation.full_clean()
+    annotation.save()
+    _create_elements(annotation, elements, now)
+    record_guest_audit(
+        guest_session=guest_session, workspace=media_version.project.workspace,
+        action='annotation.created', entity_type='annotation', entity_id=annotation.id,
+        metadata={'element_count': len(elements)},
+    )
     return annotation
 
 

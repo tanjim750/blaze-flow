@@ -163,6 +163,10 @@ if EMAIL_USE_TLS and EMAIL_USE_SSL:
 OUTBOX_MAX_ATTEMPTS = int(os.environ.get('OUTBOX_MAX_ATTEMPTS', '5'))
 OUTBOX_RETRY_BASE_SECONDS = int(os.environ.get('OUTBOX_RETRY_BASE_SECONDS', '60'))
 OUTBOX_RETRY_MAX_SECONDS = int(os.environ.get('OUTBOX_RETRY_MAX_SECONDS', '3600'))
+FILE_SECURITY_SCANNER = os.environ.get(
+    'FILE_SECURITY_SCANNER', 'app.services.file_processing.EicarAwareScanner'
+)
+OPERATIONS_STALE_MINUTES = int(os.environ.get('OPERATIONS_STALE_MINUTES', '15'))
 if OUTBOX_MAX_ATTEMPTS < 1:
     raise ImproperlyConfigured('OUTBOX_MAX_ATTEMPTS must be at least 1.')
 if OUTBOX_RETRY_BASE_SECONDS < 1:

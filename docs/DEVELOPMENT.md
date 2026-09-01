@@ -226,7 +226,15 @@ Email preferences do not hide in-app notifications. A disabled mention-email pre
 
 Only a comment's registered author can add attachments. Active collaborators with `review.comment.read` and project access can download them; the author or a user with `review.comment.manage` can soft-delete them. Uploads support verified PNG, JPEG, GIF, WebP, PDF, WAV, and MP3 signatures up to `MAX_REVIEW_ATTACHMENT_BYTES`.
 
-Attachment objects use opaque private keys and store SHA-256 checksums. Storage writes are compensated if the database transaction fails. Soft deletion marks both Comment Content and File metadata but intentionally leaves the physical object for a future retention/quarantine worker. Signature verification is not malware scanning.
+Attachment objects use opaque private keys and store SHA-256 checksums. New objects remain `PENDING` and cannot be downloaded until the outbox worker processes `file.security-scan.requested`. Clean files become `READY`; infected or scan-failed files become `FAILED`. A clean scan queues an idempotent preview event that creates a private SVG review-card File Variant.
+
+`FILE_SECURITY_SCANNER` selects a scanner class with a `name` attribute and `scan(stream)` method returning at least `{"clean": true|false}`. The default `EicarAwareScanner` is only a development/test integration backend. Configure a maintained malware product or service before production. Storage writes are compensated if database creation fails. Soft deletion leaves physical objects for a future retention worker.
+
+## Guest reviews
+
+Workspace collaborators with `review.comment.manage` can create a project guest invite. The raw invite token is returned once. Exchange it at `POST /api/guest-access/exchange/`; the resulting access key is also returned once and must be sent as `X-Guest-Access-Key` to `/api/guest/reviews/...` endpoints.
+
+Supported scoped permissions are `media.read`, `media.download`, `review.comment.read`, `review.comment.create`, `annotation.read`, and `annotation.create`. Invite permissions are copied onto the access grant at exchange so later invite edits cannot silently broaden an active guest session. Both secret types are stored only as SHA-256 hashes.
 
 ## Visual annotations
 
@@ -248,6 +256,14 @@ python manage.py run_outbox_worker --batch-size 100 --interval-seconds 5
 ```
 
 The command closes stale database connections between polls and uses the existing row-locking, retries, dead letters, and stale-claim recovery. `--once` is available for cron/serverless execution. The workspace delivery-health endpoint is manager-only and returns grouped email-delivery and outbox status counts.
+
+`GET /api/workspaces/{workspace_id}/operations/health/` adds attachment scan and alert state. Monitoring systems can also run:
+
+```bash
+python manage.py check_operational_alerts --workspace-id <uuid> --fail-on-critical
+```
+
+Critical state currently means an infected attachment or dead-letter event. Failed/stale scans produce warnings. `OPERATIONS_STALE_MINUTES` controls the pending-scan threshold.
 
 ## Schema and migrations
 
@@ -289,8 +305,8 @@ CI runs these checks on every push and pull request.
 ## Suggested implementation order
 
 1. Add email delivery, CSRF-aware frontend integration, authentication throttling, and password-reset APIs.
-2. Configure private cloud storage, malware scanning, thumbnails, and asynchronous media processing.
-3. Add attachment malware scanning, quarantine, previews, and physical retention cleanup.
-4. Implement guest review access and production metrics/alerting.
+2. Configure private cloud storage and a production malware scanner backend.
+3. Add decoded thumbnails/waveforms and physical retention cleanup.
+4. Add guest invite revocation/rotation and export metrics to the production observability platform.
 
 Avoid implementing all documented domains at once. Complete and test one end-to-end workflow before expanding the surface area.
