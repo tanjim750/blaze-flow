@@ -95,21 +95,23 @@ def upload_review_attachment(*, comment, upload, user=None, guest_session=None):
 @transaction.atomic
 def delete_review_attachment(*, content, user):
     locked = ReviewCommentContent.objects.select_for_update().select_related(
-        'file', 'review_comment__media_version__project__workspace'
+        'review_comment__media_version__project__workspace'
     ).get(id=content.id)
     if locked.deleted_at is not None:
         raise ReviewAttachmentError('This attachment is already deleted.')
+    file_record = File.objects.select_for_update().get(id=locked.file_id)
     now = timezone.now()
     locked.deleted_at = now
     locked.deleted_by_user = user
     locked.updated_at = now
     locked.save(update_fields=['deleted_at', 'deleted_by_user', 'updated_at'])
-    locked.file.deleted_at = now
-    locked.file.updated_at = now
-    locked.file.save(update_fields=['deleted_at', 'updated_at'])
-    FileVariant.objects.filter(file=locked.file, deleted_at__isnull=True).update(
+    file_record.deleted_at = now
+    file_record.updated_at = now
+    file_record.save(update_fields=['deleted_at', 'updated_at'])
+    FileVariant.objects.filter(file=file_record, deleted_at__isnull=True).update(
         deleted_at=now, updated_at=now,
     )
+    locked.file = file_record
     record_user_audit(
         user=user, workspace=locked.review_comment.media_version.project.workspace,
         action='review.attachment.deleted', entity_type='review_comment_content', entity_id=locked.id,

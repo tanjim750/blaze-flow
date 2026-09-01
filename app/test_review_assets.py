@@ -3,6 +3,7 @@ import io
 import shutil
 import tempfile
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.files.storage import default_storage
@@ -220,4 +221,6 @@ class ReviewAssetsApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(self.client.get(health_url).status_code, 403)
 
     def test_supervised_worker_once_mode_loads(self):
-        call_command('run_outbox_worker', once=True, batch_size=10, interval_seconds=0.1)
+        with patch('app.management.commands.run_outbox_worker.close_old_connections') as close_connections:
+            call_command('run_outbox_worker', once=True, batch_size=10, interval_seconds=0.1)
+        close_connections.assert_not_called()

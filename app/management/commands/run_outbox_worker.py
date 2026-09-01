@@ -20,7 +20,8 @@ class Command(BaseCommand):
         if not 0.1 <= options['interval_seconds'] <= 60:
             raise CommandError('--interval-seconds must be between 0.1 and 60.')
         while True:
-            close_old_connections()
+            if not options['once']:
+                close_old_connections()
             result = process_outbox_events(limit=options['batch_size'])
             if any(result.values()):
                 self.stdout.write(str(result))
