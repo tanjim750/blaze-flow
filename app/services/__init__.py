@@ -3,6 +3,21 @@ from app.permissions import OWNER_PERMISSION_KEYS
 from .invitations import InvitationError, accept_invitation, create_invitation
 from .audit import record_user_audit
 from .annotations import AnnotationError, create_annotation, delete_annotation, update_annotation
+from .client_teams import (
+    ClientTeamError,
+    add_client_team_member,
+    archive_client_team,
+    create_client_team,
+    grant_client_team_workspace_access,
+    remove_client_team_member,
+    update_client_team,
+)
+from .client_team_invites import (
+    ClientTeamInviteError,
+    accept_client_team_invite,
+    create_client_team_invite,
+    revoke_client_team_invite,
+)
 from .comments import (
     ReviewCommentError,
     create_review_comment,
@@ -27,6 +42,16 @@ from .review_assets import ReviewAttachmentError, delete_review_attachment, uplo
 from .projects import archive_project, create_project, update_project
 from .resource_access import ResourceAccessError, grant_project_access
 from .roles import RoleError, archive_role, create_role, update_role
+from .tasks import (
+    TaskError,
+    add_task_assignee,
+    create_task,
+    delete_task,
+    delete_task_attachment,
+    remove_task_assignee,
+    update_task,
+    upload_task_attachment,
+)
 from .workspaces import WorkspaceSlugConflict, create_workspace
 from .workflow import WorkflowTransitionError, transition_media_version
 
@@ -34,24 +59,35 @@ __all__ = [
     'OWNER_PERMISSION_KEYS',
     'InvitationError',
     'AnnotationError',
+    'ClientTeamError',
+    'ClientTeamInviteError',
     'MediaUploadError',
     'NotificationError',
     'ResourceAccessError',
     'RoleError',
     'ReviewCommentError',
     'ReviewAttachmentError',
+    'TaskError',
     'WorkspaceSlugConflict',
     'WorkflowTransitionError',
+    'accept_client_team_invite',
     'accept_invitation',
+    'add_client_team_member',
+    'add_task_assignee',
+    'archive_client_team',
     'archive_project',
     'archive_role',
     'create_invitation',
     'create_annotation',
+    'create_client_team',
+    'create_client_team_invite',
     'create_project',
     'create_review_comment',
     'create_role',
+    'create_task',
     'create_workspace',
     'deliver_notification_email',
+    'grant_client_team_workspace_access',
     'grant_project_access',
     'get_notification_preference',
     'mark_all_notifications_read',
@@ -59,16 +95,24 @@ __all__ = [
     'delete_review_comment_tree',
     'delete_annotation',
     'delete_review_attachment',
+    'delete_task',
+    'delete_task_attachment',
     'edit_review_comment',
     'record_user_audit',
     'process_outbox_events',
+    'remove_client_team_member',
+    'remove_task_assignee',
     'requeue_dead_letter_events',
+    'revoke_client_team_invite',
     'request_media_revision',
     'set_review_comment_resolution',
+    'update_client_team',
     'update_role',
     'update_notification_preference',
+    'update_task',
     'upload_media_version',
     'upload_review_attachment',
+    'upload_task_attachment',
     'update_annotation',
     'transition_media_version',
     'update_project',

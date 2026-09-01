@@ -327,6 +327,7 @@ class AuthenticationApiTests(TestCase):
             password='a-secure-test-password',
             first_name='Csrf',
             last_name='User',
+            email_verified_at=timezone.now(),
         )
         csrf_client = APIClient(enforce_csrf_checks=True)
         login_response = csrf_client.post(
@@ -383,6 +384,7 @@ class WorkspaceCreationTests(TestCase):
             password='a-secure-test-password',
             first_name='Workspace',
             last_name='Owner',
+            email_verified_at=timezone.now(),
         )
 
     def test_authenticated_user_creates_complete_owner_graph(self):
@@ -416,6 +418,24 @@ class WorkspaceCreationTests(TestCase):
 
         self.assertIn(response.status_code, (401, 403))
         self.assertFalse(Workspace.objects.exists())
+
+    def test_unverified_user_cannot_create_workspace(self):
+        unverified_user = get_user_model().objects.create_user(
+            email='unverified@example.com',
+            password='a-secure-test-password',
+            first_name='Unverified',
+            last_name='User',
+        )
+        self.client.force_authenticate(unverified_user)
+
+        response = self.client.post(
+            reverse('api-workspaces'),
+            {'name': 'Blocked Studio', 'timezone': 'UTC'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Workspace.objects.filter(slug='blocked-studio').exists())
 
     def test_invalid_timezone_is_rejected(self):
         self.client.force_authenticate(self.user)

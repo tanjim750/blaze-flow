@@ -4,6 +4,17 @@ from .auth import (
     PasswordResetRequestSerializer, RegistrationSerializer, UserSerializer,
 )
 from .annotations import AnnotationRevisionSerializer, AnnotationSerializer, AnnotationWriteSerializer
+from .client_teams import (
+    ClientTeamCreateSerializer,
+    ClientTeamInviteAcceptSerializer,
+    ClientTeamInviteCreateSerializer,
+    ClientTeamInviteSerializer,
+    ClientTeamMemberCreateSerializer,
+    ClientTeamMemberSerializer,
+    ClientTeamSerializer,
+    ClientTeamUpdateSerializer,
+    ClientTeamWorkspaceAccessCreateSerializer,
+)
 from .access import (
     RoleSerializer,
     RoleCreateSerializer,
@@ -36,6 +47,15 @@ from .media import (
 from .notifications import NotificationPreferenceSerializer, NotificationSerializer
 from .review_assets import ReviewAttachmentSerializer, ReviewAttachmentUploadSerializer
 from .projects import ProjectCreateSerializer, ProjectSerializer, ProjectUpdateSerializer
+from .tasks import (
+    TaskAssigneeCreateSerializer,
+    TaskAssigneeSerializer,
+    TaskAttachmentSerializer,
+    TaskAttachmentUploadSerializer,
+    TaskCreateSerializer,
+    TaskSerializer,
+    TaskUpdateSerializer,
+)
 from .workspaces import (
     WorkspaceCreateSerializer, WorkspaceRetentionPolicyUpdateSerializer,
     WorkspaceSerializer,
@@ -51,6 +71,15 @@ __all__ = [
     'AnnotationRevisionSerializer',
     'AnnotationSerializer',
     'AnnotationWriteSerializer',
+    'ClientTeamCreateSerializer',
+    'ClientTeamInviteAcceptSerializer',
+    'ClientTeamInviteCreateSerializer',
+    'ClientTeamInviteSerializer',
+    'ClientTeamMemberCreateSerializer',
+    'ClientTeamMemberSerializer',
+    'ClientTeamSerializer',
+    'ClientTeamUpdateSerializer',
+    'ClientTeamWorkspaceAccessCreateSerializer',
     'MessageSerializer',
     'ReviewCommentCreateSerializer',
     'ReviewCommentEditSerializer',
@@ -77,6 +106,13 @@ __all__ = [
     'ProjectCreateSerializer',
     'ProjectSerializer',
     'ProjectUpdateSerializer',
+    'TaskAssigneeCreateSerializer',
+    'TaskAssigneeSerializer',
+    'TaskAttachmentSerializer',
+    'TaskAttachmentUploadSerializer',
+    'TaskCreateSerializer',
+    'TaskSerializer',
+    'TaskUpdateSerializer',
     'UserSerializer',
     'WorkspaceCreateSerializer',
     'WorkspaceRetentionPolicyUpdateSerializer',

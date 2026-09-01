@@ -13,6 +13,8 @@ The currently supported behavior is:
 - Django password hashing, authentication, permissions, and admin integration
 - atomic workspace creation with an owner role, permission bundle, and primary-owner membership
 - hashed-token workspace invitations, membership role/status management, and client-team permission inheritance
+- client-team administration (profile CRUD, archival, member add/remove/reactivation, workspace-access grants, and EMAIL/LINK invites)
+- workspace- and project-scoped tasks (CRUD, assignees, and signature-verified attachments over the existing review/media scanning pipeline)
 - additive workspace/project permission evaluation with `ALL` and `SELECTED` project scope
 - authorized project listing, creation, detail, update, and archival
 - protected system roles, custom role administration, and explicit project-access grants

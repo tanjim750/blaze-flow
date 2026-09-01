@@ -132,7 +132,42 @@ Verify the member by changing `email` to `member@example.com`, logging in, and r
 
 The Reviewer role can read comments, create comments, and edit only their own comments. It cannot resolve, reopen, or delete threads because it does not have `review.comment.manage`. It also lacks media-upload, download, transition, and project-delete permissions; those operations should return `403 Forbidden`.
 
-## 6. Test mentions and notifications
+## 6. Test client team administration and access
+
+While logged in as the owner:
+
+1. Run **Client Teams → Create Client Team**. `client_team_id` is captured.
+2. Run **Client Teams → List Client Teams** and **Client Team Detail** to confirm it reads back.
+3. Run **Client Teams → Update Client Team** to set profile fields such as `phone` or `description`.
+4. Change `email` to `member@example.com` (the account must already be registered; run **Register** first if it is not) and run **Login**.
+5. Change `email` back to `owner@example.com`, log in again, and run **Client Teams → Add Client Team Member** with `invitation_email` as the member's email. `client_team_member_id` is captured.
+6. Run **Client Teams → Grant Client Team Workspace Access** with `role_id` set to the Member role. This creates the `CLIENT_TEAM` workspace membership; its `id` is the membership to use afterward with **Members and Invitations → Update Member** if the role or project-access mode needs to change.
+7. Log in as `member@example.com` and confirm the workspace and its projects are now visible, inherited through the client team membership rather than a direct membership.
+
+Removing a member (**Remove Client Team Member**) only removes that person; the client team keeps its workspace access for any other active members. Archiving the client team (**Archive Client Team**) immediately revokes inherited access for every member, independent of the underlying `WorkspaceMembership` row, so run it last.
+
+`client_team.manage` is required to create, update, add/remove members, and archive; `client_team.manage` alone does not grant workspace access — that step requires `workspace.members.manage`, the same permission that guards **Update Member**.
+
+As an alternative to **Add Client Team Member**, onboard members by invite:
+
+1. As the owner, run **Client Teams → Create Client Team Email Invite** with `invitation_email`, or **Create Client Team Link Invite** for a reusable, non-recipient-bound link. Either way `client_team_invite_token` is captured; the raw token is returned only in this response.
+2. Log in as the intended recipient and run **Client Teams → Accept Client Team Invite**. An `EMAIL` invite requires the logged-in account's email to match `recipient_email` exactly and is single-use; a `LINK` invite accepts any authenticated user up to its `max_uses` (unlimited if omitted). Re-accepting the same invite as the same user is idempotent and does not consume a second use.
+3. As the owner, run **List Client Team Invites** to see `use_count` update, and **Revoke Client Team Invite** to invalidate a link early. Revocation does not remove access already granted through it; use **Remove Client Team Member** for that.
+
+Accepting an invite never creates a direct `USER` workspace membership by itself; the member still only gains workspace access once someone runs **Grant Client Team Workspace Access** for the client team.
+
+## 7. Test tasks
+
+Tasks can be workspace-level (no project) or scoped to a project. Access to a project-scoped task always follows the same project permission as the project itself; access to a workspace-level task only depends on the workspace role.
+
+1. As the owner, run **Tasks → Create Workspace Task**. `task_id` is captured.
+2. Run **Tasks → Task Detail**, **Update Task** (for example set `status` to `IN_PROGRESS`, then `COMPLETED` to see `completed_at` populate, then back to `TODO` to see it clear), and **List Tasks**.
+3. Run **Tasks → Assign Task** with `membership_id` set to a member's membership. `task_assignee_id` is captured. Run **List Task Assignees**, then **Unassign Task**.
+4. Run **Tasks → Upload Task Attachment** with a supported file selected in the `file` form-data row, then **List Task Attachments** and **Delete Task Attachment**.
+5. Run **Tasks → Create Project Task** with `project_id` set to an existing project. A member without access to that project (no `ALL` access, no grant) gets `403` from **Task Detail** even if they can read workspace-level tasks; granting **Projects → Grant Project Access** for that project immediately allows it.
+6. Run **Tasks → Delete Task** as the owner. The Member role does not have `task.delete`, so a member attempting the same request gets `403`; both `task.create` and `task.update` are available to Member, so members can create and edit tasks (including their attachments and assignees).
+
+## 8. Test mentions and notifications
 
 After the member has accepted the invitation and the owner has granted project access:
 
@@ -164,7 +199,7 @@ docker compose exec web python manage.py requeue_dead_letters --limit 100
 
 The Compose stack also starts a continuous `worker` service. Use `docker compose logs -f worker` to inspect processing output.
 
-## 7. Correct payload formats
+## 9. Correct payload formats
 
 Roles use `permission_keys` and dot-separated application keys:
 
@@ -192,7 +227,7 @@ Explicit project access targets a Workspace Membership:
 
 The membership must be active, belong to the same workspace, and use `SELECTED` scope. `ALL` memberships do not need grants.
 
-## 8. Expected responses
+## 10. Expected responses
 
 | Code | Meaning |
 | --- | --- |
@@ -210,6 +245,9 @@ The membership must be active, belong to the same workspace, and use `SELECTED` 
 - Invitation email delivery is not implemented; the raw token is returned once.
 - Project and role deletion are lifecycle archival operations.
 - Member removal uses `PATCH {"status":"REMOVED"}`.
+- Client team deletion is lifecycle archival; client team member removal uses `DELETE`, not `PATCH`.
+- Task attachment uploads use the same signature-verified type allowlist as review attachments; general document formats (`.docx`, `.xlsx`, and similar) are not yet accepted. Task attachment scanning is queued through the same worker as review/media attachments; deletion removes only the association, not the underlying `File`.
+- Client team invite email delivery is not implemented; the raw token is returned once. Accepting an invite only creates client-team membership, never a direct workspace membership.
 - Access-grant detail supports `DELETE` only.
 - The built-in EICAR-aware scanner is a development contract; configure the ClamAV adapter or another maintained scanner in production.
 - Local storage is the development default; the S3-compatible adapter still requires a private bucket and production credentials.

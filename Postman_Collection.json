@@ -46,7 +46,42 @@
       "type": "string"
     },
     {
+      "key": "client_team_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "client_team_member_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "client_team_invite_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "client_team_invite_token",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "grant_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "task_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "task_assignee_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "task_attachment_id",
       "value": "",
       "type": "string"
     },
@@ -441,7 +476,7 @@
               }
             },
             "url": "{{base_url}}/api/workspaces/",
-            "description": "Create a workspace, system roles, workflow stages, and owner membership"
+            "description": "Create a workspace, system roles, workflow stages, and owner membership. Requires a verified email; returns 403 otherwise. Complete the Email Verification request first if the current session's account is unverified."
           },
           "response": []
         }
@@ -726,6 +761,371 @@
       ]
     },
     {
+      "name": "Client Teams",
+      "item": [
+        {
+          "name": "List Client Teams",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/",
+            "description": "List client organizations in the workspace"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Client Team",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"client_team_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Corp\",\n  \"website\": \"https://acme.example.com\",\n  \"email\": \"hello@acme.example.com\",\n  \"city\": \"Austin\",\n  \"country_code\": \"US\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/",
+            "description": "Create a client organization. Requires client_team.manage"
+          },
+          "response": []
+        },
+        {
+          "name": "Client Team Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/",
+            "description": "Read a single client organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Client Team",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+1-555-0100\",\n  \"description\": \"Long-standing agency client\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/",
+            "description": "Update client organization profile fields"
+          },
+          "response": []
+        },
+        {
+          "name": "List Client Team Members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/members/",
+            "description": "List active and removed members of the client organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Client Team Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"client_team_member_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{invitation_email}}\",\n  \"title\": \"Marketing Manager\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/members/",
+            "description": "Add an existing registered user as a client team member, or reactivate a previously removed one"
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Client Team Member",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/members/{{client_team_member_id}}/",
+            "description": "Soft-remove a client team member"
+          },
+          "response": []
+        },
+        {
+          "name": "Grant Client Team Workspace Access",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role_id\": \"{{role_id}}\",\n  \"project_access_mode\": \"ALL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/workspace-access/",
+            "description": "Create the CLIENT_TEAM workspace membership so active team members inherit this role and project access mode. Requires workspace.members.manage. Update or revoke afterward through Update Member / Remove Member using the returned membership id"
+          },
+          "response": []
+        },
+        {
+          "name": "List Client Team Invites",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/invites/",
+            "description": "List invitations for the client team. Never exposes the stored token hash"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Client Team Email Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"client_team_invite_id\", data.id);",
+                  "if (data.token) pm.collectionVariables.set(\"client_team_invite_token\", data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invite_type\": \"EMAIL\",\n  \"recipient_email\": \"{{invitation_email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/invites/",
+            "description": "Create a single-use, recipient-bound invite. The raw token is returned once"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Client Team Link Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"client_team_invite_id\", data.id);",
+                  "if (data.token) pm.collectionVariables.set(\"client_team_invite_token\", data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invite_type\": \"LINK\",\n  \"label\": \"Kickoff link\",\n  \"max_uses\": 5,\n  \"expires_in_days\": 14\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/invites/",
+            "description": "Create a shareable, reusable invite not bound to one recipient. max_uses is optional; omit it for unlimited use until expiration/revocation"
+          },
+          "response": []
+        },
+        {
+          "name": "Accept Client Team Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"client_team_member_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{client_team_invite_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/client-team-invitations/accept/",
+            "description": "Accept as an authenticated user. An EMAIL invite requires the logged-in account's email to match recipient_email; a LINK invite accepts any authenticated user up to max_uses. Re-accepting the same invite as the same user is idempotent"
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Client Team Invite",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/invites/{{client_team_invite_id}}/",
+            "description": "Revoke an invite. Already-exchanged access it granted is not retroactively removed; use Remove Client Team Member for that"
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Client Team",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/",
+            "description": "Archive the client organization. Existing team members immediately lose inherited access; run this last"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Projects",
       "item": [
         {
@@ -907,6 +1307,293 @@
             ],
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/access/{{grant_id}}/",
             "description": "Revoke an explicit project grant"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "List Tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/",
+            "description": "List active workspace-level tasks plus tasks in projects you can access"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Workspace Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"task_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Draft creative brief\",\n  \"priority\": \"HIGH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/",
+            "description": "Create a workspace-level task with no project. Omit project_id for workspace-level work; set it to scope the task to a project you can access"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Project Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"task_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"title\": \"Upload rough cut\",\n  \"priority\": \"MEDIUM\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/",
+            "description": "Create a task scoped to a project. Requires task.create at the workspace level plus project access to project_id"
+          },
+          "response": []
+        },
+        {
+          "name": "Task Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/",
+            "description": "Read a single task"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Task",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/",
+            "description": "Update task fields. Setting status to COMPLETED stamps completed_at; moving off COMPLETED clears it. project_id cannot be changed here"
+          },
+          "response": []
+        },
+        {
+          "name": "List Task Assignees",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/assignees/",
+            "description": "List workspace memberships assigned to the task"
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"task_assignee_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"membership_id\": \"{{membership_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/assignees/",
+            "description": "Assign a workspace membership to the task"
+          },
+          "response": []
+        },
+        {
+          "name": "Unassign Task",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/assignees/{{task_assignee_id}}/",
+            "description": "Remove an assignee from the task"
+          },
+          "response": []
+        },
+        {
+          "name": "List Task Attachments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/attachments/",
+            "description": "List files attached to the task"
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Task Attachment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"task_attachment_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/attachments/",
+            "description": "Upload a supporting file. Accepts the same signature-verified types as review attachments (PNG, JPEG, GIF, WebP, PDF, WAV, MP3) plus MP4/QuickTime/WebM. The file is queued for malware scanning like other uploads"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Task Attachment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/attachments/{{task_attachment_id}}/",
+            "description": "Remove the attachment association. The underlying File record is retained, matching the project-files convention"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Task",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/",
+            "description": "Soft-delete the task. Requires task.delete (Owner role by default; Member does not have it)"
           },
           "response": []
         }

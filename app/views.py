@@ -1,7 +1,7 @@
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, HttpResponse
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.middleware.csrf import get_token
 from django.utils import timezone
@@ -24,6 +24,15 @@ from .serializers import (
     AnnotationRevisionSerializer,
     AnnotationSerializer,
     AnnotationWriteSerializer,
+    ClientTeamCreateSerializer,
+    ClientTeamInviteAcceptSerializer,
+    ClientTeamInviteCreateSerializer,
+    ClientTeamInviteSerializer,
+    ClientTeamMemberCreateSerializer,
+    ClientTeamMemberSerializer,
+    ClientTeamSerializer,
+    ClientTeamUpdateSerializer,
+    ClientTeamWorkspaceAccessCreateSerializer,
     MessageSerializer,
     MediaUploadSerializer,
     MediaVersionSerializer,
@@ -39,6 +48,13 @@ from .serializers import (
     ReviewAttachmentUploadSerializer,
     RevisionRequestSerializer,
     StageHistorySerializer,
+    TaskAssigneeCreateSerializer,
+    TaskAssigneeSerializer,
+    TaskAttachmentSerializer,
+    TaskAttachmentUploadSerializer,
+    TaskCreateSerializer,
+    TaskSerializer,
+    TaskUpdateSerializer,
     WorkflowStageSerializer,
     WorkflowTransitionSerializer,
     ProjectCreateSerializer,
@@ -80,6 +96,11 @@ from .models import (
     FileVariant,
     Annotation,
     AnnotationRevision,
+    ClientTeam,
+    ClientTeamInvite,
+    ClientTeamMember,
+    ClientTeamMemberStatus,
+    ClientTeamStatus,
     MediaVersionStageEntry,
     Project,
     ResourceAccess,
@@ -91,6 +112,9 @@ from .models import (
     OutboxEvent,
     Role,
     RoleStatus,
+    Task,
+    TaskAssignee,
+    TaskAttachment,
     WorkflowStage,
     WorkflowStageStatus,
     WorkflowStageStatusState,
@@ -109,11 +133,17 @@ from .permissions import (
     ANNOTATION_CREATE,
     ANNOTATION_MANAGE,
     ANNOTATION_READ,
+    CLIENT_TEAM_MANAGE,
+    CLIENT_TEAM_READ,
     REVIEW_COMMENT_CREATE,
     REVIEW_COMMENT_MANAGE,
     REVIEW_COMMENT_READ,
     REVIEW_REACTION_CREATE,
     ROLE_MANAGE,
+    TASK_CREATE,
+    TASK_DELETE,
+    TASK_READ,
+    TASK_UPDATE,
     WORKSPACE_MEMBERS_MANAGE,
     WORKSPACE_MANAGE,
     WORKSPACE_READ,
@@ -125,37 +155,56 @@ from .permissions import (
 )
 from .services import (
     InvitationError,
+    ClientTeamError,
+    ClientTeamInviteError,
     MediaUploadError,
     ResourceAccessError,
     RoleError,
     ReviewCommentError,
     AnnotationError,
     ReviewAttachmentError,
+    TaskError,
     WorkflowTransitionError,
     WorkspaceSlugConflict,
+    accept_client_team_invite,
     accept_invitation,
+    add_client_team_member,
+    add_task_assignee,
+    archive_client_team,
     archive_project,
     archive_role,
+    create_client_team,
+    create_client_team_invite,
     create_invitation,
     create_project,
     create_review_comment,
     create_annotation,
     create_role,
+    create_task,
     create_workspace,
+    grant_client_team_workspace_access,
     grant_project_access,
     delete_review_comment_tree,
     delete_annotation,
     delete_review_attachment,
+    delete_task,
+    delete_task_attachment,
     edit_review_comment,
     mark_all_notifications_read,
     mark_notification_read,
     get_notification_preference,
     record_user_audit,
+    remove_client_team_member,
+    remove_task_assignee,
+    revoke_client_team_invite,
     request_media_revision,
     set_review_comment_resolution,
+    update_client_team,
     update_notification_preference,
     update_annotation,
+    update_task,
     upload_review_attachment,
+    upload_task_attachment,
     transition_media_version,
     update_role,
     upload_media_version,
@@ -278,6 +327,11 @@ def current_user(request):
     return Response(UserSerializer(request.user).data)
 
 
+def _require_verified_email(request):
+    if request.user.email_verified_at is None:
+        raise PermissionDenied('Verify your email address before creating a workspace.')
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def workspace_list_create(request):
@@ -289,6 +343,7 @@ def workspace_list_create(request):
         workspaces = Workspace.objects.filter(id__in=workspace_ids).distinct().order_by('name')
         return Response(WorkspaceSerializer(workspaces, many=True).data)
 
+    _require_verified_email(request)
     serializer = WorkspaceCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     try:
@@ -382,7 +437,7 @@ def workspace_members(request, workspace_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
     _require_workspace_permission(request, workspace, WORKSPACE_READ)
     memberships = WorkspaceMembership.objects.filter(workspace=workspace).select_related(
-        'user', 'role'
+        'user', 'client_team', 'role'
     ).order_by('joined_at')
     return Response(WorkspaceMembershipSerializer(memberships, many=True).data)
 
@@ -393,7 +448,7 @@ def workspace_member_detail(request, workspace_id, membership_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
     _require_workspace_permission(request, workspace, WORKSPACE_MEMBERS_MANAGE)
     membership = get_object_or_404(
-        WorkspaceMembership.objects.select_related('role', 'user'),
+        WorkspaceMembership.objects.select_related('role', 'user', 'client_team'),
         id=membership_id,
         workspace=workspace,
     )
@@ -418,6 +473,190 @@ def workspace_member_detail(request, workspace_id, membership_id):
     membership.full_clean()
     membership.save()
     return Response(WorkspaceMembershipSerializer(membership).data)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def client_team_list_create(request, workspace_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    if request.method == 'GET':
+        _require_workspace_permission(request, workspace, CLIENT_TEAM_READ)
+        client_teams = ClientTeam.objects.filter(workspace=workspace).order_by('name')
+        return Response(ClientTeamSerializer(client_teams, many=True).data)
+
+    _require_workspace_permission(request, workspace, CLIENT_TEAM_MANAGE)
+    serializer = ClientTeamCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    creating_membership = memberships_with_permission(
+        user=request.user,
+        workspace=workspace,
+        permission_key=CLIENT_TEAM_MANAGE,
+    ).first()
+    client_team = create_client_team(
+        workspace=workspace,
+        created_by_membership=creating_membership,
+        **serializer.validated_data,
+    )
+    return Response(ClientTeamSerializer(client_team).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def client_team_detail(request, workspace_id, client_team_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    client_team = get_object_or_404(ClientTeam, id=client_team_id, workspace=workspace)
+    if request.method == 'GET':
+        _require_workspace_permission(request, workspace, CLIENT_TEAM_READ)
+        return Response(ClientTeamSerializer(client_team).data)
+
+    _require_workspace_permission(request, workspace, CLIENT_TEAM_MANAGE)
+    try:
+        if request.method == 'DELETE':
+            archive_client_team(client_team=client_team)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = ClientTeamUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        client_team = update_client_team(client_team=client_team, **serializer.validated_data)
+    except ClientTeamError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ClientTeamSerializer(client_team).data)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def client_team_members(request, workspace_id, client_team_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    client_team = get_object_or_404(ClientTeam, id=client_team_id, workspace=workspace)
+    if request.method == 'GET':
+        _require_workspace_permission(request, workspace, CLIENT_TEAM_READ)
+        members = ClientTeamMember.objects.filter(client_team=client_team).select_related(
+            'user'
+        ).order_by('joined_at')
+        return Response(ClientTeamMemberSerializer(members, many=True).data)
+
+    _require_workspace_permission(request, workspace, CLIENT_TEAM_MANAGE)
+    serializer = ClientTeamMemberCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    adding_membership = memberships_with_permission(
+        user=request.user,
+        workspace=workspace,
+        permission_key=CLIENT_TEAM_MANAGE,
+    ).first()
+    try:
+        member = add_client_team_member(
+            client_team=client_team,
+            user=serializer.validated_data['user'],
+            added_by_membership=adding_membership,
+            title=serializer.validated_data.get('title'),
+        )
+    except ClientTeamError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ClientTeamMemberSerializer(member).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def client_team_member_detail(request, workspace_id, client_team_id, member_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    client_team = get_object_or_404(ClientTeam, id=client_team_id, workspace=workspace)
+    _require_workspace_permission(request, workspace, CLIENT_TEAM_MANAGE)
+    member = get_object_or_404(ClientTeamMember, id=member_id, client_team=client_team)
+    try:
+        remove_client_team_member(member=member)
+    except ClientTeamError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def client_team_workspace_access(request, workspace_id, client_team_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    client_team = get_object_or_404(
+        ClientTeam, id=client_team_id, workspace=workspace, status=ClientTeamStatus.ACTIVE
+    )
+    _require_workspace_permission(request, workspace, WORKSPACE_MEMBERS_MANAGE)
+    serializer = ClientTeamWorkspaceAccessCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    role = get_object_or_404(
+        Role,
+        id=serializer.validated_data['role_id'],
+        workspace=workspace,
+        status=RoleStatus.ACTIVE,
+    )
+    try:
+        membership = grant_client_team_workspace_access(
+            client_team=client_team,
+            role=role,
+            project_access_mode=serializer.validated_data['project_access_mode'],
+        )
+    except ClientTeamError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(WorkspaceMembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def client_team_invites(request, workspace_id, client_team_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    client_team = get_object_or_404(ClientTeam, id=client_team_id, workspace=workspace)
+    _require_workspace_permission(request, workspace, CLIENT_TEAM_MANAGE)
+    if request.method == 'GET':
+        invites = ClientTeamInvite.objects.filter(client_team=client_team).order_by('-created_at')
+        return Response(ClientTeamInviteSerializer(invites, many=True).data)
+
+    serializer = ClientTeamInviteCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    creating_membership = memberships_with_permission(
+        user=request.user,
+        workspace=workspace,
+        permission_key=CLIENT_TEAM_MANAGE,
+    ).first()
+    try:
+        invite, token = create_client_team_invite(
+            client_team=client_team,
+            created_by_membership=creating_membership,
+            **serializer.validated_data,
+        )
+    except ClientTeamInviteError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    data = ClientTeamInviteSerializer(invite).data
+    data['token'] = token
+    return Response(data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def client_team_invite_detail(request, workspace_id, client_team_id, invite_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    client_team = get_object_or_404(ClientTeam, id=client_team_id, workspace=workspace)
+    _require_workspace_permission(request, workspace, CLIENT_TEAM_MANAGE)
+    invite = get_object_or_404(ClientTeamInvite, id=invite_id, client_team=client_team)
+    revoking_membership = memberships_with_permission(
+        user=request.user,
+        workspace=workspace,
+        permission_key=CLIENT_TEAM_MANAGE,
+    ).first()
+    try:
+        revoke_client_team_invite(invite=invite, revoked_by_membership=revoking_membership)
+    except ClientTeamInviteError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def accept_client_team_invitation(request):
+    serializer = ClientTeamInviteAcceptSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        member = accept_client_team_invite(
+            user=request.user,
+            token=serializer.validated_data['token'],
+        )
+    except ClientTeamInviteError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ClientTeamMemberSerializer(member).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
@@ -563,6 +802,157 @@ def project_access_detail(request, workspace_id, project_id, grant_id):
     project = get_object_or_404(Project, id=project_id, workspace=workspace)
     grant = get_object_or_404(ResourceAccess, id=grant_id, project=project)
     grant.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def _require_task_permission(request, workspace, task, permission_key):
+    if task.project_id:
+        if not has_project_permission(
+            user=request.user,
+            project=task.project,
+            permission_key=permission_key,
+        ):
+            raise PermissionDenied('You do not have permission to access this task.')
+    else:
+        _require_workspace_permission(request, workspace, permission_key)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def task_list_create(request, workspace_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    if request.method == 'GET':
+        _require_workspace_permission(request, workspace, TASK_READ)
+        accessible_project_ids = accessible_projects(
+            user=request.user,
+            workspace=workspace,
+            permission_key=TASK_READ,
+        ).values_list('id', flat=True)
+        tasks = Task.objects.filter(workspace=workspace, deleted_at__isnull=True).filter(
+            Q(project__isnull=True) | Q(project_id__in=accessible_project_ids)
+        ).order_by('sort_order', '-created_at')
+        return Response(TaskSerializer(tasks, many=True).data)
+
+    _require_workspace_permission(request, workspace, TASK_CREATE)
+    serializer = TaskCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data.copy()
+    project_id = data.pop('project_id', None)
+    project = None
+    if project_id is not None:
+        project = get_object_or_404(Project, id=project_id, workspace=workspace)
+        if not has_project_permission(user=request.user, project=project, permission_key=TASK_CREATE):
+            raise PermissionDenied('You do not have permission to create tasks in this project.')
+    creating_membership = memberships_with_permission(
+        user=request.user,
+        workspace=workspace,
+        permission_key=TASK_CREATE,
+    ).first()
+    task = create_task(
+        workspace=workspace,
+        project=project,
+        created_by_membership=creating_membership,
+        **data,
+    )
+    return Response(TaskSerializer(task).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def task_detail(request, workspace_id, task_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    task = get_object_or_404(Task, id=task_id, workspace=workspace, deleted_at__isnull=True)
+    permission_key = {
+        'GET': TASK_READ,
+        'PATCH': TASK_UPDATE,
+        'DELETE': TASK_DELETE,
+    }[request.method]
+    _require_task_permission(request, workspace, task, permission_key)
+    if request.method == 'GET':
+        return Response(TaskSerializer(task).data)
+    if request.method == 'PATCH':
+        serializer = TaskUpdateSerializer(task, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        task = update_task(task=task, **serializer.validated_data)
+        return Response(TaskSerializer(task).data)
+    try:
+        delete_task(task=task)
+    except TaskError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def task_assignees(request, workspace_id, task_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    task = get_object_or_404(Task, id=task_id, workspace=workspace, deleted_at__isnull=True)
+    if request.method == 'GET':
+        _require_task_permission(request, workspace, task, TASK_READ)
+        assignees = TaskAssignee.objects.filter(task=task).select_related(
+            'workspace_membership__user', 'workspace_membership__client_team', 'workspace_membership__role'
+        ).order_by('assigned_at')
+        return Response(TaskAssigneeSerializer(assignees, many=True).data)
+
+    _require_task_permission(request, workspace, task, TASK_UPDATE)
+    serializer = TaskAssigneeCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    membership = get_object_or_404(
+        WorkspaceMembership, id=serializer.validated_data['membership_id'], workspace=workspace
+    )
+    try:
+        assignee = add_task_assignee(task=task, membership=membership)
+    except TaskError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(TaskAssigneeSerializer(assignee).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def task_assignee_detail(request, workspace_id, task_id, assignee_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    task = get_object_or_404(Task, id=task_id, workspace=workspace, deleted_at__isnull=True)
+    _require_task_permission(request, workspace, task, TASK_UPDATE)
+    assignee = get_object_or_404(TaskAssignee, id=assignee_id, task=task)
+    remove_task_assignee(assignee=assignee)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def task_attachments(request, workspace_id, task_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    task = get_object_or_404(Task, id=task_id, workspace=workspace, deleted_at__isnull=True)
+    if request.method == 'GET':
+        _require_task_permission(request, workspace, task, TASK_READ)
+        attachments = TaskAttachment.objects.filter(task=task).select_related('file').order_by('attached_at')
+        return Response(TaskAttachmentSerializer(attachments, many=True).data)
+
+    _require_task_permission(request, workspace, task, TASK_UPDATE)
+    serializer = TaskAttachmentUploadSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    attaching_membership = memberships_with_permission(
+        user=request.user,
+        workspace=workspace,
+        permission_key=TASK_UPDATE,
+    ).first()
+    try:
+        attachment = upload_task_attachment(
+            task=task, upload=serializer.validated_data['file'], membership=attaching_membership
+        )
+    except TaskError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(TaskAttachmentSerializer(attachment).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def task_attachment_detail(request, workspace_id, task_id, attachment_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    task = get_object_or_404(Task, id=task_id, workspace=workspace, deleted_at__isnull=True)
+    _require_task_permission(request, workspace, task, TASK_UPDATE)
+    attachment = get_object_or_404(TaskAttachment, id=attachment_id, task=task)
+    delete_task_attachment(attachment=attachment)
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 

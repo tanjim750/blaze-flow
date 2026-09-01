@@ -12,6 +12,7 @@ from app.models import (
 from app.permissions import ALL_PERMISSION_KEYS
 
 from .auth import UserSerializer
+from .client_teams import ClientTeamSerializer
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -62,6 +63,7 @@ class RoleUpdateSerializer(RoleCreateSerializer):
 
 class WorkspaceMembershipSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    client_team = ClientTeamSerializer(read_only=True)
     role = RoleSerializer(read_only=True)
 
     class Meta:
@@ -70,6 +72,7 @@ class WorkspaceMembershipSerializer(serializers.ModelSerializer):
             'id',
             'principal_type',
             'user',
+            'client_team',
             'role',
             'project_access_mode',
             'is_primary_owner',

@@ -4,6 +4,109 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-02 — Tasks, assignees, and task attachments
+
+### Delivered
+
+- Added `task.read`, `task.create`, `task.update`, and `task.delete` permissions to the registry and system roles, with migration `0017` backfilling existing workspaces (`read`/`create`/`update` to Owner and Member, `delete` to Owner only — mirroring the existing Project permission split).
+- Added workspace- and project-scoped Task CRUD (create/list/detail/update/soft-delete) over the existing `Task` schema. A task with no `project_id` is authorized against the caller's workspace role only; a task with a `project_id` additionally requires project access to that specific project, reusing the existing `has_project_permission`/`accessible_projects` evaluators unchanged.
+- Made status transitions to/from `COMPLETED` automatically stamp and clear `completed_at`.
+- Added Task Assignee management (assign/unassign an existing `WorkspaceMembership`) with duplicate-assignment prevention.
+- Added Task Attachments: signature-verified multipart upload reusing the review-attachment detection/checksum logic plus video signatures, routed through the same `File`/`FileSecurityScan`/outbox scanning pipeline as review and media uploads; listing; and removal (deletes only the join row, per the documented "File Reuse" rule that attachment relationships don't imply file ownership).
+- Added `MAX_TASK_ATTACHMENT_BYTES` environment setting (default 25 MB, independent of `MAX_REVIEW_ATTACHMENT_BYTES`).
+- Added Postman requests/variables and a manual testing-guide section; added test coverage for workspace-vs-project authorization boundaries, assignment, attachment upload/spoofing, and completion-timestamp behavior.
+
+### Decisions and boundaries
+
+- Task attachment uploads accept the same byte-signature allowlist as review attachments (PNG, JPEG, GIF, WebP, PDF, WAV, MP3) plus the video signatures already recognized for media uploads (MP4, QuickTime, WebM). Broader office-document formats are not yet supported; that requires new signature detectors as a follow-up, not new task-domain logic.
+- A task's `project_id` cannot be changed through the update endpoint; moving a task to a different project would change its authorization scope, so the field is create-only.
+- Task Attachments never accept a client-supplied `file_id`. Every existing file-attachment flow in this codebase (review comments, media) creates the `File` from a direct upload in the same request rather than referencing an arbitrary pre-existing `File` id, because `File` carries no workspace/tenant scoping of its own; Task Attachments follow the same rule to avoid introducing a cross-tenant file-reference path.
+- Removing a Task Attachment deletes only the `TaskAttachment` join row; the underlying `File` is retained, matching the explicit "File Reuse" guidance for the sibling Project Files domain rather than the review-attachment convention of also soft-deleting the file.
+
+### Verification
+
+- The complete SQLite suite passes (145 tests), Django system checks pass, migration drift is clean, the Postman collection parses, and project Python sources compile.
+- PostgreSQL execution remains unavailable in the local host environment because of the previously recorded Docker storage issue.
+
+### Next recommended milestone
+
+Project Files and Folders, then broaden the task/review attachment signature allowlist to cover general office-document formats.
+
+## 2026-09-01 — Client Team invites
+
+### Delivered
+
+- Added manager-only `EMAIL` and `LINK` Client Team invite creation, listing, and revocation over the existing `ClientTeamInvite`/`ClientTeamInviteAcceptance` schema.
+- `EMAIL` invites are recipient-bound and enforced single-use (`max_uses` is fixed to `1` regardless of input); `LINK` invites are not recipient-bound and accept an optional `max_uses`, remaining unlimited until expiration or revocation otherwise.
+- Added a global authenticated accept endpoint that validates expiration, revocation, client-team-active state, and (for `EMAIL`) recipient-email match; reuses the existing member add/reactivate logic so a previously removed member is reactivated rather than duplicated.
+- Made acceptance idempotent per (invite, user): re-accepting the same invite returns the existing membership without incrementing `use_count` or creating a duplicate `ClientTeamInviteAcceptance` row.
+- Added Postman requests/variables and manual testing-guide steps; added positive/negative test coverage for validation, authorization, usage limits, idempotency, expiration, and revocation.
+
+### Decisions and boundaries
+
+- Expiration is mandatory for both invite types, matching the domain specification (unlike the optional expiration on project Guest Invites); the API defaults to 14 days and accepts 1–90.
+- Accepting a Client Team Invite never creates a `USER` `WorkspaceMembership`; actual workspace access still requires a manager to run the existing Grant Client Team Workspace Access endpoint, per the documented separation between organizational membership and workspace authorization.
+- Revoking an invite is not retroactive: members it already onboarded keep their `ClientTeamMember` row until explicitly removed.
+- List/create/revoke are gated on `client_team.manage` (not `client_team.read`), matching how workspace invitations are gated on `workspace.members.manage` rather than `workspace.read` — invite tokens and usage are more sensitive than the team's public profile.
+
+### Verification
+
+- The complete SQLite suite passes (130 tests), Django system checks pass, migration drift is clean (no schema change was needed), the Postman collection parses, and project Python sources compile.
+- PostgreSQL execution remains unavailable in the local host environment because of the previously recorded Docker storage issue.
+
+### Next recommended milestone
+
+Tasks, Task Assignees, and Task Attachments, then Project Files/Folders.
+
+## 2026-09-01 — Client Team administration and workspace access
+
+### Delivered
+
+- Added `client_team.read` and `client_team.manage` permissions to the registry and system roles, with migration `0016` backfilling existing workspaces (`read` to Owner and Member, `manage` to Owner only).
+- Added manager-only Client Team profile CRUD (create, list, detail, update) and lifecycle archival over the existing schema.
+- Added Client Team Member management: adding an existing active registered user by email, idempotent reactivation of a previously removed member, and soft removal.
+- Added a manager-only endpoint to grant a Client Team workspace access by creating its `CLIENT_TEAM` `WorkspaceMembership` (role plus `ALL`/`SELECTED` project-access mode); the existing generic membership-update endpoint continues to handle later role/scope changes and revocation.
+- Exposed a nested `client_team` object on `WorkspaceMembershipSerializer` so `CLIENT_TEAM` memberships are identifiable in API responses, not just `USER` ones.
+- Added Postman requests/variables and a manual testing-guide section; added positive/negative test coverage for authorization, duplicate/removed-member handling, and permission inheritance through a granted Client Team membership.
+
+### Decisions and boundaries
+
+- Client Team Invites (`EMAIL`/`LINK` shareable onboarding links) are deliberately out of scope for this milestone; members are added directly by a manager who already knows the registered user's email, matching the project's practice of shipping one coherent workflow at a time.
+- Archiving a Client Team does not touch its `WorkspaceMembership` row. Permission evaluation already filters on `client_team.status == ACTIVE`, so archival alone immediately cuts off every member's inherited access.
+- Granting workspace access is gated on `workspace.members.manage` (the same permission guarding direct-member updates and project-access grants), not `client_team.manage`, since it grants real workspace authorization rather than editing client profile data.
+- Client Team CRUD and membership changes are not audited, matching the existing unaudited pattern for Role and Project administration; audit logging stays reserved for the review/media/workflow/retention/guest domains it already covers.
+
+### Verification
+
+- The complete SQLite suite passes (116 tests), Django system checks pass, migration drift is clean, the Postman collection parses, and project Python sources compile.
+- PostgreSQL execution remains unavailable in the local host environment because of the previously recorded Docker storage issue.
+
+### Next recommended milestone
+
+Add Client Team Invites (`EMAIL`/`LINK` onboarding), then Tasks/Task Attachments and Project Files/Folders.
+
+## 2026-09-01 — Verified-email gate on workspace creation
+
+### Delivered
+
+- Required a verified email (`email_verified_at` set) before an authenticated user may create a workspace, closing the limitation recorded in the email-verification milestone below.
+- Returns `403` with a clear message when an unverified user attempts workspace creation, instead of silently allowing it.
+- Added Postman documentation noting the requirement and positive/negative test coverage.
+
+### Decisions and boundaries
+
+- Only workspace creation is gated in this milestone. Login, registration, project creation, and other actions remain unaffected; each additional gated action is a deliberate follow-up decision, not an implicit consequence of this change.
+- The gate reads the existing `email_verified_at` timestamp directly; no new field, migration, or settings flag was introduced.
+
+### Verification
+
+- The complete SQLite suite passes (98 tests), Django system checks pass, migration drift is clean, the Postman collection parses, and project Python sources compile.
+- PostgreSQL execution remains unavailable in the local host environment because of the previously recorded Docker storage issue.
+
+### Next recommended milestone
+
+Add Client Team, Client Team Member, and Client Team Invite APIs over the existing schema, then Tasks/Task Attachments and Project Files/Folders.
+
 ## 2026-09-01 — Workspace retention-policy administration
 
 ### Delivered
