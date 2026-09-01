@@ -27,7 +27,7 @@ from .media import (
     WorkflowStageSerializer,
     WorkflowTransitionSerializer,
 )
-from .notifications import NotificationSerializer
+from .notifications import NotificationPreferenceSerializer, NotificationSerializer
 from .projects import ProjectCreateSerializer, ProjectSerializer, ProjectUpdateSerializer
 from .workspaces import WorkspaceCreateSerializer, WorkspaceSerializer
 
@@ -43,6 +43,7 @@ __all__ = [
     'MediaUploadSerializer',
     'MediaVersionSerializer',
     'NotificationSerializer',
+    'NotificationPreferenceSerializer',
     'StageHistorySerializer',
     'WorkflowStageSerializer',
     'WorkflowTransitionSerializer',

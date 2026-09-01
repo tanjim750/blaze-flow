@@ -18,6 +18,7 @@ from .serializers import (
     MediaUploadSerializer,
     MediaVersionSerializer,
     NotificationSerializer,
+    NotificationPreferenceSerializer,
     ReviewCommentCreateSerializer,
     ReviewCommentEditSerializer,
     ReviewCommentResolutionSerializer,
@@ -103,9 +104,11 @@ from .services import (
     edit_review_comment,
     mark_all_notifications_read,
     mark_notification_read,
+    get_notification_preference,
     record_user_audit,
     request_media_revision,
     set_review_comment_resolution,
+    update_notification_preference,
     transition_media_version,
     update_role,
     upload_media_version,
@@ -787,3 +790,25 @@ def notification_read(request, notification_id):
 def notification_read_all(request):
     updated_count = mark_all_notifications_read(user=request.user)
     return Response({'updated_count': updated_count})
+
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def notification_preferences(request):
+    preference = get_notification_preference(user=request.user)
+    if request.method == 'GET':
+        return Response(NotificationPreferenceSerializer(preference).data)
+    serializer = NotificationPreferenceSerializer(
+        preference,
+        data=request.data,
+        partial=True,
+    )
+    serializer.is_valid(raise_exception=True)
+    preference = update_notification_preference(
+        user=request.user,
+        email_mentions_enabled=serializer.validated_data.get(
+            'email_mentions_enabled',
+            preference.email_mentions_enabled,
+        ),
+    )
+    return Response(NotificationPreferenceSerializer(preference).data)

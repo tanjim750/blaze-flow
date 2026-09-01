@@ -4,6 +4,44 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-01 — Email notification delivery, preferences, and dead letters
+
+### Delivered
+
+- Added per-user `email_mentions_enabled` preferences with authenticated read/update APIs.
+- Added per-notification email delivery records with unique notification/channel identity, attempt counts, status, error details, and sent timestamps.
+- Registered an idempotent `notification.created` email consumer using Django's configured email backend.
+- Added environment-driven SMTP/backend, sender, application-link, and outbox retry settings with a safe console backend default.
+- Added exponential retry scheduling with a configurable maximum delay and terminal `DEAD_LETTER` status.
+- Added stale worker recovery plus an explicit `requeue_dead_letters` operator command.
+- Sanitized actor display names before using them in email subjects and retained in-app notifications when email delivery is disabled.
+- Added migration `0009`, preference requests to Postman, and delivery/backoff/dead-letter tests.
+
+### Decisions
+
+- Email delivery runs only from the outbox processor, never in the web request that creates a comment.
+- Preferences affect future processing. Disabling mention email produces a durable `SKIPPED` delivery while leaving the in-app inbox unchanged.
+- A `SENT` or `SKIPPED` delivery is idempotent and will not be attempted again.
+- SMTP is inherently at-least-once around process crashes; database delivery identity prevents normal retries after a confirmed send, but a crash between SMTP acceptance and the final database update can still duplicate an email.
+- Dead-letter events require deliberate operator requeue after the underlying problem is corrected.
+
+### Known limitations
+
+- Email is plain text; branded HTML templates and localization are not implemented.
+- There is no hosted background-worker process in Compose yet; deployments must schedule or supervise `process_outbox`.
+- There is no administrative dead-letter dashboard or alert integration.
+- Notification preferences currently cover mention email only.
+
+### Verification
+
+- Sixty-four tests pass with migrations `0001` through `0009` applied.
+- Tests cover successful and idempotent email delivery, opt-out skipping, exponential scheduling, attempt exhaustion, dead-letter requeue, plus the earlier notification security and transaction cases.
+- Django checks, migration drift checks, command discovery, Postman JSON validation, Compose validation, Python compilation, and whitespace checks pass.
+
+### Next recommended milestone
+
+Implement safely verified review-comment attachments and visual annotations, then add production worker supervision and delivery monitoring.
+
 ## 2026-09-01 — Structured mentions and durable notification outbox
 
 ### Delivered
@@ -27,8 +65,8 @@ Each entry should state what changed, why, verification performed, known limitat
 
 ### Known limitations
 
-- No email, push, WebSocket, or mobile handler is registered yet; the processor publishes only to configured domain-event subscribers.
-- Failed events retry on the next processor run without exponential backoff or a dead-letter threshold.
+- Push, WebSocket, and mobile handlers are not registered; the later email-delivery entry supersedes the email limitation.
+- The later email-delivery entry supersedes the retry-backoff and dead-letter limitation.
 - Notification lists are not paginated and there are no per-user delivery preferences.
 - Reply-author, assignment, workflow, and resolution notifications are not implemented yet.
 
@@ -40,7 +78,7 @@ Each entry should state what changed, why, verification performed, known limitat
 
 ### Next recommended milestone
 
-Register an email delivery consumer with retry backoff and preferences, then implement safely stored review attachments and visual annotations.
+See the later email-delivery, preferences, and dead-letter milestone above.
 
 ## 2026-09-01 — Timestamped review comments and revision requests
 

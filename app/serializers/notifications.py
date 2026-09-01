@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from app.models import Notification
+from app.models import Notification, NotificationPreference
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -26,3 +26,10 @@ class NotificationSerializer(serializers.ModelSerializer):
 
     def get_unread(self, notification):
         return notification.read_at is None
+
+
+class NotificationPreferenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotificationPreference
+        fields = ('email_mentions_enabled', 'updated_at')
+        read_only_fields = ('updated_at',)

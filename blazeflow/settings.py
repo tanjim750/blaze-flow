@@ -144,6 +144,33 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 MAX_MEDIA_UPLOAD_BYTES = int(os.environ.get('MAX_MEDIA_UPLOAD_BYTES', 1024 * 1024 * 1024))
 
+APP_BASE_URL = os.environ.get('APP_BASE_URL', 'http://localhost:8000').rstrip('/')
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend',
+)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '25'))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=False)
+EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', default=False)
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Blaze Flow <no-reply@localhost>')
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    raise ImproperlyConfigured('EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be enabled.')
+
+OUTBOX_MAX_ATTEMPTS = int(os.environ.get('OUTBOX_MAX_ATTEMPTS', '5'))
+OUTBOX_RETRY_BASE_SECONDS = int(os.environ.get('OUTBOX_RETRY_BASE_SECONDS', '60'))
+OUTBOX_RETRY_MAX_SECONDS = int(os.environ.get('OUTBOX_RETRY_MAX_SECONDS', '3600'))
+if OUTBOX_MAX_ATTEMPTS < 1:
+    raise ImproperlyConfigured('OUTBOX_MAX_ATTEMPTS must be at least 1.')
+if OUTBOX_RETRY_BASE_SECONDS < 1:
+    raise ImproperlyConfigured('OUTBOX_RETRY_BASE_SECONDS must be at least 1.')
+if OUTBOX_RETRY_MAX_SECONDS < OUTBOX_RETRY_BASE_SECONDS:
+    raise ImproperlyConfigured(
+        'OUTBOX_RETRY_MAX_SECONDS must be greater than or equal to OUTBOX_RETRY_BASE_SECONDS.'
+    )
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 

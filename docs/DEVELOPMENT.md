@@ -140,6 +140,7 @@ All request and response bodies use JSON. Authentication uses Django's session c
 | `GET` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/comments/{comment_id}/revisions/` | Comment reader | Read immutable edit snapshots |
 | `POST` | `/api/workspaces/{workspace_id}/projects/{project_id}/media-versions/{media_version_id}/revision-requests/` | Comment creator/media transitioner | Create feedback and request a workflow revision |
 | `GET` | `/api/notifications/` | Authenticated recipient | List own notifications; `?unread=true` filters unread |
+| `GET/PATCH` | `/api/notification-preferences/` | Authenticated user | Read or update mention-email preference |
 | `POST` | `/api/notifications/{notification_id}/read/` | Notification recipient | Idempotently mark one notification read |
 | `POST` | `/api/notifications/read-all/` | Authenticated recipient | Mark all own unread notifications read |
 
@@ -202,7 +203,18 @@ The processor claims pending/failed events with row locking, records attempts an
 python manage.py process_outbox --limit 100 --reclaim-after-seconds 300
 ```
 
-Delivery is at-least-once, so subscribers must be idempotent. The current command publishes through the in-process domain-event dispatcher. Production email/push delivery requires a real subscriber and continuous or scheduled execution.
+Delivery is at-least-once, so subscribers must be idempotent. The command publishes through the in-process domain-event dispatcher, where the mention-email subscriber is registered. Production requires continuous or scheduled command execution; push/WebSocket delivery still needs additional subscribers.
+
+The registered mention-email subscriber uses Django's email backend. Local development defaults to the console backend. Production should set `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, credentials, TLS/SSL, `DEFAULT_FROM_EMAIL`, and `APP_BASE_URL`. TLS and SSL cannot both be enabled.
+
+Failed outbox processing schedules exponential retry using `OUTBOX_RETRY_BASE_SECONDS`, capped by `OUTBOX_RETRY_MAX_SECONDS`. After `OUTBOX_MAX_ATTEMPTS`, the event becomes `DEAD_LETTER` and is excluded from automatic processing. Once the underlying delivery problem is fixed, operators can requeue a specific event or a bounded batch:
+
+```bash
+python manage.py requeue_dead_letters --event-id <uuid>
+python manage.py requeue_dead_letters --limit 100
+```
+
+Email preferences do not hide in-app notifications. A disabled mention-email preference creates a `SKIPPED` delivery record so processing remains observable and idempotent.
 
 ## Schema and migrations
 
@@ -245,7 +257,7 @@ CI runs these checks on every push and pull request.
 
 1. Add email delivery, CSRF-aware frontend integration, authentication throttling, and password-reset APIs.
 2. Configure private cloud storage, malware scanning, thumbnails, and asynchronous media processing.
-3. Register email/push delivery consumers, preferences, retry backoff, and dead-letter monitoring.
-4. Implement safe comment attachments and visual annotations.
+3. Implement safe comment attachments and visual annotations.
+4. Add production worker supervision, delivery monitoring, and push/WebSocket consumers.
 
 Avoid implementing all documented domains at once. Complete and test one end-to-end workflow before expanding the surface area.

@@ -1069,6 +1069,34 @@
       "name": "Notifications",
       "item": [
         {
+          "name": "Get Notification Preferences",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/notification-preferences/",
+            "description": "Read the authenticated user's delivery preferences"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Notification Preferences",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json", "type": "text"},
+              {"key": "X-CSRFToken", "value": "{{csrf_token}}", "type": "text"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email_mentions_enabled\": true\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{base_url}}/api/notification-preferences/",
+            "description": "Enable or disable mention emails without affecting the in-app inbox"
+          },
+          "response": []
+        },
+        {
           "name": "List Unread Notifications",
           "event": [
             {

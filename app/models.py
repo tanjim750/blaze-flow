@@ -131,6 +131,18 @@ class OutboxEventStatus(models.TextChoices):
     PROCESSING = 'PROCESSING'
     PUBLISHED = 'PUBLISHED'
     FAILED = 'FAILED'
+    DEAD_LETTER = 'DEAD_LETTER'
+
+
+class NotificationDeliveryChannel(models.TextChoices):
+    EMAIL = 'EMAIL'
+
+
+class NotificationDeliveryStatus(models.TextChoices):
+    PENDING = 'PENDING'
+    SENT = 'SENT'
+    SKIPPED = 'SKIPPED'
+    FAILED = 'FAILED'
 
 
 class SubscriptionPlan(models.TextChoices):
@@ -1220,6 +1232,42 @@ class Notification(models.Model):
             models.Index(fields=['recipient_user', 'created_at']),
             models.Index(fields=['recipient_user', 'read_at']),
             models.Index(fields=['workspace', 'created_at']),
+        ]
+
+
+class NotificationPreference(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user = models.OneToOneField(User, on_delete=models.DO_NOTHING, db_column='user_id', related_name='+')
+    email_mentions_enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'notification_preferences'
+
+
+class NotificationDelivery(models.Model):
+    id = models.UUIDField(primary_key=True)
+    notification = models.ForeignKey(Notification, on_delete=models.DO_NOTHING, db_column='notification_id', related_name='+')
+    channel = models.CharField(max_length=30, choices=NotificationDeliveryChannel.choices)
+    status = models.CharField(max_length=20, choices=NotificationDeliveryStatus.choices, default=NotificationDeliveryStatus.PENDING)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'notification_deliveries'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['notification', 'channel'],
+                name='notification_deliveries_notification_channel_uniq',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['notification']),
+            models.Index(fields=['status', 'updated_at']),
         ]
 
 

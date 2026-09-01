@@ -23,6 +23,7 @@ class Command(BaseCommand):
         )
         self.stdout.write(
             self.style.SUCCESS(
-                'Claimed {claimed}; published {published}; failed {failed}.'.format(**result)
+                'Claimed {claimed}; published {published}; failed {failed}; '
+                'dead-lettered {dead_lettered}.'.format(**result)
             )
         )

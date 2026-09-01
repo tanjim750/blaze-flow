@@ -108,14 +108,24 @@ After the member has accepted the invitation and the owner has granted project a
 4. Confirm the response includes the member under `mentions`.
 5. Log in as `member@example.com`.
 6. Run **Notifications → List Unread Notifications** to capture `notification_id`.
-7. Run **Notifications → Mark Notification Read**.
-8. Run **List Unread Notifications** again and confirm it returns an empty list.
-9. Run **Mark All Notifications Read**; `updated_count` should be `0` if nothing else is unread.
+7. Run **Notifications → Get Notification Preferences**.
+8. Run **Notifications → Update Notification Preferences**.
+9. Run **Notifications → Mark Notification Read**.
+10. Run **List Unread Notifications** again and confirm it returns an empty list.
+11. Run **Mark All Notifications Read**; `updated_count` should be `0` if nothing else is unread.
 
 Outbox events are separate from the in-app inbox. Publish pending events to registered handlers with:
 
 ```bash
 docker compose exec web python manage.py process_outbox --limit 100
+```
+
+Local development prints email content to the web/worker console. For SMTP delivery, configure the `EMAIL_*`, `DEFAULT_FROM_EMAIL`, and `APP_BASE_URL` variables documented in `.env.example`.
+
+After correcting a terminal delivery problem, requeue dead letters explicitly:
+
+```bash
+docker compose exec web python manage.py requeue_dead_letters --limit 100
 ```
 
 ## 6. Correct payload formats
@@ -167,4 +177,4 @@ The membership must be active, belong to the same workspace, and use `SELECTED` 
 - Media signature validation and checksums do not replace malware scanning or deep decoder validation.
 - Local media storage is development-only; production requires private durable object storage.
 - Comment attachments, guest comments, pagination, and annotations are not implemented yet.
-- Email/push/WebSocket delivery, notification preferences, retry backoff, and dead-letter monitoring are not implemented yet.
+- HTML/localized email, push/WebSocket delivery, worker supervision, and dead-letter alerting are not implemented yet.

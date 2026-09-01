@@ -3,6 +3,7 @@ import tempfile
 from datetime import timedelta
 from unittest.mock import patch
 
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -10,6 +11,8 @@ from django.utils import timezone
 
 from .models import (
     Notification,
+    NotificationDelivery,
+    NotificationDeliveryStatus,
     OutboxEvent,
     OutboxEventStatus,
     ProjectAccessMode,
@@ -17,7 +20,11 @@ from .models import (
     ReviewCommentMention,
     ReviewCommentRevision,
 )
-from .services import process_outbox_events
+from .services import (
+    deliver_notification_email,
+    process_outbox_events,
+    requeue_dead_letter_events,
+)
 from .test_access_projects import WorkspaceAccessSetupMixin
 
 
@@ -187,14 +194,23 @@ class MentionNotificationApiTests(WorkspaceAccessSetupMixin, TestCase):
 
         failed = process_outbox_events(event_dispatcher=failing_dispatcher)
         event.refresh_from_db()
-        self.assertEqual(failed, {'claimed': 1, 'published': 0, 'failed': 1})
+        self.assertEqual(
+            failed,
+            {'claimed': 1, 'published': 0, 'failed': 1, 'dead_lettered': 0},
+        )
         self.assertEqual(event.status, OutboxEventStatus.FAILED)
         self.assertEqual(event.attempts, 1)
+        self.assertGreater(event.available_at, timezone.now())
 
         delivered = []
+        event.available_at = timezone.now()
+        event.save(update_fields=['available_at'])
         succeeded = process_outbox_events(event_dispatcher=delivered.append)
         event.refresh_from_db()
-        self.assertEqual(succeeded, {'claimed': 1, 'published': 1, 'failed': 0})
+        self.assertEqual(
+            succeeded,
+            {'claimed': 1, 'published': 1, 'failed': 0, 'dead_lettered': 0},
+        )
         self.assertEqual(event.status, OutboxEventStatus.PUBLISHED)
         self.assertEqual(event.attempts, 2)
         self.assertEqual(delivered[0].name, 'notification.created')
@@ -215,9 +231,89 @@ class MentionNotificationApiTests(WorkspaceAccessSetupMixin, TestCase):
         )
         event.refresh_from_db()
 
-        self.assertEqual(result, {'claimed': 1, 'published': 1, 'failed': 0})
+        self.assertEqual(
+            result,
+            {'claimed': 1, 'published': 1, 'failed': 0, 'dead_lettered': 0},
+        )
         self.assertEqual(event.status, OutboxEventStatus.PUBLISHED)
         self.assertEqual(delivered[0].name, 'notification.created')
+
+    def test_outbox_moves_exhausted_failures_to_dead_letter(self):
+        self.invite_and_accept()
+        self.client.force_authenticate(self.owner)
+        self.create_mention([self.member_user.id])
+        event = OutboxEvent.objects.get()
+
+        def failing_dispatcher(domain_event):
+            raise RuntimeError('permanent delivery failure')
+
+        first = process_outbox_events(
+            event_dispatcher=failing_dispatcher,
+            max_attempts=2,
+            retry_base_seconds=1,
+        )
+        event.refresh_from_db()
+        self.assertEqual(first['failed'], 1)
+        event.available_at = timezone.now()
+        event.save(update_fields=['available_at'])
+        second = process_outbox_events(
+            event_dispatcher=failing_dispatcher,
+            max_attempts=2,
+            retry_base_seconds=1,
+        )
+        event.refresh_from_db()
+
+        self.assertEqual(second['dead_lettered'], 1)
+        self.assertEqual(event.status, OutboxEventStatus.DEAD_LETTER)
+        self.assertEqual(event.attempts, 2)
+
+        self.assertEqual(requeue_dead_letter_events(event_id=event.id), 1)
+        event.refresh_from_db()
+        self.assertEqual(event.status, OutboxEventStatus.PENDING)
+        self.assertEqual(event.attempts, 0)
+        self.assertIsNone(event.last_error)
+
+    def test_email_consumer_delivers_once_and_records_delivery(self):
+        self.invite_and_accept()
+        self.client.force_authenticate(self.owner)
+        self.create_mention([self.member_user.id])
+
+        mail.outbox.clear()
+        result = process_outbox_events()
+        delivery = NotificationDelivery.objects.get()
+
+        self.assertEqual(result['published'], 1)
+        self.assertEqual(delivery.status, NotificationDeliveryStatus.SENT)
+        self.assertEqual(delivery.attempts, 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.member_user.email])
+        self.assertIn('mentioned you', mail.outbox[0].subject)
+
+        deliver_notification_email(notification_id=delivery.notification_id)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_disabled_email_preference_skips_delivery(self):
+        self.invite_and_accept()
+        self.client.force_authenticate(self.member_user)
+        preference_url = reverse('api-notification-preferences')
+        default_preference = self.client.get(preference_url)
+        disabled = self.client.patch(
+            preference_url,
+            {'email_mentions_enabled': False},
+            format='json',
+        )
+        self.assertTrue(default_preference.json()['email_mentions_enabled'])
+        self.assertFalse(disabled.json()['email_mentions_enabled'])
+
+        self.client.force_authenticate(self.owner)
+        self.create_mention([self.member_user.id])
+        mail.outbox.clear()
+        result = process_outbox_events()
+        delivery = NotificationDelivery.objects.get()
+
+        self.assertEqual(result['published'], 1)
+        self.assertEqual(delivery.status, NotificationDeliveryStatus.SKIPPED)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_outbox_failure_rolls_back_comment_mention_and_notification(self):
         self.invite_and_accept()
