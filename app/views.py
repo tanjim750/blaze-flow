@@ -111,6 +111,7 @@ from .models import (
     ClientTeamMember,
     ClientTeamMemberStatus,
     ClientTeamStatus,
+    FileStatus,
     MediaVersionStageEntry,
     Project,
     ProjectFile,
@@ -1057,7 +1058,7 @@ def project_file_list_create(request, workspace_id, project_id):
             membership=adding_membership,
             folder=folder,
         )
-    except ProjectFileError as exc:
+    except (ProjectFileError, SubscriptionError) as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(ProjectFileSerializer(project_file).data, status=status.HTTP_201_CREATED)
 
@@ -1217,7 +1218,7 @@ def task_attachments(request, workspace_id, task_id):
         attachment = upload_task_attachment(
             task=task, upload=serializer.validated_data['file'], membership=attaching_membership
         )
-    except TaskError as exc:
+    except (TaskError, SubscriptionError) as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(TaskAttachmentSerializer(attachment).data, status=status.HTTP_201_CREATED)
 
@@ -1271,7 +1272,7 @@ def media_version_list_create(request, workspace_id, project_id):
             initial_stage=initial_stage,
             **data,
         )
-    except MediaUploadError as exc:
+    except (MediaUploadError, SubscriptionError) as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(MediaVersionSerializer(media_version).data, status=status.HTTP_201_CREATED)
 
@@ -1331,6 +1332,20 @@ def media_version_download(request, workspace_id, project_id, media_version_id):
         filename=file_record.original_name,
         content_type=file_record.mime_type,
     )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def media_version_preview(request, workspace_id, project_id, media_version_id):
+    workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
+    if not has_project_permission(user=request.user, project=project, permission_key=MEDIA_READ):
+        raise PermissionDenied('You do not have permission to view this media version.')
+    variant = FileVariant.objects.filter(
+        file=media_version.original_file, status=FileStatus.READY, deleted_at__isnull=True,
+    ).order_by('-created_at').first()
+    if variant is None or not default_storage.exists(variant.object_key):
+        raise Http404('No preview is available for this media version yet.')
+    return FileResponse(default_storage.open(variant.object_key, 'rb'), filename=variant.original_name, content_type=variant.mime_type)
 
 
 @api_view(['GET', 'POST'])
@@ -1645,7 +1660,7 @@ def review_attachment_upload(request, workspace_id, project_id, media_version_id
     serializer.is_valid(raise_exception=True)
     try:
         content = upload_review_attachment(comment=comment, user=request.user, upload=serializer.validated_data['file'])
-    except ReviewAttachmentError as exc:
+    except (ReviewAttachmentError, SubscriptionError) as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(ReviewAttachmentSerializer(content).data, status=status.HTTP_201_CREATED)
 

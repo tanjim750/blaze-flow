@@ -57,6 +57,7 @@ from .subscriptions import (
     cancel_subscription,
     enforce_project_creation_limit,
     enforce_workspace_creation_limit,
+    enforce_workspace_storage_limit,
     get_current_subscription,
     get_effective_plan,
     get_effective_subscription,
@@ -64,6 +65,7 @@ from .subscriptions import (
     provision_free_subscription,
     resume_subscription,
     upgrade_to_pro,
+    workspace_storage_bytes_used,
 )
 from .tasks import (
     TaskError,
@@ -129,6 +131,7 @@ __all__ = [
     'deliver_notification_email',
     'enforce_project_creation_limit',
     'enforce_workspace_creation_limit',
+    'enforce_workspace_storage_limit',
     'grant_client_team_workspace_access',
     'grant_project_access',
     'get_current_subscription',
@@ -175,4 +178,5 @@ __all__ = [
     'update_annotation',
     'transition_media_version',
     'update_project',
+    'workspace_storage_bytes_used',
 ]

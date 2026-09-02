@@ -528,6 +528,7 @@ class DomainInvariantTests(TestCase):
         )
         original_file = File.objects.create(
             id=uuid.uuid4(),
+            workspace=self.workspace,
             storage_backend=storage,
             object_key=f'test/{uuid.uuid4()}',
             original_name='review.mp4',

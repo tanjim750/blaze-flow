@@ -17,13 +17,13 @@ The currently supported behavior is:
 - workspace- and project-scoped tasks (CRUD, assignees, and signature-verified attachments over the existing review/media scanning pipeline)
 - project files and folders (nested folders with cascading soft delete, root/sibling name uniqueness, and signature-verified file uploads over the same scanning pipeline)
 - workspace detail/update, an optional business profile, and reversible PENDING_DELETION lifecycle scheduling with a configurable grace period
-- FREE/PRO user subscriptions with a centralized Plan Config service (`app/services/plan_config.py`), self-service PRO upgrade/cancel/resume with no external payment provider, an operator command to process scheduled cancellations, and enforced `max_workspaces_owned`/`max_projects_per_workspace` plan limits
+- FREE/PRO user subscriptions with a centralized Plan Config service (`app/services/plan_config.py`), self-service PRO upgrade/cancel/resume with no external payment provider, an operator command to process scheduled cancellations, and enforced workspace/project/storage plan limits
 - Google Sign-In (`POST /api/auth/google/`) that verifies a client-supplied Google ID token, auto-links a verified Google email to a matching existing account or creates a new one (unusable password, pre-verified email, FREE subscription), and reuses the same linked identity on return visits
 - DOCX/XLSX/PPTX/RTF are now accepted alongside the existing image/PDF/audio/video attachment types, verified by their internal ZIP part rather than the shared outer ZIP signature
 - additive workspace/project permission evaluation with `ALL` and `SELECTED` project scope
 - authorized project listing, creation, detail, update, and archival
 - protected system roles, custom role administration, and explicit project-access grants
-- default-storage media uploads with project-wide version allocation and initial workflow history
+- default-storage media uploads with project-wide version allocation, initial workflow history, asynchronous H.264 review proxies, and permission-controlled proxy playback
 - database constraints for principal, author, ownership, workflow, and subscription invariants
 - a public `GET /api/health/` endpoint
 - automated foundation checks and tests
@@ -298,6 +298,8 @@ An active guest can rotate its key at `POST /api/guest/reviews/{project_id}/acce
 
 `STORAGE_DRIVER=local` remains the development default. Set `STORAGE_DRIVER=s3` with `AWS_STORAGE_BUCKET_NAME` to activate django-storages' private S3 backend. Region, endpoint, credentials, addressing style, and signed-query expiry are environment-driven, allowing AWS S3 or compatible providers. IAM/container credentials work when explicit keys are omitted. Database Storage Backend metadata records only bucket/region/endpoint—not secrets.
 
+Original uploads count against the workspace owner's plan limit (`PLAN_FREE_MAX_STORAGE_BYTES` and `PLAN_PRO_MAX_STORAGE_BYTES`). Upload services make a fast preflight check and then repeat the check while locking the workspace row in the file-creation transaction, so concurrent uploads cannot jointly exceed the cap. Logically deleted project files, review attachments, and task attachments stop counting; generated `FileVariant` previews and proxies do not count.
+
 ## Visual annotations
 
 Annotations can optionally link to an active comment on the same Media Version and can target a general frame, a point in milliseconds, or a time range. Supported element contracts are:
@@ -331,7 +333,7 @@ Prometheus-compatible metrics are exposed at the manager-protected `GET /api/wor
 
 ## Decoded review previews
 
-Images and WAV files are decoded in process. PDF first pages use Poppler's `pdftoppm`; MP3 waveforms use `ffmpeg` to produce bounded mono PCM before SVG generation. The Docker image installs both tools. Decoder command names, timeout, input/output limits, and maximum decoded audio duration are configured through the `PREVIEW_*`, `PDF_PREVIEW_COMMAND`, and `FFMPEG_COMMAND` variables in `.env.example`. A decoder failure safely produces the generic review card instead of failing file processing.
+Images and WAV files are decoded in process. PDF first pages use Poppler's `pdftoppm`; MP3 waveforms use `ffmpeg` to produce bounded mono PCM before SVG generation. Video uploads use `ffmpeg` to generate H.264/AAC MP4 proxies controlled by the `VIDEO_PROXY_*` settings and served from the media-version preview endpoint. The Docker image installs both tools. Decoder command names, timeout, input/output limits, and maximum decoded audio duration are configured through the `PREVIEW_*`, `VIDEO_PROXY_*`, `PDF_PREVIEW_COMMAND`, and `FFMPEG_COMMAND` variables in `.env.example`. A decoder failure safely produces the generic review card instead of failing file processing.
 
 ## Schema and migrations
 

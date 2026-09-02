@@ -348,6 +348,7 @@ class StorageBackend(models.Model):
 
 class File(models.Model):
     id = models.UUIDField(primary_key=True)
+    workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
     storage_backend = models.ForeignKey(StorageBackend, on_delete=models.DO_NOTHING, db_column='storage_backend_id', related_name='+')
     object_key = models.CharField(max_length=1024)
     original_name = models.CharField(max_length=512)
@@ -365,6 +366,7 @@ class File(models.Model):
         db_table = 'files'
         constraints = [models.UniqueConstraint(fields=['storage_backend', 'object_key'], name='files_storage_backend_object_key_uniq')]
         indexes = [
+            models.Index(fields=['workspace']),
             models.Index(fields=['storage_backend']),
             models.Index(fields=['mime_type']),
             models.Index(fields=['status']),

@@ -11,6 +11,7 @@ from app.models import (
     File,
     FileSecurityScan,
     FileStatus,
+    FileVariant,
     ProjectFile,
     ProjectFolder,
 )
@@ -18,6 +19,7 @@ from app.models import (
 from .file_processing import SCAN_TOPIC, enqueue_file_event
 from .media import _storage_backend, detect_media_type, sha256_upload
 from .review_assets import detect_attachment_type
+from .subscriptions import enforce_workspace_storage_limit
 
 
 class ProjectFileError(Exception):
@@ -77,8 +79,18 @@ def delete_project_folder(*, folder):
     ProjectFolder.objects.filter(id__in=folder_ids, deleted_at__isnull=True).update(
         deleted_at=now, updated_at=now
     )
-    ProjectFile.objects.filter(folder_id__in=folder_ids, deleted_at__isnull=True).update(
+    project_files = ProjectFile.objects.filter(
+        folder_id__in=folder_ids, deleted_at__isnull=True,
+    )
+    file_ids = list(project_files.values_list('file_id', flat=True))
+    project_files.update(
         deleted_at=now, updated_at=now
+    )
+    File.objects.filter(id__in=file_ids, deleted_at__isnull=True).update(
+        deleted_at=now, updated_at=now,
+    )
+    FileVariant.objects.filter(file_id__in=file_ids, deleted_at__isnull=True).update(
+        deleted_at=now, updated_at=now,
     )
     folder.deleted_at = now
     return folder
@@ -101,6 +113,7 @@ def _validate_project_file(upload):
 
 def upload_project_file(*, project, upload, membership, folder=None):
     mime_type = _validate_project_file(upload)
+    enforce_workspace_storage_limit(workspace=project.workspace, additional_bytes=upload.size)
     checksum = sha256_upload(upload)
     clean_name = Path(upload.name).name or 'file'
     object_key = (
@@ -110,8 +123,13 @@ def upload_project_file(*, project, upload, membership, folder=None):
     now = timezone.now()
     try:
         with transaction.atomic():
+            enforce_workspace_storage_limit(
+                workspace=project.workspace,
+                additional_bytes=upload.size,
+                lock=True,
+            )
             file_record = File.objects.create(
-                id=uuid.uuid4(), storage_backend=_storage_backend(now), object_key=stored_key,
+                id=uuid.uuid4(), workspace=project.workspace, storage_backend=_storage_backend(now), object_key=stored_key,
                 original_name=clean_name, mime_type=mime_type, size_bytes=upload.size,
                 checksum=checksum, checksum_algorithm='sha256', metadata={},
                 status=FileStatus.PENDING, created_at=now, updated_at=now,
@@ -137,10 +155,19 @@ def upload_project_file(*, project, upload, membership, folder=None):
         raise
 
 
+@transaction.atomic
 def delete_project_file(*, project_file):
-    if project_file.deleted_at is not None:
+    locked = ProjectFile.objects.select_for_update().get(id=project_file.id)
+    if locked.deleted_at is not None:
         raise ProjectFileError('This file has already been removed.')
-    project_file.deleted_at = timezone.now()
-    project_file.updated_at = timezone.now()
-    project_file.save(update_fields=['deleted_at', 'updated_at'])
-    return project_file
+    now = timezone.now()
+    locked.deleted_at = now
+    locked.updated_at = now
+    locked.save(update_fields=['deleted_at', 'updated_at'])
+    File.objects.filter(id=locked.file_id, deleted_at__isnull=True).update(
+        deleted_at=now, updated_at=now,
+    )
+    FileVariant.objects.filter(file_id=locked.file_id, deleted_at__isnull=True).update(
+        deleted_at=now, updated_at=now,
+    )
+    return locked

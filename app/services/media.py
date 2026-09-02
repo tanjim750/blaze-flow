@@ -18,6 +18,8 @@ from app.models import (
     WorkflowStageStatusState,
 )
 from .audit import record_user_audit
+from .file_processing import PREVIEW_TOPIC, enqueue_file_event
+from .subscriptions import enforce_workspace_storage_limit
 
 
 class MediaUploadError(Exception):
@@ -86,6 +88,7 @@ def _storage_backend(now):
 
 def upload_media_version(*, project, user, upload, title, note='', priority='MEDIUM', allow_download=False, initial_stage=None):
     detected_type = validate_media_upload(upload)
+    enforce_workspace_storage_limit(workspace=project.workspace, additional_bytes=upload.size)
     checksum = sha256_upload(upload)
     if initial_stage is None:
         initial_stage = WorkflowStage.objects.filter(
@@ -109,6 +112,11 @@ def upload_media_version(*, project, user, upload, title, note='', priority='MED
     try:
         with transaction.atomic():
             locked_project = Project.objects.select_for_update().get(id=project.id)
+            enforce_workspace_storage_limit(
+                workspace=locked_project.workspace,
+                additional_bytes=upload.size,
+                lock=True,
+            )
             version_number = locked_project.next_media_version_number
             locked_project.next_media_version_number = version_number + 1
             locked_project.updated_at = now
@@ -116,6 +124,7 @@ def upload_media_version(*, project, user, upload, title, note='', priority='MED
             backend = _storage_backend(now)
             file_record = File.objects.create(
                 id=uuid.uuid4(),
+                workspace=locked_project.workspace,
                 storage_backend=backend,
                 object_key=stored_key,
                 original_name=clean_name,
@@ -166,6 +175,8 @@ def upload_media_version(*, project, user, upload, title, note='', priority='MED
                     'checksum_sha256': checksum,
                 },
             )
+            if detected_type.startswith('video/'):
+                enqueue_file_event(file=file_record, topic=PREVIEW_TOPIC)
             return media_version
     except Exception:
         default_storage.delete(stored_key)

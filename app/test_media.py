@@ -1,4 +1,5 @@
 import shutil
+import subprocess
 import tempfile
 import hashlib
 from pathlib import Path
@@ -8,9 +9,23 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import AuditLog, File, MediaVersion, MediaVersionStageEntry, Project, ProjectAccessMode, WorkflowStage
+from .models import AuditLog, File, FileVariant, MediaVersion, MediaVersionStageEntry, Project, ProjectAccessMode, WorkflowStage
 from .services import upload_media_version
+from .services.outbox import process_outbox_events
 from .test_access_projects import WorkspaceAccessSetupMixin
+
+
+def _make_test_clip():
+    with tempfile.TemporaryDirectory(prefix='blazeflow-video-fixture-') as directory:
+        output = Path(directory) / 'clip.mp4'
+        subprocess.run(
+            ['ffmpeg', '-v', 'error', '-y',
+             '-f', 'lavfi', '-i', 'testsrc=size=320x240:duration=1:rate=10',
+             '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=1',
+             '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', str(output)],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30,
+        )
+        return output.read_bytes()
 
 
 class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
@@ -215,3 +230,48 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
             ['queued', 'in-progress', 'in-review', 'revision', 'approval', 'approved'],
         )
         self.assertEqual(response.json()[0]['statuses'], [])
+
+    def test_video_upload_generates_playable_proxy_variant(self):
+        uploaded = self.upload(name='clip.mp4', content=_make_test_clip(), content_type='video/mp4')
+        self.assertEqual(uploaded.status_code, 201)
+        media_id = uploaded.json()['id']
+
+        process_outbox_events()
+        process_outbox_events()
+
+        variant = FileVariant.objects.get(file_id=uploaded.json()['file']['id'])
+        self.assertEqual(variant.metadata['variant_type'], 'VIDEO_PROXY')
+        self.assertEqual(variant.mime_type, 'video/mp4')
+        self.assertLessEqual(variant.metadata['max_width'], 960)
+
+        preview_url = reverse(
+            'api-media-version-preview',
+            args=[self.workspace.id, self.project.id, media_id],
+        )
+        response = self.client.get(preview_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'video/mp4')
+        body = b''.join(response.streaming_content)
+        self.assertGreater(len(body), 0)
+        self.assertEqual(body[4:8], b'ftyp')
+
+    def test_preview_requires_project_membership_and_404s_before_processing(self):
+        uploaded = self.upload(name='clip.mp4', content=_make_test_clip(), content_type='video/mp4')
+        media_id = uploaded.json()['id']
+        preview_url = reverse(
+            'api-media-version-preview',
+            args=[self.workspace.id, self.project.id, media_id],
+        )
+
+        not_ready = self.client.get(preview_url)
+        self.assertEqual(not_ready.status_code, 404)
+
+        outsider_model = type(self.owner)
+        outsider = outsider_model.objects.create_user(
+            email='preview-outsider@example.com',
+            password='a-secure-test-password',
+            first_name='Preview',
+            last_name='Outsider',
+        )
+        self.client.force_authenticate(outsider)
+        self.assertEqual(self.client.get(preview_url).status_code, 403)

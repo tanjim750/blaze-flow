@@ -161,6 +161,16 @@ PREVIEW_DECODER_MAX_INPUT_BYTES = int(os.environ.get('PREVIEW_DECODER_MAX_INPUT_
 PREVIEW_DECODER_MAX_OUTPUT_BYTES = int(os.environ.get('PREVIEW_DECODER_MAX_OUTPUT_BYTES', str(20 * 1024 * 1024)))
 PREVIEW_AUDIO_MAX_SECONDS = int(os.environ.get('PREVIEW_AUDIO_MAX_SECONDS', '600'))
 
+# Video review proxy: a lower-bitrate H.264 rendition generated on upload so reviewers
+# stream this instead of the (often much larger) original file.
+VIDEO_PROXY_MAX_WIDTH = int(os.environ.get('VIDEO_PROXY_MAX_WIDTH', '960'))
+VIDEO_PROXY_MAX_HEIGHT = int(os.environ.get('VIDEO_PROXY_MAX_HEIGHT', '540'))
+VIDEO_PROXY_CRF = int(os.environ.get('VIDEO_PROXY_CRF', '28'))
+VIDEO_PROXY_AUDIO_BITRATE = os.environ.get('VIDEO_PROXY_AUDIO_BITRATE', '128k')
+VIDEO_PROXY_MAX_INPUT_BYTES = int(os.environ.get('VIDEO_PROXY_MAX_INPUT_BYTES', str(MAX_MEDIA_UPLOAD_BYTES)))
+VIDEO_PROXY_MAX_OUTPUT_BYTES = int(os.environ.get('VIDEO_PROXY_MAX_OUTPUT_BYTES', str(200 * 1024 * 1024)))
+VIDEO_PROXY_TIMEOUT_SECONDS = int(os.environ.get('VIDEO_PROXY_TIMEOUT_SECONDS', '600'))
+
 # Subscription plan resource limits. Kept in environment configuration rather than the
 # database for the MVP; consumers must read these through app.services.plan_config.get_plan_limit
 # rather than this settings module directly, so a future move to database-managed plans
@@ -169,10 +179,12 @@ PLAN_LIMITS = {
     'FREE': {
         'max_workspaces_owned': int(os.environ.get('PLAN_FREE_MAX_WORKSPACES_OWNED', '1')),
         'max_projects_per_workspace': int(os.environ.get('PLAN_FREE_MAX_PROJECTS_PER_WORKSPACE', '3')),
+        'max_storage_bytes': int(os.environ.get('PLAN_FREE_MAX_STORAGE_BYTES', str(5 * 1024 * 1024 * 1024))),
     },
     'PRO': {
         'max_workspaces_owned': int(os.environ.get('PLAN_PRO_MAX_WORKSPACES_OWNED', '20')),
         'max_projects_per_workspace': int(os.environ.get('PLAN_PRO_MAX_PROJECTS_PER_WORKSPACE', '200')),
+        'max_storage_bytes': int(os.environ.get('PLAN_PRO_MAX_STORAGE_BYTES', str(2 * 1024 * 1024 * 1024 * 1024))),
     },
 }
 SUBSCRIPTION_PRO_PERIOD_DAYS = int(os.environ.get('SUBSCRIPTION_PRO_PERIOD_DAYS', '30'))

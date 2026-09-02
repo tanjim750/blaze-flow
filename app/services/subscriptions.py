@@ -3,14 +3,17 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from app.models import (
+    File,
     Project,
     ProjectStatus,
     SubscriptionPlan,
     SubscriptionStatus,
     UserSubscription,
+    Workspace,
     WorkspaceMembership,
     WorkspaceMembershipStatus,
     WorkspaceStatus,
@@ -173,4 +176,24 @@ def enforce_project_creation_limit(*, workspace):
         raise SubscriptionError(
             f"The workspace owner's {plan} plan allows up to {limit} project(s) per workspace. "
             'Upgrade to create another.'
+        )
+
+
+def workspace_storage_bytes_used(*, workspace):
+    return File.objects.filter(workspace=workspace, deleted_at__isnull=True).aggregate(
+        total=Sum('size_bytes'),
+    )['total'] or 0
+
+
+def enforce_workspace_storage_limit(*, workspace, additional_bytes, lock=False):
+    if lock:
+        workspace = Workspace.objects.select_for_update().get(id=workspace.id)
+    owner = _primary_owner_user(workspace=workspace)
+    plan = get_effective_plan(user=owner) if owner else SubscriptionPlan.FREE
+    limit = get_plan_limit(plan, 'max_storage_bytes')
+    used = workspace_storage_bytes_used(workspace=workspace)
+    if used + additional_bytes > limit:
+        raise SubscriptionError(
+            f"The workspace owner's {plan} plan allows up to {limit} bytes of storage. "
+            'Upgrade or free up space to upload more.'
         )

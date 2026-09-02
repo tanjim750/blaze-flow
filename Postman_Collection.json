@@ -2122,6 +2122,16 @@
           "response": []
         },
         {
+          "name": "Preview Media Version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/preview/",
+            "description": "Stream the generated review proxy or preview with media.read permission; returns 404 until background preview processing finishes"
+          },
+          "response": []
+        },
+        {
           "name": "Workflow History",
           "request": {
             "method": "GET",

@@ -32,6 +32,10 @@ from app.models import (
 
 SCAN_TOPIC = 'file.security-scan.requested'
 PREVIEW_TOPIC = 'file.preview.requested'
+PREVIEW_VARIANT_TYPES = (
+    'REVIEW_CARD', 'IMAGE_THUMBNAIL', 'AUDIO_WAVEFORM',
+    'PDF_FIRST_PAGE', 'MP3_WAVEFORM', 'VIDEO_PROXY',
+)
 
 
 class EicarAwareScanner:
@@ -240,7 +244,9 @@ def _waveform_svg(amplitudes, *, duration_ms, sample_rate, variant_type):
     }
 
 
-def _copy_private_object(file, destination):
+def _copy_private_object(file, destination, max_bytes=None):
+    if max_bytes is None:
+        max_bytes = settings.PREVIEW_DECODER_MAX_INPUT_BYTES
     copied = 0
     with default_storage.open(file.object_key, 'rb') as source, open(destination, 'wb') as target:
         while True:
@@ -248,7 +254,7 @@ def _copy_private_object(file, destination):
             if not chunk:
                 break
             copied += len(chunk)
-            if copied > settings.PREVIEW_DECODER_MAX_INPUT_BYTES:
+            if copied > max_bytes:
                 raise ValueError('Preview decoder input exceeds its configured limit.')
             target.write(chunk)
 
@@ -313,10 +319,44 @@ def _mp3_waveform(file):
         )
 
 
+def _video_proxy(file):
+    executable = shutil.which(settings.FFMPEG_COMMAND)
+    if not executable:
+        raise OSError('Video proxy encoder is unavailable.')
+    with tempfile.TemporaryDirectory(prefix='blazeflow-video-proxy-') as directory:
+        source = Path(directory) / 'source'
+        output = Path(directory) / 'proxy.mp4'
+        _copy_private_object(file, source, max_bytes=settings.VIDEO_PROXY_MAX_INPUT_BYTES)
+        scale = (
+            f"scale='min({settings.VIDEO_PROXY_MAX_WIDTH},iw)':'min({settings.VIDEO_PROXY_MAX_HEIGHT},ih)'"
+            ":force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2"
+        )
+        subprocess.run(
+            [executable, '-v', 'error', '-y', '-i', str(source),
+             '-vf', scale, '-c:v', 'libx264', '-preset', 'veryfast',
+             '-crf', str(settings.VIDEO_PROXY_CRF), '-pix_fmt', 'yuv420p',
+             '-movflags', '+faststart', '-c:a', 'aac', '-b:a', settings.VIDEO_PROXY_AUDIO_BITRATE,
+             '-ac', '2', str(output)],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=settings.VIDEO_PROXY_TIMEOUT_SECONDS,
+        )
+        if not output.exists() or output.stat().st_size == 0:
+            raise ValueError('Video proxy encoder returned no usable output.')
+        if output.stat().st_size > settings.VIDEO_PROXY_MAX_OUTPUT_BYTES:
+            raise ValueError('Video proxy output exceeds its configured limit.')
+        return output.read_bytes(), 'video/mp4', 'mp4', 'VIDEO_PROXY', {
+            'max_width': settings.VIDEO_PROXY_MAX_WIDTH,
+            'max_height': settings.VIDEO_PROXY_MAX_HEIGHT,
+            'crf': settings.VIDEO_PROXY_CRF,
+        }
+
+
 def _preview_content(file):
     try:
         if file.mime_type.startswith('image/'):
             return _image_thumbnail(file)
+        if file.mime_type.startswith('video/'):
+            return _video_proxy(file)
         if file.mime_type == 'audio/wav':
             return _audio_waveform(file)
         if file.mime_type == 'application/pdf':
@@ -334,10 +374,8 @@ def _preview_content(file):
 def generate_preview(*, file_id):
     file = File.objects.get(id=file_id, status=FileStatus.READY, deleted_at__isnull=True)
     existing = FileVariant.objects.filter(
-        file=file, metadata__variant_type__in=[
-            'REVIEW_CARD', 'IMAGE_THUMBNAIL', 'AUDIO_WAVEFORM',
-            'PDF_FIRST_PAGE', 'MP3_WAVEFORM',
-        ], deleted_at__isnull=True,
+        file=file, metadata__variant_type__in=PREVIEW_VARIANT_TYPES,
+        deleted_at__isnull=True,
     ).first()
     if existing:
         return existing
@@ -352,10 +390,8 @@ def generate_preview(*, file_id):
                 id=file_id, status=FileStatus.READY, deleted_at__isnull=True,
             )
             existing = FileVariant.objects.filter(
-                file=file, metadata__variant_type__in=[
-                    'REVIEW_CARD', 'IMAGE_THUMBNAIL', 'AUDIO_WAVEFORM',
-                    'PDF_FIRST_PAGE', 'MP3_WAVEFORM',
-                ], deleted_at__isnull=True,
+                file=file, metadata__variant_type__in=PREVIEW_VARIANT_TYPES,
+                deleted_at__isnull=True,
             ).first()
             if existing:
                 default_storage.delete(stored_key)

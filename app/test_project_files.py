@@ -5,7 +5,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Project, ProjectAccessMode, ProjectFile, ProjectFolder
+from .models import File, Project, ProjectAccessMode, ProjectFile, ProjectFolder
 from .test_access_projects import WorkspaceAccessSetupMixin
 
 
@@ -156,7 +156,9 @@ class ProjectFolderApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(response.status_code, 204)
         self.assertIsNotNone(ProjectFolder.objects.get(id=root['id']).deleted_at)
         self.assertIsNotNone(ProjectFolder.objects.get(id=child['id']).deleted_at)
-        self.assertIsNotNone(ProjectFile.objects.get(id=upload['id']).deleted_at)
+        deleted_project_file = ProjectFile.objects.get(id=upload['id'])
+        self.assertIsNotNone(deleted_project_file.deleted_at)
+        self.assertIsNotNone(File.objects.get(id=deleted_project_file.file_id).deleted_at)
 
         listed_folders = self.client.get(
             reverse('api-project-folders', args=[self.workspace.id, self.project.id])
@@ -235,7 +237,9 @@ class ProjectFileApiTests(WorkspaceAccessSetupMixin, TestCase):
             reverse('api-project-file-detail', args=[self.workspace.id, self.project.id, file_id])
         )
         self.assertEqual(removed.status_code, 204)
-        self.assertIsNotNone(ProjectFile.objects.get(id=file_id).deleted_at)
+        deleted_project_file = ProjectFile.objects.get(id=file_id)
+        self.assertIsNotNone(deleted_project_file.deleted_at)
+        self.assertIsNotNone(File.objects.get(id=deleted_project_file.file_id).deleted_at)
 
     def test_file_can_be_placed_in_a_folder(self):
         folder = self.client.post(

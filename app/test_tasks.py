@@ -9,6 +9,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import (
+    File,
     ProjectAccessMode,
     Task,
     TaskAssignee,
@@ -328,7 +329,8 @@ class TaskAttachmentApiTests(WorkspaceAccessSetupMixin, TestCase):
 
         self.assertEqual(response.status_code, 201)
         attachment_id = response.json()['id']
-        self.assertTrue(TaskAttachment.objects.filter(id=attachment_id).exists())
+        attachment = TaskAttachment.objects.get(id=attachment_id)
+        file_id = attachment.file_id
 
         listed = self.client.get(
             reverse('api-task-attachments', args=[self.workspace.id, self.task_id])
@@ -340,6 +342,20 @@ class TaskAttachmentApiTests(WorkspaceAccessSetupMixin, TestCase):
         )
         self.assertEqual(removed.status_code, 204)
         self.assertFalse(TaskAttachment.objects.filter(id=attachment_id).exists())
+        self.assertIsNotNone(File.objects.get(id=file_id).deleted_at)
+
+    def test_deleting_task_releases_its_attachment_files(self):
+        uploaded = self.client.post(
+            reverse('api-task-attachments', args=[self.workspace.id, self.task_id]),
+            {'file': self._png_upload()},
+            format='multipart',
+        ).json()
+        file_id = TaskAttachment.objects.get(id=uploaded['id']).file_id
+
+        response = self.client.delete(reverse('api-task-detail', args=[self.workspace.id, self.task_id]))
+
+        self.assertEqual(response.status_code, 204)
+        self.assertIsNotNone(File.objects.get(id=file_id).deleted_at)
 
     def test_docx_attachment_is_accepted(self):
         buffer = io.BytesIO()

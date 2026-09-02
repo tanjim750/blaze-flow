@@ -74,27 +74,28 @@ Run these requests individually in order:
 13. **Media Versions → List Media Versions**
 14. **Media Versions → Media Version Detail**
 15. **Media Versions → Download Media Version**
-16. **Media Versions → Workflow History**
-17. **Media Versions → Transition to In Review**
-18. **Media Versions → Workflow History** again to see the closed and open entries
-19. **Review Comments → Create Timestamped Comment**
-20. **Review Comments → List Active Comments**, then **Add Comment Reaction**
-21. **Review Comments → Reply to Comment**
-22. **Review Comments → Edit Own Comment**
-23. **Review Comments → Comment Revision History**
-24. **Review Comments → Resolve Comment Thread**
-25. **Review Comments → Reopen Comment Thread**
-26. **Review Comments → Request Media Revision**
-27. **Media Versions → Workflow History** to confirm the Revision stage
-28. **Review Comments → Upload Comment Attachment** after selecting a supported file
-29. Wait for **Operations → Operations Health and Alerts** to show the attachment scan as `CLEAN`, then run **Review Comments → Download Comment Attachment**
-30. **Annotations → Create Annotation**
-31. **Annotations → List Annotations**
-32. **Annotations → Edit Own Annotation**
-33. **Annotations → Annotation Revision History**
-34. **Operations → Get Retention Policy**, then **Update Retention Policy** if you want a workspace override
-35. **Operations → Delivery Health**
-36. **Operations → Operations Health and Alerts**
+16. **Media Versions → Preview Media Version** after the outbox worker generates the preview/proxy
+17. **Media Versions → Workflow History**
+18. **Media Versions → Transition to In Review**
+19. **Media Versions → Workflow History** again to see the closed and open entries
+20. **Review Comments → Create Timestamped Comment**
+21. **Review Comments → List Active Comments**, then **Add Comment Reaction**
+22. **Review Comments → Reply to Comment**
+23. **Review Comments → Edit Own Comment**
+24. **Review Comments → Comment Revision History**
+25. **Review Comments → Resolve Comment Thread**
+26. **Review Comments → Reopen Comment Thread**
+27. **Review Comments → Request Media Revision**
+28. **Media Versions → Workflow History** to confirm the Revision stage
+29. **Review Comments → Upload Comment Attachment** after selecting a supported file
+30. Wait for **Operations → Operations Health and Alerts** to show the attachment scan as `CLEAN`, then run **Review Comments → Download Comment Attachment**
+31. **Annotations → Create Annotation**
+32. **Annotations → List Annotations**
+33. **Annotations → Edit Own Annotation**
+34. **Annotations → Annotation Revision History**
+35. **Operations → Get Retention Policy**, then **Update Retention Policy** if you want a workspace override
+36. **Operations → Delivery Health**
+37. **Operations → Operations Health and Alerts**
 
 The worker performs scan and preview events in separate batches. With Compose it runs continuously; for deterministic manual testing run `docker compose exec web python manage.py process_outbox` twice after an attachment upload.
 

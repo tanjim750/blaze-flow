@@ -1,15 +1,24 @@
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from io import StringIO
+from threading import Barrier
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.test import TestCase
+from django.db import close_old_connections, transaction
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from .models import SubscriptionPlan, SubscriptionStatus, UserSubscription
-from .services import process_expired_subscriptions
+from .models import File, FileStatus, Project, StorageBackend, SubscriptionPlan, SubscriptionStatus, UserSubscription, Workspace
+from .services import (
+    SubscriptionError,
+    enforce_workspace_storage_limit,
+    process_expired_subscriptions,
+    workspace_storage_bytes_used,
+)
 from .test_access_projects import WorkspaceAccessSetupMixin
 
 
@@ -265,3 +274,134 @@ class ProjectPlanLimitApiTests(WorkspaceAccessSetupMixin, TestCase):
         fourth = self._create_project('Project 4')
 
         self.assertEqual(fourth.status_code, 201)
+
+
+@override_settings(PLAN_LIMITS={
+    'FREE': {'max_workspaces_owned': 1, 'max_projects_per_workspace': 3, 'max_storage_bytes': 10},
+    'PRO': {'max_workspaces_owned': 20, 'max_projects_per_workspace': 200, 'max_storage_bytes': 1_000_000},
+})
+class StoragePlanLimitApiTests(WorkspaceAccessSetupMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_authenticate(self.owner)
+        project_response = self.client.post(
+            reverse('api-projects', args=[self.workspace.id]),
+            {'name': 'Storage Project'},
+            format='json',
+        )
+        self.project = Project.objects.get(id=project_response.json()['id'])
+
+    def _upload(self, name='frame.png'):
+        return self.client.post(
+            reverse('api-media-versions', args=[self.workspace.id, self.project.id]),
+            {
+                'file': SimpleUploadedFile(name, b'\x89PNG\r\n\x1a\npng-data-well-past-ten-bytes', content_type='image/png'),
+                'title': name,
+            },
+            format='multipart',
+        )
+
+    def test_upload_beyond_free_storage_cap_is_rejected(self):
+        response = self._upload()
+        self.assertEqual(response.status_code, 400)
+
+    def test_project_file_upload_obeys_storage_cap(self):
+        response = self.client.post(
+            reverse('api-project-files', args=[self.workspace.id, self.project.id]),
+            {'file': SimpleUploadedFile(
+                'reference.png', b'\x89PNG\r\n\x1a\nproject-file-over-cap', content_type='image/png',
+            )},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_task_attachment_upload_obeys_storage_cap(self):
+        task = self.client.post(
+            reverse('api-tasks', args=[self.workspace.id]),
+            {'title': 'Quota task'},
+            format='json',
+        ).json()
+
+        response = self.client.post(
+            reverse('api-task-attachments', args=[self.workspace.id, task['id']]),
+            {'file': SimpleUploadedFile(
+                'reference.png', b'\x89PNG\r\n\x1a\ntask-attachment-over-cap', content_type='image/png',
+            )},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_review_attachment_upload_obeys_storage_cap(self):
+        self.client.post(reverse('api-subscription-upgrade'))
+        media = self._upload().json()
+        comment = self.client.post(
+            reverse('api-review-comments', args=[self.workspace.id, self.project.id, media['id']]),
+            {'text': 'Quota review'},
+            format='json',
+        ).json()
+        UserSubscription.objects.filter(user=self.owner).update(plan=SubscriptionPlan.FREE)
+
+        response = self.client.post(
+            reverse('api-review-attachment-upload', args=[
+                self.workspace.id, self.project.id, media['id'], comment['id'],
+            ]),
+            {'file': SimpleUploadedFile(
+                'reference.pdf', b'%PDF-1.7\nreview-attachment-over-cap', content_type='application/pdf',
+            )},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_upload_succeeds_after_owner_upgrades_to_pro(self):
+        self.client.post(reverse('api-subscription-upgrade'))
+
+        response = self._upload()
+
+        self.assertEqual(response.status_code, 201)
+
+
+@override_settings(PLAN_LIMITS={
+    'FREE': {'max_workspaces_owned': 1, 'max_projects_per_workspace': 3, 'max_storage_bytes': 10},
+    'PRO': {'max_workspaces_owned': 20, 'max_projects_per_workspace': 200, 'max_storage_bytes': 1_000_000},
+})
+class StoragePlanLimitConcurrencyTests(WorkspaceAccessSetupMixin, TransactionTestCase):
+    reset_sequences = True
+
+    def setUp(self):
+        super().setUp()
+        self.backend = StorageBackend.objects.create(
+            id=uuid.uuid4(), name='Quota test storage', provider='quota-test',
+            created_at=timezone.now(), updated_at=timezone.now(),
+        )
+
+    def _attempt_upload(self, barrier):
+        close_old_connections()
+        try:
+            barrier.wait(timeout=10)
+            with transaction.atomic():
+                workspace = Workspace.objects.get(id=self.workspace.id)
+                enforce_workspace_storage_limit(
+                    workspace=workspace, additional_bytes=8, lock=True,
+                )
+                File.objects.create(
+                    id=uuid.uuid4(), workspace=workspace, storage_backend=self.backend,
+                    object_key=f'quota/{uuid.uuid4()}', original_name='concurrent.bin',
+                    mime_type='application/octet-stream', size_bytes=8,
+                    status=FileStatus.READY, created_at=timezone.now(), updated_at=timezone.now(),
+                )
+            return True
+        except SubscriptionError:
+            return False
+        finally:
+            close_old_connections()
+
+    def test_concurrent_uploads_cannot_exceed_workspace_cap(self):
+        barrier = Barrier(2)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(lambda _: self._attempt_upload(barrier), range(2)))
+
+        self.assertEqual(sorted(results), [False, True])
+        self.assertEqual(workspace_storage_bytes_used(workspace=self.workspace), 8)

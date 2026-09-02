@@ -10,6 +10,7 @@ from app.models import (
     File,
     FileSecurityScan,
     FileStatus,
+    FileVariant,
     Task,
     TaskAssignee,
     TaskAttachment,
@@ -19,6 +20,7 @@ from app.models import (
 from .file_processing import SCAN_TOPIC, enqueue_file_event
 from .media import _storage_backend, detect_media_type, sha256_upload
 from .review_assets import detect_attachment_type
+from .subscriptions import enforce_workspace_storage_limit
 
 
 class TaskError(Exception):
@@ -57,13 +59,23 @@ def update_task(*, task, **fields):
     return task
 
 
+@transaction.atomic
 def delete_task(*, task):
-    if task.deleted_at is not None:
+    locked = Task.objects.select_for_update().get(id=task.id)
+    if locked.deleted_at is not None:
         raise TaskError('This task has already been deleted.')
-    task.deleted_at = timezone.now()
-    task.updated_at = timezone.now()
-    task.save(update_fields=['deleted_at', 'updated_at'])
-    return task
+    now = timezone.now()
+    file_ids = list(TaskAttachment.objects.filter(task=locked).values_list('file_id', flat=True))
+    File.objects.filter(id__in=file_ids, deleted_at__isnull=True).update(
+        deleted_at=now, updated_at=now,
+    )
+    FileVariant.objects.filter(file_id__in=file_ids, deleted_at__isnull=True).update(
+        deleted_at=now, updated_at=now,
+    )
+    locked.deleted_at = now
+    locked.updated_at = now
+    locked.save(update_fields=['deleted_at', 'updated_at'])
+    return locked
 
 
 def add_task_assignee(*, task, membership):
@@ -103,6 +115,7 @@ def _validate_task_attachment(upload):
 
 def upload_task_attachment(*, task, upload, membership):
     mime_type = _validate_task_attachment(upload)
+    enforce_workspace_storage_limit(workspace=task.workspace, additional_bytes=upload.size)
     checksum = sha256_upload(upload)
     clean_name = Path(upload.name).name or 'attachment'
     object_key = (
@@ -112,8 +125,13 @@ def upload_task_attachment(*, task, upload, membership):
     now = timezone.now()
     try:
         with transaction.atomic():
+            enforce_workspace_storage_limit(
+                workspace=task.workspace,
+                additional_bytes=upload.size,
+                lock=True,
+            )
             file_record = File.objects.create(
-                id=uuid.uuid4(), storage_backend=_storage_backend(now), object_key=stored_key,
+                id=uuid.uuid4(), workspace_id=task.workspace_id, storage_backend=_storage_backend(now), object_key=stored_key,
                 original_name=clean_name, mime_type=mime_type, size_bytes=upload.size,
                 checksum=checksum, checksum_algorithm='sha256', metadata={},
                 status=FileStatus.PENDING, created_at=now, updated_at=now,
@@ -137,5 +155,14 @@ def upload_task_attachment(*, task, upload, membership):
         raise
 
 
+@transaction.atomic
 def delete_task_attachment(*, attachment):
-    attachment.delete()
+    locked = TaskAttachment.objects.select_for_update().get(id=attachment.id)
+    now = timezone.now()
+    File.objects.filter(id=locked.file_id, deleted_at__isnull=True).update(
+        deleted_at=now, updated_at=now,
+    )
+    FileVariant.objects.filter(file_id=locked.file_id, deleted_at__isnull=True).update(
+        deleted_at=now, updated_at=now,
+    )
+    locked.delete()

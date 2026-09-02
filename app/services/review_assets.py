@@ -12,6 +12,7 @@ from app.models import File, FileSecurityScan, FileStatus, FileVariant, ReviewCo
 from .audit import record_guest_audit, record_user_audit
 from .media import _storage_backend, detect_media_type, sha256_upload
 from .file_processing import SCAN_TOPIC, enqueue_file_event
+from .subscriptions import enforce_workspace_storage_limit
 
 
 class ReviewAttachmentError(Exception):
@@ -78,9 +79,10 @@ def upload_review_attachment(*, comment, upload, user=None, guest_session=None):
     if (user is None) == (guest_session is None):
         raise ReviewAttachmentError('Exactly one attachment actor is required.')
     mime_type = validate_attachment(upload)
+    project = comment.media_version.project
+    enforce_workspace_storage_limit(workspace=project.workspace, additional_bytes=upload.size)
     checksum = sha256_upload(upload)
     clean_name = Path(upload.name).name or 'attachment'
-    project = comment.media_version.project
     object_key = (
         f'workspaces/{project.workspace_id}/projects/{project.id}/comments/'
         f'{comment.id}/{uuid.uuid4()}/{clean_name}'
@@ -89,8 +91,13 @@ def upload_review_attachment(*, comment, upload, user=None, guest_session=None):
     now = timezone.now()
     try:
         with transaction.atomic():
+            enforce_workspace_storage_limit(
+                workspace=project.workspace,
+                additional_bytes=upload.size,
+                lock=True,
+            )
             file_record = File.objects.create(
-                id=uuid.uuid4(), storage_backend=_storage_backend(now), object_key=stored_key,
+                id=uuid.uuid4(), workspace=project.workspace, storage_backend=_storage_backend(now), object_key=stored_key,
                 original_name=clean_name, mime_type=mime_type, size_bytes=upload.size,
                 checksum=checksum, checksum_algorithm='sha256', metadata={},
                 status=FileStatus.PENDING, created_at=now, updated_at=now,
