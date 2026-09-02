@@ -24,3 +24,16 @@ dist-ssr
 *.sw?
 
 .env
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+media/
+
+# macOS metadata (especially important on external drives)
+.DS_Store
+._*

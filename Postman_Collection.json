@@ -1,0 +1,3253 @@
+{
+  "info": {
+    "name": "Blaze Flow API",
+    "description": "Executable collection for the currently implemented Blaze Flow Django API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "owner@example.com",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "a-secure-test-password",
+      "type": "string"
+    },
+    {
+      "key": "csrf_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workspace_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "project_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "role_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "membership_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "client_team_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "client_team_member_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "client_team_invite_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "client_team_invite_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "grant_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "task_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "task_assignee_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "task_attachment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "project_folder_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "project_file_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "media_version_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "comment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attachment_content_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "annotation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "mentioned_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notification_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workflow_stage_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invitation_email",
+      "value": "member@example.com",
+      "type": "string"
+    },
+    {
+      "key": "invitation_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_invite_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_access_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_comment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_invite_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_access_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_attachment_content_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guest_annotation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "new_password",
+      "value": "a-new-secure-test-password",
+      "type": "string"
+    },
+    {
+      "key": "reset_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "google_id_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "verification_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/health/",
+            "description": "Public health endpoint"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register",
+          "event": [],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"first_name\": \"Postman\",\n  \"last_name\": \"User\",\n  \"timezone\": \"Europe/London\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/auth/register/",
+            "description": "Register the account currently stored in the email/password variables"
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.csrf_token) pm.collectionVariables.set(\"csrf_token\", data.csrf_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/auth/login/",
+            "description": "Start a Django session and capture its CSRF token"
+          },
+          "response": []
+        },
+        {
+          "name": "Google Sign-In",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.csrf_token) pm.collectionVariables.set(\"csrf_token\", data.csrf_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_token\": \"{{google_id_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/auth/google/",
+            "description": "Exchange a Google-issued ID token for a Blaze Flow session. Requires GOOGLE_OAUTH_CLIENT_ID to be set server-side and a real id_token from a Google Sign-In flow for the same client ID (Postman cannot generate one itself); returns 400 with a clear message if the server has no client ID configured. A verified Google email auto-links to a matching registered account; an unverified one is rejected rather than silently linked. A first-time verified sign-in creates the account, marks its email verified, and provisions a FREE subscription, the same as Register"
+          },
+          "response": []
+        },
+        {
+          "name": "Current User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/auth/me/",
+            "description": "Return the authenticated user"
+          },
+          "response": []
+        },
+        {
+          "name": "Request Password Reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/password-reset/request/",
+            "description": "Always returns 202. Copy the token query parameter from the delivered development email into reset_token."
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Password Reset",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 204) pm.collectionVariables.set(\"password\", pm.collectionVariables.get(\"new_password\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{reset_token}}\",\n  \"new_password\": \"{{new_password}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/password-reset/confirm/"
+          },
+          "response": []
+        },
+        {
+          "name": "Request Email Verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/email-verification/request/",
+            "description": "Always returns 202. Copy the token query parameter from the delivered development email into verification_token."
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Email Verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{verification_token}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/email-verification/confirm/"
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 204) pm.collectionVariables.set(\"password\", pm.collectionVariables.get(\"new_password\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"{{password}}\",\n  \"new_password\": \"{{new_password}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/password/change/"
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "event": [],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/auth/logout/",
+            "description": "End the current session"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Subscriptions",
+      "item": [
+        {
+          "name": "Get My Subscription",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/subscriptions/me/",
+            "description": "Read the current user's subscription and effective plan limits. Accounts registered before this feature existed have no stored row; a FREE default is returned without creating one"
+          },
+          "response": []
+        },
+        {
+          "name": "Upgrade to PRO",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/subscriptions/upgrade/",
+            "description": "Simulate upgrading to the PRO plan (no external payment provider is integrated). Sets a period of SUBSCRIPTION_PRO_PERIOD_DAYS (default 30). Fails with 400 if already on an active, non-cancelling PRO subscription"
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/subscriptions/cancel/",
+            "description": "Schedule cancellation at the end of the current period (cancel_at_period_end). The plan stays PRO until an operator runs the process_expired_subscriptions command after the period ends. Fails with 400 if there is no active PRO subscription or one is already scheduled to cancel"
+          },
+          "response": []
+        },
+        {
+          "name": "Resume Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/subscriptions/resume/",
+            "description": "Undo a pending cancellation while still within the current period. Fails with 400 if nothing is scheduled to cancel"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Workspaces",
+      "item": [
+        {
+          "name": "List Workspaces",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/",
+            "description": "List workspaces readable by the current user"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Workspace",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"workspace_id\", data.id);",
+                  "if (data.membership_id) pm.collectionVariables.set(\"membership_id\", data.membership_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Creative Agency\",\n  \"slug\": \"postman-creative-agency\",\n  \"timezone\": \"Europe/London\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/",
+            "description": "Create a workspace, system roles, workflow stages, and owner membership. Requires a verified email; returns 403 otherwise. Complete the Email Verification request first if the current session's account is unverified. Also fails with 400 once the account already owns its plan's max_workspaces_owned limit (FREE defaults to 1); run Subscriptions -> Upgrade to PRO first if you need more than one test workspace on the same account."
+          },
+          "response": []
+        },
+        {
+          "name": "Workspace Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/",
+            "description": "Read a single workspace"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Workspace",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Renamed Creative Agency\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/",
+            "description": "Update name and/or timezone. Requires workspace.manage. The slug cannot be changed"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Workspace Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/profile/",
+            "description": "Read the optional business profile. Returns empty fields until a manager sets any of them; no row is created by reading"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Workspace Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_name\": \"Postman Creative Agency LLC\",\n  \"email\": \"hello@postman-agency.example.com\",\n  \"city\": \"Austin\",\n  \"country_code\": \"US\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/profile/",
+            "description": "Create or update the business profile. Requires workspace.manage"
+          },
+          "response": []
+        },
+        {
+          "name": "Schedule Workspace Deletion",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/",
+            "description": "Move the workspace to PENDING_DELETION with a grace period (WORKSPACE_DELETION_GRACE_DAYS, default 30). This does not physically delete anything and can be undone with Restore Workspace. Run this only at the end of a manual test pass"
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Workspace",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/restore/",
+            "description": "Cancel a pending deletion and return the workspace to ACTIVE. Fails with 400 if the workspace is not currently PENDING_DELETION"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Roles",
+      "item": [
+        {
+          "name": "List Roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/roles/",
+            "description": "List workspace roles and their permission keys"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Custom Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"role_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Reviewer\",\n  \"description\": \"Reviews selected project media\",\n  \"permission_keys\": [\"workspace.read\", \"project.read\", \"media.read\", \"review.comment.read\", \"review.comment.create\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/roles/",
+            "description": "Create a custom workspace role"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Custom Role",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Senior Reviewer\",\n  \"permission_keys\": [\"workspace.read\", \"project.read\", \"project.update\", \"media.read\", \"review.comment.read\", \"review.comment.create\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/roles/{{role_id}}/",
+            "description": "Update a non-system role"
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Custom Role",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/roles/{{role_id}}/",
+            "description": "Archive an unassigned custom role"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Members and Invitations",
+      "item": [
+        {
+          "name": "List Members",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const members = pm.response.json();",
+                  "const mentioned = members.find(item => item.user && item.user.email === pm.collectionVariables.get('invitation_email'));",
+                  "if (mentioned) pm.collectionVariables.set(\"mentioned_user_id\", mentioned.user.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/members/",
+            "description": "List workspace membership principals"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Member",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role_id\": \"{{role_id}}\",\n  \"project_access_mode\": \"SELECTED\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/members/{{membership_id}}/",
+            "description": "Update a non-owner membership"
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Member",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"REMOVED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/members/{{membership_id}}/",
+            "description": "Soft-remove a non-owner membership"
+          },
+          "response": []
+        },
+        {
+          "name": "Send Invitation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.token) pm.collectionVariables.set(\"invitation_token\", data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{invitation_email}}\",\n  \"role_id\": \"{{role_id}}\",\n  \"project_access_mode\": \"SELECTED\",\n  \"expires_in_days\": 7\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/invitations/",
+            "description": "Create a single-use invitation and capture its raw token"
+          },
+          "response": []
+        },
+        {
+          "name": "Accept Invitation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"membership_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{invitation_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspace-invitations/accept/",
+            "description": "Accept as an authenticated user whose email matches invitation_email"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Client Teams",
+      "item": [
+        {
+          "name": "List Client Teams",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/",
+            "description": "List client organizations in the workspace"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Client Team",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"client_team_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Corp\",\n  \"website\": \"https://acme.example.com\",\n  \"email\": \"hello@acme.example.com\",\n  \"city\": \"Austin\",\n  \"country_code\": \"US\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/",
+            "description": "Create a client organization. Requires client_team.manage"
+          },
+          "response": []
+        },
+        {
+          "name": "Client Team Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/",
+            "description": "Read a single client organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Client Team",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+1-555-0100\",\n  \"description\": \"Long-standing agency client\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/",
+            "description": "Update client organization profile fields"
+          },
+          "response": []
+        },
+        {
+          "name": "List Client Team Members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/members/",
+            "description": "List active and removed members of the client organization"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Client Team Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"client_team_member_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{invitation_email}}\",\n  \"title\": \"Marketing Manager\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/members/",
+            "description": "Add an existing registered user as a client team member, or reactivate a previously removed one"
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Client Team Member",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/members/{{client_team_member_id}}/",
+            "description": "Soft-remove a client team member"
+          },
+          "response": []
+        },
+        {
+          "name": "Grant Client Team Workspace Access",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role_id\": \"{{role_id}}\",\n  \"project_access_mode\": \"ALL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/workspace-access/",
+            "description": "Create the CLIENT_TEAM workspace membership so active team members inherit this role and project access mode. Requires workspace.members.manage. Update or revoke afterward through Update Member / Remove Member using the returned membership id"
+          },
+          "response": []
+        },
+        {
+          "name": "List Client Team Invites",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/invites/",
+            "description": "List invitations for the client team. Never exposes the stored token hash"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Client Team Email Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"client_team_invite_id\", data.id);",
+                  "if (data.token) pm.collectionVariables.set(\"client_team_invite_token\", data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invite_type\": \"EMAIL\",\n  \"recipient_email\": \"{{invitation_email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/invites/",
+            "description": "Create a single-use, recipient-bound invite. The raw token is returned once"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Client Team Link Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"client_team_invite_id\", data.id);",
+                  "if (data.token) pm.collectionVariables.set(\"client_team_invite_token\", data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invite_type\": \"LINK\",\n  \"label\": \"Kickoff link\",\n  \"max_uses\": 5,\n  \"expires_in_days\": 14\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/invites/",
+            "description": "Create a shareable, reusable invite not bound to one recipient. max_uses is optional; omit it for unlimited use until expiration/revocation"
+          },
+          "response": []
+        },
+        {
+          "name": "Accept Client Team Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"client_team_member_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{client_team_invite_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/client-team-invitations/accept/",
+            "description": "Accept as an authenticated user. An EMAIL invite requires the logged-in account's email to match recipient_email; a LINK invite accepts any authenticated user up to max_uses. Re-accepting the same invite as the same user is idempotent"
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Client Team Invite",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/invites/{{client_team_invite_id}}/",
+            "description": "Revoke an invite. Already-exchanged access it granted is not retroactively removed; use Remove Client Team Member for that"
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Client Team",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/client-teams/{{client_team_id}}/",
+            "description": "Archive the client organization. Existing team members immediately lose inherited access; run this last"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "List Projects",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/",
+            "description": "List projects within the current users effective scope"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"project_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Website Redesign\",\n  \"description\": \"Complete redesign of the company website\",\n  \"priority\": \"HIGH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/",
+            "description": "Create a project. Fails with 400 once the workspace already holds its owner's plan max_projects_per_workspace limit (FREE defaults to 3, counting non-archived projects); the owner can run Subscriptions -> Upgrade to PRO to raise it"
+          },
+          "response": []
+        },
+        {
+          "name": "Project Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/",
+            "description": "Read an authorized project"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Project",
+          "event": [],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Website Redesign - Phase 2\",\n  \"status\": \"ON_HOLD\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/",
+            "description": "Update an authorized project"
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Project",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/",
+            "description": "Archive rather than physically delete the project"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Project Access",
+      "item": [
+        {
+          "name": "List Explicit Grants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/access/",
+            "description": "List explicit SELECTED-scope grants"
+          },
+          "response": []
+        },
+        {
+          "name": "Grant Project Access",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"grant_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"membership_id\": \"{{membership_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/access/",
+            "description": "Grant the project to an active SELECTED membership"
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Project Access",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/access/{{grant_id}}/",
+            "description": "Revoke an explicit project grant"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Project Files",
+      "item": [
+        {
+          "name": "List Project Folders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/folders/",
+            "description": "List active folders as a flat list; assemble the tree client-side using parent_folder_id"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Root Folder",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"project_folder_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"References\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/folders/",
+            "description": "Create a root-level folder. Omit parent_folder_id for root; set it to nest inside an existing folder. Names must be unique among siblings"
+          },
+          "response": []
+        },
+        {
+          "name": "Rename Folder",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Client References\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/folders/{{project_folder_id}}/",
+            "description": "Rename a folder. A folder cannot be moved to a different parent through this endpoint"
+          },
+          "response": []
+        },
+        {
+          "name": "List Project Files",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/files/",
+            "description": "List active project files (root and foldered)"
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Project File",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"project_file_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "folder_id",
+                  "value": "{{project_folder_id}}",
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/files/",
+            "description": "Upload a supporting project file. Enable the folder_id field to place it inside a folder instead of the project root. Accepts the same signature-verified types as review/task attachments (PNG, JPEG, GIF, WebP, PDF, WAV, MP3, MP4, QuickTime, WebM, DOCX, XLSX, PPTX, RTF) and is queued for malware scanning the same way"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Project File",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/files/{{project_file_id}}/",
+            "description": "Remove the file from the project. The underlying File record is retained"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Folder",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/folders/{{project_folder_id}}/",
+            "description": "Delete a folder. Cascades to descendant folders and the files inside them; underlying File records are retained. Run this last"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "List Tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/",
+            "description": "List active workspace-level tasks plus tasks in projects you can access"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Workspace Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"task_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Draft creative brief\",\n  \"priority\": \"HIGH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/",
+            "description": "Create a workspace-level task with no project. Omit project_id for workspace-level work; set it to scope the task to a project you can access"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Project Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"task_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"title\": \"Upload rough cut\",\n  \"priority\": \"MEDIUM\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/",
+            "description": "Create a task scoped to a project. Requires task.create at the workspace level plus project access to project_id"
+          },
+          "response": []
+        },
+        {
+          "name": "Task Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/",
+            "description": "Read a single task"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Task",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/",
+            "description": "Update task fields. Setting status to COMPLETED stamps completed_at; moving off COMPLETED clears it. project_id cannot be changed here"
+          },
+          "response": []
+        },
+        {
+          "name": "List Task Assignees",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/assignees/",
+            "description": "List workspace memberships assigned to the task"
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"task_assignee_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"membership_id\": \"{{membership_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/assignees/",
+            "description": "Assign a workspace membership to the task"
+          },
+          "response": []
+        },
+        {
+          "name": "Unassign Task",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/assignees/{{task_assignee_id}}/",
+            "description": "Remove an assignee from the task"
+          },
+          "response": []
+        },
+        {
+          "name": "List Task Attachments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/attachments/",
+            "description": "List files attached to the task"
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Task Attachment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"task_attachment_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/attachments/",
+            "description": "Upload a supporting file. Accepts the same signature-verified types as review attachments (PNG, JPEG, GIF, WebP, PDF, WAV, MP3) plus MP4/QuickTime/WebM and DOCX/XLSX/PPTX/RTF. The file is queued for malware scanning like other uploads"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Task Attachment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/attachments/{{task_attachment_id}}/",
+            "description": "Remove the attachment association. The underlying File record is retained, matching the project-files convention"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Task",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/",
+            "description": "Soft-delete the task. Requires task.delete (Owner role by default; Member does not have it)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Media Versions",
+      "item": [
+        {
+          "name": "List Media Versions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/",
+            "description": "List authorized project media versions"
+          },
+          "response": []
+        },
+        {
+          "name": "List Workflow Stages",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const stages = pm.response.json();",
+                  "const reviewStage = stages.find(stage => stage.slug === 'in-review');",
+                  "if (reviewStage) pm.collectionVariables.set(\"workflow_stage_id\", reviewStage.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/workflow-stages/",
+            "description": "List active stages and capture In Review for the transition request"
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Media Version",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"media_version_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select an image or video"
+                },
+                {
+                  "key": "title",
+                  "value": "First review version",
+                  "type": "text"
+                },
+                {
+                  "key": "note",
+                  "value": "Uploaded from Postman",
+                  "type": "text"
+                },
+                {
+                  "key": "priority",
+                  "value": "HIGH",
+                  "type": "text"
+                },
+                {
+                  "key": "allow_download",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "initial_stage_id",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Optional active workflow-stage UUID"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/",
+            "description": "Upload an image/video and allocate the next project version"
+          },
+          "response": []
+        },
+        {
+          "name": "Media Version Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/",
+            "description": "Read media metadata and current workflow stage"
+          },
+          "response": []
+        },
+        {
+          "name": "Download Media Version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/download/",
+            "description": "Download the private object when allow_download is enabled"
+          },
+          "response": []
+        },
+        {
+          "name": "Preview Media Version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/preview/",
+            "description": "Stream the generated review proxy or preview with media.read permission; returns 404 until background preview processing finishes"
+          },
+          "response": []
+        },
+        {
+          "name": "Workflow History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/workflow/",
+            "description": "Read the ordered stage history for the media version"
+          },
+          "response": []
+        },
+        {
+          "name": "Transition to In Review",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflow_stage_id\": \"{{workflow_stage_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/workflow/",
+            "description": "Atomically close the current stage entry and enter In Review"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Review Comments",
+      "item": [
+        {
+          "name": "Create Timestamped Comment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"comment_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Please tighten this edit.\",\n  \"start_time_ms\": 1250,\n  \"end_time_ms\": 2400\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/",
+            "description": "Create a top-level time-range comment and capture its ID"
+          },
+          "response": []
+        },
+        {
+          "name": "List Active Comments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/",
+            "description": "List active comments and replies in creation order"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Comment Reaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"👍\"\n}"
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/reactions/",
+            "description": "Idempotently add the current user's reaction and return updated comment aggregates"
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Comment Reaction",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"👍\"\n}"
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/reactions/",
+            "description": "Remove only the current user's matching reaction"
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Comment Attachment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"attachment_content_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select a PNG, JPEG, GIF, WebP, PDF, WAV, MP3, DOCX, XLSX, PPTX, or RTF"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/attachments/",
+            "description": "Upload a signature-verified private attachment to your own comment"
+          },
+          "response": []
+        },
+        {
+          "name": "Download Comment Attachment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/attachments/{{attachment_content_id}}/",
+            "description": "Download an attachment through project-scoped authorization"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Comment Attachment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/attachments/{{attachment_content_id}}/",
+            "description": "Soft-delete as the comment author or comment manager; run after download testing"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Comment with Mention",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Please review this update.\",\n  \"mentioned_user_ids\": [\"{{mentioned_user_id}}\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/",
+            "description": "Create a structured mention after the invited member has project read access"
+          },
+          "response": []
+        },
+        {
+          "name": "Reply to Comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"I will update this section.\",\n  \"parent_comment_id\": \"{{comment_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/",
+            "description": "Reply without separate timing; replies inherit their thread context"
+          },
+          "response": []
+        },
+        {
+          "name": "Edit Own Comment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Please tighten this edit and soften the transition.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/",
+            "description": "Edit the original author's comment and preserve its previous snapshot"
+          },
+          "response": []
+        },
+        {
+          "name": "Comment Revision History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/revisions/",
+            "description": "Read immutable snapshots captured before edits"
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve Comment Thread",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resolved\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/resolution/",
+            "description": "Resolve a top-level thread; requires review.comment.manage"
+          },
+          "response": []
+        },
+        {
+          "name": "Reopen Comment Thread",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resolved\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/resolution/",
+            "description": "Reopen a resolved top-level thread"
+          },
+          "response": []
+        },
+        {
+          "name": "Request Media Revision",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Please replace the final frame.\",\n  \"start_time_ms\": 9000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/revision-requests/",
+            "description": "Atomically create feedback and move the media to the Revision stage"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Comment Thread",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/comments/{{comment_id}}/",
+            "description": "Soft-delete the comment and all active descendants; run last"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Annotations",
+      "item": [
+        {
+          "name": "Create Annotation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"annotation_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"review_comment_id\": \"{{comment_id}}\",\n  \"start_time_ms\": 1200,\n  \"elements\": [\n    {\n      \"element_type\": \"RECTANGLE\",\n      \"geometry\": {\"x\": 0.1, \"y\": 0.2, \"width\": 0.3, \"height\": 0.4},\n      \"style\": {\"color\": \"#ff0000\"}\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/",
+            "description": "Create normalized visual markup and capture its ID"
+          },
+          "response": []
+        },
+        {
+          "name": "List Annotations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/",
+            "description": "List active markup for the media version"
+          },
+          "response": []
+        },
+        {
+          "name": "Edit Own Annotation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"elements\": [\n    {\n      \"element_type\": \"ARROW\",\n      \"geometry\": {\"start\": {\"x\": 0.1, \"y\": 0.1}, \"end\": {\"x\": 0.9, \"y\": 0.9}}\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{annotation_id}}/",
+            "description": "Replace annotation elements and preserve the previous snapshot"
+          },
+          "response": []
+        },
+        {
+          "name": "Annotation Revision History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{annotation_id}}/revisions/",
+            "description": "Read immutable pre-edit annotation snapshots"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Annotation",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{annotation_id}}/",
+            "description": "Soft-delete using annotation.manage; run last"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Operations",
+      "item": [
+        {
+          "name": "Delivery Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/delivery-health/",
+            "description": "Workspace-manager view of outbox and delivery counts"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Retention Policy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/retention-policy/",
+            "description": "Read the workspace override or effective environment-default review-file policy"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Retention Policy",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"review_file_cleanup_enabled\": true,\n  \"review_file_retention_days\": 30\n}"
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/retention-policy/",
+            "description": "Create or update the audited workspace review-file retention override"
+          },
+          "response": []
+        },
+        {
+          "name": "Operations Health and Alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/operations/health/",
+            "description": "Manager-only scan, preview/outbox, delivery, and alert-state report"
+          },
+          "response": []
+        },
+        {
+          "name": "Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/operations/metrics/",
+            "description": "Manager-only Prometheus text exposition for workspace operations."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get Notification Preferences",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/notification-preferences/",
+            "description": "Read the authenticated user's delivery preferences"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Notification Preferences",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email_mentions_enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/notification-preferences/",
+            "description": "Enable or disable mention emails without affecting the in-app inbox"
+          },
+          "response": []
+        },
+        {
+          "name": "List Unread Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.length) pm.collectionVariables.set(\"notification_id\", data[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/notifications/?unread=true",
+            "description": "List only the authenticated recipient's unread notifications"
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Notification Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/notifications/{{notification_id}}/read/",
+            "description": "Idempotently mark one recipient-owned notification as read"
+          },
+          "response": []
+        },
+        {
+          "name": "Mark All Notifications Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/notifications/read-all/",
+            "description": "Mark all unread notifications for the authenticated user as read"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Guest Reviews",
+      "item": [
+        {
+          "name": "Create Guest Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) { const data = pm.response.json(); pm.collectionVariables.set(\"guest_invite_token\", data.token); pm.collectionVariables.set(\"guest_invite_id\", data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Client reviewer\",\n  \"permissions\": [\"media.read\", \"media.download\", \"review.comment.read\", \"review.comment.create\", \"review.comment.edit\", \"review.comment.delete\", \"review.reaction.create\", \\\"review.attachment.create\\\", \\\"review.attachment.delete\\\", \"annotation.read\", \"annotation.create\", \"annotation.edit\", \"annotation.delete\"],\n  \"expires_in_hours\": 168\n}"
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/guest-invites/"
+          },
+          "response": []
+        },
+        {
+          "name": "Exchange Guest Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) { pm.collectionVariables.set(\"guest_access_key\", pm.response.json().access_key); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{guest_invite_token}}\",\n  \"name\": \"Client Reviewer\",\n  \"email\": \"reviewer@example.com\"\n}"
+            },
+            "url": "{{base_url}}/api/guest-access/exchange/"
+          },
+          "response": []
+        },
+        {
+          "name": "Open Guest Review",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Guest Comment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) { pm.collectionVariables.set(\"guest_comment_id\", pm.response.json().id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Guest review feedback\",\n  \"start_time_ms\": 1500\n}"
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Guest Reaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"❤️\"\n}"
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/{{guest_comment_id}}/reactions/",
+            "description": "Idempotently add the current guest session's reaction"
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Guest Reaction",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"❤️\"\n}"
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/{{guest_comment_id}}/reactions/",
+            "description": "Remove only the current guest session's matching reaction"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Guest Annotation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"review_comment_id\": \"{{guest_comment_id}}\",\n  \"elements\": [{\"element_type\": \"POINT\", \"geometry\": {\"x\": 0.25, \"y\": 0.4}}]\n}"
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/annotations/"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"guest_annotation_id\", pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Edit Guest Comment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Updated guest review feedback\"\n}"
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/{{guest_comment_id}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "List Guest Comment Revisions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/{{guest_comment_id}}/revisions/"
+          },
+          "response": []
+        },
+        {
+          "name": "Edit Guest Annotation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"elements\": [{\"element_type\": \"POINT\", \"geometry\": {\"x\": 0.35, \"y\": 0.5}}]\n}"
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{guest_annotation_id}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "List Guest Annotation Revisions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{guest_annotation_id}}/revisions/"
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Guest Attachment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"guest_attachment_content_id\", pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select a PNG, JPEG, GIF, WebP, PDF, WAV, MP3, DOCX, XLSX, PPTX, or RTF"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/{{guest_comment_id}}/attachments/",
+            "description": "Uploads to the guest own comment and enters quarantine scanning"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Guest Attachment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/attachments/{{guest_attachment_content_id}}/",
+            "description": "Soft-deletes an attachment owned by the current guest session and its generated previews."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Guest Annotation",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/annotations/{{guest_annotation_id}}/"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Guest Comment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/media-versions/{{media_version_id}}/comments/{{guest_comment_id}}/"
+          },
+          "description": "Run after attachment tests because deleting the comment hides its attachments.",
+          "response": []
+        },
+        {
+          "name": "List Guest Invites and Access",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const invite = pm.response.json().find(item => item.id === pm.collectionVariables.get(\"guest_invite_id\"));",
+                  "if (invite && invite.accesses.length) pm.collectionVariables.set(\"guest_access_id\", invite.accesses[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/guest-invites/",
+            "description": "Manager-only invite and exchanged-access lifecycle view"
+          },
+          "response": []
+        },
+        {
+          "name": "Rotate Guest Access Key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"guest_access_key\", pm.response.json().access_key);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Guest-Access-Key",
+                "value": "{{guest_access_key}}"
+              }
+            ],
+            "url": "{{base_url}}/api/guest/reviews/{{project_id}}/access-key/rotate/",
+            "description": "Replaces the guest key immediately and captures the one-time replacement"
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Guest Access",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/guest-access/{{guest_access_id}}/",
+            "description": "Revokes one exchanged guest session; run lifecycle deletes last"
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Guest Invite",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/guest-invites/{{guest_invite_id}}/",
+            "description": "Revokes the invite and all still-active access issued from it"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
