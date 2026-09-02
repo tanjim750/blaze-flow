@@ -4,3 +4,5 @@ psycopg[binary]==3.2.9
 Pillow==11.3.0
 django-storages[s3]==1.14.6
 boto3==1.42.97
+google-auth==2.50.0
+requests==2.32.3

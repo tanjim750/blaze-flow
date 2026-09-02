@@ -23,6 +23,7 @@ In Postman, select **Import**, choose `Postman_Collection.json`, and open the **
 | `password` | `a-secure-test-password` | Account password |
 | `new_password` | `a-new-secure-test-password` | Replacement used by password reset/change |
 | `reset_token` | Manual from reset email | One-time token consumed by reset confirmation |
+| `google_id_token` | Manual, from a real Google Sign-In flow | Consumed by Google Sign-In; only needed if `GOOGLE_OAUTH_CLIENT_ID` is configured |
 | `verification_token` | Manual from verification email | One-time token consumed by verification confirmation |
 | `invitation_email` | `member@example.com` | Invited member account |
 | `csrf_token` | Automatic | Captured after Login |
@@ -167,7 +168,59 @@ Tasks can be workspace-level (no project) or scoped to a project. Access to a pr
 5. Run **Tasks → Create Project Task** with `project_id` set to an existing project. A member without access to that project (no `ALL` access, no grant) gets `403` from **Task Detail** even if they can read workspace-level tasks; granting **Projects → Grant Project Access** for that project immediately allows it.
 6. Run **Tasks → Delete Task** as the owner. The Member role does not have `task.delete`, so a member attempting the same request gets `403`; both `task.create` and `task.update` are available to Member, so members can create and edit tasks (including their attachments and assignees).
 
-## 8. Test mentions and notifications
+## 8. Test project files and folders
+
+Unlike tasks, every folder and file belongs to exactly one project, so access always follows that project's permissions (`project_file.read`/`create`/`update`/`delete`), never a workspace-level check.
+
+1. As the owner, run **Project Files → Create Root Folder**. `project_folder_id` is captured.
+2. Run **Create Root Folder** again with the same name; it fails with `400` because root-level names must be unique within the project. Change the name and create a second root folder, then create a folder with `parent_folder_id` set to the first one's id — nested folder names only need to be unique among siblings, so the same name is allowed under a different parent.
+3. Run **List Project Folders**. Folders come back as a flat list with `parent_folder_id`; assemble the visible tree client-side, the same way review-comment threads work.
+4. Run **Rename Folder**. A folder's parent cannot be changed later; there is intentionally no "move folder" operation in this milestone.
+5. Run **Upload Project File** with a supported file selected in the `file` form-data row, leaving `folder_id` disabled to place it at the project root. Run it again with `folder_id` enabled to place a file inside the folder from step 1.
+6. Run **List Project Files**, then **Delete Project File**. Deletion removes only the project/file association; the underlying `File` record is not destroyed.
+7. Run **Delete Folder** last. It cascades: descendant folders and the project files inside them are all soft-deleted in one request, but their underlying `File` records are retained the same way.
+
+## 9. Test workspace lifecycle and profile
+
+1. As the owner, run **Workspaces → Workspace Detail** and **Update Workspace** (rename it or change its timezone; the slug is fixed at creation and cannot be changed here).
+2. Run **Get Workspace Profile**. It returns empty fields and does not create anything until you run **Update Workspace Profile**, which creates the row on first write and updates it in place afterward.
+3. As `member@example.com`, confirm **Workspace Detail** and **Get Workspace Profile** both return `200` (Member has `workspace.read`) while **Update Workspace** and **Update Workspace Profile** both return `403` (only Owner has `workspace.manage`).
+4. As the owner, run **Schedule Workspace Deletion**. The workspace moves to `PENDING_DELETION` with `deletion_scheduled_at` set roughly `WORKSPACE_DELETION_GRACE_DAYS` (default 30) days out; nothing is physically deleted. Run **Restore Workspace** to cancel it and return to `ACTIVE`.
+5. Running **Schedule Workspace Deletion** a second time while already `PENDING_DELETION`, or **Restore Workspace** while still `ACTIVE`, both return `400`.
+
+Only run step 4 at the very end of a manual test session against a workspace you are done with — every other request in this guide assumes the workspace stays `ACTIVE`.
+
+## 10. Test subscriptions and plan limits
+
+There is no payment provider wired up; "PRO" is a self-service simulation and "cancellation" only takes effect once an operator runs a command.
+
+1. As the owner, run **Subscriptions → Get My Subscription**. A freshly registered account already has a `FREE` row (provisioned at registration); `limits.max_workspaces_owned` is `1` and `limits.max_projects_per_workspace` is `3` by default.
+2. Run **Workspaces → Create Workspace** again on the same account. It fails with `400` — the owner already owns one active workspace, which is the FREE limit.
+3. Run **Subscriptions → Upgrade to PRO**. `plan` becomes `PRO` and a `current_period_end` roughly `SUBSCRIPTION_PRO_PERIOD_DAYS` (default 30) days out appears. Running it again immediately fails with `400`.
+4. Retry **Create Workspace**; it now succeeds, since PRO's limit is much higher.
+5. In the original workspace, create three projects (**Projects → Create Project**, three times); a fourth fails with `400` while still on FREE. If you already upgraded in step 3, the owner's new PRO limit covers many more, so this check only demonstrates the cap on an account still on FREE.
+6. Run **Subscriptions → Cancel Subscription**. It returns `200` with `cancel_at_period_end: true`, but `plan` is still `PRO` — nothing downgrades until the period actually ends. Run **Resume Subscription** to undo it before the next step, or leave it to observe the operator flow.
+7. To simulate the period ending, an operator would run:
+
+```bash
+docker compose exec web python manage.py process_expired_subscriptions --dry-run
+docker compose exec web python manage.py process_expired_subscriptions
+```
+
+The command only affects rows with `cancel_at_period_end=True` and `current_period_end` in the past; there is no scheduler wired up to run it automatically.
+
+## 11. Test Google sign-in
+
+This requires `GOOGLE_OAUTH_CLIENT_ID` to be set in the running server's environment and a real Google OAuth client configured in Google Cloud Console; Postman cannot generate a Google ID token itself.
+
+1. Leave `GOOGLE_OAUTH_CLIENT_ID` unset and run **Authentication → Google Sign-In**. It returns `400` with a "not configured" message and does not attempt any network call.
+2. Configure `GOOGLE_OAUTH_CLIENT_ID`, restart the server, obtain a real ID token for that same client ID from a frontend Google Sign-In button (or Google's OAuth Playground configured with your client), set `google_id_token`, and run **Google Sign-In** again. `csrf_token` is captured the same way as **Login**.
+3. A first sign-in with a verified Google email and no matching account creates a new user (email already marked verified, password unusable, a `FREE` subscription provisioned, same as **Register**), links a Google `OAuthIdentity`, and starts a session.
+4. Running **Google Sign-In** again with the same Google account reuses the same identity and user — no duplicate account is created, and the identity's cached name/picture are refreshed from the new token's claims.
+5. If a Google account's email matches an already-registered Blaze Flow account (created through **Register**) and the Google email is verified, signing in links that Google identity to the existing account instead of creating a second one. If the Google email is not verified, linking is refused rather than silently trusting it.
+6. A suspended account cannot sign in through Google either way (matched by an existing linked identity, or matched by email) — both return `400`.
+
+## 12. Test mentions and notifications
 
 After the member has accepted the invitation and the owner has granted project access:
 
@@ -199,7 +252,7 @@ docker compose exec web python manage.py requeue_dead_letters --limit 100
 
 The Compose stack also starts a continuous `worker` service. Use `docker compose logs -f worker` to inspect processing output.
 
-## 9. Correct payload formats
+## 13. Correct payload formats
 
 Roles use `permission_keys` and dot-separated application keys:
 
@@ -227,7 +280,7 @@ Explicit project access targets a Workspace Membership:
 
 The membership must be active, belong to the same workspace, and use `SELECTED` scope. `ALL` memberships do not need grants.
 
-## 10. Expected responses
+## 14. Expected responses
 
 | Code | Meaning |
 | --- | --- |
@@ -246,7 +299,11 @@ The membership must be active, belong to the same workspace, and use `SELECTED` 
 - Project and role deletion are lifecycle archival operations.
 - Member removal uses `PATCH {"status":"REMOVED"}`.
 - Client team deletion is lifecycle archival; client team member removal uses `DELETE`, not `PATCH`.
-- Task attachment uploads use the same signature-verified type allowlist as review attachments; general document formats (`.docx`, `.xlsx`, and similar) are not yet accepted. Task attachment scanning is queued through the same worker as review/media attachments; deletion removes only the association, not the underlying `File`.
+- Task attachment uploads use the same signature-verified type allowlist as review attachments, now including DOCX/XLSX/PPTX (verified by the internal ZIP part, not just the outer `PK` signature) and RTF. Legacy binary Office formats (`.doc`, `.xls`, `.ppt`, the pre-2007 OLE compound-file formats) and formats with no reliable magic bytes (`.csv`, `.txt`) are still not accepted — the latter would require trusting the file extension alone, which conflicts with this project's signature-verification model. Task attachment scanning is queued through the same worker as review/media attachments; deletion removes only the association, not the underlying `File`.
+- Project files share the same signature-verified type allowlist as task attachments (same legacy-format/no-magic-bytes limitation). A folder's parent cannot be changed after creation, and a file's folder cannot be changed after upload — reorganizing means deleting and re-adding.
+- A workspace's slug is fixed at creation. `PENDING_DELETION` only schedules and can be restored; there is no operator command yet that physically purges a workspace once its grace period elapses (every child table uses `on_delete=DO_NOTHING`, so cascading physical deletion needs dedicated work across every domain, not just the Workspace endpoint).
+- There is no payment provider integration. "Upgrade to PRO" is a self-service simulation with no charge; "Cancel Subscription" only schedules `cancel_at_period_end` and requires the `process_expired_subscriptions` operator command to actually downgrade once the period ends — nothing runs that command on a schedule automatically. Only `max_workspaces_owned` and `max_projects_per_workspace` are enforced; other resource limits (members, storage, media) are not yet capped by plan.
+- Google Sign-In verifies an ID token issued by an existing Google OAuth client; this project does not implement the browser-side "Sign in with Google" button/redirect flow that produces that token — a frontend or a tool like Google's OAuth Playground must obtain it. No other OAuth providers are implemented.
 - Client team invite email delivery is not implemented; the raw token is returned once. Accepting an invite only creates client-team membership, never a direct workspace membership.
 - Access-grant detail supports `DELETE` only.
 - The built-in EICAR-aware scanner is a development contract; configure the ClamAV adapter or another maintained scanner in production.

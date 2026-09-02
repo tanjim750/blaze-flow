@@ -1,5 +1,7 @@
 import uuid
+from datetime import timedelta
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -11,6 +13,8 @@ from app.models import (
     WorkspaceMembership,
     WorkspaceMembershipStatus,
     WorkspacePrincipalType,
+    WorkspaceProfile,
+    WorkspaceStatus,
     WorkflowStage,
 )
 from app.permissions import MEMBER_PERMISSION_KEYS, OWNER_PERMISSION_KEYS
@@ -18,6 +22,10 @@ from app.permissions import MEMBER_PERMISSION_KEYS, OWNER_PERMISSION_KEYS
 
 class WorkspaceSlugConflict(Exception):
     """Raised when concurrent workspace creation claims the requested slug."""
+
+
+class WorkspaceLifecycleError(Exception):
+    pass
 
 
 @transaction.atomic
@@ -106,3 +114,51 @@ def create_workspace(*, owner, name, slug, workspace_timezone):
     membership.full_clean()
     membership.save()
     return workspace, membership
+
+
+def update_workspace(*, workspace, **fields):
+    for field, value in fields.items():
+        setattr(workspace, field, value)
+    workspace.updated_at = timezone.now()
+    workspace.full_clean()
+    workspace.save()
+    return workspace
+
+
+def schedule_workspace_deletion(*, workspace):
+    if workspace.status == WorkspaceStatus.PENDING_DELETION:
+        raise WorkspaceLifecycleError('This workspace is already scheduled for deletion.')
+    now = timezone.now()
+    workspace.status = WorkspaceStatus.PENDING_DELETION
+    workspace.deletion_scheduled_at = now + timedelta(days=settings.WORKSPACE_DELETION_GRACE_DAYS)
+    workspace.updated_at = now
+    workspace.save(update_fields=['status', 'deletion_scheduled_at', 'updated_at'])
+    return workspace
+
+
+def restore_workspace(*, workspace):
+    if workspace.status != WorkspaceStatus.PENDING_DELETION:
+        raise WorkspaceLifecycleError('This workspace is not scheduled for deletion.')
+    workspace.status = WorkspaceStatus.ACTIVE
+    workspace.deletion_scheduled_at = None
+    workspace.updated_at = timezone.now()
+    workspace.save(update_fields=['status', 'deletion_scheduled_at', 'updated_at'])
+    return workspace
+
+
+def get_or_create_workspace_profile(*, workspace):
+    profile, _ = WorkspaceProfile.objects.get_or_create(
+        workspace=workspace,
+        defaults={'id': uuid.uuid4(), 'created_at': timezone.now(), 'updated_at': timezone.now()},
+    )
+    return profile
+
+
+def update_workspace_profile(*, workspace, **fields):
+    profile = get_or_create_workspace_profile(workspace=workspace)
+    for field, value in fields.items():
+        setattr(profile, field, value)
+    profile.updated_at = timezone.now()
+    profile.full_clean()
+    profile.save()
+    return profile

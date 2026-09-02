@@ -87,6 +87,10 @@ class LoginSerializer(serializers.Serializer):
         return attrs
 
 
+class GoogleLoginSerializer(serializers.Serializer):
+    id_token = serializers.CharField(trim_whitespace=False)
+
+
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)
 

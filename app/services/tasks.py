@@ -93,9 +93,9 @@ def _validate_task_attachment(upload):
         raise TaskError('The attachment exceeds the configured size limit.')
     header = upload.read(32)
     upload.seek(0)
-    detected = detect_attachment_type(header) or detect_media_type(header)
+    detected = detect_attachment_type(header, upload) or detect_media_type(header)
     declared = (getattr(upload, 'content_type', '') or '').lower()
-    aliases = {'image/jpg': 'image/jpeg', 'audio/x-wav': 'audio/wav'}
+    aliases = {'image/jpg': 'image/jpeg', 'audio/x-wav': 'audio/wav', 'text/rtf': 'application/rtf'}
     if detected is None or aliases.get(declared, declared) != detected:
         raise TaskError('The attachment signature does not match a supported type.')
     return detected

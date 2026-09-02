@@ -86,6 +86,16 @@
       "type": "string"
     },
     {
+      "key": "project_folder_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "project_file_id",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "media_version_id",
       "value": "",
       "type": "string"
@@ -176,6 +186,11 @@
       "type": "string"
     },
     {
+      "key": "google_id_token",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "verification_token",
       "value": "",
       "type": "string"
@@ -260,6 +275,43 @@
             },
             "url": "{{base_url}}/api/auth/login/",
             "description": "Start a Django session and capture its CSRF token"
+          },
+          "response": []
+        },
+        {
+          "name": "Google Sign-In",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.csrf_token) pm.collectionVariables.set(\"csrf_token\", data.csrf_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_token\": \"{{google_id_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/auth/google/",
+            "description": "Exchange a Google-issued ID token for a Blaze Flow session. Requires GOOGLE_OAUTH_CLIENT_ID to be set server-side and a real id_token from a Google Sign-In flow for the same client ID (Postman cannot generate one itself); returns 400 with a clear message if the server has no client ID configured. A verified Google email auto-links to a matching registered account; an unverified one is rejected rather than silently linked. A first-time verified sign-in creates the account, marks its email verified, and provisions a FREE subscription, the same as Register"
           },
           "response": []
         },
@@ -425,6 +477,69 @@
       ]
     },
     {
+      "name": "Subscriptions",
+      "item": [
+        {
+          "name": "Get My Subscription",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/subscriptions/me/",
+            "description": "Read the current user's subscription and effective plan limits. Accounts registered before this feature existed have no stored row; a FREE default is returned without creating one"
+          },
+          "response": []
+        },
+        {
+          "name": "Upgrade to PRO",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/subscriptions/upgrade/",
+            "description": "Simulate upgrading to the PRO plan (no external payment provider is integrated). Sets a period of SUBSCRIPTION_PRO_PERIOD_DAYS (default 30). Fails with 400 if already on an active, non-cancelling PRO subscription"
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/subscriptions/cancel/",
+            "description": "Schedule cancellation at the end of the current period (cancel_at_period_end). The plan stays PRO until an operator runs the process_expired_subscriptions command after the period ends. Fails with 400 if there is no active PRO subscription or one is already scheduled to cancel"
+          },
+          "response": []
+        },
+        {
+          "name": "Resume Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/subscriptions/resume/",
+            "description": "Undo a pending cancellation while still within the current period. Fails with 400 if nothing is scheduled to cancel"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Workspaces",
       "item": [
         {
@@ -476,7 +591,119 @@
               }
             },
             "url": "{{base_url}}/api/workspaces/",
-            "description": "Create a workspace, system roles, workflow stages, and owner membership. Requires a verified email; returns 403 otherwise. Complete the Email Verification request first if the current session's account is unverified."
+            "description": "Create a workspace, system roles, workflow stages, and owner membership. Requires a verified email; returns 403 otherwise. Complete the Email Verification request first if the current session's account is unverified. Also fails with 400 once the account already owns its plan's max_workspaces_owned limit (FREE defaults to 1); run Subscriptions -> Upgrade to PRO first if you need more than one test workspace on the same account."
+          },
+          "response": []
+        },
+        {
+          "name": "Workspace Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/",
+            "description": "Read a single workspace"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Workspace",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Renamed Creative Agency\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/",
+            "description": "Update name and/or timezone. Requires workspace.manage. The slug cannot be changed"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Workspace Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/profile/",
+            "description": "Read the optional business profile. Returns empty fields until a manager sets any of them; no row is created by reading"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Workspace Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_name\": \"Postman Creative Agency LLC\",\n  \"email\": \"hello@postman-agency.example.com\",\n  \"city\": \"Austin\",\n  \"country_code\": \"US\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/profile/",
+            "description": "Create or update the business profile. Requires workspace.manage"
+          },
+          "response": []
+        },
+        {
+          "name": "Schedule Workspace Deletion",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/",
+            "description": "Move the workspace to PENDING_DELETION with a grace period (WORKSPACE_DELETION_GRACE_DAYS, default 30). This does not physically delete anything and can be undone with Restore Workspace. Run this only at the end of a manual test pass"
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Workspace",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/restore/",
+            "description": "Cancel a pending deletion and return the workspace to ACTIVE. Fails with 400 if the workspace is not currently PENDING_DELETION"
           },
           "response": []
         }
@@ -1176,7 +1403,7 @@
               }
             },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/",
-            "description": "Create a project"
+            "description": "Create a project. Fails with 400 once the workspace already holds its owner's plan max_projects_per_workspace limit (FREE defaults to 3, counting non-archived projects); the owner can run Subscriptions -> Upgrade to PRO to raise it"
           },
           "response": []
         },
@@ -1307,6 +1534,179 @@
             ],
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/access/{{grant_id}}/",
             "description": "Revoke an explicit project grant"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Project Files",
+      "item": [
+        {
+          "name": "List Project Folders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/folders/",
+            "description": "List active folders as a flat list; assemble the tree client-side using parent_folder_id"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Root Folder",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"project_folder_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"References\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/folders/",
+            "description": "Create a root-level folder. Omit parent_folder_id for root; set it to nest inside an existing folder. Names must be unique among siblings"
+          },
+          "response": []
+        },
+        {
+          "name": "Rename Folder",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Client References\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/folders/{{project_folder_id}}/",
+            "description": "Rename a folder. A folder cannot be moved to a different parent through this endpoint"
+          },
+          "response": []
+        },
+        {
+          "name": "List Project Files",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/files/",
+            "description": "List active project files (root and foldered)"
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Project File",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"project_file_id\", data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "folder_id",
+                  "value": "{{project_folder_id}}",
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/files/",
+            "description": "Upload a supporting project file. Enable the folder_id field to place it inside a folder instead of the project root. Accepts the same signature-verified types as review/task attachments (PNG, JPEG, GIF, WebP, PDF, WAV, MP3, MP4, QuickTime, WebM, DOCX, XLSX, PPTX, RTF) and is queued for malware scanning the same way"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Project File",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/files/{{project_file_id}}/",
+            "description": "Remove the file from the project. The underlying File record is retained"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Folder",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRFToken",
+                "value": "{{csrf_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{base_url}}/api/workspaces/{{workspace_id}}/projects/{{project_id}}/folders/{{project_folder_id}}/",
+            "description": "Delete a folder. Cascades to descendant folders and the files inside them; underlying File records are retained. Run this last"
           },
           "response": []
         }
@@ -1561,7 +1961,7 @@
               ]
             },
             "url": "{{base_url}}/api/workspaces/{{workspace_id}}/tasks/{{task_id}}/attachments/",
-            "description": "Upload a supporting file. Accepts the same signature-verified types as review attachments (PNG, JPEG, GIF, WebP, PDF, WAV, MP3) plus MP4/QuickTime/WebM. The file is queued for malware scanning like other uploads"
+            "description": "Upload a supporting file. Accepts the same signature-verified types as review attachments (PNG, JPEG, GIF, WebP, PDF, WAV, MP3) plus MP4/QuickTime/WebM and DOCX/XLSX/PPTX/RTF. The file is queued for malware scanning like other uploads"
           },
           "response": []
         },
@@ -1894,7 +2294,7 @@
                   "key": "file",
                   "type": "file",
                   "src": [],
-                  "description": "Select a PNG, JPEG, GIF, WebP, PDF, WAV, or MP3"
+                  "description": "Select a PNG, JPEG, GIF, WebP, PDF, WAV, MP3, DOCX, XLSX, PPTX, or RTF"
                 }
               ]
             },
@@ -2706,7 +3106,7 @@
                   "key": "file",
                   "type": "file",
                   "src": [],
-                  "description": "Select a PNG, JPEG, GIF, WebP, PDF, WAV, or MP3"
+                  "description": "Select a PNG, JPEG, GIF, WebP, PDF, WAV, MP3, DOCX, XLSX, PPTX, or RTF"
                 }
               ]
             },

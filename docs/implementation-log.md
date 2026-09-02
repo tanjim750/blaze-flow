@@ -4,6 +4,134 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-02 — Google OAuth sign-in
+
+### Delivered
+
+- Added `POST /api/auth/google/`, verifying a client-supplied Google-issued ID token against Google's public keys via the `google-auth` library (new dependency, pinned, along with `requests` as its HTTP transport) and starting a normal Django session on success, identical in shape to the existing `Login` response (`UserSerializer` data plus `csrf_token`).
+- Token verification lives in its own function (`verify_google_id_token`) so tests replace it with a double instead of calling Google's network endpoint, the same "swap the integration point" pattern already used for `FILE_SECURITY_SCANNER`.
+- A returning Google user (same token `sub`) reuses their existing linked `OAuthIdentity` and refreshes its cached name/picture from the latest claims. A first-time verified Google email either links to a matching existing registered account (per the documented auto-link rule) or creates a new account — pre-verified email, `set_unusable_password()`-equivalent (`create_user(password=None)`, which Django resolves to an unusable password automatically), and a provisioned `FREE` subscription, mirroring `Register` exactly.
+- An unverified Google email is refused rather than silently linked or used to create an account, and a suspended/non-active account cannot sign in through either the existing-identity or email-matching path.
+- `GOOGLE_OAUTH_CLIENT_ID` is optional; leaving it unset returns a clear `400` instead of a crash or a confusing network error, consistent with how this project treats other optional external integrations (storage, malware scanning).
+- Added Postman documentation (Postman itself cannot generate a Google ID token) and a manual testing-guide section; added test coverage for first-time sign-in, returning-user identity reuse, existing-account auto-linking, refusing an unverified email, suspended-account rejection through both lookup paths, invalid-token handling, and the not-configured response.
+
+### Decisions and boundaries
+
+- Only Google is implemented; the `OAuthProvider` enum and `OAuthIdentity` schema already generalize to more providers, but no other provider integration was added speculatively.
+- This backend only verifies an ID token handed to it; it does not implement the browser-side "Sign in with Google" redirect/button flow that produces that token. A frontend (or a manual tool like Google's OAuth Playground) is responsible for that half.
+- Linking is one-directional and identity-based: matching is by Google's stable `sub` claim first, then by verified email for first-time linking. An unverified Google email never links or creates an account, closing the spoofing risk of trusting a client-asserted email.
+
+### Verification
+
+- The complete SQLite suite passes (207 tests), Django system checks pass, migration drift is clean (no schema change — `OAuthIdentity`/`OAuthProvider` already existed), the Postman collection parses, and project Python sources compile.
+- PostgreSQL execution remains unavailable in the local host environment because of the previously recorded Docker storage issue. Google token verification itself was exercised only through a mocked `verify_google_id_token`; no live Google OAuth client was available to test the real network path end-to-end.
+
+### Next recommended milestone
+
+This closes every item on the standing follow-up list for the documented backend MVP (`docs/implementations/domain_and_features.md`). Remaining gaps are intentionally out of that scope: a frontend, and the README's broader product vision (Calendar, Billing, Reports, AI Assistant) have no backend work started.
+
+## 2026-09-02 — Office document attachment support (DOCX/XLSX/PPTX/RTF)
+
+### Delivered
+
+- Extended the single shared `detect_attachment_type` used by review comment, task, and project-file attachments to recognize DOCX/XLSX/PPTX and RTF, closing the follow-up noted in the last several milestone entries. All three upload paths picked up the change from one place; none of their call sites needed new detection logic, only an extra `upload` argument.
+- OOXML detection does not trust the outer ZIP signature alone (`PK\x03\x04` is shared by every `.docx`/`.xlsx`/`.pptx`/plain `.zip`). It opens the upload as a zip archive and checks for the internal part that only exists in the corresponding Office package (`word/document.xml`, `xl/workbook.xml`, `ppt/presentation.xml`), so a renamed generic ZIP or a `.xlsx` byte-for-byte file re-declared as `.docx` is still rejected.
+- RTF is detected from its `{\rtf1` text header, matching the existing shallow-header-check style used for the other already-supported formats.
+- Added unit coverage for the new detector (valid DOCX/XLSX/PPTX, a corrupt zip, a generic zip without any Office marker, RTF, and the "signature alone is not enough without the upload stream" case) plus an end-to-end API test uploading a real in-memory DOCX through the Task Attachment endpoint and one confirming a mislabeled plain ZIP is still rejected.
+
+### Decisions and boundaries
+
+- Legacy binary Office formats (`.doc`, `.xls`, `.ppt` — the pre-2007 OLE compound-file format) remain unsupported. Distinguishing them from their compound-file header alone would need an OLE directory parser (a new third-party dependency, e.g. `olefile`); given how rare these legacy formats are next to modern OOXML, that trade-off wasn't taken in this pass.
+- Formats with no reliable magic bytes (`.csv`, `.txt`, and similar plain-text formats) remain unsupported by design, not oversight — accepting them would mean trusting the file extension or declared MIME type alone, which conflicts with the signature-verification guarantee this codebase has maintained for every other attachment type.
+- The fix lives in one place (`app/services/review_assets.py`'s `detect_attachment_type`) rather than being duplicated across the three call sites, so future format additions only need to change one function.
+
+### Verification
+
+- The complete SQLite suite passes (198 tests), Django system checks pass, migration drift is clean (no schema or model change), the Postman collection parses, and project Python sources compile.
+- PostgreSQL execution remains unavailable in the local host environment because of the previously recorded Docker storage issue.
+
+### Next recommended milestone
+
+Google OAuth for Identity & Authentication — the last item on the standing follow-up list for the documented backend MVP.
+
+## 2026-09-02 — User Subscription and plan-limit enforcement
+
+### Delivered
+
+- Added `app/services/plan_config.py` exposing `get_plan_limit(plan, key)` as the single accessor for environment-configured plan resource limits (`PLAN_LIMITS` in settings, covering `max_workspaces_owned` and `max_projects_per_workspace` for `FREE`/`PRO`), per the domain documentation's explicit call for a Plan Config abstraction that isolates business logic from where limits are physically stored.
+- Registration now provisions a `FREE`/`ACTIVE` `UserSubscription` row automatically. Accounts that existed before this change have no row; every read falls back to an equivalent unsaved FREE default rather than creating one, so `GET` stays side-effect-free.
+- Added self-service `GET /api/subscriptions/me/`, `POST /api/subscriptions/upgrade/` (simulated PRO upgrade — no external payment provider), `POST /api/subscriptions/cancel/` (schedules `cancel_at_period_end`, does not downgrade immediately), and `POST /api/subscriptions/resume/` (undoes a pending cancellation).
+- Added a `process_expired_subscriptions` operator command (dry-run capable) that downgrades PRO subscriptions to FREE once a scheduled cancellation's `current_period_end` has passed — there is no payment-provider webhook driving this, matching the same "explicit operator action" pattern already used for retention cleanup and dead-letter requeue.
+- Wired real enforcement into the two endpoints the domain calls out explicitly: workspace creation now rejects once the creating user already owns `max_workspaces_owned` active workspaces for their plan, and project creation now rejects once the workspace already holds `max_projects_per_workspace` non-archived projects for its primary owner's plan.
+- Added Postman requests and a manual testing-guide section; added test coverage for provisioning, the upgrade/cancel/resume state machine, the expiry-processing command (including dry-run), and both enforcement points end-to-end through the API.
+
+### Decisions and boundaries
+
+- No payment provider is integrated. "Upgrade" and "cancel" are self-service state changes on the `UserSubscription` row itself; the existing `provider`/`provider_subscription_id` fields remain available for a future real integration without a schema change.
+- Only `max_workspaces_owned` and `max_projects_per_workspace` are enforced in this milestone. Member-count and storage limits mentioned in the domain documentation are not yet capped; enforcement was scoped to the two limits with a clear, already-existing creation endpoint to attach to, rather than adding new enforcement surfaces speculatively.
+- A workspace's effective plan is resolved from its primary owner's subscription via the existing `is_primary_owner` membership flag, never from `Workspace.created_by_user` — ownership can outlive the original creator per the domain model, and the plan must follow ownership.
+- Cancellation is deliberately not immediate. The subscription stays on its current plan until `process_expired_subscriptions` runs after the period ends, mirroring how a real billing provider's webhook-driven downgrade would behave and keeping the same "durable state change happens out of the request/response cycle" discipline used for email delivery and retention cleanup elsewhere in this codebase.
+
+### Verification
+
+- The complete SQLite suite passes (189 tests), Django system checks pass, migration drift is clean (no schema change was needed — `UserSubscription` already existed in full), the Postman collection parses, and project Python sources compile.
+- PostgreSQL execution remains unavailable in the local host environment because of the previously recorded Docker storage issue.
+
+### Next recommended milestone
+
+Google OAuth for Identity & Authentication, then broaden the review/task/project-file attachment signature allowlist to general office-document formats.
+
+## 2026-09-02 — Workspace detail, business profile, and deletion lifecycle
+
+### Delivered
+
+- Added `GET/PATCH /workspaces/{id}/` for reading a single workspace and updating `name`/`timezone` (the slug remains fixed after creation), gated on the existing `workspace.read`/`workspace.manage` permissions.
+- Added `GET/PATCH /workspaces/{id}/profile/` over the existing `WorkspaceProfile` schema. Reading never creates a row (a blank in-memory default is serialized instead); the first write creates it, later writes update the same row.
+- Added reversible workspace deletion scheduling: `DELETE /workspaces/{id}/` moves an `ACTIVE` workspace to `PENDING_DELETION` with `deletion_scheduled_at` set `WORKSPACE_DELETION_GRACE_DAYS` (default 30, environment-configurable) in the future; `POST /workspaces/{id}/restore/` cancels it back to `ACTIVE`. Both reject the no-op case (already pending, or not pending).
+- Added Postman requests and a manual testing-guide section; added test coverage for read/update authorization, invalid-timezone/empty-update rejection, the GET-has-no-side-effect guarantee on the profile endpoint, and the schedule/restore/double-schedule/premature-restore state machine.
+
+### Decisions and boundaries
+
+- Only scheduling and restoring `PENDING_DELETION` are implemented. There is no operator command that physically purges a workspace once its grace period elapses — every table in this schema uses `on_delete=DO_NOTHING`, so real cascading deletion would need dedicated work across every domain (Projects, Media, Tasks, Client Teams, and so on), not just this endpoint. Building that purge path is explicitly deferred.
+- `SUSPENDED` is not exposed as a self-service transition from any API in this milestone; the codebase has no platform-admin role concept beyond Django's own `is_staff`/`is_superuser`; suspension stays an internal/administrative state for now.
+- Workspace update intentionally excludes `status` and `slug`; lifecycle transitions only happen through the dedicated schedule/restore endpoints, and slug stability was chosen over renaming to avoid breaking bookmarked routing.
+
+### Verification
+
+- The complete SQLite suite passes (171 tests), Django system checks pass, migration drift is clean (no schema change was needed — both `Workspace.deletion_scheduled_at` and `WorkspaceProfile` already existed), the Postman collection parses, and project Python sources compile.
+- PostgreSQL execution remains unavailable in the local host environment because of the previously recorded Docker storage issue.
+
+### Next recommended milestone
+
+User Subscription and a Plan Config service, then Google OAuth for Identity & Authentication, then broaden the review/task/project-file attachment signature allowlist to general office-document formats.
+
+## 2026-09-02 — Project Files and Folders
+
+### Delivered
+
+- Added `project_file.read`, `project_file.create`, `project_file.update`, and `project_file.delete` permissions to the registry and system roles, with migration `0019` backfilling existing workspaces (`read`/`create`/`update` to Owner and Member, `delete` to Owner only — the same split used for Project and Task permissions).
+- Closed a schema gap the domain documentation had explicitly flagged: added the missing partial unique constraint (migration `0018`) so two root-level folders (`parent_folder IS NULL`) in the same project can no longer collide on name, matching the sibling-uniqueness constraint that already existed for non-root folders.
+- Added nested Project Folder CRUD (create/list/rename) plus cascading soft delete: deleting a folder soft-deletes every descendant folder and every Project File inside that subtree in one transaction, while leaving the underlying `File` records untouched.
+- Added Project File list/upload/delete, reusing the same signature-verification, checksum, and `File`/`FileSecurityScan`/outbox scanning pipeline as Task Attachments and review attachments.
+- Added a dedicated `MAX_PROJECT_FILE_BYTES` environment setting (default 25 MB).
+- Added Postman requests/variables and a manual testing-guide section; added test coverage for root/sibling name-collision rejection, cascading delete, folder rename, upload/spoof handling, and project-access authorization boundaries.
+
+### Decisions and boundaries
+
+- A folder's `parent_folder` and a file's `folder` are fixed at creation. Neither can be changed afterward through the API; reorganizing means deleting and re-adding, keeping the mutation surface minimal (mirrors the same call made for `Task.project_id` in the previous milestone).
+- Every folder/file endpoint is project-scoped only; there is no workspace-level variant, unlike Tasks, because `ProjectFolder`/`ProjectFile` both require a non-nullable `project` foreign key in the schema.
+- Deleting a folder cascades logically (soft delete) to its descendants and their files but never deletes the underlying centralized `File` rows, matching the domain documentation's explicit "File Reuse" rule and the same choice already made for Task Attachment removal.
+- File uploads reuse the Task Attachment signature allowlist (PNG, JPEG, GIF, WebP, PDF, WAV, MP3, plus MP4/QuickTime/WebM) rather than inventing a broader one; general office-document formats remain a known follow-up shared with Task Attachments.
+
+### Verification
+
+- The complete SQLite suite passes (159 tests), Django system checks pass, migration drift is clean, the Postman collection parses, and project Python sources compile.
+- PostgreSQL execution remains unavailable in the local host environment because of the previously recorded Docker storage issue.
+
+### Next recommended milestone
+
+Broaden the review/task/project-file attachment signature allowlist to general office-document formats, then User Subscription and plan-based resource limits (the last MVP domain with zero API surface), followed by Google OAuth for Identity & Authentication.
+
 ## 2026-09-02 — Tasks, assignees, and task attachments
 
 ### Delivered

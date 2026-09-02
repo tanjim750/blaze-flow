@@ -15,6 +15,11 @@ The currently supported behavior is:
 - hashed-token workspace invitations, membership role/status management, and client-team permission inheritance
 - client-team administration (profile CRUD, archival, member add/remove/reactivation, workspace-access grants, and EMAIL/LINK invites)
 - workspace- and project-scoped tasks (CRUD, assignees, and signature-verified attachments over the existing review/media scanning pipeline)
+- project files and folders (nested folders with cascading soft delete, root/sibling name uniqueness, and signature-verified file uploads over the same scanning pipeline)
+- workspace detail/update, an optional business profile, and reversible PENDING_DELETION lifecycle scheduling with a configurable grace period
+- FREE/PRO user subscriptions with a centralized Plan Config service (`app/services/plan_config.py`), self-service PRO upgrade/cancel/resume with no external payment provider, an operator command to process scheduled cancellations, and enforced `max_workspaces_owned`/`max_projects_per_workspace` plan limits
+- Google Sign-In (`POST /api/auth/google/`) that verifies a client-supplied Google ID token, auto-links a verified Google email to a matching existing account or creates a new one (unusable password, pre-verified email, FREE subscription), and reuses the same linked identity on return visits
+- DOCX/XLSX/PPTX/RTF are now accepted alongside the existing image/PDF/audio/video attachment types, verified by their internal ZIP part rather than the shared outer ZIP signature
 - additive workspace/project permission evaluation with `ALL` and `SELECTED` project scope
 - authorized project listing, creation, detail, update, and archival
 - protected system roles, custom role administration, and explicit project-access grants

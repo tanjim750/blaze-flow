@@ -1,6 +1,6 @@
 from .auth import (
     EmailVerificationConfirmSerializer, EmailVerificationRequestSerializer,
-    LoginSerializer, PasswordChangeSerializer, PasswordResetConfirmSerializer,
+    GoogleLoginSerializer, LoginSerializer, PasswordChangeSerializer, PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer, RegistrationSerializer, UserSerializer,
 )
 from .annotations import AnnotationRevisionSerializer, AnnotationSerializer, AnnotationWriteSerializer
@@ -28,6 +28,7 @@ from .access import (
     WorkspaceMembershipUpdateSerializer,
 )
 from .base import MessageSerializer
+from .subscriptions import SubscriptionSerializer
 from .comments import (
     ReviewCommentCreateSerializer,
     ReviewCommentEditSerializer,
@@ -47,6 +48,13 @@ from .media import (
 from .notifications import NotificationPreferenceSerializer, NotificationSerializer
 from .review_assets import ReviewAttachmentSerializer, ReviewAttachmentUploadSerializer
 from .projects import ProjectCreateSerializer, ProjectSerializer, ProjectUpdateSerializer
+from .project_files import (
+    ProjectFileSerializer,
+    ProjectFileUploadSerializer,
+    ProjectFolderCreateSerializer,
+    ProjectFolderSerializer,
+    ProjectFolderUpdateSerializer,
+)
 from .tasks import (
     TaskAssigneeCreateSerializer,
     TaskAssigneeSerializer,
@@ -57,12 +65,13 @@ from .tasks import (
     TaskUpdateSerializer,
 )
 from .workspaces import (
-    WorkspaceCreateSerializer, WorkspaceRetentionPolicyUpdateSerializer,
-    WorkspaceSerializer,
+    WorkspaceCreateSerializer, WorkspaceProfileSerializer, WorkspaceProfileUpdateSerializer,
+    WorkspaceRetentionPolicyUpdateSerializer, WorkspaceSerializer, WorkspaceUpdateSerializer,
 )
 
 __all__ = [
     'LoginSerializer',
+    'GoogleLoginSerializer',
     'EmailVerificationConfirmSerializer',
     'EmailVerificationRequestSerializer',
     'PasswordChangeSerializer',
@@ -103,7 +112,13 @@ __all__ = [
     'RoleUpdateSerializer',
     'ResourceAccessCreateSerializer',
     'ResourceAccessSerializer',
+    'SubscriptionSerializer',
     'ProjectCreateSerializer',
+    'ProjectFileSerializer',
+    'ProjectFileUploadSerializer',
+    'ProjectFolderCreateSerializer',
+    'ProjectFolderSerializer',
+    'ProjectFolderUpdateSerializer',
     'ProjectSerializer',
     'ProjectUpdateSerializer',
     'TaskAssigneeCreateSerializer',
@@ -115,7 +130,10 @@ __all__ = [
     'TaskUpdateSerializer',
     'UserSerializer',
     'WorkspaceCreateSerializer',
+    'WorkspaceProfileSerializer',
+    'WorkspaceProfileUpdateSerializer',
     'WorkspaceRetentionPolicyUpdateSerializer',
+    'WorkspaceUpdateSerializer',
     'WorkspaceInviteAcceptSerializer',
     'WorkspaceInviteCreateSerializer',
     'WorkspaceInviteSerializer',

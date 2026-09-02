@@ -2,6 +2,7 @@ from app.permissions import OWNER_PERMISSION_KEYS
 
 from .invitations import InvitationError, accept_invitation, create_invitation
 from .audit import record_user_audit
+from .google_oauth import GoogleOAuthError, authenticate_with_google
 from .annotations import AnnotationError, create_annotation, delete_annotation, update_annotation
 from .client_teams import (
     ClientTeamError,
@@ -40,8 +41,30 @@ from .notifications import (
 from .outbox import process_outbox_events, requeue_dead_letter_events
 from .review_assets import ReviewAttachmentError, delete_review_attachment, upload_review_attachment
 from .projects import archive_project, create_project, update_project
+from .project_files import (
+    ProjectFileError,
+    create_project_folder,
+    delete_project_file,
+    delete_project_folder,
+    rename_project_folder,
+    upload_project_file,
+)
 from .resource_access import ResourceAccessError, grant_project_access
+from .plan_config import PlanConfigError, get_plan_limit
 from .roles import RoleError, archive_role, create_role, update_role
+from .subscriptions import (
+    SubscriptionError,
+    cancel_subscription,
+    enforce_project_creation_limit,
+    enforce_workspace_creation_limit,
+    get_current_subscription,
+    get_effective_plan,
+    get_effective_subscription,
+    process_expired_subscriptions,
+    provision_free_subscription,
+    resume_subscription,
+    upgrade_to_pro,
+)
 from .tasks import (
     TaskError,
     add_task_assignee,
@@ -52,7 +75,16 @@ from .tasks import (
     update_task,
     upload_task_attachment,
 )
-from .workspaces import WorkspaceSlugConflict, create_workspace
+from .workspaces import (
+    WorkspaceLifecycleError,
+    WorkspaceSlugConflict,
+    create_workspace,
+    get_or_create_workspace_profile,
+    restore_workspace,
+    schedule_workspace_deletion,
+    update_workspace,
+    update_workspace_profile,
+)
 from .workflow import WorkflowTransitionError, transition_media_version
 
 __all__ = [
@@ -67,7 +99,12 @@ __all__ = [
     'RoleError',
     'ReviewCommentError',
     'ReviewAttachmentError',
+    'GoogleOAuthError',
+    'PlanConfigError',
+    'ProjectFileError',
+    'SubscriptionError',
     'TaskError',
+    'WorkspaceLifecycleError',
     'WorkspaceSlugConflict',
     'WorkflowTransitionError',
     'accept_client_team_invite',
@@ -77,40 +114,62 @@ __all__ = [
     'archive_client_team',
     'archive_project',
     'archive_role',
+    'authenticate_with_google',
+    'cancel_subscription',
     'create_invitation',
     'create_annotation',
     'create_client_team',
     'create_client_team_invite',
     'create_project',
+    'create_project_folder',
     'create_review_comment',
     'create_role',
     'create_task',
     'create_workspace',
     'deliver_notification_email',
+    'enforce_project_creation_limit',
+    'enforce_workspace_creation_limit',
     'grant_client_team_workspace_access',
     'grant_project_access',
+    'get_current_subscription',
+    'get_effective_plan',
+    'get_effective_subscription',
     'get_notification_preference',
+    'get_or_create_workspace_profile',
+    'get_plan_limit',
     'mark_all_notifications_read',
     'mark_notification_read',
     'delete_review_comment_tree',
     'delete_annotation',
+    'delete_project_file',
+    'delete_project_folder',
     'delete_review_attachment',
     'delete_task',
     'delete_task_attachment',
     'edit_review_comment',
+    'process_expired_subscriptions',
+    'provision_free_subscription',
     'record_user_audit',
     'process_outbox_events',
     'remove_client_team_member',
     'remove_task_assignee',
+    'rename_project_folder',
     'requeue_dead_letter_events',
+    'restore_workspace',
+    'resume_subscription',
     'revoke_client_team_invite',
     'request_media_revision',
+    'schedule_workspace_deletion',
     'set_review_comment_resolution',
     'update_client_team',
     'update_role',
     'update_notification_preference',
     'update_task',
+    'update_workspace',
+    'update_workspace_profile',
+    'upgrade_to_pro',
     'upload_media_version',
+    'upload_project_file',
     'upload_review_attachment',
     'upload_task_attachment',
     'update_annotation',

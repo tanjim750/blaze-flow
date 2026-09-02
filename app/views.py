@@ -17,6 +17,7 @@ from .pagination import paginated_response
 from .serializers import (
     EmailVerificationConfirmSerializer,
     EmailVerificationRequestSerializer,
+    GoogleLoginSerializer,
     LoginSerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
@@ -48,6 +49,7 @@ from .serializers import (
     ReviewAttachmentUploadSerializer,
     RevisionRequestSerializer,
     StageHistorySerializer,
+    SubscriptionSerializer,
     TaskAssigneeCreateSerializer,
     TaskAssigneeSerializer,
     TaskAttachmentSerializer,
@@ -58,6 +60,11 @@ from .serializers import (
     WorkflowStageSerializer,
     WorkflowTransitionSerializer,
     ProjectCreateSerializer,
+    ProjectFileSerializer,
+    ProjectFileUploadSerializer,
+    ProjectFolderCreateSerializer,
+    ProjectFolderSerializer,
+    ProjectFolderUpdateSerializer,
     ProjectSerializer,
     ProjectUpdateSerializer,
     ResourceAccessCreateSerializer,
@@ -68,6 +75,8 @@ from .serializers import (
     RoleUpdateSerializer,
     UserSerializer,
     WorkspaceCreateSerializer,
+    WorkspaceProfileSerializer,
+    WorkspaceProfileUpdateSerializer,
     WorkspaceRetentionPolicyUpdateSerializer,
     WorkspaceInviteAcceptSerializer,
     WorkspaceInviteCreateSerializer,
@@ -75,6 +84,7 @@ from .serializers import (
     WorkspaceMembershipSerializer,
     WorkspaceMembershipUpdateSerializer,
     WorkspaceSerializer,
+    WorkspaceUpdateSerializer,
 )
 from .services.passwords import (
     PasswordError, change_password, confirm_password_reset, request_password_reset,
@@ -103,6 +113,8 @@ from .models import (
     ClientTeamStatus,
     MediaVersionStageEntry,
     Project,
+    ProjectFile,
+    ProjectFolder,
     ResourceAccess,
     ReviewComment,
     ReviewCommentContent,
@@ -120,10 +132,15 @@ from .models import (
     WorkflowStageStatusState,
     Workspace,
     WorkspaceMembership,
+    WorkspaceProfile,
 )
 from .permissions import (
     PROJECT_CREATE,
     PROJECT_DELETE,
+    PROJECT_FILE_CREATE,
+    PROJECT_FILE_DELETE,
+    PROJECT_FILE_READ,
+    PROJECT_FILE_UPDATE,
     PROJECT_READ,
     PROJECT_UPDATE,
     MEDIA_CREATE,
@@ -157,18 +174,24 @@ from .services import (
     InvitationError,
     ClientTeamError,
     ClientTeamInviteError,
+    GoogleOAuthError,
     MediaUploadError,
     ResourceAccessError,
     RoleError,
     ReviewCommentError,
     AnnotationError,
     ReviewAttachmentError,
+    ProjectFileError,
+    SubscriptionError,
     TaskError,
     WorkflowTransitionError,
+    WorkspaceLifecycleError,
     WorkspaceSlugConflict,
     accept_client_team_invite,
     accept_invitation,
     add_client_team_member,
+    authenticate_with_google,
+    cancel_subscription,
     add_task_assignee,
     archive_client_team,
     archive_project,
@@ -177,32 +200,48 @@ from .services import (
     create_client_team_invite,
     create_invitation,
     create_project,
+    create_project_folder,
     create_review_comment,
     create_annotation,
     create_role,
     create_task,
     create_workspace,
+    enforce_project_creation_limit,
+    enforce_workspace_creation_limit,
     grant_client_team_workspace_access,
     grant_project_access,
     delete_review_comment_tree,
     delete_annotation,
+    delete_project_file,
+    delete_project_folder,
     delete_review_attachment,
     delete_task,
     delete_task_attachment,
     edit_review_comment,
     mark_all_notifications_read,
     mark_notification_read,
+    get_effective_subscription,
     get_notification_preference,
+    get_plan_limit,
+    provision_free_subscription,
     record_user_audit,
     remove_client_team_member,
     remove_task_assignee,
+    rename_project_folder,
+    restore_workspace,
+    resume_subscription,
     revoke_client_team_invite,
     request_media_revision,
+    schedule_workspace_deletion,
     set_review_comment_resolution,
     update_client_team,
     update_notification_preference,
     update_annotation,
+    update_workspace,
+    update_workspace_profile,
     update_task,
+    upgrade_to_pro,
+    upload_project_file,
     upload_review_attachment,
     upload_task_attachment,
     transition_media_version,
@@ -227,6 +266,7 @@ def register(request):
     serializer = RegistrationSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     user = serializer.save()
+    provision_free_subscription(user=user)
     request_email_verification(email=user.email)
     return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
@@ -239,6 +279,23 @@ def login_user(request):
     serializer = LoginSerializer(data=request.data, context={'request': request})
     serializer.is_valid(raise_exception=True)
     user = serializer.validated_data['user']
+    login(request, user)
+    data = UserSerializer(user).data
+    data['csrf_token'] = get_token(request)
+    return Response(data)
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@throttle_classes([LoginThrottle])
+def google_login(request):
+    serializer = GoogleLoginSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        user = authenticate_with_google(id_token=serializer.validated_data['id_token'])
+    except GoogleOAuthError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     login(request, user)
     data = UserSerializer(user).data
     data['csrf_token'] = get_token(request)
@@ -327,6 +384,52 @@ def current_user(request):
     return Response(UserSerializer(request.user).data)
 
 
+def _subscription_response(subscription):
+    data = SubscriptionSerializer(subscription).data
+    data['limits'] = {
+        'max_workspaces_owned': get_plan_limit(subscription.plan, 'max_workspaces_owned'),
+        'max_projects_per_workspace': get_plan_limit(subscription.plan, 'max_projects_per_workspace'),
+    }
+    return data
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def subscription_detail(request):
+    subscription = get_effective_subscription(user=request.user)
+    return Response(_subscription_response(subscription))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def subscription_upgrade(request):
+    try:
+        subscription = upgrade_to_pro(user=request.user)
+    except SubscriptionError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(_subscription_response(subscription), status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def subscription_cancel(request):
+    try:
+        subscription = cancel_subscription(user=request.user)
+    except SubscriptionError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(_subscription_response(subscription))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def subscription_resume(request):
+    try:
+        subscription = resume_subscription(user=request.user)
+    except SubscriptionError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(_subscription_response(subscription))
+
+
 def _require_verified_email(request):
     if request.user.email_verified_at is None:
         raise PermissionDenied('Verify your email address before creating a workspace.')
@@ -347,12 +450,15 @@ def workspace_list_create(request):
     serializer = WorkspaceCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     try:
+        enforce_workspace_creation_limit(user=request.user)
         workspace, membership = create_workspace(
             owner=request.user,
             name=serializer.validated_data['name'],
             slug=serializer.validated_data['slug'],
             workspace_timezone=serializer.validated_data['timezone'],
         )
+    except SubscriptionError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     except WorkspaceSlugConflict:
         return Response(
             {'slug': ['This workspace slug is already in use.']},
@@ -370,6 +476,55 @@ def _require_workspace_permission(request, workspace, permission_key):
         permission_key=permission_key,
     ):
         raise PermissionDenied('You do not have permission to perform this action.')
+
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def workspace_detail(request, workspace_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    if request.method == 'GET':
+        _require_workspace_permission(request, workspace, WORKSPACE_READ)
+        return Response(WorkspaceSerializer(workspace).data)
+
+    _require_workspace_permission(request, workspace, WORKSPACE_MANAGE)
+    try:
+        if request.method == 'DELETE':
+            schedule_workspace_deletion(workspace=workspace)
+            return Response(WorkspaceSerializer(workspace).data)
+        serializer = WorkspaceUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        workspace = update_workspace(workspace=workspace, **serializer.validated_data)
+    except WorkspaceLifecycleError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(WorkspaceSerializer(workspace).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def workspace_restore(request, workspace_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    _require_workspace_permission(request, workspace, WORKSPACE_MANAGE)
+    try:
+        workspace = restore_workspace(workspace=workspace)
+    except WorkspaceLifecycleError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(WorkspaceSerializer(workspace).data)
+
+
+@api_view(['GET', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def workspace_profile(request, workspace_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    if request.method == 'GET':
+        _require_workspace_permission(request, workspace, WORKSPACE_READ)
+        profile = WorkspaceProfile.objects.filter(workspace=workspace).first() or WorkspaceProfile(workspace=workspace)
+        return Response(WorkspaceProfileSerializer(profile).data)
+
+    _require_workspace_permission(request, workspace, WORKSPACE_MANAGE)
+    serializer = WorkspaceProfileUpdateSerializer(data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    profile = update_workspace_profile(workspace=workspace, **serializer.validated_data)
+    return Response(WorkspaceProfileSerializer(profile).data)
 
 
 @api_view(['GET', 'POST'])
@@ -731,6 +886,10 @@ def project_list_create(request, workspace_id):
         raise PermissionDenied('You do not have permission to create projects.')
     serializer = ProjectCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
+    try:
+        enforce_project_creation_limit(workspace=workspace)
+    except SubscriptionError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     project = create_project(
         workspace=workspace,
         created_by_user=request.user,
@@ -802,6 +961,124 @@ def project_access_detail(request, workspace_id, project_id, grant_id):
     project = get_object_or_404(Project, id=project_id, workspace=workspace)
     grant = get_object_or_404(ResourceAccess, id=grant_id, project=project)
     grant.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def project_folder_list_create(request, workspace_id, project_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    project = get_object_or_404(Project, id=project_id, workspace=workspace)
+    if request.method == 'GET':
+        _require_project_permission(request, project, PROJECT_FILE_READ, 'You do not have permission to read project files.')
+        folders = ProjectFolder.objects.filter(project=project, deleted_at__isnull=True).order_by('name')
+        return Response(ProjectFolderSerializer(folders, many=True).data)
+
+    _require_project_permission(request, project, PROJECT_FILE_CREATE, 'You do not have permission to create project folders.')
+    serializer = ProjectFolderCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    parent_folder = None
+    parent_folder_id = serializer.validated_data.get('parent_folder_id')
+    if parent_folder_id is not None:
+        parent_folder = get_object_or_404(
+            ProjectFolder, id=parent_folder_id, project=project, deleted_at__isnull=True
+        )
+    creating_membership = memberships_with_permission(
+        user=request.user,
+        workspace=workspace,
+        permission_key=PROJECT_FILE_CREATE,
+    ).first()
+    try:
+        folder = create_project_folder(
+            project=project,
+            created_by_membership=creating_membership,
+            name=serializer.validated_data['name'],
+            parent_folder=parent_folder,
+        )
+    except ProjectFileError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ProjectFolderSerializer(folder).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def project_folder_detail(request, workspace_id, project_id, folder_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    project = get_object_or_404(Project, id=project_id, workspace=workspace)
+    folder = get_object_or_404(
+        ProjectFolder, id=folder_id, project=project, deleted_at__isnull=True
+    )
+    if request.method == 'GET':
+        _require_project_permission(request, project, PROJECT_FILE_READ, 'You do not have permission to read this folder.')
+        return Response(ProjectFolderSerializer(folder).data)
+
+    permission_key = PROJECT_FILE_UPDATE if request.method == 'PATCH' else PROJECT_FILE_DELETE
+    _require_project_permission(request, project, permission_key, 'You do not have permission to modify this folder.')
+    try:
+        if request.method == 'DELETE':
+            delete_project_folder(folder=folder)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = ProjectFolderUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        folder = rename_project_folder(folder=folder, name=serializer.validated_data['name'])
+    except ProjectFileError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ProjectFolderSerializer(folder).data)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def project_file_list_create(request, workspace_id, project_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    project = get_object_or_404(Project, id=project_id, workspace=workspace)
+    if request.method == 'GET':
+        _require_project_permission(request, project, PROJECT_FILE_READ, 'You do not have permission to read project files.')
+        files = ProjectFile.objects.filter(project=project, deleted_at__isnull=True).select_related('file').order_by('-created_at')
+        return Response(ProjectFileSerializer(files, many=True).data)
+
+    _require_project_permission(request, project, PROJECT_FILE_CREATE, 'You do not have permission to add project files.')
+    serializer = ProjectFileUploadSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    folder = None
+    folder_id = serializer.validated_data.get('folder_id')
+    if folder_id is not None:
+        folder = get_object_or_404(
+            ProjectFolder, id=folder_id, project=project, deleted_at__isnull=True
+        )
+    adding_membership = memberships_with_permission(
+        user=request.user,
+        workspace=workspace,
+        permission_key=PROJECT_FILE_CREATE,
+    ).first()
+    try:
+        project_file = upload_project_file(
+            project=project,
+            upload=serializer.validated_data['file'],
+            membership=adding_membership,
+            folder=folder,
+        )
+    except ProjectFileError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ProjectFileSerializer(project_file).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def project_file_detail(request, workspace_id, project_id, file_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    project = get_object_or_404(Project, id=project_id, workspace=workspace)
+    project_file = get_object_or_404(
+        ProjectFile.objects.select_related('file'), id=file_id, project=project, deleted_at__isnull=True
+    )
+    if request.method == 'GET':
+        _require_project_permission(request, project, PROJECT_FILE_READ, 'You do not have permission to read this file.')
+        return Response(ProjectFileSerializer(project_file).data)
+
+    _require_project_permission(request, project, PROJECT_FILE_DELETE, 'You do not have permission to remove this file.')
+    try:
+        delete_project_file(project_file=project_file)
+    except ProjectFileError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 

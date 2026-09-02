@@ -1,4 +1,5 @@
 import uuid
+import zipfile
 from pathlib import Path
 
 from django.conf import settings
@@ -17,7 +18,31 @@ class ReviewAttachmentError(Exception):
     pass
 
 
-def detect_attachment_type(header):
+# Internal-part markers that only exist in the corresponding OOXML package. The outer
+# ZIP signature alone (`PK\x03\x04`) is shared by every .docx/.xlsx/.pptx/.zip file, so
+# a real type decision requires looking at what is actually stored inside the archive.
+_OOXML_PART_MARKERS = (
+    ('word/document.xml', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+    ('xl/workbook.xml', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+    ('ppt/presentation.xml', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'),
+)
+
+
+def _detect_ooxml_type(upload):
+    try:
+        with zipfile.ZipFile(upload) as archive:
+            names = set(archive.namelist())
+    except zipfile.BadZipFile:
+        return None
+    finally:
+        upload.seek(0)
+    for marker, mime_type in _OOXML_PART_MARKERS:
+        if marker in names:
+            return mime_type
+    return None
+
+
+def detect_attachment_type(header, upload=None):
     media_type = detect_media_type(header)
     if media_type and media_type.startswith('image/'):
         return media_type
@@ -27,6 +52,10 @@ def detect_attachment_type(header):
         return 'audio/wav'
     if header.startswith(b'ID3') or (len(header) >= 2 and header[0] == 0xFF and header[1] & 0xE0 == 0xE0):
         return 'audio/mpeg'
+    if header.startswith(b'{\\rtf1'):
+        return 'application/rtf'
+    if upload is not None and header.startswith(b'PK\x03\x04'):
+        return _detect_ooxml_type(upload)
     return None
 
 
@@ -37,9 +66,9 @@ def validate_attachment(upload):
         raise ReviewAttachmentError('The attachment exceeds the configured size limit.')
     header = upload.read(32)
     upload.seek(0)
-    detected = detect_attachment_type(header)
+    detected = detect_attachment_type(header, upload)
     declared = (getattr(upload, 'content_type', '') or '').lower()
-    aliases = {'image/jpg': 'image/jpeg', 'audio/x-wav': 'audio/wav'}
+    aliases = {'image/jpg': 'image/jpeg', 'audio/x-wav': 'audio/wav', 'text/rtf': 'application/rtf'}
     if detected is None or aliases.get(declared, declared) != detected:
         raise ReviewAttachmentError('The attachment signature does not match a supported type.')
     return detected

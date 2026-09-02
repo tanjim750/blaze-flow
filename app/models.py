@@ -1090,7 +1090,14 @@ class ProjectFolder(models.Model):
 
     class Meta:
         db_table = 'project_folders'
-        constraints = [models.UniqueConstraint(fields=['project', 'parent_folder', 'name'], name='project_folders_project_parent_name_uniq')]
+        constraints = [
+            models.UniqueConstraint(fields=['project', 'parent_folder', 'name'], name='project_folders_project_parent_name_uniq'),
+            models.UniqueConstraint(
+                fields=['project', 'name'],
+                condition=models.Q(parent_folder__isnull=True),
+                name='project_folders_root_name_uniq',
+            ),
+        ]
         indexes = [
             models.Index(fields=['project']),
             models.Index(fields=['parent_folder']),

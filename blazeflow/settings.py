@@ -148,6 +148,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 MAX_MEDIA_UPLOAD_BYTES = int(os.environ.get('MAX_MEDIA_UPLOAD_BYTES', 1024 * 1024 * 1024))
 MAX_REVIEW_ATTACHMENT_BYTES = int(os.environ.get('MAX_REVIEW_ATTACHMENT_BYTES', 25 * 1024 * 1024))
 MAX_TASK_ATTACHMENT_BYTES = int(os.environ.get('MAX_TASK_ATTACHMENT_BYTES', 25 * 1024 * 1024))
+MAX_PROJECT_FILE_BYTES = int(os.environ.get('MAX_PROJECT_FILE_BYTES', 25 * 1024 * 1024))
 REVIEW_PAGE_SIZE = int(os.environ.get('REVIEW_PAGE_SIZE', '50'))
 REVIEW_MAX_PAGE_SIZE = int(os.environ.get('REVIEW_MAX_PAGE_SIZE', '200'))
 PREVIEW_MAX_PIXELS = int(os.environ.get('PREVIEW_MAX_PIXELS', '40000000'))
@@ -159,6 +160,24 @@ PREVIEW_DECODER_TIMEOUT_SECONDS = int(os.environ.get('PREVIEW_DECODER_TIMEOUT_SE
 PREVIEW_DECODER_MAX_INPUT_BYTES = int(os.environ.get('PREVIEW_DECODER_MAX_INPUT_BYTES', str(MAX_REVIEW_ATTACHMENT_BYTES)))
 PREVIEW_DECODER_MAX_OUTPUT_BYTES = int(os.environ.get('PREVIEW_DECODER_MAX_OUTPUT_BYTES', str(20 * 1024 * 1024)))
 PREVIEW_AUDIO_MAX_SECONDS = int(os.environ.get('PREVIEW_AUDIO_MAX_SECONDS', '600'))
+
+# Subscription plan resource limits. Kept in environment configuration rather than the
+# database for the MVP; consumers must read these through app.services.plan_config.get_plan_limit
+# rather than this settings module directly, so a future move to database-managed plans
+# does not require touching call sites.
+PLAN_LIMITS = {
+    'FREE': {
+        'max_workspaces_owned': int(os.environ.get('PLAN_FREE_MAX_WORKSPACES_OWNED', '1')),
+        'max_projects_per_workspace': int(os.environ.get('PLAN_FREE_MAX_PROJECTS_PER_WORKSPACE', '3')),
+    },
+    'PRO': {
+        'max_workspaces_owned': int(os.environ.get('PLAN_PRO_MAX_WORKSPACES_OWNED', '20')),
+        'max_projects_per_workspace': int(os.environ.get('PLAN_PRO_MAX_PROJECTS_PER_WORKSPACE', '200')),
+    },
+}
+SUBSCRIPTION_PRO_PERIOD_DAYS = int(os.environ.get('SUBSCRIPTION_PRO_PERIOD_DAYS', '30'))
+if SUBSCRIPTION_PRO_PERIOD_DAYS < 1:
+    raise ImproperlyConfigured('SUBSCRIPTION_PRO_PERIOD_DAYS must be at least 1.')
 
 STORAGE_DRIVER = os.environ.get('STORAGE_DRIVER', 'local').lower()
 if STORAGE_DRIVER not in {'local', 's3'}:
@@ -201,6 +220,7 @@ if STORAGE_DRIVER == 's3':
     }
 
 APP_BASE_URL = os.environ.get('APP_BASE_URL', 'http://localhost:8000').rstrip('/')
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
 EMAIL_BACKEND = os.environ.get(
     'EMAIL_BACKEND',
     'django.core.mail.backends.console.EmailBackend',
@@ -239,6 +259,7 @@ CLAMAV_TIMEOUT_SECONDS = float(os.environ.get('CLAMAV_TIMEOUT_SECONDS', '30'))
 CLAMAV_MAX_STREAM_BYTES = int(os.environ.get('CLAMAV_MAX_STREAM_BYTES', str(MAX_REVIEW_ATTACHMENT_BYTES)))
 OPERATIONS_STALE_MINUTES = int(os.environ.get('OPERATIONS_STALE_MINUTES', '15'))
 REVIEW_FILE_RETENTION_DAYS = int(os.environ.get('REVIEW_FILE_RETENTION_DAYS', '30'))
+WORKSPACE_DELETION_GRACE_DAYS = int(os.environ.get('WORKSPACE_DELETION_GRACE_DAYS', '30'))
 if OUTBOX_MAX_ATTEMPTS < 1:
     raise ImproperlyConfigured('OUTBOX_MAX_ATTEMPTS must be at least 1.')
 if OUTBOX_RETRY_BASE_SECONDS < 1:
@@ -249,6 +270,8 @@ if OUTBOX_RETRY_MAX_SECONDS < OUTBOX_RETRY_BASE_SECONDS:
     )
 if REVIEW_FILE_RETENTION_DAYS < 1:
     raise ImproperlyConfigured('REVIEW_FILE_RETENTION_DAYS must be at least 1.')
+if WORKSPACE_DELETION_GRACE_DAYS < 1:
+    raise ImproperlyConfigured('WORKSPACE_DELETION_GRACE_DAYS must be at least 1.')
 if REVIEW_PAGE_SIZE < 1 or REVIEW_MAX_PAGE_SIZE < REVIEW_PAGE_SIZE:
     raise ImproperlyConfigured('Review pagination sizes must be positive and max must cover default.')
 if PREVIEW_MAX_PIXELS < 1 or PREVIEW_MAX_WIDTH < 1 or PREVIEW_MAX_HEIGHT < 1:

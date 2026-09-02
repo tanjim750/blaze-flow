@@ -1,5 +1,7 @@
+import io
 import shutil
 import tempfile
+import zipfile
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -338,6 +340,46 @@ class TaskAttachmentApiTests(WorkspaceAccessSetupMixin, TestCase):
         )
         self.assertEqual(removed.status_code, 204)
         self.assertFalse(TaskAttachment.objects.filter(id=attachment_id).exists())
+
+    def test_docx_attachment_is_accepted(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as archive:
+            archive.writestr('word/document.xml', '<xml/>')
+        upload = SimpleUploadedFile(
+            'brief.docx',
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        )
+
+        response = self.client.post(
+            reverse('api-task-attachments', args=[self.workspace.id, self.task_id]),
+            {'file': upload},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.json()['file']['mime_type'],
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        )
+
+    def test_plain_zip_mislabeled_as_docx_is_rejected(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as archive:
+            archive.writestr('readme.txt', 'hello')
+        upload = SimpleUploadedFile(
+            'fake.docx',
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        )
+
+        response = self.client.post(
+            reverse('api-task-attachments', args=[self.workspace.id, self.task_id]),
+            {'file': upload},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
 
     def test_spoofed_attachment_is_rejected(self):
         upload = SimpleUploadedFile('fake.png', b'not-really-a-png', content_type='image/png')
