@@ -887,6 +887,13 @@ def project_list_create(request, workspace_id):
         raise PermissionDenied('You do not have permission to create projects.')
     serializer = ProjectCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
+    project_data = serializer.validated_data.copy()
+    client_team_id = project_data.pop('client_team_id', None)
+    client_team = None
+    if client_team_id:
+        client_team = get_object_or_404(
+            ClientTeam, id=client_team_id, workspace=workspace, status=ClientTeamStatus.ACTIVE,
+        )
     try:
         enforce_project_creation_limit(workspace=workspace)
     except SubscriptionError as exc:
@@ -895,7 +902,8 @@ def project_list_create(request, workspace_id):
         workspace=workspace,
         created_by_user=request.user,
         authorizing_membership=authorizing_membership,
-        **serializer.validated_data,
+        client_team=client_team,
+        **project_data,
     )
     return Response(ProjectSerializer(project).data, status=status.HTTP_201_CREATED)
 
@@ -1081,6 +1089,25 @@ def project_file_detail(request, workspace_id, project_id, file_id):
     except ProjectFileError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def project_file_download(request, workspace_id, project_id, file_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    project = get_object_or_404(Project, id=project_id, workspace=workspace)
+    project_file = get_object_or_404(
+        ProjectFile.objects.select_related('file'), id=file_id, project=project, deleted_at__isnull=True
+    )
+    _require_project_permission(request, project, PROJECT_FILE_READ, 'You do not have permission to download this file.')
+    if project_file.file.status != 'READY':
+        return Response({'detail': 'This file is still being scanned or was rejected.'}, status=status.HTTP_409_CONFLICT)
+    if not default_storage.exists(project_file.file.object_key):
+        raise Http404('The stored file was not found.')
+    return FileResponse(
+        default_storage.open(project_file.file.object_key, 'rb'), as_attachment=True,
+        filename=project_file.file.original_name, content_type=project_file.file.mime_type,
+    )
 
 
 def _require_task_permission(request, workspace, task, permission_key):

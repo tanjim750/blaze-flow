@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { signIn } from "@/lib/auth-client";
+import { GoogleSignIn } from "@/components/google-sign-in";
 
 export default function SignIn() {
   const router = useRouter();
@@ -35,6 +36,9 @@ export default function SignIn() {
         <h2>Sign in to your workspace</h2>
         <p className="muted">Use your work email to continue.</p>
       </header>
+
+      <GoogleSignIn />
+      <div className="auth-divider"><span>or use email</span></div>
 
       <label>
         Email address

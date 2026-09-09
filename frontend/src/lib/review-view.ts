@@ -1,23 +1,13 @@
-import { listMediaVersions, listProjects, listReviewComments, listWorkspaces } from "./api";
-import type { MediaVersion, ReviewComment } from "./api";
-import { timecode } from "./timecode";
+import { listAnnotations, listGuestInvites, listMediaVersions, listProjects, listReviewComments, listWorkflowStages, listWorkspaces } from "./api";
+import type { Annotation, GuestInvite, MediaVersion } from "./api";
+import { nestNotes, type ReviewNote } from "./review-notes";
+import { selectWorkspace } from "./workspace";
 
 /** One selectable cut in the version rail. */
 export type VersionOption = { id: string; label: string; title: string; stage: string; selected: boolean };
 
-/** A comment as the review sidebar renders it, flattened from the API's parent/child rows. */
-export type ReviewNote = {
-  id: string;
-  author: string;
-  initials: string;
-  /** `mm:ss` when the note is pinned to a timecode, else null for a general note. */
-  timecode: string | null;
-  startMs: number | null;
-  text: string;
-  age: string;
-  resolved: boolean;
-  replies: ReviewNote[];
-};
+export type { ReviewNote } from "./review-notes";
+export { nestNotes } from "./review-notes";
 
 export type ReviewView = {
   workspaceId: string | null;
@@ -29,62 +19,15 @@ export type ReviewView = {
   /** Streams the H.264 proxy through the Next rewrite; null when there is no media. */
   previewSrc: string | null;
   canComment: boolean;
+  stages: { id: string; name: string; isApproval: boolean }[];
+  annotations: Annotation[];
+  /** Client review links for this project, empty when the viewer cannot manage them. */
+  guestInvites: GuestInvite[];
+  /** False when the invite list came back 403 — read access without share rights. */
+  canManageGuests: boolean;
   /** Non-null when the API could not supply the page and demo content is shown instead. */
   notice: string | null;
 };
-
-function relativeAge(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
-  const minutes = Math.floor((Date.now() - then) / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function initialsFrom(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "?";
-  const first = parts[0].charAt(0);
-  const last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : "";
-  return `${first}${last}`.toUpperCase();
-}
-
-function toNote(comment: ReviewComment): ReviewNote {
-  const name = comment.author?.name?.trim() || comment.author?.email || "Unknown";
-  return {
-    id: comment.id,
-    author: name,
-    initials: initialsFrom(name),
-    timecode: comment.start_time_ms === null ? null : timecode(comment.start_time_ms),
-    startMs: comment.start_time_ms,
-    text: comment.text ?? "",
-    age: relativeAge(comment.created_at),
-    resolved: comment.resolved,
-    replies: [],
-  };
-}
-
-/**
- * Nests replies under their parent. The API returns one flat list ordered by
- * `created_at`, and a reply's `parent_comment_id` always refers to a comment on the same
- * media version, so a single pass is enough. A reply whose parent is missing (resolved
- * away or deleted) is promoted to a top-level note rather than dropped.
- */
-export function nestNotes(comments: ReviewComment[]): ReviewNote[] {
-  const notes = new Map<string, ReviewNote>();
-  for (const comment of comments) notes.set(comment.id, toNote(comment));
-  const roots: ReviewNote[] = [];
-  for (const comment of comments) {
-    const note = notes.get(comment.id)!;
-    const parent = comment.parent_comment_id ? notes.get(comment.parent_comment_id) : undefined;
-    if (parent) parent.replies.push(note);
-    else roots.push(note);
-  }
-  return roots;
-}
 
 const describe = (status: number, detail: string) =>
   status === 0
@@ -103,7 +46,7 @@ const describe = (status: number, detail: string) =>
 export async function loadReviewView(params: { projectId?: string; versionId?: string }): Promise<ReviewView> {
   const workspaces = await listWorkspaces();
   if (!workspaces.ok) return demoView(describe(workspaces.error.status, workspaces.error.detail));
-  const workspace = workspaces.data[0];
+  const workspace = await selectWorkspace(workspaces.data);
   if (!workspace) return demoView("This account has no workspace yet, so demo content is shown.");
 
   const projects = await listProjects(workspace.id);
@@ -121,7 +64,12 @@ export async function loadReviewView(params: { projectId?: string; versionId?: s
     // The list arrives oldest-first; the newest cut is the one worth opening on.
     const ordered = [...media.data].reverse();
     const version = ordered.find((item) => item.id === params.versionId) ?? ordered[0];
-    const comments = await listReviewComments(workspace.id, project.id, version.id);
+    const [comments, stages, annotations, guestInvites] = await Promise.all([
+      listReviewComments(workspace.id, project.id, version.id),
+      listWorkflowStages(workspace.id),
+      listAnnotations(workspace.id, project.id, version.id),
+      listGuestInvites(workspace.id, project.id),
+    ]);
 
     return {
       workspaceId: workspace.id,
@@ -139,6 +87,14 @@ export async function loadReviewView(params: { projectId?: string; versionId?: s
       previewSrc: `/api/workspaces/${workspace.id}/projects/${project.id}/media-versions/${version.id}/preview/`,
       // A 403 on the comment list means read access without comment rights.
       canComment: comments.ok,
+      stages: stages.ok ? stages.data.map((stage) => ({
+        id: stage.id, name: stage.name,
+        isApproval: /approv|done|complete|deliver/i.test(`${stage.name} ${stage.slug}`),
+      })) : [],
+      annotations: annotations.ok ? annotations.data : [],
+      // A 403 here means review access without permission to share the project out.
+      guestInvites: guestInvites.ok ? guestInvites.data : [],
+      canManageGuests: guestInvites.ok,
       notice: comments.ok ? null : `Comments unavailable: ${comments.error.detail}`,
     };
   }
@@ -150,6 +106,10 @@ export async function loadReviewView(params: { projectId?: string; versionId?: s
 const EMPTY_VIEW: ReviewView = {
   workspaceId: null, projectId: null, projectName: "", version: null, versions: [],
   notes: [], previewSrc: null, canComment: false, notice: null,
+  stages: [],
+  annotations: [],
+  guestInvites: [],
+  canManageGuests: false,
 };
 
 /** Content from the Stitch reference, used only when the API cannot answer. */
@@ -165,12 +125,16 @@ function demoView(notice: string): ReviewView {
       { id: "d1", label: "V2", title: "Hero film V2", stage: "Approved", selected: false },
     ],
     notes: [
-      { id: "d1", author: "Aaron Jackson", initials: "AJ", timecode: "00:08", startMs: 8000, text: "Push the cyan and magenta contrast slightly on the wet street.", age: "12m ago", resolved: false, replies: [] },
-      { id: "d2", author: "Sarah Lin", initials: "SL", timecode: "00:19", startMs: 19000, text: "The pacing feels right with the revised music edit.", age: "40m ago", resolved: false, replies: [] },
-      { id: "d3", author: "Elena Rostova", initials: "ER", timecode: "00:26", startMs: 26000, text: "Check the low-end hit when the title lands.", age: "1h ago", resolved: true, replies: [] },
+      { id: "d1", author: "Aaron Jackson", authorId: null, guestSessionId: null, initials: "AJ", timecode: "00:08", startMs: 8000, text: "Push the cyan and magenta contrast slightly on the wet street.", age: "12m ago", resolved: false, reactions: [], attachments: [], replies: [] },
+      { id: "d2", author: "Sarah Lin", authorId: null, guestSessionId: null, initials: "SL", timecode: "00:19", startMs: 19000, text: "The pacing feels right with the revised music edit.", age: "40m ago", resolved: false, reactions: [], attachments: [], replies: [] },
+      { id: "d3", author: "Elena Rostova", authorId: null, guestSessionId: null, initials: "ER", timecode: "00:26", startMs: 26000, text: "Check the low-end hit when the title lands.", age: "1h ago", resolved: true, reactions: [], attachments: [], replies: [] },
     ],
     previewSrc: null,
     canComment: false,
+    stages: [],
+    annotations: [],
+    guestInvites: [],
+    canManageGuests: false,
     notice,
   };
 }

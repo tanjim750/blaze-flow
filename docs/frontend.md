@@ -6,14 +6,24 @@ loader, or backend coupling changes. Material work belongs in `docs/implementati
 
 ## Current state
 
-The frontend is an authenticated vertical slice, not a finished product. Eight routes exist
+The frontend is an authenticated vertical slice, not a finished product. Eighteen routes exist
 and each is wired to real API data:
 
 | Route | Kind | Purpose |
 | --- | --- | --- |
 | `/` | Server component | Workspace dashboard: stats, tasks, review queue, projects, deadlines, activity |
 | `/projects` | Server component + client browser | Client → campaign → asset tree, asset grid/list, and a workflow status board |
-| `/review` | Server component + client workspace | Proxy video player with timecoded comments, replies, and resolution |
+| `/review` | Server component + client workspace | Proxy player, comments, point annotations, reactions, attachments, workflow, and sharing |
+| `/guest-review` | Client component | Token-based external review without a workspace account |
+| `/onboarding` | Server component + client form | Verified-email gate and first-workspace creation |
+| `/settings` | Server component + client forms | Account identity, workspace profile, password, and verification controls |
+| `/tasks` | Server component + client board | Search/filter tasks, create work, and complete or reopen tasks |
+| `/team` | Server component + client admin | Members, roles, invitations, and selected-project access grants |
+| `/files` | Server component + client browser | Cross-project file inventory and project-file upload |
+| `/deliverables` | Server component | Download-enabled media versions across the workspace |
+| `/clients` | Server component + client directory | Client records, contact details, assigned projects, create/edit/archive |
+| `/render-queue` | Server component | Workspace media proxy readiness and failure queue |
+| `/help` | Server component | Role-aware product workflow guide and section shortcuts |
 | `/sign-in` | Client component | Email/password session login |
 | `/sign-up` | Client component | Registration, followed by an automatic sign-in |
 | `/forgot-password` | Client component | Requests a reset email |
@@ -23,9 +33,7 @@ and each is wired to real API data:
 The last five share the split-screen shell in `src/app/(auth)/layout.tsx`. `(auth)` is a
 route group, so it adds no path segment — those pages stay at their top-level paths.
 
-Everything the sidebar and topbar link to beyond those routes (`/tasks`, `/files`,
-`/clients`, `/team`, `/render-queue`, `/deliverables`, `/settings`, `/help`) is navigation
-scaffolding pointing at routes that do not exist yet and will 404.
+Every sidebar and topbar navigation target now resolves to a real route.
 
 ## Stack
 
@@ -62,6 +70,7 @@ npm run dev          # http://localhost:3000
 | Variable | Required | Meaning |
 | --- | --- | --- |
 | `BLAZEFLOW_API_URL` | No | Django origin; defaults to `http://127.0.0.1:8000` |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | For Google sign-in | Google Web OAuth client ID; the button shows setup guidance when absent |
 
 `BLAZEFLOW_API_URL` is read in two places and both must agree: `next.config.ts` for the
 browser-facing rewrite, and `src/lib/api.ts` for server-side fetches.
@@ -78,12 +87,19 @@ the external-drive warning in `docs/DEVELOPMENT.md`.
 | `src/app/page.tsx` | Dashboard route |
 | `src/app/projects/` | Projects route: `page.tsx`, `browser.tsx` (client), `actions.ts` |
 | `src/app/review/` | Review route: `page.tsx`, `workspace.tsx` (client), `actions.ts` |
+| `src/app/onboarding/` | Verified-email gate and workspace creation form/action |
+| `src/app/settings/` | Account, workspace-profile, verification, and password forms/actions |
+| `src/app/tasks/` | Workspace task board and shared task mutation actions |
+| `src/app/team/` | Workspace membership, role, and invitation administration |
+| `src/app/files/` | Project-file inventory and multipart upload |
+| `src/app/deliverables/` | Download-authorized media handoff view |
 | `src/app/(auth)/` | Pre-session pages and their shared layout, styles, and forms |
 | `src/app/actions.ts` | `signOutAction`, the one app-wide server action |
 | `src/components/app-shell.tsx` | Sidebar, topbar, workspace tabs, and the account menu |
 | `src/components/dashboard-tasks.tsx` | Task panel with Today/Upcoming/Overdue buckets |
 | `src/lib/api.ts` | Typed server-side Django client; the only place a URL is built |
 | `src/lib/session.ts` | Resolves the current user and decides the unauthenticated path |
+| `src/lib/workspace.ts` | Validates the selected-workspace cookie against authorized workspaces |
 | `src/lib/auth-client.ts` | Browser-side client for the public auth endpoints |
 | `src/lib/errors.ts` | Turns a DRF error body into one sentence; used by both clients |
 | `src/lib/user.ts` | Name and initials helpers, importable from client components |
@@ -114,6 +130,11 @@ Writes go through server actions (`actions.ts`) rather than browser `fetch`, so 
 run with the session cookie already available and finish with `revalidatePath` instead of
 manual cache invalidation.
 
+Media upload is the deliberate exception: the browser streams multipart data through the
+same-origin `/api` rewrite with the CSRF cookie header. This avoids buffering uploads through
+Next Server Actions, whose default request cap is 1 MiB, while Django remains responsible
+for file-size, signature, permission, and subscription checks.
+
 The exception is the pre-session auth forms, which post from the browser through
 `src/lib/auth-client.ts`. Login has to: only a response the browser itself handles can
 accept Django's `Set-Cookie`. The other public auth endpoints follow it for consistency and
@@ -121,6 +142,12 @@ inline validation feedback. Both clients render failures through the same
 `describeErrorBody`, so a DRF field error such as `{"password": ["This password is too
 short."]}` reads as "Password: This password is too short." wherever it surfaced rather than
 as raw JSON.
+
+The selected workspace is stored in an HTTP-only, same-site `blazeflow_workspace` cookie.
+Every loader and mutation resolves that id against the current authorized workspace list;
+a missing, stale, or unauthorized value safely falls back to the first available workspace.
+The sidebar selector posts a Server Action that updates the cookie and returns to the current
+route.
 
 ## How requests reach Django
 
@@ -264,6 +291,11 @@ send timing, because the backend rejects it on a reply. Resolve/reopen requires
 `REVIEW_COMMENT_MANAGE`, and `canComment` is inferred from whether the comment list
 returned successfully — a 403 there means read access without comment rights.
 
+Point annotations are normalized against the viewer bounds and stored through the annotation
+endpoint at the active player time. Existing points render over the media. Comment authors can
+upload attachments directly through the browser multipart path; files remain visibly marked as
+scanning until the API reports `READY`, when the authenticated download link becomes active.
+
 ## Backend gaps that shape the UI
 
 These are backend limitations the frontend works around. Each is a place where a schema or
@@ -271,11 +303,9 @@ endpoint change would let the UI get simpler, not just prettier.
 
 | Gap | Current workaround |
 | --- | --- |
-| No `Project.client_team` relation | Client → campaign grouping is stored in `ClientTeam.metadata.project_ids`. Creating a campaign is therefore two writes; if the second fails the project shows under "Unassigned" rather than being lost. |
 | No dashboard/summary endpoint | Dashboard derives everything from list endpoints plus a bounded media fan-out |
 | Media list serializer has no poster frame | Asset and review cards fall back to a tinted plate |
 | No comment count, duration, or resolution on the media list | Those fields are `null` and the card omits them rather than faking a number |
-| No task completion endpoint | The dashboard checkbox is session-local and does not write back |
 | Comment lists are offset-paginated via `X-Pagination-*` headers | The review page requests one page of `limit=200` and does not paginate |
 
 ## Styling
@@ -295,38 +325,22 @@ and the palette notes in that directory's `precision_dark_media_os/DESIGN.md`.
 
 ## Known limitations
 
-- No tests of any kind. `tsc --noEmit` and `npm run lint` are the only automated checks.
-- Eight navigation targets 404 (listed under Current state).
-- **A new account lands on demo content.** Sign-up works, but the account owns no
-  workspace, so every loader's `workspaces[0]` is undefined and the dashboard falls back to
-  demo content behind a notice. There is no create-workspace flow yet, which makes this the
-  most visible gap in the product.
-- Inert controls that render but do nothing: "+ Upload Asset", "Client Review Link", the
-  Format/Status/sort filter dropdowns, per-card menus, "Approve" on a review, and "Continue
-  with Google". The Google button needs a client id and the GIS handshake; the API half
-  (`POST /api/auth/google/`) already exists.
-- No authenticated account management — no password change, no profile edit, no
-  verification resend from inside the app. `/settings` in the account menu 404s.
-- No workspace switcher — every loader takes `workspaces[0]`. An account with more than one
-  workspace can only ever see the first.
-- Annotations, reactions, attachments, guest review access, notifications management, and
-  workflow transitions are all supported by the API and absent from the UI.
-- `PRO` in the sidebar and the render-engine status block are static decoration, not real
-  subscription or worker state.
-- The dashboard task checkbox does not persist.
+- The frontend suite currently has two focused unit/component tests; end-to-end browser coverage
+  is still absent.
+- No shell navigation targets 404.
+- Inert controls that render but do nothing: the Format/Status/sort filter dropdowns and per-card menus.
+- Account identity fields are read-only because the backend exposes no user-profile update
+  endpoint. Workspace business-profile fields can be edited at `/settings`.
+- Annotations support points, rectangles, ellipses, arrows, freehand paths, and text. Authors can
+  edit color and resize bounded shapes; managers can delete.
+- The notification popover supports list, individual/mark-all read, review routing, and email
+  mention preferences. Operations health is available only to workspace managers, matching the API.
+- `PRO` in the sidebar remains static decoration; operations health is live.
 
 ## Next steps
 
 In rough order of value:
 
-1. A create-workspace flow, including the verified-email gate. Registration currently ends
-   on a demo-content dashboard, which is the worst first impression the app can give.
-2. An authenticated account area at `/settings`: password change, profile, and verification
-   resend. The endpoints exist and the account menu already links there.
-3. Asset upload from the Projects page, which is the largest missing product action.
-4. A real `Project.client_team` foreign key, replacing the `metadata.project_ids` workaround
-   and its two-write campaign creation.
-5. Workflow transitions and approval from the review page.
-6. Google sign-in: a `NEXT_PUBLIC_` client id and the GIS handshake against the existing
-   `POST /api/auth/google/`.
-7. A component test setup, so the view-model derivations get covered.
+1. Add browser-level end-to-end coverage for the authenticated review and client flows.
+2. Add direct drag handles for moving/resizing every annotation geometry.
+3. Add render retry/cancellation once the backend exposes worker-control endpoints.

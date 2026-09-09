@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from app.models import MediaVersion, MediaVersionStageEntry, PriorityLevel, WorkflowStageStatus
+from app.models import FileVariant, MediaVersion, MediaVersionStageEntry, PriorityLevel, WorkflowStageStatus
 
 
 class MediaUploadSerializer(serializers.Serializer):
@@ -15,12 +15,13 @@ class MediaUploadSerializer(serializers.Serializer):
 class MediaVersionSerializer(serializers.ModelSerializer):
     file = serializers.SerializerMethodField()
     current_stage = serializers.SerializerMethodField()
+    preview_status = serializers.SerializerMethodField()
 
     class Meta:
         model = MediaVersion
         fields = (
             'id', 'project_id', 'version_number', 'title', 'note', 'priority',
-            'allow_download', 'status', 'file', 'current_stage', 'created_at',
+            'allow_download', 'status', 'file', 'current_stage', 'preview_status', 'created_at',
         )
 
     def get_file(self, media):
@@ -43,6 +44,9 @@ class MediaVersionSerializer(serializers.ModelSerializer):
             'name': entry.workflow_stage.name,
             'slug': entry.workflow_stage.slug,
         }
+
+    def get_preview_status(self, media):
+        return FileVariant.objects.filter(file=media.original_file, deleted_at__isnull=True).order_by('-created_at').values_list('status', flat=True).first() or 'PENDING'
 
 
 def media_stage_entries(media):

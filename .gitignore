@@ -37,3 +37,6 @@ media/
 # macOS metadata (especially important on external drives)
 .DS_Store
 ._*
+
+# Design mockups (Stitch exports) - kept local
+stitch_blaze_flow_creative_operating_system/

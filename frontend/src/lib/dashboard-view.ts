@@ -1,5 +1,6 @@
 import { listMediaVersions, listNotifications, listProjects, listTasks, listWorkspaces } from "./api";
 import type { MediaVersion, Notification, Task } from "./api";
+import { selectWorkspace } from "./workspace";
 
 export type Bucket = "Today" | "Upcoming" | "Overdue";
 export type Tone = "neutral" | "warning" | "danger" | "success" | "accent" | "blue";
@@ -134,7 +135,7 @@ export async function loadDashboardView(greetingName: string): Promise<Dashboard
 
   const workspaces = await listWorkspaces();
   if (!workspaces.ok) return demoView(greetingName, today, describe(workspaces.error.status, workspaces.error.detail));
-  const workspace = workspaces.data[0];
+  const workspace = await selectWorkspace(workspaces.data);
   if (!workspace) return demoView(greetingName, today, "This account has no workspace yet, so demo content is shown.");
 
   const [projectsResult, tasksResult, notificationsResult] = await Promise.all([

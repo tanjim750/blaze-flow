@@ -576,6 +576,7 @@ class Project(models.Model):
     id = models.UUIDField(primary_key=True)
     workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
     created_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='created_by_user_id', related_name='+')
+    client_team = models.ForeignKey(ClientTeam, on_delete=models.SET_NULL, db_column='client_team_id', null=True, blank=True, related_name='projects')
     name = models.CharField(max_length=200)
     description = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=30, choices=ProjectStatus.choices, default=ProjectStatus.DRAFT)
@@ -591,9 +592,14 @@ class Project(models.Model):
         db_table = 'projects'
         indexes = [
             models.Index(fields=['workspace']),
+            models.Index(fields=['client_team']),
             models.Index(fields=['created_by_user']),
             models.Index(fields=['status']),
         ]
+
+    def clean(self):
+        if self.client_team_id and self.workspace_id and self.client_team.workspace_id != self.workspace_id:
+            raise ValidationError({'client_team': 'The client team must belong to the project workspace.'})
 
 
 class ResourceAccess(models.Model):

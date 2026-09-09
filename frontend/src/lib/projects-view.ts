@@ -1,5 +1,6 @@
 import { listClientTeams, listFolders, listMediaVersions, listProjects, listWorkflowStages, listWorkspaces } from "./api";
-import type { MediaVersion, Project, ProjectFolder } from "./api";
+import type { MediaVersion, ProjectFolder } from "./api";
+import { selectWorkspace } from "./workspace";
 
 /** Shape the Projects browser renders, independent of where the rows came from. */
 export type AssetCard = {
@@ -119,9 +120,8 @@ function buildFolders(folders: ProjectFolder[]): FolderNode[] {
 /**
  * Loads the Projects page from the Django API.
  *
- * Client → campaign grouping comes from `ClientTeam.metadata.project_ids`, because the
- * backend has no `Project.client_team` relation. Projects not claimed by any client are
- * grouped under "Unassigned" so they stay reachable.
+ * Client → campaign grouping comes from `Project.client_team_id`. Unassigned projects stay
+ * reachable in a synthetic group.
  */
 /** Demo fallback that still honours the ?client / ?campaign selection, so the tree stays navigable. */
 function demoView(params: { clientId?: string; campaignId?: string }, notice: string): ProjectsView {
@@ -136,20 +136,17 @@ function demoView(params: { clientId?: string; campaignId?: string }, notice: st
 export async function loadProjectsView(params: { clientId?: string; campaignId?: string }): Promise<ProjectsView> {
   const workspaces = await listWorkspaces();
   if (!workspaces.ok) return demoView(params, describe(workspaces.error.status, workspaces.error.detail));
-  const workspace = workspaces.data[0];
+  const workspace = await selectWorkspace(workspaces.data);
   if (!workspace) return demoView(params, "This account has no workspace yet, so demo content is shown.");
 
   const [teams, projects] = await Promise.all([listClientTeams(workspace.id), listProjects(workspace.id)]);
   if (!teams.ok) return demoView(params, describe(teams.error.status, teams.error.detail));
   if (!projects.ok) return demoView(params, describe(projects.error.status, projects.error.detail));
 
-  const byId = new Map<string, Project>(projects.data.map((project) => [project.id, project]));
   const claimed = new Set<string>();
   const clients: ClientNode[] = teams.data.map((team) => {
-    const ids = Array.isArray(team.metadata?.project_ids) ? (team.metadata!.project_ids as string[]) : [];
-    const campaigns = ids
-      .map((id) => byId.get(id))
-      .filter((project): project is Project => Boolean(project))
+    const campaigns = projects.data
+      .filter((project) => project.client_team_id === team.id)
       .map((project) => {
         claimed.add(project.id);
         return { id: project.id, name: project.name, assetCount: 0, folders: [] as FolderNode[] };

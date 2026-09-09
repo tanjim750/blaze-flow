@@ -186,6 +186,35 @@ class ProjectAuthorizationApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(response.status_code, 201)
         return Project.objects.get(id=response.json()['id'])
 
+    def test_project_can_be_created_for_client_team_in_same_write(self):
+        now = timezone.now()
+        team = ClientTeam.objects.create(
+            id=uuid.uuid4(), workspace=self.workspace,
+            created_by_workspace_membership=self.owner_membership,
+            name='Northstar', created_at=now, updated_at=now,
+        )
+        self.client.force_authenticate(self.owner)
+
+        response = self.client.post(
+            reverse('api-projects', args=[self.workspace.id]),
+            {'name': 'Launch', 'client_team_id': str(team.id)},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['client_team_id'], str(team.id))
+        self.assertEqual(Project.objects.get(id=response.json()['id']).client_team, team)
+
+    def test_project_rejects_unknown_client_team(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(
+            reverse('api-projects', args=[self.workspace.id]),
+            {'name': 'Launch', 'client_team_id': str(uuid.uuid4())},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(Project.objects.filter(name='Launch').exists())
+
     def test_member_can_read_and_update_but_not_archive_project(self):
         self.invite_and_accept()
         project = self.create_project_as_owner()

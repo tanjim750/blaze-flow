@@ -4,6 +4,89 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-09 — Render visibility, Help, review editing, and client access
+
+### Delivered
+
+- Built `/render-queue` from real media-version data and added `preview_status` to the media API,
+  reflecting the latest proxy variant as pending, processing, ready, or failed.
+- Built `/help` with shortcuts and a concise organize → review → approve → deliver guide. All shell
+  navigation targets now resolve.
+- Added text annotations and bounded-shape geometry resizing alongside the existing drawing/color
+  controls, and added permission-backed deletion for review-comment attachments.
+- Expanded Clients with existing-account member add/remove and expiring email or reusable-link
+  invitations, including one-time token copy and revocation.
+
+### Verification
+
+- `npx tsc --noEmit`, `npm run lint`, `npm test` (2 files / 2 tests), and `npm run build` passed.
+  The production route manifest includes `/render-queue` and `/help` (21 routes including framework
+  routes).
+- Python compilation, Docker Compose configuration validation, and `git diff --check` passed.
+- Django execution remains unavailable in the host Python environment because Django is not
+  installed outside the application container.
+
+### Known limitations and next step
+
+- Render Queue is observability-only because no retry/cancel endpoint exists. Annotation geometry
+  resizing is a controlled increment rather than direct canvas handles. Add browser end-to-end tests
+  next, then worker-control endpoints and full annotation manipulation.
+
+## 2026-09-09 — Clients, file lifecycle, richer annotations, and notification controls
+
+### Delivered
+
+- Built `/clients` with real client-team data, assigned-project summaries, contact links, and
+  permission-backed create, edit, and archive actions.
+- Completed project-file actions with delete and a new authenticated download stream. Downloads
+  require project read permission, a `READY` security state, and an existing storage object.
+- Expanded review annotations to points, rectangles, ellipses, arrows, and freehand paths. Authors
+  can cycle annotation colors (persisting an annotation revision), and authorized managers can
+  delete annotations.
+- Notification items now mark themselves read and route review mentions to the referenced project
+  and media version. Settings now exposes the API's email-mention preference.
+
+### Verification
+
+- `npx tsc --noEmit`, `npm run lint`, and `npm test` passed (2 files / 2 tests).
+- Python compilation, Docker Compose configuration validation, and `git diff --check` passed.
+- The host Python environment does not include Django, so the added project-file download test was
+  not executable outside the project container during this pass.
+
+### Known limitations and next step
+
+- Annotation color editing is implemented, but direct geometry handles and text annotations remain.
+  Clients does not yet manage client-team members/invites. Build Render Queue and Help next, then
+  deepen those two surfaces.
+
+## 2026-09-09 — Review annotations, scoped access, and live shell status
+
+### Delivered
+
+- Added point placement to the signed-in review player. Coordinates are normalized to the media
+  stage, tied to the active timecode, persisted through the annotation API, and rendered on reload.
+- Added review-comment attachment upload for the signed-in comment author, processing-state labels,
+  and authenticated downloads once scanning reports the file `READY`.
+- Added selected-project access administration to Team & Roles: managers can choose a member and
+  project, create the existing resource-access grant, and revoke individual grants.
+- Replaced the shell's decorative notification dot and hardcoded render node with a real notification
+  popover, mark-all-read action, and workspace operations-health status. Non-manager health requests
+  show the API's restricted state rather than implying the worker is healthy.
+- Cleared React 19 effect-lint regressions in the guest-review/share surfaces encountered by the
+  full verification pass.
+
+### Verification
+
+- `npm test`: 2 files / 2 tests passed.
+- `npx tsc --noEmit`, `npm run lint`, and `npm run build` passed; the production build generated all
+  15 application routes.
+
+### Known limitations and next step
+
+- Annotation creation is point-only; shapes, editing, and deletion remain. Attachments can be
+  downloaded but not deleted in the signed-in UI. Notifications support mark-all-read, not per-item
+  navigation or preferences. Build `/clients` next, then deepen those interactions.
+
 ## 2026-09-09 — Frontend account-access flows
 
 ### Delivered
@@ -1010,3 +1093,75 @@ Add database constraints for principal/authorship/ownership invariants, followed
 - Focused guest-review and review-asset tests pass (22 tests).
 - The full SQLite suite passes (86 tests), Django system checks pass, migration drift is clean, and the Postman collection parses as valid JSON.
 - The Docker build installed Poppler/FFmpeg successfully but Docker Desktop failed while unpacking the resulting layer with a host `input/output error`; the same daemon storage error prevented the final PostgreSQL run. This is an environment limitation, not an application test failure.
+# 2026-09-09 — Frontend onboarding, settings, and media upload
+
+### Delivered
+
+- Added verified-email onboarding and first-workspace creation; registration now enters this flow and the dashboard redirects workspace-less accounts into it.
+- Added `/settings` with account identity, email-verification resend, workspace business-profile editing, and authenticated password change.
+- Replaced the inert Projects upload button with a multipart asset dialog supporting the backend's accepted image and video types, priority, notes, and download policy.
+- Streamed uploads through the same-origin Django rewrite with an explicit CSRF header, avoiding the 1 MiB Server Action request limit.
+
+### Known limitations
+
+- The API has no user-profile update endpoint, so account name, email, avatar, and timezone are displayed read-only.
+- Workspace selection still defaults to the first authorized workspace.
+
+### Verification
+
+- TypeScript, ESLint, the Next.js production build, and patch whitespace checks pass.
+# 2026-09-09 — Client-linked projects, review transitions, Google auth, and frontend tests
+
+### Delivered
+
+- Added nullable `Project.client_team` ownership with same-workspace validation and API serialization/input.
+- Added a compatibility data migration that maps legacy `ClientTeam.metadata.project_ids` values, removes the legacy key, and preserves other metadata.
+- Reduced campaign creation to one transactional project write and rebuilt frontend grouping from `client_team_id`.
+- Added configured workflow-stage transitions to Review, including approval/completion-stage discovery and server-enforced permission feedback.
+- Added an optional Google Identity Services button on sign-in and sign-up, exchanging the returned ID token through the existing Django Google endpoint.
+- Added Vitest 3, jsdom, Testing Library, AppleDouble exclusions, a component interaction test, and a review view-model nesting test.
+
+### Configuration
+
+- Google sign-in requires the same Web OAuth client ID in backend `GOOGLE_OAUTH_CLIENT_ID` and frontend `NEXT_PUBLIC_GOOGLE_CLIENT_ID`; localhost origins must be authorized in Google Cloud.
+
+### Verification
+
+- Focused project authorization and media backend tests pass (29 tests).
+- Frontend component/view-model tests pass (2 tests); TypeScript, ESLint, and the production build pass.
+# 2026-09-09 — Persistent tasks, workspace switching, and task board
+
+### Delivered
+
+- Replaced dashboard-only task completion state with authenticated task status updates, optimistic feedback, and rollback on API failure.
+- Added a cookie-backed workspace selector to the sidebar and made dashboard, projects, review, settings, tasks, and their mutations resolve the authorized selected workspace.
+- Added `/tasks` with open/all/completed filters, search across task/project content, persistent completion and reopening, and task creation with project, priority, due date, and description.
+- Added typed task create/update API methods and a shared task action layer used by both dashboard and task board.
+
+### Decisions
+
+- Workspace selection is an HTTP-only, same-site cookie validated against the live authorized workspace list on every load; invalid or stale ids fall back safely.
+- Notifications remain account-wide because the existing endpoint is not workspace-scoped.
+
+### Verification
+
+- The backend task suite passes (18 tests).
+- Frontend tests pass (2 tests); TypeScript, ESLint, the Next.js production build, and patch whitespace checks pass.
+# 2026-09-09 — Team administration, file delivery, and richer review actions
+
+### Delivered
+
+- Added `/team` with live membership status, role and access-scope editing, custom-role creation, and workspace invitation creation with secure token handoff.
+- Added `/files` with a searchable cross-project inventory, folder context, processing status, and CSRF-protected multipart uploads into a selected project/folder.
+- Added `/deliverables`, listing only media versions whose download policy is enabled and linking through the permission-enforced media download endpoint.
+- Added comment reaction summaries/actions and atomic revision requests with player timecodes to the review workspace.
+
+### Decisions
+
+- Project files are not presented as downloadable because the backend currently exposes metadata and deletion but no project-file download endpoint.
+- Invitation tokens are shown exactly once after creation because invitation email delivery remains a backend gap.
+- Advanced review work is incremental: reactions and revision requests are complete; annotation drawing and comment attachments remain next.
+
+### Verification
+
+- Frontend tests, TypeScript, ESLint, the Next.js production build, and patch whitespace checks pass.

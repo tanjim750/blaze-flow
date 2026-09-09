@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   ArrowRight, CalendarDays, Clock3, Film, Folder, FolderKanban, Layers2, ListChecks,
   MessageSquareText, TriangleAlert, Zap,
@@ -9,6 +10,8 @@ import { loadDashboardView } from "@/lib/dashboard-view";
 import type { AttentionItem } from "@/lib/dashboard-view";
 import { loadSession } from "@/lib/session";
 import { displayName, toShellUser } from "@/lib/user";
+import { listWorkspaces } from "@/lib/api";
+import { loadWorkspaceContext } from "@/lib/workspace";
 import "./home.css";
 
 const ATTENTION_ICONS = { clock: Clock3, message: MessageSquareText, checks: ListChecks };
@@ -16,10 +19,15 @@ const ATTENTION_ICONS = { clock: Clock3, message: MessageSquareText, checks: Lis
 export default async function Dashboard() {
   // Redirects to /sign-in when the API says we are unauthenticated.
   const session = await loadSession();
+  if (session.user) {
+    const workspaces = await listWorkspaces();
+    if (workspaces.ok && workspaces.data.length === 0) redirect("/onboarding");
+  }
   const view = await loadDashboardView(session.user ? displayName(session.user).split(" ")[0] : "there");
+  const workspaceContext = await loadWorkspaceContext();
   const notice = session.notice ?? view.notice;
 
-  return <AppShell user={session.user && toShellUser(session.user)}>
+  return <AppShell user={session.user && toShellUser(session.user)} workspaces={workspaceContext.ok ? workspaceContext.data.workspaces : []} selectedWorkspaceId={workspaceContext.ok ? workspaceContext.data.selected?.id : null}>
     <div className="home-shell">
     {notice && <p className="home-notice"><TriangleAlert size={14} /><span>{notice}</span></p>}
 

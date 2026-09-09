@@ -7,13 +7,14 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = (
-            'id', 'workspace_id', 'name', 'description', 'status', 'priority',
+            'id', 'workspace_id', 'client_team_id', 'name', 'description', 'status', 'priority',
             'start_at', 'due_at', 'created_at', 'updated_at',
         )
         read_only_fields = ('id', 'workspace_id', 'created_at', 'updated_at')
 
 
 class ProjectCreateSerializer(serializers.Serializer):
+    client_team_id = serializers.UUIDField(required=False, allow_null=True)
     name = serializers.CharField(max_length=200)
     description = serializers.CharField(required=False, allow_blank=True)
     priority = serializers.ChoiceField(choices=PriorityLevel.choices, default=PriorityLevel.MEDIUM)

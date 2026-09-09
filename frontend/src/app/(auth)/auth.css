@@ -46,3 +46,4 @@
 @media (max-width: 480px) {
   .auth-row { grid-template-columns: 1fr; }
 }
+.google-auth { display: grid; gap: 8px; }.google-button { min-height: 44px; display: flex; justify-content: center; overflow: hidden; }.google-disabled { margin: 0; text-align: center; }.auth-divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 11px; }.auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }.auth-divider span { white-space: nowrap; }

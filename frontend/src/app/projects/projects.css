@@ -76,6 +76,19 @@
 .pb-title-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .pb-primary-button { display: flex; align-items: center; gap: 7px; background: linear-gradient(135deg, #7c5cfc, #5b30e5); color: #fff; border: 1px solid #9874ff; border-radius: 9px; padding: 9px 14px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px #744cfb40; white-space: nowrap; }
 .pb-primary-button:hover { filter: brightness(1.08); }
+.pb-primary-button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+
+.pb-upload-dialog { position: fixed; inset: 0; z-index: 100; width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; color: var(--shell-on); }
+.pb-upload-backdrop { position: absolute; inset: 0; width: 100%; border: 0; background: #050509b8; backdrop-filter: blur(5px); }
+.pb-upload-panel { position: relative; width: min(calc(100% - 32px), 560px); margin: max(70px, 8vh) auto; padding: 22px; border: 1px solid var(--shell-highest); border-radius: 15px; background: var(--shell-container); box-shadow: 0 30px 100px #000c; display: grid; gap: 15px; }
+.pb-upload-panel > header { display: flex; justify-content: space-between; align-items: flex-start; }
+.pb-upload-panel > header p { margin: 0 0 4px; color: var(--shell-primary); font: 600 10px var(--font-geist-mono), monospace; text-transform: uppercase; letter-spacing: .08em; }
+.pb-upload-panel h2 { margin: 0; font-size: 19px; }.pb-upload-panel > header button { border: 0; background: none; color: var(--shell-outline); cursor: pointer; }
+.pb-upload-panel > label, .pb-upload-options > label { display: grid; gap: 7px; color: var(--shell-variant); font-size: 12px; font-weight: 600; }
+.pb-upload-panel input, .pb-upload-panel textarea, .pb-upload-panel select { width: 100%; padding: 10px 11px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-rail); color: var(--shell-on); outline: 0; resize: vertical; }
+.pb-file-drop { place-items: center; padding: 20px; border: 1px dashed #67627a; border-radius: 11px; background: var(--shell-low); text-align: center; cursor: pointer; }.pb-file-drop > svg { color: var(--shell-primary); }.pb-file-drop span { color: var(--shell-outline); font-weight: 400; }.pb-file-drop input { padding: 7px; }
+.pb-upload-options { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-items: end; }.pb-upload-options .pb-check { display: flex; grid-template-columns: auto 1fr; align-items: center; padding-bottom: 10px; }.pb-check input { width: auto; accent-color: var(--shell-accent); }
+.pb-upload-panel > footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 5px; }.pb-upload-panel > footer button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 13px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-low); color: var(--shell-on); cursor: pointer; }.pb-upload-panel > footer button[type="submit"] { border-color: #8d73fb; background: var(--shell-accent); color: white; }.pb-upload-panel > footer button:disabled { opacity: .6; cursor: wait; }
 
 .pb-tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; border-bottom: 1px solid #2a2a2d; padding-bottom: 8px; }
 .pb-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }

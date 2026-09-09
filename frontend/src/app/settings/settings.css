@@ -1,0 +1,26 @@
+.settings-page { max-width: 960px; margin: 0 auto; }
+.settings-page > header { margin-bottom: 28px; }
+.settings-page > header h1 { margin: 7px 0 8px; font-size: 32px; letter-spacing: -.035em; }
+.settings-page > header p:last-child, .settings-title p, .settings-muted { color: var(--shell-outline); }
+.settings-card { margin-bottom: 18px; padding: 24px; border: 1px solid var(--shell-highest); border-radius: 15px; background: var(--shell-container); }
+.settings-title { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 22px; }
+.settings-title > svg { padding: 8px; width: 38px; height: 38px; border-radius: 10px; background: #cabeff18; color: var(--shell-primary); }
+.settings-title h2 { margin: 0 0 4px; font-size: 17px; }
+.settings-title p { margin: 0; font-size: 12px; }
+.identity-values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.identity-values span { padding: 13px; border-radius: 10px; background: var(--shell-low); }
+.identity-values small, .identity-values strong { display: block; }
+.identity-values small { margin-bottom: 5px; color: var(--shell-outline); }
+.identity-values strong { overflow-wrap: anywhere; }
+.verification-row { display: flex; align-items: center; gap: 18px; margin-top: 16px; padding: 14px; border: 1px solid var(--shell-highest); border-radius: 10px; background: var(--shell-low); }
+.verification-row > div { flex: 1; }.verification-row p { margin: 3px 0 0; color: var(--shell-outline); font-size: 12px; }
+.settings-form { display: grid; gap: 15px; }.settings-form.compact { max-width: 520px; }
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.settings-form label { display: grid; gap: 7px; color: var(--shell-variant); font-size: 12px; font-weight: 600; }
+.settings-form input, .settings-form textarea { width: 100%; padding: 10px 11px; border: 1px solid var(--shell-highest); border-radius: 8px; outline: 0; background: var(--shell-rail); color: var(--shell-on); resize: vertical; }
+.settings-form input:focus, .settings-form textarea:focus { border-color: var(--shell-primary); }
+.settings-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; justify-self: start; padding: 9px 13px; border: 1px solid #8d73fb; border-radius: 8px; background: var(--shell-accent); color: white; font-weight: 600; cursor: pointer; }
+.settings-button:disabled { opacity: .6; cursor: wait; }
+.settings-success { color: #83e8bf; font-size: 12px; }
+@media (max-width: 700px) { .identity-values, .settings-grid { grid-template-columns: 1fr; } .verification-row { align-items: flex-start; flex-direction: column; } }
+.settings-check{display:flex!important;align-items:center;gap:10px}.settings-check input{width:17px;height:17px}.settings-check span{display:grid;gap:3px}.settings-check small{color:var(--shell-outline);font-weight:400}

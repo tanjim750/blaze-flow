@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, LockKeyhole, Mail, User } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { browserTimezone, signIn, signUp } from "@/lib/auth-client";
+import { GoogleSignIn } from "@/components/google-sign-in";
 
 export default function SignUp() {
   const router = useRouter();
@@ -45,7 +46,7 @@ export default function SignUp() {
       setBusy(false);
       return;
     }
-    router.push("/");
+    router.push("/onboarding");
     router.refresh();
   }
 
@@ -56,6 +57,9 @@ export default function SignUp() {
         <h2>Create your account</h2>
         <p className="muted">You will get a verification email once you sign up.</p>
       </header>
+
+      <GoogleSignIn destination="/onboarding" />
+      <div className="auth-divider"><span>or use email</span></div>
 
       <div className="auth-row">
         <label>

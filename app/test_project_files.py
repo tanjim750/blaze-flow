@@ -285,6 +285,35 @@ class ProjectFileApiTests(WorkspaceAccessSetupMixin, TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_ready_file_can_be_downloaded(self):
+        created = self.client.post(
+            reverse('api-project-files', args=[self.workspace.id, self.project.id]),
+            {'file': self._png_upload()}, format='multipart',
+        ).json()
+        project_file = ProjectFile.objects.select_related('file').get(id=created['id'])
+        project_file.file.status = 'READY'
+        project_file.file.save(update_fields=['status'])
+
+        response = self.client.get(
+            reverse('api-project-file-download', args=[self.workspace.id, self.project.id, created['id']])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b''.join(response.streaming_content), PNG_BYTES)
+        self.assertIn('attachment;', response['Content-Disposition'])
+
+    def test_pending_file_download_is_rejected(self):
+        created = self.client.post(
+            reverse('api-project-files', args=[self.workspace.id, self.project.id]),
+            {'file': self._png_upload()}, format='multipart',
+        ).json()
+
+        response = self.client.get(
+            reverse('api-project-file-download', args=[self.workspace.id, self.project.id, created['id']])
+        )
+
+        self.assertEqual(response.status_code, 409)
+
     def test_member_cannot_delete_without_access(self):
         created = self.client.post(
             reverse('api-project-files', args=[self.workspace.id, self.project.id]),

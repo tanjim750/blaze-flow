@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import type { Bucket, DashboardTask } from "@/lib/dashboard-view";
+import { setTaskCompletedAction } from "@/app/tasks/actions";
 
 const BUCKETS: Bucket[] = ["Today", "Upcoming", "Overdue"];
 
@@ -15,6 +16,8 @@ export function DashboardTasks({ tasks }: { tasks: DashboardTask[] }) {
    * rather than writing back.
    */
   const [completed, setCompleted] = useState<string[]>([]);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState("");
   const visible = tasks.filter((task) => task.bucket === bucket);
   const todayCount = tasks.filter((task) => task.bucket === "Today").length;
 
@@ -30,6 +33,7 @@ export function DashboardTasks({ tasks }: { tasks: DashboardTask[] }) {
       </div>
     </div>
     <div className="task-list">
+      {error && <p className="form-error" role="alert">{error}</p>}
       {visible.length === 0 && <p className="home-empty">Nothing {bucket.toLowerCase()}.</p>}
       {visible.map(task => {
         const done = completed.includes(task.id);
@@ -38,7 +42,19 @@ export function DashboardTasks({ tasks }: { tasks: DashboardTask[] }) {
             type="checkbox"
             aria-label={`Complete ${task.name}`}
             checked={done}
-            onChange={event => setCompleted(event.target.checked ? [...completed, task.id] : completed.filter(id => id !== task.id))}
+            disabled={pending}
+            onChange={event => {
+              const checked = event.target.checked;
+              setCompleted(checked ? [...completed, task.id] : completed.filter(id => id !== task.id));
+              setError("");
+              startTransition(async () => {
+                const result = await setTaskCompletedAction(task.id, checked);
+                if (result.error) {
+                  setCompleted((value) => checked ? value.filter((id) => id !== task.id) : [...value, task.id]);
+                  setError(result.error);
+                }
+              });
+            }}
           />
           <span className="task-description">
             <strong>{task.name}</strong>

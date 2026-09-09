@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import {
   Activity, Building2, ChevronDown, ChevronRight, ChevronsUpDown, CloudUpload, Download, Ellipsis,
   EyeOff, FileText, Folder, FolderOpen, Grid2X2, LayoutList, ListFilter, MessageSquare, Pencil,
-  Plus, Search, Share2, TriangleAlert, UploadCloud,
+  Plus, Search, Share2, TriangleAlert, UploadCloud, X,
 } from "lucide-react";
 import type { AssetCard, BoardCard, ClientNode, ProjectsView } from "@/lib/projects-view";
 import { createCampaignAction, createClientAction, createFolderAction, type ActionState } from "./actions";
@@ -14,12 +15,14 @@ const initialState: ActionState = { error: null };
 const TABS = ["Assets", "Status", "Brief & Specs", "Activity Log"] as const;
 
 export function ProjectsBrowser({ view, initialTab, initialDense = false }: { view: ProjectsView; initialTab?: string; initialDense?: boolean }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<(typeof TABS)[number]>(
     () => TABS.find((value) => value.toLowerCase() === initialTab?.toLowerCase()) ?? "Assets",
   );
   const [dense, setDense] = useState(initialDense);
   const [expanded, setExpanded] = useState<string[]>(view.selectedClient ? [view.selectedClient.id] : []);
+  const [uploading, setUploading] = useState(false);
 
   const assets = view.assets.filter((asset) =>
     (asset.title + asset.note + asset.stage).toLowerCase().includes(query.trim().toLowerCase()),
@@ -41,7 +44,13 @@ export function ProjectsBrowser({ view, initialTab, initialDense = false }: { vi
               <span>{view.selectedClient?.name ?? "—"}</span><ChevronRight size={13} />
               <b>{view.selectedCampaign?.name ?? "No campaign"}<Pencil size={11} /></b>
             </nav>
-            <button className="pb-ghost-button" type="button"><Share2 size={14} />Client Review Link</button>
+            {view.selectedCampaign ? (
+              <Link className="pb-ghost-button" href={`/review?project=${view.selectedCampaign.id}&share=1`}>
+                <Share2 size={14} />Client Review Link
+              </Link>
+            ) : (
+              <button className="pb-ghost-button" type="button" disabled title="Select a campaign first"><Share2 size={14} />Client Review Link</button>
+            )}
           </div>
 
           <div className="pb-title-row">
@@ -51,7 +60,7 @@ export function ProjectsBrowser({ view, initialTab, initialDense = false }: { vi
             </div>
             <div className="pb-title-actions">
               <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions"><Ellipsis size={15} /></button>
-              <button className="pb-primary-button" type="button"><CloudUpload size={15} />+ Upload Asset</button>
+              <button className="pb-primary-button" type="button" disabled={!view.workspaceId || !view.selectedCampaign} onClick={() => setUploading(true)}><CloudUpload size={15} />+ Upload Asset</button>
             </div>
           </div>
 
@@ -103,8 +112,52 @@ export function ProjectsBrowser({ view, initialTab, initialDense = false }: { vi
           <p className="pb-empty">The {tab} view is not built yet.</p>
         )}
       </section>
+      {uploading && view.workspaceId && view.selectedCampaign && (
+        <UploadDialog workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} onClose={() => setUploading(false)} onUploaded={() => { setUploading(false); router.refresh(); }} />
+      )}
     </div>
   );
+}
+
+function csrfToken(): string {
+  const match = document.cookie.split("; ").find((item) => item.startsWith("csrftoken="));
+  return match ? decodeURIComponent(match.slice("csrftoken=".length)) : "";
+}
+
+function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded }: { workspaceId: string; projectId: string; projectName: string; onClose: () => void; onUploaded: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    const form = new FormData(event.currentTarget);
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/media-versions/`, {
+        method: "POST", body: form, credentials: "include", headers: { "X-CSRFToken": csrfToken() },
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as Record<string, unknown> | null;
+        const detail = typeof body?.detail === "string" ? body.detail : Object.entries(body ?? {}).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(" ") : String(value)}`).join(" ");
+        setError(detail || `Upload failed (${response.status}).`); setBusy(false); return;
+      }
+      onUploaded();
+    } catch { setError("The upload could not reach Blaze Flow. Try again."); setBusy(false); }
+  }
+
+  return <dialog ref={dialog} open className="pb-upload-dialog" onCancel={onClose} aria-labelledby="upload-title">
+    <button type="button" className="pb-upload-backdrop" onClick={onClose} aria-label="Close upload dialog" />
+    <form onSubmit={submit} className="pb-upload-panel">
+      <header><div><p>New media version</p><h2 id="upload-title">Upload to {projectName}</h2></div><button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button></header>
+      <label className="pb-file-drop"><UploadCloud size={26} /><strong>Choose an asset</strong><span>PNG, JPEG, GIF, WebP, MP4, MOV, or WebM</span><input name="file" type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm" required /></label>
+      <label>Title<input name="title" placeholder="Spring campaign — hero cut" required /></label>
+      <label>Notes<textarea name="note" rows={3} placeholder="What changed in this version?" /></label>
+      <div className="pb-upload-options"><label>Priority<select name="priority" defaultValue="MEDIUM"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select></label><label className="pb-check"><input name="allow_download" type="checkbox" value="true" />Allow downloads</label></div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <footer><button type="button" onClick={onClose}>Cancel</button><button type="submit" disabled={busy}><CloudUpload size={15} />{busy ? "Uploading…" : "Upload asset"}</button></footer>
+    </form>
+  </dialog>;
 }
 
 function AssetTile({ asset }: { asset: AssetCard }) {
@@ -213,7 +266,6 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
           {adding ? (
             <form action={submitCampaign} className="pb-inline-form nested">
               <input type="hidden" name="clientId" value={client.id} />
-              <input type="hidden" name="projectIds" value={client.campaigns.map((campaign) => campaign.id).join(",")} />
               <input name="name" placeholder="e.g. March 2026" aria-label="New subfolder name" autoFocus required />
               <button type="submit">Add</button>
               {campaignState.error && <small role="alert">{campaignState.error}</small>}

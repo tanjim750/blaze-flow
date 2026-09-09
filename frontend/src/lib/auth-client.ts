@@ -42,6 +42,9 @@ export type SignInResponse = CurrentUser & { csrf_token: string };
 export const signIn = (email: string, password: string) =>
   post<SignInResponse>("login/", { email, password });
 
+export const signInWithGoogle = (idToken: string) =>
+  post<SignInResponse>("google/", { id_token: idToken });
+
 /**
  * Registers an account. Django does **not** open a session here and it sends a
  * verification email, so the caller signs in separately with the same credentials.

@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { logout } from "@/lib/api";
+import { WORKSPACE_COOKIE } from "@/lib/workspace";
 
 /**
  * Ends the session and returns to sign-in.
@@ -21,4 +22,13 @@ export async function signOutAction(): Promise<void> {
   jar.delete("sessionid");
   jar.delete("csrftoken");
   redirect("/sign-in");
+}
+
+export async function switchWorkspaceAction(form: FormData): Promise<void> {
+  const workspaceId = String(form.get("workspaceId") ?? "");
+  const returnTo = String(form.get("returnTo") ?? "/");
+  if (!workspaceId) return;
+  const jar = await cookies();
+  jar.set(WORKSPACE_COOKIE, workspaceId, { httpOnly: true, sameSite: "lax", path: "/", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 365 });
+  redirect(returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/");
 }

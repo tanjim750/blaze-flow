@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClientTeam, createFolder, createProject, listWorkspaces, updateClientTeam } from "@/lib/api";
-import type { ClientTeamMetadata } from "@/lib/api";
+import { createClientTeam, createFolder, createProject, listWorkspaces } from "@/lib/api";
+import { selectWorkspace } from "@/lib/workspace";
 
 export type ActionState = { error: string | null };
 const ok: ActionState = { error: null };
@@ -10,7 +10,7 @@ const ok: ActionState = { error: null };
 async function currentWorkspaceId(): Promise<{ id: string } | ActionState> {
   const workspaces = await listWorkspaces();
   if (!workspaces.ok) return { error: workspaces.error.detail };
-  const workspace = workspaces.data[0];
+  const workspace = await selectWorkspace(workspaces.data);
   return workspace ? { id: workspace.id } : { error: "No workspace is available for this account." };
 }
 
@@ -23,7 +23,7 @@ export async function createClientAction(_prev: ActionState, form: FormData): Pr
   const workspace = await currentWorkspaceId();
   if (isFailure(workspace)) return workspace;
 
-  const created = await createClientTeam(workspace.id, { name, metadata: { project_ids: [] } });
+  const created = await createClientTeam(workspace.id, { name });
   if (!created.ok) return { error: created.error.detail };
   revalidatePath("/projects");
   return ok;
@@ -32,10 +32,7 @@ export async function createClientAction(_prev: ActionState, form: FormData): Pr
 /**
  * Creates a campaign under a client.
  *
- * A campaign is a `Project`. Because the backend has no `Project.client_team` column, the
- * new project id is appended to the client team's `metadata.project_ids` so the tree can
- * be rebuilt on the next load. Two writes, so a failure after the first leaves the project
- * unclaimed — it then appears under "Unassigned" rather than being lost.
+ * A campaign is a `Project` linked directly to its client team in the same write.
  */
 export async function createCampaignAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   const name = String(form.get("name") ?? "").trim();
@@ -45,13 +42,8 @@ export async function createCampaignAction(_prev: ActionState, form: FormData): 
   const workspace = await currentWorkspaceId();
   if (isFailure(workspace)) return workspace;
 
-  const project = await createProject(workspace.id, { name });
+  const project = await createProject(workspace.id, { name, client_team_id: clientId });
   if (!project.ok) return { error: project.error.detail };
-
-  const existing = String(form.get("projectIds") ?? "").split(",").filter(Boolean);
-  const metadata: ClientTeamMetadata = { project_ids: [...existing, project.data.id] };
-  const linked = await updateClientTeam(workspace.id, clientId, { metadata });
-  if (!linked.ok) return { error: `Campaign created, but linking it to the client failed: ${linked.error.detail}` };
 
   revalidatePath("/projects");
   return ok;
