@@ -9,7 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import AuditLog, File, FileVariant, MediaVersion, MediaVersionStageEntry, Project, ProjectAccessMode, WorkflowStage
+from .models import AuditLog, File, FileVariant, MediaVersion, MediaVersionStageEntry, OutboxEvent, Project, ProjectAccessMode, WorkflowStage
 from .services import upload_media_version
 from .services.outbox import process_outbox_events
 from .test_access_projects import WorkspaceAccessSetupMixin
@@ -275,3 +275,19 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
         )
         self.client.force_authenticate(outsider)
         self.assertEqual(self.client.get(preview_url).status_code, 403)
+
+    def test_render_job_can_be_cancelled_and_retried(self):
+        uploaded = self.upload(name='queued.mp4', content=b'\x00\x00\x00\x18ftypisom-test', content_type='video/mp4')
+        url = reverse('api-media-version-render-control', args=[self.workspace.id, self.project.id, uploaded.json()['id']])
+
+        cancelled = self.client.post(url, {'action': 'cancel'}, format='json')
+        event = OutboxEvent.objects.get(topic='file.preview.requested')
+        self.assertEqual(cancelled.status_code, 200)
+        self.assertEqual(event.status, 'PUBLISHED')
+        self.assertTrue(event.payload['cancelled'])
+
+        retried = self.client.post(url, {'action': 'retry'}, format='json')
+        event.refresh_from_db()
+        self.assertEqual(retried.status_code, 200)
+        self.assertEqual(event.status, 'PENDING')
+        self.assertNotIn('cancelled', event.payload)

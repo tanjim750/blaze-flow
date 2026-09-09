@@ -4,6 +4,35 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-09 — Browser smoke coverage, canvas movement, and render controls
+
+### Delivered
+
+- Added Playwright configuration plus separate authenticated review and client-administration smoke
+  suites. They require explicit isolated-account credentials, so a developer cannot accidentally
+  mutate a personal or production workspace; Vitest explicitly excludes the browser specs.
+- Annotation authors can now drag points, text, bounded shapes, arrows, and paths directly on the
+  canvas. Movement is clamped to normalized media bounds and persists through the revision-producing
+  annotation update endpoint.
+- Added permission-backed media render control: queued/failed work can be cancelled, and cancelled
+  or failed work can be reset to pending. Running jobs return 409 because the current in-process
+  worker cannot be safely interrupted, and ready previews cannot be reprocessed accidentally.
+- Render Queue now exposes the valid Retry/Cancel actions and reports cancelled durable events.
+
+### Verification
+
+- `npx tsc --noEmit`, `npm run lint`, `npm test` (2 files / 2 tests), Playwright discovery (2 specs),
+  and `npm run build` passed. The local Playwright invocation skipped both specs as designed because
+  isolated `E2E_*` credentials were not supplied.
+- Docker ran 20 focused media/project-file tests successfully, including the new render cancel/retry
+  contract. Python compilation, Compose validation, and `git diff --check` also passed.
+
+### Known limitations and next step
+
+- Direct dragging moves all geometry, while resizing remains an incremental control for rectangles
+  and ellipses; arrows/path endpoints and text sizing need dedicated handles. Run the Playwright
+  suite against a seeded CI workspace next.
+
 ## 2026-09-09 — Render visibility, Help, review editing, and client access
 
 ### Delivered

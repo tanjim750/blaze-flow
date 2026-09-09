@@ -135,6 +135,7 @@ export const listProjects = (workspaceId: string) => request<Project[]>(`/worksp
 export const listFolders = (workspaceId: string, projectId: string) => request<ProjectFolder[]>(`/workspaces/${workspaceId}/projects/${projectId}/folders/`);
 export const listProjectFiles = (workspaceId: string, projectId: string) => request<ProjectFile[]>(`/workspaces/${workspaceId}/projects/${projectId}/files/`);
 export const listMediaVersions = (workspaceId: string, projectId: string) => request<MediaVersion[]>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/`);
+export const controlMediaRender = (workspaceId: string, projectId: string, mediaVersionId: string, action: "retry" | "cancel") => request<{ status: string }>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/render/`, jsonBody({ action }));
 export const listWorkflowStages = (workspaceId: string) => request<WorkflowStage[]>(`/workspaces/${workspaceId}/workflow-stages/`);
 export const listRoles = (workspaceId: string) => request<Role[]>(`/workspaces/${workspaceId}/roles/`);
 export const createRole = (workspaceId: string, payload: { name: string; description?: string; permission_keys: string[] }) =>

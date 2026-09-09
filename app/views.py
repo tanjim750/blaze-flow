@@ -1,6 +1,7 @@
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, HttpResponse
+from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.middleware.csrf import get_token
@@ -1373,6 +1374,46 @@ def media_version_preview(request, workspace_id, project_id, media_version_id):
     if variant is None or not default_storage.exists(variant.object_key):
         raise Http404('No preview is available for this media version yet.')
     return FileResponse(default_storage.open(variant.object_key, 'rb'), filename=variant.original_name, content_type=variant.mime_type)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def media_version_render_control(request, workspace_id, project_id, media_version_id):
+    workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
+    if not has_project_permission(user=request.user, project=project, permission_key=MEDIA_CREATE):
+        raise PermissionDenied('You do not have permission to control media processing.')
+    action = str(request.data.get('action', '')).lower()
+    if action not in {'retry', 'cancel'}:
+        return Response({'detail': 'Action must be retry or cancel.'}, status=status.HTTP_400_BAD_REQUEST)
+    with transaction.atomic():
+        event = OutboxEvent.objects.select_for_update().filter(
+            topic='file.preview.requested', aggregate_id=str(media_version.original_file_id)
+        ).first()
+        if event is None:
+            return Response({'detail': 'No render job exists for this media version.'}, status=status.HTTP_404_NOT_FOUND)
+        if event.status == 'PROCESSING':
+            return Response({'detail': 'A running render cannot be changed safely.'}, status=status.HTTP_409_CONFLICT)
+        if FileVariant.objects.filter(file=media_version.original_file, status=FileStatus.READY, deleted_at__isnull=True).exists():
+            return Response({'detail': 'This media version already has a ready preview.'}, status=status.HTTP_409_CONFLICT)
+        now = timezone.now()
+        payload = dict(event.payload)
+        if action == 'cancel':
+            payload['cancelled'] = True
+            event.status = 'PUBLISHED'
+            event.published_at = now
+        else:
+            payload.pop('cancelled', None)
+            event.status = 'PENDING'
+            event.attempts = 0
+            event.available_at = now
+            event.published_at = None
+        event.payload = payload
+        event.locked_at = None
+        event.last_error = None
+        event.updated_at = now
+        event.save(update_fields=['payload', 'status', 'attempts', 'available_at', 'locked_at', 'published_at', 'last_error', 'updated_at'])
+    record_user_audit(user=request.user, workspace=workspace, action=f'media.render.{action}', entity_type='media_version', entity_id=media_version.id)
+    return Response({'status': 'CANCELLED' if action == 'cancel' else 'PENDING'})
 
 
 @api_view(['GET', 'POST'])

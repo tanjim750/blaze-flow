@@ -65,12 +65,16 @@ npm run dev          # http://localhost:3000
 | `npm run build` | Production build |
 | `npm start` | Serve the production build |
 | `npm run lint` | ESLint (`eslint-config-next`) |
+| `npm test` | Vitest component/unit suite |
+| `npm run test:e2e` | Playwright review/client smoke tests; requires isolated credentials |
 | `npx tsc --noEmit` | Type check |
 
 | Variable | Required | Meaning |
 | --- | --- | --- |
 | `BLAZEFLOW_API_URL` | No | Django origin; defaults to `http://127.0.0.1:8000` |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | For Google sign-in | Google Web OAuth client ID; the button shows setup guidance when absent |
+| `E2E_EMAIL` / `E2E_PASSWORD` | For browser tests | Credentials for an isolated seeded workspace account |
+| `PLAYWRIGHT_BASE_URL` | No | Existing frontend origin; otherwise Playwright starts Next on port 3000 |
 
 `BLAZEFLOW_API_URL` is read in two places and both must agree: `next.config.ts` for the
 browser-facing rewrite, and `src/lib/api.ts` for server-side fetches.
@@ -332,7 +336,7 @@ and the palette notes in that directory's `precision_dark_media_os/DESIGN.md`.
 - Account identity fields are read-only because the backend exposes no user-profile update
   endpoint. Workspace business-profile fields can be edited at `/settings`.
 - Annotations support points, rectangles, ellipses, arrows, freehand paths, and text. Authors can
-  edit color and resize bounded shapes; managers can delete.
+  drag every geometry, edit color, and resize bounded shapes; managers can delete.
 - The notification popover supports list, individual/mark-all read, review routing, and email
   mention preferences. Operations health is available only to workspace managers, matching the API.
 - `PRO` in the sidebar remains static decoration; operations health is live.
@@ -341,6 +345,6 @@ and the palette notes in that directory's `precision_dark_media_os/DESIGN.md`.
 
 In rough order of value:
 
-1. Add browser-level end-to-end coverage for the authenticated review and client flows.
-2. Add direct drag handles for moving/resizing every annotation geometry.
-3. Add render retry/cancellation once the backend exposes worker-control endpoints.
+1. Seed an isolated browser-test workspace in CI and run the credentialed Playwright suite there.
+2. Add direct resize/end-point handles for arrows, paths, and text sizing.
+3. Add richer Projects filters and replace remaining per-card placeholder menus.
