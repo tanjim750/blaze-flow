@@ -1,0 +1,72 @@
+/* Review workspace additions. The base layout (.review-workspace, .viewer, .comments,
+   .comment-feed, .comment-box) lives in globals.css alongside the other Stitch screens. */
+
+.review-header > a { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+.review-header > a svg { width: 16px; }
+.rv-stage {
+  font: 600 10px var(--font-geist-mono), monospace; text-transform: uppercase; letter-spacing: .05em;
+  background: #2a2149; color: #c8baff; border: 1px solid #55418f; border-radius: 999px; padding: 4px 9px;
+}
+
+.rv-notice {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
+  background: #3a2f16; border: 1px solid #6b5520; color: #f0d9a1;
+  padding: 9px 12px; border-radius: 9px; font-size: 12px;
+}
+
+/* Version rail */
+.rv-versions { display: flex; gap: 8px; margin-bottom: 12px; overflow-x: auto; }
+.rv-versions a {
+  display: grid; gap: 2px; padding: 8px 13px; border-radius: 9px; white-space: nowrap;
+  background: var(--surface); border: 1px solid var(--border); font-weight: 650; font-size: 12px;
+}
+.rv-versions a small { color: var(--muted); font-weight: 500; font-size: 10px; text-transform: capitalize; }
+.rv-versions a.selected { background: #292143; border-color: #55418f; color: #fff; }
+
+/* Viewer */
+.video-stage video { width: 100%; height: 100%; object-fit: contain; background: #000; cursor: pointer; }
+.rv-placeholder { display: grid; justify-items: center; gap: 12px; color: var(--muted); padding: 24px; text-align: center; }
+.rv-placeholder p { margin: 0; font-size: 12px; max-width: 320px; line-height: 1.6; }
+.player-controls button:disabled { opacity: .4; }
+
+/* Scrubber with comment markers */
+.player-controls .scrub { position: relative; cursor: pointer; }
+.rv-marker {
+  position: absolute; top: -4px; width: 3px; height: 12px; padding: 0;
+  transform: translateX(-1px); border: 0; border-radius: 2px; background: var(--warning); cursor: pointer;
+}
+.rv-marker:hover { background: #ffd278; height: 16px; top: -6px; }
+
+/* Comment feed */
+.rv-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 26px 12px; margin: 0; }
+.comment-feed article.rv-resolved { opacity: .55; }
+.comment-feed article.rv-resolved p { text-decoration: line-through; text-decoration-color: #6b6879; }
+.comment-feed article p b[role="button"] { cursor: pointer; }
+.comment-feed article p b[role="button"]:hover { color: #ffd899; }
+
+.rv-reply { display: flex; gap: 7px; margin: 9px 0 0 8px; padding-left: 9px; border-left: 1px solid var(--border); }
+.rv-reply svg { color: var(--muted); flex: none; margin-top: 4px; }
+.rv-reply p { margin: 4px 0 0; font-size: 12px; line-height: 1.5; }
+.rv-reply .comment-meta strong { font-size: 12px; }
+
+.rv-note-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.rv-note-actions form { display: contents; }
+.rv-note-actions button {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 0; background: none; color: var(--muted); font-size: 11px; cursor: pointer;
+}
+.rv-note-actions button:hover { color: var(--text); }
+.rv-note-actions button:disabled { opacity: .5; }
+.rv-note-actions .rv-resolve:hover { color: #7fd6a0; }
+
+/* Composer */
+.rv-replying {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; color: var(--muted); background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px; margin-bottom: 8px;
+}
+.rv-replying button { border: 0; background: none; color: var(--primary-2); font-size: 11px; cursor: pointer; }
+.comment-box textarea:disabled { opacity: .6; }
+.comment-box > div small { color: var(--muted); font-size: 10px; align-self: center; }
+.comment-box button:disabled { opacity: .5; }
+.comment-box .form-error { margin: 0 0 8px; }

@@ -4,6 +4,45 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-09 — Next.js frontend and its documentation
+
+### Delivered
+
+- Added the `frontend/` Next.js 16 / React 19 browser client for the existing Django API, covering four routes: a workspace dashboard (`/`), the client/campaign/asset browser with a workflow status board (`/projects`), the proxy-video review workspace with timecoded comments (`/review`), and session login (`/sign-in`).
+- Data loads in server components through per-page view models in `src/lib/*-view.ts`, built on one typed, non-throwing API client (`src/lib/api.ts`) that returns an `ApiResult<T>` union so every caller handles failure explicitly. Writes go through server actions with `revalidatePath`; only login runs in the browser, because it must receive `Set-Cookie`.
+- Server-side fetches go straight to the Django origin with the browser's cookie jar and `X-CSRFToken` forwarded; browser-side requests use relative `/api/*` paths rewritten in `next.config.ts` to keep the session cookie same-origin.
+- Added `docs/frontend.md`: stack, commands, configuration, repository map, the three-layer architecture, both request paths and their trailing-slash workarounds, authentication, the demo-fallback convention, per-page derivation notes, the backend gaps the UI works around, styling conventions, known limitations, and next steps. Replaced the `create-next-app` boilerplate in `frontend/README.md` with a project-specific entry point, and linked both from `docs/DEVELOPMENT.md` and the root README.
+
+### Decisions and boundaries
+
+- Every view loader has a demo path: when the API is unreachable, has no workspace, or errors, the page renders placeholder content from the Stitch references behind a visible warning banner rather than an error screen. This keeps the UI reviewable with no backend running, at the cost that visible content is not proof the API works — documented explicitly, and confined to the `demoView`/`DEMO_VIEW` functions.
+- A real signed-in account with no data returns a genuine empty state and no notice. Only an API failure produces a notice.
+- `loadSession()` separates 401/403 (redirect to `/sign-in`) from status 0 (Django unreachable — keep rendering, show a notice), because redirecting on an unreachable API asserts something we cannot know.
+- Fields the API does not expose — per-cut comment counts, durations, poster frames, resolutions — are left null and omitted from the card rather than fabricated.
+- `skipTrailingSlashRedirect` plus a slash-restoring rewrite destination are both required: Django's `APPEND_SLASH` and Next's default 308 otherwise form an infinite redirect on every browser-side API call.
+- Client → campaign grouping is read from `ClientTeam.metadata.project_ids` because the schema has no `Project.client_team` relation. Campaign creation is therefore two writes, and a project unclaimed by the second write appears under "Unassigned" rather than being lost.
+- The dashboard derives its panels from three workspace-wide lists plus a media fan-out bounded to six projects, since there is no dashboard or summary endpoint.
+
+### Verification
+
+- `npx tsc --noEmit` clean and `npm run lint` clean.
+- No frontend test suite exists yet; those two checks are the only automated coverage. Behaviour was verified by hand against a running API.
+
+### Known limitations
+
+- No frontend tests.
+- Eight navigation targets (`/tasks`, `/files`, `/clients`, `/team`, `/render-queue`, `/deliverables`, `/settings`, `/help`) 404; the sidebar and topbar are scaffolding ahead of those routes.
+- Inert controls: asset upload, client review link, filter dropdowns, review approval, Google sign-in, forgot password, and account creation all render without behaviour.
+- No sign-out, registration, password reset, or email verification in the UI, though the API supports all four.
+- No workspace switcher — every loader takes `workspaces[0]`, so an account with several workspaces only sees the first.
+- Annotations, reactions, attachments, guest access, notification management, and workflow transitions exist in the API and not in the UI.
+- The dashboard task checkbox is session-local; the task API exposes no completion endpoint for it to call.
+- The Stitch design references under `stitch_blaze_flow_creative_operating_system/` are intentionally not committed; `docs/frontend.md` records where they live.
+
+### Next recommended milestone
+
+Sign-out, registration, and password reset in the UI, so an account can be managed without Postman. Then a real `Project.client_team` foreign key, which removes the `metadata.project_ids` workaround and its two-write campaign creation.
+
 ## 2026-09-03 — Per-workspace storage caps
 
 ### Delivered

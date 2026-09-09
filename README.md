@@ -43,6 +43,20 @@ Blaze Flow is currently under active development.
 
 Start with the [developer guide](docs/DEVELOPMENT.md) for setup, architecture, conventions, and the contribution workflow. Delivery decisions and completed foundation work are recorded in the [implementation log](docs/implementation-log.md).
 
+## Frontend
+
+The Next.js application lives in `frontend/`. Run the Django API on port 8000, then start the UI with:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The development server proxies `/api/*` to `http://127.0.0.1:8000`. Set `BLAZEFLOW_API_URL` when the backend uses another origin.
+
+Architecture, routes, and known limitations are documented in the [frontend guide](docs/frontend.md).
+
 ---
 
 **Blaze Flow** — One workspace for creative work, collaboration, and agency operations.

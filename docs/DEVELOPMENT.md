@@ -28,6 +28,8 @@ The currently supported behavior is:
 - a public `GET /api/health/` endpoint
 - automated foundation checks and tests
 
+A Next.js browser client lives in `frontend/`. It is an authenticated vertical slice covering a workspace dashboard, the projects browser, and the review workspace, and it is documented separately in `docs/frontend.md`.
+
 ## Repository map
 
 | Path | Purpose |
@@ -40,6 +42,8 @@ The currently supported behavior is:
 | `app/events/` | Minimal synchronous domain-event mechanism |
 | `app/migrations/` | Authoritative database history |
 | `app/tests.py` | Current foundation tests; split by domain as the suite grows |
+| `frontend/` | Next.js browser client; see `docs/frontend.md` |
+| `docs/frontend.md` | Frontend architecture, routes, and API coupling |
 | `docs/implementations/` | Product/domain intent |
 | `docs/implementation-log.md` | Chronological delivery and decision record |
 | `Postman_Collection.json` | Executable manual API requests with automatic variable capture |
