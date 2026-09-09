@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { describeErrorBody } from "./errors";
 
 /**
  * Server-side client for the Blaze Flow Django API.
@@ -80,13 +81,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
     return failure(0, `Cannot reach the Blaze Flow API at ${API_ORIGIN}.`);
   }
   if (!response.ok) {
-    const body = await response.text();
-    let detail = body.slice(0, 300);
-    try {
-      const parsed = JSON.parse(body);
-      detail = typeof parsed?.detail === "string" ? parsed.detail : detail;
-    } catch { /* non-JSON error body; keep the raw text */ }
-    return failure(response.status, detail || response.statusText);
+    return failure(response.status, describeErrorBody(response.status, await response.text(), response.statusText));
   }
   if (response.status === 204) return { ok: true, data: undefined as T };
   return { ok: true, data: (await response.json()) as T };
@@ -123,6 +118,19 @@ export const createFolder = (workspaceId: string, projectId: string, payload: { 
   request<ProjectFolder>(`/workspaces/${workspaceId}/projects/${projectId}/folders/`, jsonBody(payload));
 
 export const getCurrentUser = () => request<CurrentUser>("/auth/me/");
+
+/**
+ * Ends the Django session. Session-authenticated, so unlike the public auth endpoints this
+ * one is CSRF-enforced — `authHeaders` supplies the token from the cookie jar.
+ */
+export const logout = () => request<void>("/auth/logout/", { method: "POST" });
+
+export const changePassword = (payload: { current_password: string; new_password: string }) =>
+  request<void>("/auth/password/change/", jsonBody(payload));
+
+/** Resends verification to the signed-in user's own address. Enumeration-safe 202 either way. */
+export const requestEmailVerification = (email: string) =>
+  request<{ detail: string }>("/auth/email-verification/request/", jsonBody({ email }));
 export const listTasks = (workspaceId: string) => request<Task[]>(`/workspaces/${workspaceId}/tasks/`);
 
 /**

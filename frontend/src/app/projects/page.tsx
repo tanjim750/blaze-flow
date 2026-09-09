@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { loadProjectsView } from "@/lib/projects-view";
 import { loadSession } from "@/lib/session";
+import { toShellUser } from "@/lib/user";
 import { ProjectsBrowser } from "./browser";
 import "./projects.css";
 
@@ -16,7 +17,7 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/project
   const listMode = params.view === "list";
 
   return (
-    <AppShell flush>
+    <AppShell flush user={session.user && toShellUser(session.user)}>
       <ProjectsBrowser view={view} initialTab={tab} initialDense={listMode} />
     </AppShell>
   );

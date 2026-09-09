@@ -7,7 +7,8 @@ import { AppShell } from "@/components/app-shell";
 import { DashboardTasks } from "@/components/dashboard-tasks";
 import { loadDashboardView } from "@/lib/dashboard-view";
 import type { AttentionItem } from "@/lib/dashboard-view";
-import { displayName, loadSession } from "@/lib/session";
+import { loadSession } from "@/lib/session";
+import { displayName, toShellUser } from "@/lib/user";
 import "./home.css";
 
 const ATTENTION_ICONS = { clock: Clock3, message: MessageSquareText, checks: ListChecks };
@@ -18,7 +19,7 @@ export default async function Dashboard() {
   const view = await loadDashboardView(session.user ? displayName(session.user).split(" ")[0] : "there");
   const notice = session.notice ?? view.notice;
 
-  return <AppShell>
+  return <AppShell user={session.user && toShellUser(session.user)}>
     <div className="home-shell">
     {notice && <p className="home-notice"><TriangleAlert size={14} /><span>{notice}</span></p>}
 

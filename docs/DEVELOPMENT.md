@@ -28,7 +28,7 @@ The currently supported behavior is:
 - a public `GET /api/health/` endpoint
 - automated foundation checks and tests
 
-A Next.js browser client lives in `frontend/`. It is an authenticated vertical slice covering a workspace dashboard, the projects browser, and the review workspace, and it is documented separately in `docs/frontend.md`.
+A Next.js browser client lives in `frontend/`. It is an authenticated vertical slice covering a workspace dashboard, the projects browser, the review workspace, and the account-access flows (sign in/up, sign out, password reset, and email verification — the last two being the targets of `PASSWORD_RESET_URL` and `EMAIL_VERIFICATION_URL`). It is documented separately in `docs/frontend.md`.
 
 ## Repository map
 

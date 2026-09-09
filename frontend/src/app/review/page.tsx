@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { loadReviewView } from "@/lib/review-view";
 import { loadSession } from "@/lib/session";
+import { toShellUser } from "@/lib/user";
 import { ReviewWorkspace } from "./workspace";
 import "./review.css";
 
@@ -14,7 +15,7 @@ export default async function Review({ searchParams }: PageProps<"/review">) {
   const view = await loadReviewView({ projectId, versionId });
 
   return (
-    <AppShell>
+    <AppShell user={session.user && toShellUser(session.user)}>
       <ReviewWorkspace view={session.notice ? { ...view, notice: session.notice } : view} />
     </AppShell>
   );

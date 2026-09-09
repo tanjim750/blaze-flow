@@ -72,6 +72,35 @@
 .studio-icon-button > i { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--shell-primary); box-shadow: 0 0 0 2px var(--shell-bg); }
 .studio-avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #302744; border: 1px solid var(--shell-highest); color: #d7c6ff; font-size: 11px; font-weight: 600; }
 .studio-avatar:hover { border-color: var(--shell-primary); }
+.studio-avatar { cursor: pointer; font-family: inherit; }
+.studio-avatar.is-anonymous { color: var(--shell-outline); }
+
+/* Account menu, anchored under the avatar in the topbar. */
+.studio-account { position: relative; }
+.studio-account-menu {
+  position: absolute; right: 0; top: calc(100% + 9px); z-index: 60; width: 236px;
+  display: grid; padding: 6px; border-radius: 12px;
+  background: var(--shell-container); border: 1px solid var(--shell-high);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .48);
+}
+.studio-account-who { padding: 10px 11px 12px; border-bottom: 1px solid var(--shell-high); margin-bottom: 6px; }
+.studio-account-who strong { display: block; font-size: 13px; }
+.studio-account-who small {
+  display: flex; align-items: center; gap: 5px; margin-top: 4px;
+  color: var(--shell-variant); font-size: 11px; overflow-wrap: anywhere;
+}
+.studio-account-menu a,
+.studio-account-menu button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 11px; border: 0; border-radius: 8px;
+  background: none; color: var(--shell-on); font-size: 13px; font-weight: 500;
+  text-align: left; cursor: pointer;
+}
+.studio-account-menu a:hover,
+.studio-account-menu button:hover { background: var(--shell-high); }
+.studio-account-menu form { display: contents; }
+.studio-sign-out { color: #ff9ba3 !important; }
+.studio-sign-out:hover { background: #3b171d !important; }
 .studio-main > main { padding: 90px 28px 60px; }
 .studio-main > main.flush { padding: 56px 0 0; }
 .mobile-menu { display: none; }

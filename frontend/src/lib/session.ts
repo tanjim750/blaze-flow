@@ -27,12 +27,3 @@ export async function loadSession(): Promise<Session> {
     notice: `${me.error.detail} Showing demo content until the API is running.`,
   };
 }
-
-/** "Ada Lovelace" → "AL"; falls back to the email's first letter. */
-export function initialsFor(user: Pick<CurrentUser, "first_name" | "last_name" | "email">): string {
-  const initials = `${user.first_name.charAt(0)}${user.last_name.charAt(0)}`.trim();
-  return (initials || user.email.charAt(0)).toUpperCase();
-}
-
-export const displayName = (user: Pick<CurrentUser, "first_name" | "last_name" | "email">) =>
-  `${user.first_name} ${user.last_name}`.trim() || user.email;

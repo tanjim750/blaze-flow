@@ -4,6 +4,52 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-09 — Frontend account-access flows
+
+### Delivered
+
+- Added the four missing pre-session routes, all against endpoints that already existed: `/sign-up` (register, then an automatic sign-in, sending the browser's IANA timezone), `/forgot-password` (enumeration-safe reset request), `/reset-password`, and `/verify-email`. The last two are the targets of `PASSWORD_RESET_URL` and `EMAIL_VERIFICATION_URL`, which Django has always pointed at `/reset-password` and `/verify-email` — those emailed links previously 404'd.
+- Added sign-out: a topbar account menu showing the real signed-in user's name, email, and initials, submitting to a new `signOutAction`. The action calls `POST /auth/logout/` and then deletes `sessionid`/`csrftoken` from the browser jar, because a server-side fetch's `Set-Cookie` never reaches the browser. The shell previously hardcoded the initials "AR" and linked the avatar to `/sign-in`.
+- Moved the five pre-session pages into an `(auth)` route group with one shared split-screen layout and stylesheet, replacing the markup that had been inline in `sign-in/page.tsx`. The group adds no path segment, so every URL is unchanged. Reformatted the sign-in page, which had been written as a single 1,600-character line, and wired its previously inert "Forgot password?" and "Create an account" links.
+- Added `src/lib/errors.ts`: one `describeErrorBody` used by both the server API client and the new browser auth client. `lib/api` previously read only `body.detail` and fell back to a 300-character slice of the raw body, so DRF field errors reached users as raw JSON. Now `{"password": ["This password is too short."]}` reads "Password: This password is too short.", and `non_field_errors`, HTML error pages, empty bodies, and throttle responses are all handled.
+- Added `src/lib/auth-client.ts` (browser-side public auth endpoints) and `src/lib/user.ts` (name/initials helpers, moved out of `lib/session` so a client component can import them without pulling `next/headers` into the browser bundle — the same constraint that already forced `lib/timecode` to be its own module).
+- Added `logout`, `changePassword`, and `requestEmailVerification` to `lib/api`.
+
+### Decisions and boundaries
+
+- Email verification requires a click rather than confirming on page load. Tokens are single-use, and mail clients and link scanners routinely prefetch URLs, so an automatic confirm would let a prefetch burn the token before the recipient opened the page.
+- Reset and resend confirmations repeat the API's hedge ("if an active account exists") instead of asserting an email was sent, preserving the enumeration safety the 202 responses are designed for.
+- Registration is two calls because Django's register endpoint does not open a session. When registration succeeds and the follow-up sign-in fails, the page says the account was created and asks the user to sign in, rather than implying nothing happened.
+- The public auth endpoints are called from the browser; `logout` and `password/change` are session-authenticated and CSRF-enforced, so they run server-side where `authHeaders()` already supplies `X-CSRFToken`.
+- Google sign-in was left out. The button stays inert because wiring it needs a client id and the GIS handshake, and shipping an OAuth path that cannot be exercised here would be worse than a documented gap.
+
+### Verification
+
+Docker's daemon was unavailable on this host, so verification ran against a real Django dev server on file-backed SQLite (scratchpad settings overlay, console email backend) with the Next dev server in front of it. Every result below is from that pair, driven over HTTP through the Next `/api/*` rewrite:
+
+- Registration: 201 for a valid payload; 400 with both password-validator messages for a weak one.
+- Login: 200 with `csrf_token` plus `sessionid`/`csrftoken` cookies; 400 `non_field_errors` for a wrong password.
+- Sign-out, invoked as the real server action (matching `Next-Action` id): both cookies cleared with a past expiry, `x-action-redirect: /sign-in;push`, and `/auth/me/` 403 afterwards. Logout without the CSRF header is correctly refused ("CSRF Failed: CSRF token missing"), with it returns 204.
+- Password reset: the emailed link rendered the form, confirm returned 204, the new password authenticated, the old one was rejected, and reusing the token returned the expected "invalid or expired".
+- Email verification: the emailed link rendered the confirm panel, confirm returned 204, `email_verified_at` was set, and reuse was rejected.
+- Missing-token states for both token pages render their explanatory panel rather than a broken form.
+- All eight routes return 200 (three shell pages signed in, showing the real user; the auth pages signed out), and an unauthenticated `/` still 307s to `/sign-in`.
+- `describeErrorBody` was exercised directly over nine real DRF response shapes.
+- `npm run build` clean (all eight routes registered), `npx tsc --noEmit` clean, `npm run lint` clean. No 5xx and no traceback in either server log.
+
+### Known limitations
+
+- Still no frontend test suite; the checks above are manual plus the two static ones.
+- **A new account lands on demo content.** Sign-up now works, but the account owns no workspace, so `workspaces[0]` is undefined and every loader falls back to demo content behind a notice. There is no create-workspace flow yet, and this is now the most visible gap in the product.
+- No authenticated account management: no password change, profile edit, or verification resend from inside the app, and `/settings` in the new account menu 404s.
+- Google sign-in remains inert (see Decisions).
+- The account menu closes on outside click and Escape but is not a full focus-trapped menu widget, and it does not restore focus to the avatar on close.
+- Sign-out was verified by invoking the server action over HTTP, not by clicking in a browser; no browser automation is available on this host.
+
+### Next recommended milestone
+
+A create-workspace flow behind the verified-email gate, so registration ends in a real, empty workspace instead of demo content. Then an authenticated `/settings` area for password change, profile, and verification resend.
+
 ## 2026-09-09 — Next.js frontend and its documentation
 
 ### Delivered

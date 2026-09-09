@@ -6,7 +6,7 @@ loader, or backend coupling changes. Material work belongs in `docs/implementati
 
 ## Current state
 
-The frontend is an authenticated vertical slice, not a finished product. Four routes exist
+The frontend is an authenticated vertical slice, not a finished product. Eight routes exist
 and each is wired to real API data:
 
 | Route | Kind | Purpose |
@@ -15,8 +15,15 @@ and each is wired to real API data:
 | `/projects` | Server component + client browser | Client → campaign → asset tree, asset grid/list, and a workflow status board |
 | `/review` | Server component + client workspace | Proxy video player with timecoded comments, replies, and resolution |
 | `/sign-in` | Client component | Email/password session login |
+| `/sign-up` | Client component | Registration, followed by an automatic sign-in |
+| `/forgot-password` | Client component | Requests a reset email |
+| `/reset-password` | Server component + client form | Consumes a reset token from the emailed link |
+| `/verify-email` | Server component + client panel | Consumes a verification token, or resends one |
 
-Everything the sidebar and topbar link to beyond those four routes (`/tasks`, `/files`,
+The last five share the split-screen shell in `src/app/(auth)/layout.tsx`. `(auth)` is a
+route group, so it adds no path segment — those pages stay at their top-level paths.
+
+Everything the sidebar and topbar link to beyond those routes (`/tasks`, `/files`,
 `/clients`, `/team`, `/render-queue`, `/deliverables`, `/settings`, `/help`) is navigation
 scaffolding pointing at routes that do not exist yet and will 404.
 
@@ -71,11 +78,15 @@ the external-drive warning in `docs/DEVELOPMENT.md`.
 | `src/app/page.tsx` | Dashboard route |
 | `src/app/projects/` | Projects route: `page.tsx`, `browser.tsx` (client), `actions.ts` |
 | `src/app/review/` | Review route: `page.tsx`, `workspace.tsx` (client), `actions.ts` |
-| `src/app/sign-in/page.tsx` | Login form |
-| `src/components/app-shell.tsx` | Sidebar, topbar, and workspace tabs |
+| `src/app/(auth)/` | Pre-session pages and their shared layout, styles, and forms |
+| `src/app/actions.ts` | `signOutAction`, the one app-wide server action |
+| `src/components/app-shell.tsx` | Sidebar, topbar, workspace tabs, and the account menu |
 | `src/components/dashboard-tasks.tsx` | Task panel with Today/Upcoming/Overdue buckets |
 | `src/lib/api.ts` | Typed server-side Django client; the only place a URL is built |
 | `src/lib/session.ts` | Resolves the current user and decides the unauthenticated path |
+| `src/lib/auth-client.ts` | Browser-side client for the public auth endpoints |
+| `src/lib/errors.ts` | Turns a DRF error body into one sentence; used by both clients |
+| `src/lib/user.ts` | Name and initials helpers, importable from client components |
 | `src/lib/dashboard-view.ts` | Builds the dashboard view model |
 | `src/lib/projects-view.ts` | Builds the projects tree, asset cards, and status board |
 | `src/lib/review-view.ts` | Builds the review view model and nests comment replies |
@@ -101,8 +112,15 @@ Three layers, and the boundaries are deliberate:
 
 Writes go through server actions (`actions.ts`) rather than browser `fetch`, so mutations
 run with the session cookie already available and finish with `revalidatePath` instead of
-manual cache invalidation. The one exception is login, which must run in the browser to
-receive the `Set-Cookie` response.
+manual cache invalidation.
+
+The exception is the pre-session auth forms, which post from the browser through
+`src/lib/auth-client.ts`. Login has to: only a response the browser itself handles can
+accept Django's `Set-Cookie`. The other public auth endpoints follow it for consistency and
+inline validation feedback. Both clients render failures through the same
+`describeErrorBody`, so a DRF field error such as `{"password": ["This password is too
+short."]}` reads as "Password: This password is too short." wherever it surfaced rather than
+as raw JSON.
 
 ## How requests reach Django
 
@@ -134,10 +152,54 @@ Django uses session authentication, so the frontend holds no token and stores no
 - **Status 0** — Django is unreachable. Redirecting would assert something we cannot know,
   so the page keeps rendering and surfaces a notice instead.
 
+### Signing in and out
+
 `/sign-in` posts to `/api/auth/login/` with `credentials: "include"`, then calls
 `router.push("/")` and `router.refresh()` so the new session is picked up on the server.
 
-There is no sign-out control in the UI yet, even though `POST /api/auth/logout/` exists.
+Sign-out lives in the topbar account menu and submits a form to `signOutAction`
+(`src/app/actions.ts`). Django's `logout()` flushes the session row, but a server-side
+fetch's `Set-Cookie` never reaches the browser, so the action also deletes `sessionid` and
+`csrftoken` from the jar. Without that the browser keeps sending a dead cookie and every
+page costs an API round trip to discover it is signed out. The API call is best-effort: if
+it fails, clearing the cookies and leaving is still the right outcome for someone who asked
+to sign out.
+
+`/auth/logout/` and `/auth/password/change/` are session-authenticated and therefore
+CSRF-enforced, which is why they run server-side through `lib/api` — `authHeaders()`
+supplies `X-CSRFToken` from the cookie. Every other auth endpoint is declared
+`@authentication_classes([])` on the Django side and needs no token.
+
+### Registration
+
+`/sign-up` makes two calls, because Django's register endpoint creates the account without
+opening a session: register, then sign in with the same credentials. It sends the browser's
+IANA timezone so the account starts in the right one. If registration succeeds but the
+follow-up sign-in fails, the page says so explicitly rather than implying the account was
+not created.
+
+Registration also triggers a verification email. Verification is an account signal — it
+does not block login, but it does gate workspace creation.
+
+### Reset and verification links
+
+Django builds both emails against frontend URLs — `PASSWORD_RESET_URL` and
+`EMAIL_VERIFICATION_URL`, defaulting to `/reset-password` and `/verify-email` with the raw
+token as a `?token=` query parameter. Both pages are server components that read the token
+from `searchParams` and hand it to a client form, so the token never round-trips through
+browser history state.
+
+Two deliberate behaviours:
+
+- **Verification requires a click.** The page does not confirm on load. Tokens are
+  single-use, and mail clients and link scanners routinely prefetch URLs — an automatic
+  confirm would let a prefetch burn the token before the recipient ever saw the page.
+- **Reset and resend messages never confirm whether an account exists.** Both endpoints
+  answer 202 either way for enumeration safety, so the UI repeats that hedge ("if an active
+  account exists") rather than asserting an email was sent.
+
+Both pages handle a missing token — a link truncated by a mail client, or pasted without
+its query string — with an explanation and a route back to requesting a new one.
 
 ## The demo-fallback convention
 
@@ -235,11 +297,16 @@ and the palette notes in that directory's `precision_dark_media_os/DESIGN.md`.
 
 - No tests of any kind. `tsc --noEmit` and `npm run lint` are the only automated checks.
 - Eight navigation targets 404 (listed under Current state).
+- **A new account lands on demo content.** Sign-up works, but the account owns no
+  workspace, so every loader's `workspaces[0]` is undefined and the dashboard falls back to
+  demo content behind a notice. There is no create-workspace flow yet, which makes this the
+  most visible gap in the product.
 - Inert controls that render but do nothing: "+ Upload Asset", "Client Review Link", the
-  Format/Status/sort filter dropdowns, per-card menus, "Approve" on a review, "Continue
-  with Google", "Forgot password?", and "Create an account".
-- No sign-out, registration, password reset, or email-verification flow, though the API
-  supports all four.
+  Format/Status/sort filter dropdowns, per-card menus, "Approve" on a review, and "Continue
+  with Google". The Google button needs a client id and the GIS handshake; the API half
+  (`POST /api/auth/google/`) already exists.
+- No authenticated account management — no password change, no profile edit, no
+  verification resend from inside the app. `/settings` in the account menu 404s.
 - No workspace switcher — every loader takes `workspaces[0]`. An account with more than one
   workspace can only ever see the first.
 - Annotations, reactions, attachments, guest review access, notifications management, and
@@ -252,9 +319,14 @@ and the palette notes in that directory's `precision_dark_media_os/DESIGN.md`.
 
 In rough order of value:
 
-1. Sign-out, registration, and password reset, so an account can be managed without Postman.
-2. A real `Project.client_team` foreign key, replacing the `metadata.project_ids` workaround
-   and its two-write campaign creation.
+1. A create-workspace flow, including the verified-email gate. Registration currently ends
+   on a demo-content dashboard, which is the worst first impression the app can give.
+2. An authenticated account area at `/settings`: password change, profile, and verification
+   resend. The endpoints exist and the account menu already links there.
 3. Asset upload from the Projects page, which is the largest missing product action.
-4. Workflow transitions and approval from the review page.
-5. A component test setup, so the view-model derivations get covered.
+4. A real `Project.client_team` foreign key, replacing the `metadata.project_ids` workaround
+   and its two-write campaign creation.
+5. Workflow transitions and approval from the review page.
+6. Google sign-in: a `NEXT_PUBLIC_` client id and the GIS handshake against the existing
+   `POST /api/auth/google/`.
+7. A component test setup, so the view-model derivations get covered.
