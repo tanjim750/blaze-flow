@@ -9,12 +9,14 @@ import {
   Plus, Search, Share2, TriangleAlert, UploadCloud, X,
 } from "lucide-react";
 import type { AssetCard, BoardCard, ClientNode, ProjectsView } from "@/lib/projects-view";
+import type { FilesView } from "@/lib/files-view";
+import { AssetLibrary } from "@/components/asset-library";
 import { createCampaignAction, createClientAction, createFolderAction, type ActionState } from "./actions";
 
 const initialState: ActionState = { error: null };
-const TABS = ["Assets", "Status", "Brief & Specs", "Activity Log"] as const;
+const TABS = ["Assets", "Files", "Status", "Brief & Specs", "Activity Log"] as const;
 
-export function ProjectsBrowser({ view, initialTab, initialDense = false }: { view: ProjectsView; initialTab?: string; initialDense?: boolean }) {
+export function ProjectsBrowser({ view, filesView, initialTab, initialDense = false }: { view: ProjectsView; filesView: FilesView; initialTab?: string; initialDense?: boolean }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<(typeof TABS)[number]>(
@@ -69,6 +71,7 @@ export function ProjectsBrowser({ view, initialTab, initialDense = false }: { vi
               {TABS.map((value) => (
                 <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? "selected" : ""} onClick={() => setTab(value)}>
                   {value === "Assets" && <Grid2X2 size={14} />}
+                  {value === "Files" && <FolderOpen size={14} />}
                   {value === "Status" && <i className="pb-status-dot" />}
                   {value === "Brief & Specs" && <FileText size={14} />}
                   {value === "Activity Log" && <Activity size={14} />}
@@ -106,6 +109,8 @@ export function ProjectsBrowser({ view, initialTab, initialDense = false }: { vi
               </p>
             )}
           </>
+        ) : tab === "Files" && view.selectedCampaign ? (
+          <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient?.id ?? null} />
         ) : tab === "Status" ? (
           <StatusBoard view={view} dense={dense} setDense={setDense} />
         ) : (

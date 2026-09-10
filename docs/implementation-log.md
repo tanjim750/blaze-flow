@@ -4,6 +4,77 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-10 — Files search, bulk actions, upload staging, and details
+
+### Delivered
+
+- Added an explicit recursive-search mode that finds matching assets across nested folders while
+  retaining current-location search as the default.
+- Added accessible file/folder selection and a sticky bulk-action bar. Bulk folder deletion removes
+  every descendant folder and contained file through a single reusable data-layer operation.
+- Upgraded uploads with drag-and-drop staging, visible file names/types/sizes, an item count, and a
+  disabled submit action until valid files are ready.
+- Added a details action and modal for file format, size, ownership, timestamps, and Client/Project
+  relationship metadata, with an equivalent created-by view for folders.
+
+### Verification
+
+- `npx tsc --noEmit`, `npm run lint`, and `npm test` passed (4 files / 8 tests). The production
+  build and diff hygiene passed after the changes.
+
+### Known limitations and next step
+
+- Bulk operations currently cover recursive deletion; move and assignment remain per-item. Add a
+  shared bulk assignment dialog after the workspace asset API defines partial-failure behavior.
+
+## 2026-09-10 — Files organization controls and relationship safety
+
+### Delivered
+
+- Added Client, Project, and creative file-type filters plus newest, alphabetical, and file-size
+  sorting to the shared Files library.
+- Added responsive card and compact-list presentations with accessible pressed-state controls.
+- Made folder reassignment cascade Client/Project ownership through every nested folder and file,
+  and removed descendant folders from move targets so users cannot create circular hierarchies.
+- Added component coverage for folder creation, shared Project visibility, and density switching,
+  plus unit coverage for recursive assignment behavior.
+
+### Verification
+
+- `npx tsc --noEmit`, `npm run lint`, and `npm test` passed (4 files / 6 tests). The production
+  build and diff hygiene passed after the changes.
+
+### Known limitations and next step
+
+- Filtering is scoped to the open folder rather than searching recursively across every nested
+  location. Add an explicit workspace-wide search mode when the backend asset API can provide
+  indexed results and pagination.
+
+## 2026-09-09 — Shared creative Files library
+
+### Delivered
+
+- Rebuilt `/files` as a media-focused asset library with standalone files, visual folder previews,
+  nested browsing, breadcrumbs, search, empty/loading states, multi-file upload, and folder creation.
+- Added explicit nullable Client → Project → Folder relationships to frontend file/folder entities,
+  realistic persisted mock assets, creative type detection, previews, and contextual rename, move,
+  assignment, download, and delete actions.
+- Added a Files tab to each project using the same asset-library component and entity store, so the
+  project screen filters shared objects instead of duplicating them.
+- Added focused tests for creative file classification and shared project projections.
+
+### Verification
+
+- Frontend TypeScript, ESLint, Vitest, production build, and diff hygiene were run successfully.
+
+### Known limitations and next step
+
+- The backend currently requires every project-file row to belong to a project. Unassigned assets
+  and frontend mutations therefore persist in localStorage for now; Blob URLs survive only the
+  current browser session, small image previews are persisted, and folder download produces a
+  manifest. Add workspace-level asset endpoints with nullable client/project/folder ownership, then
+  swap the store adapter without changing the component contract.
+
 ## 2026-09-09 — Browser smoke coverage, canvas movement, and render controls
 
 ### Delivered

@@ -1,0 +1,120 @@
+.asset-library { max-width: 1180px; margin: auto; }
+.asset-library.compact { max-width: none; }
+.al-head, .al-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+.al-head h1 { margin: 6px 0; font-size: 32px; }
+.al-head p:last-child { margin: 0; color: var(--shell-outline); }
+.compact .al-head > div:first-child { display: none; }
+.al-head > div:last-child { display: flex; gap: 8px; }
+.al-head button, .al-form > button, .al-empty button { display: flex; align-items: center; gap: 6px; padding: 9px 12px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-container); color: var(--shell-on); cursor: pointer; }
+.al-head button.primary, .al-form > button { border-color: #9278ff; background: var(--shell-accent); color: #fff; }
+.al-head svg { width: 15px; }
+.al-toolbar { align-items: center; margin: 24px 0 18px; }
+.al-toolbar nav, .al-toolbar nav span { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.al-toolbar nav svg { width: 13px; color: var(--shell-outline); }
+.al-toolbar nav button { border: 0; background: none; color: var(--shell-variant); font-size: 12px; cursor: pointer; }
+.al-toolbar nav span:last-child button { color: var(--shell-on); font-weight: 600; }
+.al-toolbar > label { position: relative; display: flex; align-items: center; width: min(340px, 40vw); }
+.al-toolbar > label svg { position: absolute; left: 10px; width: 14px; color: var(--shell-outline); }
+.al-toolbar input { width: 100%; padding: 9px 10px 9px 32px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-rail); color: var(--shell-on); }
+.al-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; }
+.al-controls select { min-width: 130px; padding: 8px 28px 8px 9px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-rail); color: var(--shell-variant); font-size: 11px; }
+.al-view-toggle { display: flex; margin-left: auto; padding: 2px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-rail); }
+.al-view-toggle button { display: grid; place-items: center; width: 29px; height: 27px; border: 0; border-radius: 6px; background: transparent; color: var(--shell-outline); cursor: pointer; }
+.al-view-toggle button.active { background: var(--shell-high); color: var(--shell-primary); }
+.al-view-toggle svg { width: 13px; }
+.al-section { margin-bottom: 25px; }
+.al-section > header { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.al-section h2 { margin: 0; font-size: 13px; }
+.al-section > header span { padding: 2px 5px; border-radius: 4px; background: var(--shell-high); color: var(--shell-outline); font-size: 9px; }
+.al-folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); gap: 14px; }
+.al-folder-card, .al-file-card { overflow: visible; border: 1px solid var(--shell-highest); border-radius: 13px; background: var(--shell-container); transition: transform .15s, border-color .15s; }
+.al-folder-card, .al-file-card { position: relative; }
+.al-folder-card.selected, .al-file-card.selected { border-color: var(--shell-primary); box-shadow: 0 0 0 1px var(--shell-primary); }
+.al-select { position: absolute; z-index: 8; top: 9px; left: 9px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; background: #11141dcc; opacity: 0; transition: opacity .15s; }
+.al-folder-card:hover .al-select, .al-file-card:hover .al-select, .al-select:has(input:checked) { opacity: 1; }
+.al-select input { accent-color: var(--shell-primary); }
+.al-folder-card:hover { transform: translateY(-2px); border-color: #55506d; }
+.al-folder-preview { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; gap: 4px; width: 100%; height: 150px; padding: 6px; border: 0; border-radius: 13px 13px 0 0; background: #191922; overflow: hidden; cursor: pointer; }
+.al-folder-preview > :first-child { grid-row: 1 / 3; }
+.al-preview-blank, .al-preview-image, .al-kind-preview { display: grid; place-items: center; min-width: 0; min-height: 0; background: #242936; color: #62d9ed; }
+.al-preview-image { background-position: center; background-size: cover; }
+.al-kind-preview.video { background: linear-gradient(145deg, #3d2943, #161923); color: #e28be8; }
+.al-kind-preview.image { background: linear-gradient(145deg, #2b3e5a, #181923); color: #8bbcff; }
+.al-kind-preview.document, .al-kind-preview.source { background: linear-gradient(145deg, #493b27, #181923); color: #f4c672; }
+.al-kind-preview svg { width: 22px; }
+.al-kind-preview.audio { position: relative; }
+.al-kind-preview.audio i { display: flex; align-items: center; gap: 2px; }
+.al-kind-preview.audio b { width: 2px; height: 9px; background: currentColor; }
+.al-kind-preview.audio b:nth-child(2), .al-kind-preview.audio b:nth-child(4) { height: 18px; }
+.al-kind-preview.audio b:nth-child(3) { height: 25px; }
+.al-folder-card > footer { display: flex; align-items: center; padding: 11px 12px; }
+.al-folder-card > footer > button { display: grid; gap: 3px; flex: 1; border: 0; background: none; color: var(--shell-on); text-align: left; cursor: pointer; }
+.al-folder-card small, .al-file-card small { color: var(--shell-outline); font-size: 10px; }
+.al-file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.al-folder-grid.dense, .al-file-grid.dense { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.al-folder-grid.dense .al-folder-card, .al-file-grid.dense .al-file-card { display: flex; min-height: 58px; transform: none; }
+.al-folder-grid.dense .al-folder-preview, .al-file-grid.dense .al-file-preview { flex: 0 0 88px; height: 58px; border-radius: 10px 0 0 10px; }
+.al-folder-grid.dense .al-folder-card > footer, .al-file-grid.dense .al-file-card > div { flex: 1; min-width: 0; }
+.al-file-card { border-radius: 11px; }
+.al-file-preview { position: relative; width: 100%; height: 125px; padding: 0; border: 0; border-radius: 11px 11px 0 0; overflow: hidden; background: var(--shell-low); cursor: pointer; }
+.al-file-preview > span { width: 100%; height: 100%; }
+.al-file-preview > i { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: #0b0b0ecc; color: #fff; }
+.al-file-preview > i svg { width: 11px; }
+.al-file-card > div { display: flex; align-items: center; gap: 7px; padding: 10px; }
+.al-file-card > div > svg { width: 14px; color: var(--shell-primary); }
+.al-file-card > div > span { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.al-file-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.al-menu { position: relative; }
+.al-menu > summary { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 6px; color: var(--shell-outline); cursor: pointer; list-style: none; }
+.al-menu > summary::-webkit-details-marker, .al-menu details > summary::-webkit-details-marker { display: none; }
+.al-menu svg { width: 13px; }
+.al-menu > div, .al-submenu { position: absolute; right: 0; top: 30px; z-index: 25; display: grid; min-width: 180px; max-height: 280px; overflow: auto; padding: 5px; border: 1px solid var(--shell-highest); border-radius: 9px; background: var(--shell-container); box-shadow: 0 14px 35px #000a; }
+.al-menu button, .al-menu details > summary { display: flex; align-items: center; gap: 7px; width: 100%; padding: 8px; border: 0; border-radius: 6px; background: none; color: var(--shell-on); font-size: 11px; text-align: left; cursor: pointer; list-style: none; }
+.al-menu button:hover, .al-menu details > summary:hover { background: var(--shell-high); }
+.al-menu button.danger { color: #ff8f98; }
+.al-menu .al-submenu { right: calc(100% + 5px); top: 0; }
+.al-empty { grid-column: 1 / -1; display: grid; justify-items: center; gap: 8px; padding: 45px; border: 1px dashed var(--shell-highest); border-radius: 11px; color: var(--shell-outline); }
+.al-empty > svg { width: 28px; }
+.al-empty strong { color: var(--shell-on); }
+.al-empty span { font-size: 11px; }
+.al-modal { position: fixed; inset: 0; z-index: 110; }
+.al-backdrop { position: absolute; inset: 0; width: 100%; border: 0; background: #050509c7; backdrop-filter: blur(5px); }
+.al-modal >section { position: relative; width: min(calc(100% - 30px), 620px); max-height: 88vh; overflow: auto; margin: 6vh auto; padding: 20px; border: 1px solid var(--shell-highest); border-radius: 14px; background: var(--shell-container); }
+.al-modal > section > header { display: flex; align-items: center; justify-content: space-between; }
+.al-modal h2 { margin: 0; font-size: 17px; }
+.al-modal header button { border: 0; background: none; color: var(--shell-outline); cursor: pointer; }
+.al-form { display: grid; gap: 13px; margin-top: 16px; }
+.al-form label { display: grid; gap: 6px; color: var(--shell-variant); font-size: 11px; }
+.al-form input, .al-form select { padding: 10px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-rail); color: var(--shell-on); }
+.al-relations { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.al-drop { place-items: center; padding: 24px; border: 1px dashed var(--shell-outline); border-radius: 10px; text-align: center; cursor: pointer; }
+.al-drop > svg { color: var(--shell-primary); }
+.al-drop.dragging { border-color: var(--shell-primary); background: color-mix(in srgb, var(--shell-primary) 10%, transparent); }
+.al-drop span { color: var(--shell-outline); }
+.al-upload-list { display: grid; gap: 5px; padding: 10px; border: 1px solid var(--shell-highest); border-radius: 9px; background: var(--shell-rail); }
+.al-upload-list > span { display: flex; align-items: center; gap: 7px; color: var(--shell-variant); font-size: 11px; }
+.al-upload-list svg { width: 13px; }
+.al-upload-list small { margin-left: auto; color: var(--shell-outline); }
+.al-scope { display: flex; align-items: center; gap: 5px; color: var(--shell-outline); font-size: 11px; white-space: nowrap; }
+.al-scope input { accent-color: var(--shell-primary); }
+.al-bulk { position: sticky; top: 10px; z-index: 20; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding: 9px 11px; border: 1px solid #6558a6; border-radius: 9px; background: #242036f2; box-shadow: 0 8px 24px #0006; }
+.al-bulk strong { margin-right: auto; font-size: 11px; }
+.al-bulk button { display: flex; align-items: center; gap: 5px; padding: 6px 9px; border: 0; border-radius: 6px; background: var(--shell-high); color: var(--shell-on); cursor: pointer; }
+.al-bulk button.danger { color: #ff9ba3; }
+.al-bulk svg { width: 13px; }
+.al-results-note { margin: -6px 0 16px; color: var(--shell-outline); font-size: 10px; }
+.al-details { margin-top: 18px; }
+.al-details > div { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; }
+.al-details > div svg { width: 20px; color: var(--shell-primary); }
+.al-details h3 { margin: 0; font-size: 15px; }
+.al-details dl { display: grid; margin: 0; border-top: 1px solid var(--shell-highest); }
+.al-details dl > div { display: grid; grid-template-columns: 120px 1fr; padding: 10px 0; border-bottom: 1px solid var(--shell-highest); font-size: 11px; }
+.al-details dt { color: var(--shell-outline); }
+.al-details dd { margin: 0; color: var(--shell-on); text-transform: capitalize; }
+.al-full-preview { display: grid; place-items: center; gap: 12px; min-height: 280px; margin-top: 14px; }
+.al-full-preview img, .al-full-preview video { max-width: 100%; max-height: 60vh; }
+.al-full-preview audio { width: 100%; }
+.al-full-preview > .al-kind-preview { width: 100%; height: 280px; }
+.al-full-preview p { color: var(--shell-outline); font-size: 10px; }
+@media (max-width: 700px) { .al-head, .al-toolbar { align-items: stretch; flex-direction: column; } .al-toolbar > label { width: 100%; } .al-controls { flex-wrap: wrap; } .al-controls select { flex: 1; } .al-view-toggle { margin-left: 0; } .al-relations { grid-template-columns: 1fr; } .al-folder-grid, .al-file-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { .al-folder-grid, .al-file-grid { grid-template-columns: 1fr; } }

@@ -276,6 +276,27 @@ stage. Stage names are mapped onto the mockup's badge palette by keyword (`toneF
 
 Three server actions write: create client team, create campaign, create folder.
 
+The Files tab embeds the same asset-library component used at `/files`, filtered by the selected
+project id. It is a projection of the same folder/file entities, not a second collection.
+
+### Files (`/files`)
+
+The Files page is the workspace's central creative asset library. Root-level files and visual
+folder cards coexist; folders may nest, and both entity types carry nullable `clientId` and
+`projectId` relationships. Create-folder and multi-file upload dialogs allow optional
+Client → Project assignment, while uploads can target either the current folder or the root.
+The toolbar supports Client, Project, and file-type filtering, newest/name/size sorting, and
+card or compact-list presentation. Reassigning a folder cascades its relationship through nested
+folders and files; descendant targets are excluded from the move menu to prevent folder cycles.
+Search can stay within the current location or explicitly scan every nested folder. File and folder
+cards support selection with recursive bulk deletion, uploads can be staged through browse or
+drag-and-drop before submission, and the context menu exposes a metadata details dialog.
+
+`src/lib/asset-library.ts` owns the frontend entity contract and a localStorage-backed mock store.
+The shared component adapts real project-file API rows into that contract, then overlays local
+mock changes by id. This lets `/files` and Projects → Files update together today while preserving
+a clean boundary for a future workspace-level asset API.
+
 ### Review (`/review`)
 
 Loads a project's media versions, selects a cut, and loads its comments. Selection falls
@@ -311,6 +332,7 @@ endpoint change would let the UI get simpler, not just prettier.
 | Media list serializer has no poster frame | Asset and review cards fall back to a tinted plate |
 | No comment count, duration, or resolution on the media list | Those fields are `null` and the card omits them rather than faking a number |
 | Comment lists are offset-paginated via `X-Pagination-*` headers | The review page requests one page of `limit=200` and does not paginate |
+| Project-file endpoints require a project and have no workspace-level nullable assignment model | Files uses a persisted frontend entity store for unassigned assets and overlays project API rows by id |
 
 ## Styling
 
@@ -332,7 +354,10 @@ and the palette notes in that directory's `precision_dark_media_os/DESIGN.md`.
 - The frontend suite currently has two focused unit/component tests; end-to-end browser coverage
   is still absent.
 - No shell navigation targets 404.
-- Inert controls that render but do nothing: the Format/Status/sort filter dropdowns and per-card menus.
+- Inert controls that render but do nothing: the Format/Status/sort filter dropdowns and non-Files per-card menus.
+- Files created only in the frontend store are mock assets: Blob download URLs last for the current
+  browser session, image previews persist only for images up to 1 MB, and folder downloads are a
+  metadata manifest rather than a ZIP. A workspace-level backend API should replace this adapter.
 - Account identity fields are read-only because the backend exposes no user-profile update
   endpoint. Workspace business-profile fields can be edited at `/settings`.
 - Annotations support points, rectangles, ellipses, arrows, freehand paths, and text. Authors can
