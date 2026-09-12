@@ -1938,3 +1938,29 @@ menu button sat on top of full-bleed pages.
 - Driven in Chrome at 1440px and 820px: both rails toggle and restore, the handles clear
   each other when the client rail is shut, the mobile breakpoint hides both handles and
   restores the off-canvas drawer, and neither page scrolls sideways.
+
+## 2026-09-12 — Inline create forms could not be dismissed
+
+Reported: opening "+ Add Subfolder" and then trying to back out left the form wedged in the
+tree.
+
+It was not a state bug so much as a missing feature, in all three inline forms — client,
+subfolder and folder. None had a cancel control, none listened for Escape, none closed on
+clicking away, and none closed on **success** either: the action returned `{error: null}`
+both before and after saving, so a form had no way to tell that it had done its job.
+
+The three hand-written copies are now one `InlineCreate` component:
+
+- Escape and a cancel button always close it.
+- Clicking away closes it **only while the field is empty**, so a half-typed name is never
+  thrown away.
+- `ActionState` gained `savedAt`, which makes a completed write distinguishable from the
+  initial state, and the form closes on it.
+
+Verified in Chrome, all four paths: opens on click, closes on Escape, closes on the cancel
+button, closes on clicking away when empty, and stays open with "April 2026" intact when
+clicking away after typing.
+
+The rail handles were also reworked — a pill straddling the edge with a gradient, a
+hairline top highlight and a drop shadow, plus an accent ring on hover, in place of the
+flat disc.

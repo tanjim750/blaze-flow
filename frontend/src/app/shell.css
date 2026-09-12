@@ -41,15 +41,28 @@
    its place instead of being pushed off the bottom. */
 .studio-sidebar-top { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-bottom: 8px; }
 
-/* The handle straddles the rail's edge so it is in the same place in both states. */
+/*
+ * The collapse handle.
+ *
+ * A pill straddling the rail's edge rather than a flat disc: the gradient, the hairline
+ * top highlight and the drop shadow give it enough relief to read as a physical grip, and
+ * the accent ring on hover is what tells you it is interactive before you click it.
+ */
 .studio-rail-toggle {
-  position: absolute; top: 62px; right: -13px; z-index: 55;
-  display: grid; place-items: center; width: 26px; height: 26px;
-  border: 1px solid var(--shell-highest); border-radius: 50%;
-  background: var(--shell-container); color: var(--shell-variant);
-  cursor: pointer; box-shadow: 0 4px 12px #0007;
+  position: absolute; top: 68px; right: -11px; z-index: 55;
+  display: grid; place-items: center; width: 22px; height: 46px; padding: 0;
+  border: 1px solid #ffffff1a; border-radius: 999px;
+  background: linear-gradient(160deg, #2c2c35, #16161b);
+  color: #b9b5c9; cursor: pointer;
+  box-shadow: inset 0 1px 0 #ffffff20, inset 0 -1px 0 #00000066, 0 6px 18px #00000099;
+  transition: color .18s, border-color .18s, background .18s, box-shadow .18s;
 }
-.studio-rail-toggle:hover { background: var(--shell-high); color: var(--shell-on); }
+.studio-rail-toggle:hover {
+  color: #fff; border-color: #8b6cff66;
+  background: linear-gradient(160deg, #36314d, #1b1a24);
+  box-shadow: inset 0 1px 0 #ffffff29, 0 6px 20px #000000a6, 0 0 0 3px #8b6cff1f;
+}
+.studio-rail-toggle:focus-visible { border-color: var(--shell-primary); }
 .studio-rail-toggle svg { transition: transform .42s cubic-bezier(.34, 1.56, .64, 1); }
 .is-collapsed .studio-rail-toggle svg { transform: rotate(180deg); }
 

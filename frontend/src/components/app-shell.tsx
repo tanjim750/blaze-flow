@@ -114,7 +114,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
           whileTap={reduceMotion ? undefined : { scale: 0.82 }}
           transition={{ type: "spring", stiffness: 620, damping: 14 }}
         >
-          <ChevronLeft size={14} />
+          <ChevronLeft size={14} strokeWidth={2.25} />
         </motion.button>
 
         <div className="studio-sidebar-top">

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useRef, useState, type FormEvent } from "react";
+import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
@@ -17,7 +17,65 @@ import type { TasksView } from "@/lib/tasks-view";
 import "../tasks/tasks.css";
 import { createCampaignAction, createClientAction, createFolderAction, type ActionState } from "./actions";
 
-const initialState: ActionState = { error: null };
+const initialState: ActionState = { error: null, savedAt: null };
+
+/**
+ * An inline "name it and press Add" form.
+ *
+ * All three of these — client, subfolder, folder — were previously written out by hand and
+ * shared the same defect: once opened there was no way back. No cancel control, no Escape,
+ * no dismissal on clicking away, and not even a close on success, because the action
+ * returned `{error: null}` both before and after saving. Opening one to see what it did
+ * left it wedged on the tree.
+ *
+ * So: Escape and a cancel button always close it, clicking away closes it when nothing has
+ * been typed (never discarding work), and a completed save closes it via `savedAt`.
+ */
+function InlineCreate({ action, hidden, placeholder, label, onClose, nested = false }: {
+  action: (previous: ActionState, form: FormData) => Promise<ActionState>;
+  hidden?: Record<string, string>;
+  placeholder: string;
+  label: string;
+  onClose: () => void;
+  nested?: boolean;
+}) {
+  const [state, submit, pending] = useActionState(action, initialState);
+  const [value, setValue] = useState("");
+  const acknowledged = useRef(state.savedAt);
+
+  useEffect(() => {
+    if (state.savedAt && state.savedAt !== acknowledged.current) {
+      acknowledged.current = state.savedAt;
+      onClose();
+    }
+  }, [state.savedAt, onClose]);
+
+  return (
+    <form
+      action={submit}
+      className={nested ? "pb-inline-form nested" : "pb-inline-form"}
+      onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}
+      onBlur={(event) => {
+        // Only when it is still empty, so a half-typed name is never thrown away.
+        if (!value.trim() && !event.currentTarget.contains(event.relatedTarget as Node | null)) onClose();
+      }}
+    >
+      {Object.entries(hidden ?? {}).map(([name, fieldValue]) => <input key={name} type="hidden" name={name} value={fieldValue} />)}
+      <input
+        name="name"
+        placeholder={placeholder}
+        aria-label={label}
+        autoFocus
+        required
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+      />
+      <button type="submit" disabled={pending}>{pending ? "Adding…" : "Add"}</button>
+      <button type="button" className="pb-inline-cancel" onClick={onClose} aria-label="Cancel"><X size={13} /></button>
+      {state.error && <small role="alert">{state.error}</small>}
+    </form>
+  );
+}
 const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log"] as const;
 
 export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string }) {
@@ -139,7 +197,6 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
 function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: ProjectsView; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void }) {
   const [filter, setFilter] = useState("");
   const [creating, setCreating] = useState(false);
-  const [clientState, submitClient] = useActionState(createClientAction, initialState);
   const reduceMotion = useReducedMotion();
 
   const clients = view.clients.filter((client) => client.name.toLowerCase().includes(filter.trim().toLowerCase()));
@@ -160,7 +217,7 @@ function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: P
         whileTap={reduceMotion ? undefined : { scale: 0.82 }}
         transition={{ type: "spring", stiffness: 620, damping: 14 }}
       >
-        <ChevronLeft size={14} />
+        <ChevronLeft size={14} strokeWidth={2.25} />
       </motion.button>
       </div>
       <div className="pb-rail-top">
@@ -177,11 +234,12 @@ function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: P
         </div>
 
         {creating && (
-          <form action={submitClient} className="pb-inline-form">
-            <input name="name" placeholder="New client name" aria-label="New client name" autoFocus required />
-            <button type="submit">Create</button>
-            {clientState.error && <small role="alert">{clientState.error}</small>}
-          </form>
+          <InlineCreate
+            action={createClientAction}
+            placeholder="New client name"
+            label="New client name"
+            onClose={() => setCreating(false)}
+          />
         )}
 
         <div className="pb-tree">
@@ -203,7 +261,6 @@ function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: P
 
 function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; view: ProjectsView; open: boolean; onToggle: () => void }) {
   const [adding, setAdding] = useState(false);
-  const [campaignState, submitCampaign] = useActionState(createCampaignAction, initialState);
   const isSelected = view.selectedClient?.id === client.id;
 
   return (
@@ -230,12 +287,14 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
           })}
 
           {adding ? (
-            <form action={submitCampaign} className="pb-inline-form nested">
-              <input type="hidden" name="clientId" value={client.id} />
-              <input name="name" placeholder="e.g. March 2026" aria-label="New subfolder name" autoFocus required />
-              <button type="submit">Add</button>
-              {campaignState.error && <small role="alert">{campaignState.error}</small>}
-            </form>
+            <InlineCreate
+              nested
+              action={createCampaignAction}
+              hidden={{ clientId: client.id }}
+              placeholder="e.g. March 2026"
+              label="New subfolder name"
+              onClose={() => setAdding(false)}
+            />
           ) : (
             <button type="button" className="pb-add-sub" onClick={() => setAdding(true)}>
               <Plus size={13} />+ Add Subfolder <span>(e.g. March 2026)</span>
@@ -252,7 +311,6 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
 /** Folders inside the selected campaign — the "and so on" level below a subfolder. */
 function NestedFolders({ view }: { view: ProjectsView }) {
   const [adding, setAdding] = useState(false);
-  const [folderState, submitFolder] = useActionState(createFolderAction, initialState);
   const campaign = view.selectedCampaign!;
   const roots = campaign.folders.filter((folder) => !folder.parentId);
   if (!roots.length && !adding) {
@@ -264,12 +322,14 @@ function NestedFolders({ view }: { view: ProjectsView }) {
         <span key={folder.id} className="pb-nested-row"><Folder size={12} />{folder.name}</span>
       ))}
       {adding ? (
-        <form action={submitFolder} className="pb-inline-form nested">
-          <input type="hidden" name="campaignId" value={campaign.id} />
-          <input name="name" placeholder="Folder name" aria-label="New folder name" autoFocus required />
-          <button type="submit">Add</button>
-          {folderState.error && <small role="alert">{folderState.error}</small>}
-        </form>
+        <InlineCreate
+          nested
+          action={createFolderAction}
+          hidden={{ campaignId: campaign.id }}
+          placeholder="Folder name"
+          label="New folder name"
+          onClose={() => setAdding(false)}
+        />
       ) : (
         <button type="button" className="pb-add-sub subtle" onClick={() => setAdding(true)}><Plus size={12} />Add folder</button>
       )}
