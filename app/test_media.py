@@ -231,6 +231,33 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
         )
         self.assertEqual(response.json()[0]['statuses'], [])
 
+    def test_a_failed_poster_does_not_cost_the_file_its_preview(self):
+        """The poster and the duration enrich a file; the preview is what it needs.
+
+        They run first — a thumbnail should not queue behind a full transcode — so an
+        unforeseen error in either used to take the preview down with it, and the file
+        became unplayable over a missing thumbnail.
+        """
+        uploaded = self.upload(name='clip.mp4', content=_make_test_clip(), content_type='video/mp4')
+        self.assertEqual(uploaded.status_code, 201)
+        file_id = uploaded.json()['file']['id']
+
+        # A media upload enqueues the preview alongside the scan, so both drains have to
+        # run under the patch or the poster is made before it applies.
+        with patch(
+            'app.services.file_processing._video_poster', side_effect=RuntimeError('encoder exploded'),
+        ), patch(
+            'app.services.file_processing._probe_duration_ms', side_effect=RuntimeError('probe exploded'),
+        ):
+            process_outbox_events()
+            process_outbox_events()
+
+        self.assertFalse(
+            FileVariant.objects.filter(file_id=file_id, metadata__variant_type='VIDEO_POSTER').exists()
+        )
+        proxy = FileVariant.objects.get(file_id=file_id, metadata__variant_type='VIDEO_PROXY')
+        self.assertEqual(proxy.mime_type, 'video/mp4')
+
     def test_video_upload_generates_playable_proxy_variant(self):
         uploaded = self.upload(name='clip.mp4', content=_make_test_clip(), content_type='video/mp4')
         self.assertEqual(uploaded.status_code, 201)

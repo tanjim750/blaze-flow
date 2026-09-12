@@ -1,6 +1,7 @@
 import hashlib
 import html
 import io
+import logging
 import shutil
 import socket
 import struct
@@ -31,6 +32,8 @@ from app.models import (
 
 
 SCAN_TOPIC = 'file.security-scan.requested'
+logger = logging.getLogger(__name__)
+
 PREVIEW_TOPIC = 'file.preview.requested'
 # The playable/openable preview: exactly one of these per file, and the thing the review
 # player and `preview_status` mean when they say "the preview".
@@ -418,7 +421,7 @@ def _probe_duration_ms(file):
              '-of', 'default=noprint_wrappers=1:nokey=1', str(source)],
             capture_output=True, text=True, timeout=settings.VIDEO_PROXY_TIMEOUT_SECONDS,
         )
-    if result.returncode != 0:
+    if not result or result.returncode != 0:
         return None
     try:
         seconds = float(result.stdout.strip())
@@ -498,23 +501,33 @@ def generate_preview(*, file_id):
     thumbnail.
     """
     file = File.objects.get(id=file_id, status=FileStatus.READY, deleted_at__isnull=True)
-    preview = _store_variant(file, _preview_content, types=PREVIEW_VARIANT_TYPES)
+
+    # The poster goes first, before the proxy. Extracting one frame takes a moment;
+    # transcoding the whole cut can take minutes, and the thumbnail every list is waiting
+    # on has no reason to queue behind it.
+    # Both of these enrich the file; neither is allowed to cost it its preview. The catch
+    # is deliberately broad: a poster or a duration is worth having, but not at the price of
+    # a file that cannot be opened because extracting one threw something unforeseen. Both
+    # log, because a silent pass leaves a card waiting with nothing to explain it.
+    if file.mime_type.startswith('video/'):
+        try:
+            _store_variant(file, _video_poster, types=(POSTER_VARIANT_TYPE,))
+        except Exception:
+            logger.warning('Poster generation failed for file %s', file.id, exc_info=True)
+
     if file.mime_type.startswith(('video/', 'audio/')) and not (file.metadata or {}).get('duration_ms'):
         try:
             duration_ms = _probe_duration_ms(file)
-        except (OSError, subprocess.SubprocessError):
+        except Exception:
+            logger.warning('Duration probe failed for file %s', file.id, exc_info=True)
             duration_ms = None
         if duration_ms:
             File.objects.filter(id=file.id).update(
                 metadata={**(file.metadata or {}), 'duration_ms': duration_ms},
                 updated_at=timezone.now(),
             )
-    if file.mime_type.startswith('video/'):
-        try:
-            _store_variant(file, _video_poster, types=(POSTER_VARIANT_TYPE,))
-        except (OSError, ValueError, subprocess.SubprocessError):
-            pass
-    return preview
+
+    return _store_variant(file, _preview_content, types=PREVIEW_VARIANT_TYPES)
 
 
 def handle_security_scan_event(event):

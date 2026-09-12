@@ -2313,3 +2313,31 @@ someone reloaded. The library re-reads every three seconds while anything is pro
 and stops after twenty attempts, because a poster that can never be produced (an mp4 with
 no video stream does exactly that) must not keep the page polling for the rest of the
 session. Measured: three re-reads in seven seconds, and a settled card does not poll.
+
+## 2026-09-12 — "Generating preview…" that never finished
+
+Reported: a duplicate sat on the progress bar. It was not slow — it had finished twenty
+minutes earlier and produced no poster. Three separate faults, found in that order.
+
+**The worker was running day-old code.** The container started 2026-09-11 21:58;
+`file_processing.py` changed 2026-09-12 22:45. `run_outbox_worker` is a long-lived process
+with no autoreload, so it had never executed the poster step at all. What made this hard to
+see is that `docker compose exec worker python …` starts a *new* process — every manual
+check I had run used the new code, while the daemon did not. Written up in
+`docs/DEVELOPMENT.md`.
+
+**The poster queued behind the proxy.** `generate_preview` made the playable variant first,
+so a one-frame extract waited on a full transcode of the whole cut. Reversed: the poster and
+the duration now run before the proxy. Measured after: a duplicate is scanned and postered
+within eight seconds, with the transcode still going.
+
+**An enrichment could cost a file its preview.** With the reorder, anything unforeseen
+thrown by the poster or the duration probe now happened *before* the preview existed — so it
+took the preview down with it. The test suite caught it immediately: `subprocess.run`
+patched to return `None` made `result.returncode` raise `AttributeError`, which was outside
+the caught tuple, and the mp3 ended up with no variant at all. Both steps are now caught
+broadly and logged: a poster and a duration are worth having, but not at the price of a file
+that cannot be opened. A regression test asserts the proxy survives both blowing up.
+
+The silent `except: pass` is gone too. It gave a card waiting forever and nothing to explain
+it; both paths now log with a traceback.

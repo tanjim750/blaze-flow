@@ -384,3 +384,21 @@ CI runs these checks on every push and pull request.
 4. Add guest token rotation and export metrics to the production observability platform.
 
 Avoid implementing all documented domains at once. Complete and test one end-to-end workflow before expanding the surface area.
+
+## The worker does not reload code
+
+`web` runs `runserver`, which reloads on every edit. `worker` runs
+`manage.py run_outbox_worker`, which does not — it holds whatever was imported when the
+container started, for as long as it runs.
+
+So after changing anything the worker executes — `app/services/file_processing.py`,
+`app/services/media.py`, anything reachable from `handle_preview_event` — restart it:
+
+```bash
+docker compose restart worker
+```
+
+This is easy to miss, because `docker compose exec worker python …` starts a *new* process
+and therefore runs the new code. A change can look fine when tested that way and still not
+be running in the daemon. Symptom: uploads complete, but whatever the new code was meant to
+produce never appears, and the outbox event is `PUBLISHED` rather than failed.
