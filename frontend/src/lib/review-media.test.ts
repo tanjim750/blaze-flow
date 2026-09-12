@@ -22,9 +22,11 @@ const assetFile = (over: Partial<ProjectFile> & { id: string; fileId: string; na
   id: over.id, workspace_id: WORKSPACE,
   client_team_id: over.client_team_id ?? null, project_id: over.project_id ?? null,
   folder_id: over.folder_id ?? null, task_stage_id: over.task_stage_id ?? null,
-  file: { id: over.fileId, name: over.name, mime_type: "video/mp4", size_bytes: 10, checksum_sha256: "x", status: "READY" },
+  file: { id: over.fileId, name: over.name, mime_type: "video/mp4", size_bytes: 10, checksum_sha256: "x", status: "READY", duration_ms: null },
   added_by: null,
   poster: null,
+  comment_count: 0,
+  version_number: null,
   created_at: over.created_at ?? "2026-09-02T00:00:00Z",
 });
 

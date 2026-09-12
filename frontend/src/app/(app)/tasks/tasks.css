@@ -21,10 +21,10 @@
 
 .task-file-thumb {
   position: relative; display: grid; place-items: center;
-  /* Overridden inline with the frame's own ratio; this is the fallback when none is
-     known. The cap only bites on extreme shapes, and `contain` keeps those letterboxed
-     rather than cropped. */
-  aspect-ratio: 16 / 10; max-height: 360px; margin: 0 auto 9px;
+  /* One box for every card, so the columns stay even. The media is fitted inside rather
+     than filling it: a vertical cut is shown whole with bars at the sides instead of
+     having its top and bottom cropped off. */
+  aspect-ratio: 16 / 10; margin-bottom: 9px;
   border: 1px solid var(--border); border-radius: 9px;
   background: linear-gradient(150deg, #26243a, #15141b);
   overflow: hidden; transition: border-color .15s;
@@ -46,18 +46,26 @@
   background: #3a2f16; color: #f0d9a1; font: 600 9px var(--font-geist-mono), monospace; font-style: normal;
 }
 
-.task-card-file h4 { margin: 0; font-size: 12px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.task-file-meta { display: flex; align-items: center; gap: 6px; margin-top: 7px; min-width: 0; }
-.task-file-avatar {
-  display: grid; place-items: center; flex: none; width: 18px; height: 18px;
-  border-radius: 50%; background: #2c2444; color: #cbbcff;
-  font: 600 8px var(--font-geist-mono), monospace;
-}
-.task-file-avatar svg { width: 10px; height: 10px; }
-.task-file-meta strong { min-width: 0; font-size: 10px; font-weight: 500; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.task-file-meta time { margin-left: auto; flex: none; color: var(--muted); font-size: 10px; }
+.task-card-file h4 { margin: 0; font-size: 12.5px; font-weight: 600; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-file-meta { margin: 4px 0 0; color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.task-file-foot { display: flex; align-items: center; gap: 7px; margin-top: 8px; color: var(--muted); font-size: 9px; }
-.task-file-project { margin-left: auto; padding: 2px 6px; border: 1px solid var(--border); border-radius: 999px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The collection the file belongs to. Its project, which is the nearest thing the data
+   has to the grouping the design calls a collection. */
+.task-file-collection {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin-top: 8px;
+  color: var(--shell-variant, #c9c4d8); font-size: 10.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.task-file-collection svg { flex: none; width: 12px; height: 12px; color: #a99bff; }
+
+/* Runtime, bottom-left of the frame; review notes, top-right. */
+.task-file-comments {
+  position: absolute; right: 7px; top: 7px;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 6px; border-radius: 5px;
+  background: #000000a8; color: #dcd9e6;
+  font: 600 9px var(--font-geist-mono), monospace;
+}
+.task-file-comments svg { width: 10px; height: 10px; }
 
 /* A staged file's shortcut into the review workspace. */

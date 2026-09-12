@@ -2209,3 +2209,29 @@ of having its top and bottom cut away.
 
 Existing posters predate the dimensions, so they were dropped and regenerated; the one on
 the reported file came back 405×720.
+
+## 2026-09-12 — Board cards: uniform frames and real badges
+
+Reworked against a fuller reference, and reversing the previous pass: thumbnails are one
+box on every card so the columns stay even, with the media **fitted inside** rather than
+cropped — a vertical cut is shown whole with bars at the sides. Measured: four cards of
+mixed shape, all 297×185.
+
+The badges are data, not decoration:
+
+- **Duration** (`0:49`) — probed with `ffprobe` while the preview is generated and stored
+  on `File.metadata`, not on a variant: a duration belongs to the media, and an audio file
+  has one without ever producing a poster. Backfilled; the reported clip reads 16.2s.
+- **Comment count** — review notes reach the same bytes as an asset row through the shared
+  `File`, so a library file published into a project carries its count with nothing new
+  stored. Hidden at zero.
+- **Version** (`v2`) — present only where the file was published as a media version.
+- **Collection chip** — the project, the nearest thing the data has to the grouping the
+  design calls a collection.
+
+All three are subqueries on the same annotation, so a board still costs one round trip
+rather than three per card.
+
+Not built, and deliberately: the per-card checkbox and the column "+" buttons are selection
+and creation, not badges; and the custom-field grid (DEADLINE / EDITORS / PRICING …) needs
+a user-definable field model, which is its own piece of work rather than a card restyle.

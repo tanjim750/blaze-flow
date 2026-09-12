@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from app.models import FileStatus, FileVariant, ProjectFile, ProjectFolder
+from app.models import FileStatus, FileVariant, MediaVersion, ProjectFile, ProjectFolder, ReviewComment
 from app.services.file_processing import POSTER_VARIANT_TYPE
 
 
@@ -29,11 +29,34 @@ class ProjectFileSerializer(serializers.ModelSerializer):
     file = serializers.SerializerMethodField()
     added_by = serializers.SerializerMethodField()
     poster = serializers.SerializerMethodField()
+    comment_count = serializers.SerializerMethodField()
+    version_number = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectFile
-        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'folder_id', 'task_stage_id', 'file', 'added_by', 'poster', 'created_at')
+        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'folder_id', 'task_stage_id', 'file', 'added_by', 'poster', 'comment_count', 'version_number', 'created_at')
         read_only_fields = fields
+
+    def get_comment_count(self, project_file):
+        """Review notes on this media.
+
+        Comments hang off a `MediaVersion`, and a media version and an asset row reach the
+        same bytes through the same `File` — so a library file published into a project
+        carries its review count here without anything new being stored.
+        """
+        if hasattr(project_file, 'comment_count_annotation'):
+            return project_file.comment_count_annotation or 0
+        return ReviewComment.objects.filter(
+            media_version__original_file_id=project_file.file_id, deleted_at__isnull=True,
+        ).count()
+
+    def get_version_number(self, project_file):
+        """The cut number, when this file was published as a project media version."""
+        if hasattr(project_file, 'version_number_annotation'):
+            return project_file.version_number_annotation
+        return MediaVersion.objects.filter(
+            original_file_id=project_file.file_id,
+        ).values_list('version_number', flat=True).first()
 
     def get_poster(self, project_file):
         """The still a list shows, with the frame's own dimensions.
@@ -73,6 +96,9 @@ class ProjectFileSerializer(serializers.ModelSerializer):
             'size_bytes': item.size_bytes,
             'checksum_sha256': item.checksum,
             'status': item.status,
+            # Present once the preview worker has probed it; null for anything with no
+            # runtime, and for media uploaded before it was recorded.
+            'duration_ms': (item.metadata or {}).get('duration_ms'),
         }
 
 

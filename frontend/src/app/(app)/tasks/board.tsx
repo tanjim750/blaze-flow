@@ -2,7 +2,7 @@
 import { useMemo, useState, type DragEvent, type FormEvent } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
-import { AudioLines, CalendarDays, CheckCircle2, ChevronDown, CirclePlus, Clapperboard, Columns3, Ellipsis, File as FileIcon, GripVertical, Image as ImageIcon, LayoutList, Search, Trash2, TriangleAlert, UserRound, X } from "lucide-react";
+import { AudioLines, CalendarDays, CheckCircle2, ChevronDown, CirclePlus, Clapperboard, Columns3, Ellipsis, File as FileIcon, FolderOpen, GripVertical, Image as ImageIcon, LayoutList, MessageSquare, Search, Trash2, TriangleAlert, UserRound, X } from "lucide-react";
 import type { ProjectFile, Task, TaskStage, TaskWorkflowSettings } from "@/lib/api"; import type { TasksView } from "@/lib/tasks-view";
 import { updateAssetFile } from "@/lib/asset-api-client";
 import { AnimatePresence, motion } from "motion/react";
@@ -30,11 +30,16 @@ function Card({task,project,client,edit,remove}:{task:Task;project?:string;clien
 /**
  * A media card for a file staged on the board.
  *
+ * Every thumbnail is the same box whatever the media's shape, so columns stay even; the
+ * frame is fitted inside rather than cropped, which is what keeps a vertical cut whole.
+ *
+ * The badges are all real. Duration is probed when the preview is generated, the comment
+ * count joins review notes through the shared `File` row, and a version number appears
+ * only for a file published into a project as a media version.
+ *
  * The thumbnail is the file itself only for images, which are small enough to fetch for a
- * card. Video deliberately gets a rendered poster instead: the asset download route is a
- * plain `FileResponse`, which serves no byte ranges, so a `<video>` here would pull every
- * clip on the board down in full just to paint one frame. A real still needs a poster
- * variant from the worker — see the note in the implementation log.
+ * card. Video shows the poster the worker rendered: the asset download route serves no
+ * byte ranges, so a `<video>` here would pull every clip on the board down in full.
  */
 function FileCard({file,project}:{file:ProjectFile;project?:string}){
  // `file.file.id` is the `File` row, which is what review is addressed by, so this link
@@ -43,31 +48,20 @@ function FileCard({file,project}:{file:ProjectFile;project?:string}){
  const playable=kind==="video"||kind==="audio";
  const review=playable?`/review?media=${file.file.id}`:null;
  const ready=file.file.status==="READY";
- // A still the worker generated: one frame for video, the thumbnail for an image. Tiny
- // next to the media itself, which is why a card can afford to show it.
  const poster=file.poster?`/api/workspaces/${file.workspace_id}/asset-files/${file.id}/poster/`:null;
- // The frame's own shape, so a vertical cut is shown vertical rather than cropped into a
- // landscape box. Posters made before dimensions were recorded fall back to the CSS default.
- const shape=file.poster?.width&&file.poster.height?{aspectRatio:`${file.poster.width} / ${file.poster.height}`}:undefined;
  const extension=file.file.name.includes(".")?file.file.name.split(".").pop()!.toUpperCase():kind.toUpperCase();
- const author=file.added_by?.name??null;
  const Icon=kind==="video"?Clapperboard:kind==="audio"?AudioLines:kind==="image"?ImageIcon:FileIcon;
+ const meta=[dateLabel(file.created_at),formatBytes(file.file.size_bytes),file.version_number?`v${file.version_number}`:null].filter(Boolean).join(" · ");
  const body=<>
-  <div className={`task-file-thumb ${kind}`} style={shape}>
+  <div className={`task-file-thumb ${kind}`}>
    <Poster src={poster} fallback={<Icon/>}/>
-   <em>{extension}</em>
+   <em>{file.file.duration_ms?runtime(file.file.duration_ms):extension}</em>
+   {file.comment_count>0&&<b className="task-file-comments"><MessageSquare/>{file.comment_count}</b>}
    {!ready&&<i className="task-file-scanning" title="Still being scanned">Scanning</i>}
   </div>
   <h4>{file.file.name}</h4>
-  <div className="task-file-meta">
-   <span className="task-file-avatar">{author?initials(author):<UserRound/>}</span>
-   <strong>{author??"Unknown"}</strong>
-   <time>{dateLabel(file.created_at)}</time>
-  </div>
-  <footer className="task-file-foot">
-   <span>{formatBytes(file.file.size_bytes)}</span>
-   {project&&<span className="task-file-project">{project}</span>}
-  </footer>
+  <p className="task-file-meta">{meta}</p>
+  {project&&<span className="task-file-collection"><FolderOpen/>{project}</span>}
  </>;
  return <article className="task-card task-card-file" draggable onDragStart={e=>e.dataTransfer.setData("text/file",file.id)}>
   {review
@@ -113,3 +107,5 @@ function Poster({src,fallback}:{src:string|null;fallback:React.ReactNode}){
  if(!src||broken)return <span className="task-file-glyph">{fallback}</span>;
  return <NextImage src={src} alt="" width={320} height={180} unoptimized onError={()=>setBroken(true)}/>;
 }
+
+function runtime(ms:number){const total=Math.max(0,Math.round(ms/1000));const m=Math.floor(total/60),sec=total%60;const h=Math.floor(m/60);return h?`${h}:${String(m%60).padStart(2,"0")}:${String(sec).padStart(2,"0")}`:`${m}:${String(sec).padStart(2,"0")}`}

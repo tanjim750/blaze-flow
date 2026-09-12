@@ -2,7 +2,7 @@ from django.contrib.auth import login, logout, update_session_auth_hash
 from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, HttpResponse
 from django.db import transaction
-from django.db.models import Count, JSONField, OuterRef, Q, Subquery
+from django.db.models import Count, IntegerField, JSONField, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404
 from django.middleware.csrf import get_token
 from django.utils import timezone
@@ -1097,7 +1097,7 @@ def asset_file_list_create(request, workspace_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
     if request.method == 'GET':
         files = _accessible_assets(
-            _with_poster_flag(ProjectFile.objects.filter(workspace=workspace, deleted_at__isnull=True).select_related('file', 'added_by_workspace_membership__user')),
+            _with_card_fields(ProjectFile.objects.filter(workspace=workspace, deleted_at__isnull=True).select_related('file', 'added_by_workspace_membership__user')),
             request=request, workspace=workspace, permission_key=PROJECT_FILE_READ,
         ).order_by('-created_at')
         return Response(ProjectFileSerializer(files, many=True).data)
@@ -1166,20 +1166,34 @@ def asset_file_download(request, workspace_id, file_id):
     return FileResponse(default_storage.open(item.file.object_key, 'rb'), as_attachment=True, filename=item.file.original_name, content_type=item.file.mime_type)
 
 
-def _with_poster_flag(queryset):
-    """Annotates `poster_metadata_annotation`, which `ProjectFileSerializer` reads.
+def _with_card_fields(queryset):
+    """Annotates everything a media card shows beyond the row itself.
 
-    Carries the variant's metadata rather than a bare exists, because a card needs the
-    frame's dimensions to size itself. Without the annotation the serializer falls back to
-    a query per row, which on a board of media cards is one round trip per card.
+    The poster's metadata (the card sizes its frame from it), the review comment count, and
+    the cut number where the file was published as a media version. All three are
+    subqueries so that rendering a board costs one round trip rather than three per card.
     """
-    return queryset.annotate(poster_metadata_annotation=Subquery(
-        FileVariant.objects.filter(
-            file_id=OuterRef('file_id'), status=FileStatus.READY, deleted_at__isnull=True,
-            metadata__variant_type__in=(POSTER_VARIANT_TYPE, 'IMAGE_THUMBNAIL'),
-        ).order_by('-created_at').values('metadata')[:1],
-        output_field=JSONField(),
-    ))
+    return queryset.annotate(
+        poster_metadata_annotation=Subquery(
+            FileVariant.objects.filter(
+                file_id=OuterRef('file_id'), status=FileStatus.READY, deleted_at__isnull=True,
+                metadata__variant_type__in=(POSTER_VARIANT_TYPE, 'IMAGE_THUMBNAIL'),
+            ).order_by('-created_at').values('metadata')[:1],
+            output_field=JSONField(),
+        ),
+        comment_count_annotation=Subquery(
+            ReviewComment.objects.filter(
+                media_version__original_file_id=OuterRef('file_id'), deleted_at__isnull=True,
+            ).values('media_version__original_file_id').annotate(total=Count('id')).values('total')[:1],
+            output_field=IntegerField(),
+        ),
+        version_number_annotation=Subquery(
+            MediaVersion.objects.filter(
+                original_file_id=OuterRef('file_id'),
+            ).order_by('-version_number').values('version_number')[:1],
+            output_field=IntegerField(),
+        ),
+    )
 
 
 @api_view(['GET'])
@@ -1273,7 +1287,7 @@ def project_file_list_create(request, workspace_id, project_id):
     project = get_object_or_404(Project, id=project_id, workspace=workspace)
     if request.method == 'GET':
         _require_project_permission(request, project, PROJECT_FILE_READ, 'You do not have permission to read project files.')
-        files = _with_poster_flag(ProjectFile.objects.filter(project=project, deleted_at__isnull=True).select_related('file', 'added_by_workspace_membership__user')).order_by('-created_at')
+        files = _with_card_fields(ProjectFile.objects.filter(project=project, deleted_at__isnull=True).select_related('file', 'added_by_workspace_membership__user')).order_by('-created_at')
         return Response(ProjectFileSerializer(files, many=True).data)
 
     _require_project_permission(request, project, PROJECT_FILE_CREATE, 'You do not have permission to add project files.')

@@ -401,6 +401,32 @@ def _video_poster(file):
         raise ValueError('Video poster encoder returned no usable output.')
 
 
+def _probe_duration_ms(file):
+    """Milliseconds of runtime, read once while the preview is being made.
+
+    Stored on the `File` rather than on a variant: a duration belongs to the media, and an
+    audio file has one without ever producing a poster.
+    """
+    executable = shutil.which(settings.FFPROBE_COMMAND)
+    if not executable:
+        return None
+    with tempfile.TemporaryDirectory(prefix='blazeflow-probe-') as directory:
+        source = Path(directory) / 'source'
+        _copy_private_object(file, source, max_bytes=settings.VIDEO_PROXY_MAX_INPUT_BYTES)
+        result = subprocess.run(
+            [executable, '-v', 'error', '-show_entries', 'format=duration',
+             '-of', 'default=noprint_wrappers=1:nokey=1', str(source)],
+            capture_output=True, text=True, timeout=settings.VIDEO_PROXY_TIMEOUT_SECONDS,
+        )
+    if result.returncode != 0:
+        return None
+    try:
+        seconds = float(result.stdout.strip())
+    except ValueError:
+        return None
+    return round(seconds * 1000) if seconds > 0 else None
+
+
 def _preview_content(file):
     try:
         if file.mime_type.startswith('image/'):
@@ -473,6 +499,16 @@ def generate_preview(*, file_id):
     """
     file = File.objects.get(id=file_id, status=FileStatus.READY, deleted_at__isnull=True)
     preview = _store_variant(file, _preview_content, types=PREVIEW_VARIANT_TYPES)
+    if file.mime_type.startswith(('video/', 'audio/')) and not (file.metadata or {}).get('duration_ms'):
+        try:
+            duration_ms = _probe_duration_ms(file)
+        except (OSError, subprocess.SubprocessError):
+            duration_ms = None
+        if duration_ms:
+            File.objects.filter(id=file.id).update(
+                metadata={**(file.metadata or {}), 'duration_ms': duration_ms},
+                updated_at=timezone.now(),
+            )
     if file.mime_type.startswith('video/'):
         try:
             _store_variant(file, _video_poster, types=(POSTER_VARIANT_TYPE,))
