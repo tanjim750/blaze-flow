@@ -2089,3 +2089,30 @@ governs the proxy generally, not just `next dev`, so a deployed build is covered
 Worth recording for next time: the reason this took a second pass is that the first fix was
 real but not sufficient — 25 MB *was* rejecting videos. Two independent ceilings sat in
 front of the same upload, and clearing one only moved the failure.
+
+## 2026-09-12 — The player cropped anything that was not 16:9
+
+Reported against a portrait `.mov`: the picture filled the width and lost its top and
+bottom.
+
+`width/height: 100%` with `object-fit: contain` looks like it should letterbox, and it did
+not, because the height percentage never resolved — the stage's grid row is not a definite
+height from the item's side. The video fell back to its intrinsic ratio at full width,
+`object-fit` had nothing left to do, and the stage's `overflow: hidden` cropped whatever
+did not fit. Measured on a 1080×1920 clip: an 804×**1429** box in an 804×736 stage.
+
+Landscape was wrong too, just less visibly — a 16:9 clip was rendering at 1.09:1.
+
+The picture and both annotation layers now sit in a `.rvp-frame` carrying the media's own
+`aspect-ratio`, capped by `max-width`/`max-height`. After: portrait 414×736 (0.563, its
+own), landscape 804×452 (1.778), square 736×736 (1.0), none overflowing.
+
+That fixed a second fault in the same stroke. Annotation coordinates are normalised 0–1
+against the layer they are drawn on, and that layer used to cover the whole stage — so on
+letterboxed media a drawing landed beside the picture it was made against. Video, overlay
+and draw layer now report an identical box (`451,88 414x736` inside a `256,88 804x736`
+stage).
+
+Before the media reports a shape, and when there is none, the frame fills the stage: a
+loading clip is still letterboxed by `object-fit`, and the empty state is not squeezed into
+a 16:9 box in the middle of a larger one.

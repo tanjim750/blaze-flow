@@ -109,11 +109,28 @@
 .rvp { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--rv-canvas); }
 .rvp-stage {
   position: relative; flex: 1; min-height: 0;
-  display: grid; place-items: center;
+  display: flex; align-items: center; justify-content: center;
   background: var(--rv-canvas); overflow: hidden;
 }
 .rvp-stage.is-drawing { cursor: crosshair; }
-.rvp-stage video { width: 100%; height: 100%; object-fit: contain; cursor: pointer; }
+
+/*
+ * Sized to the media, not to the stage: `aspect-ratio` comes from the loaded video and the
+ * two maxima shrink the frame to fit whichever edge runs out first. Portrait, square and
+ * anamorphic all keep their proportions, and the annotation layers — which fill this box —
+ * line up with the picture instead of the surrounding black.
+ */
+.rvp-frame {
+  position: relative;
+  max-width: 100%; max-height: 100%;
+  aspect-ratio: 16 / 9;
+  display: flex; align-items: center; justify-content: center;
+}
+/* Until the media reports its shape — and when there is none — the frame fills the stage,
+   so a loading clip is still letterboxed by `object-fit` and the empty state is not
+   squeezed into a 16:9 box in the middle of it. */
+.rvp-frame.is-unsized { width: 100%; height: 100%; aspect-ratio: auto; }
+.rvp-stage video { display: block; width: 100%; height: 100%; object-fit: contain; cursor: pointer; }
 .rvp-empty { display: grid; justify-items: center; gap: 12px; padding: 24px; color: var(--muted); text-align: center; }
 .rvp-empty p { margin: 0; max-width: 320px; font-size: 12px; line-height: 1.6; }
 .rvp-badge {

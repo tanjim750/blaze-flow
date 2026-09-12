@@ -53,6 +53,7 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
   const [volume, setVolume] = useState(1);
   const [speed, setSpeed] = useState(1);
   const [failed, setFailed] = useState(false);
+  const [shape, setShape] = useState<{ width: number; height: number } | null>(null);
   const [tool, setTool] = useState<DrawTool | null>(null);
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [path, setPath] = useState<{ x: number; y: number }[]>([]);
@@ -92,9 +93,11 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
     const element = video.current;
     if (!element) return;
     setFailed(false);
+    setShape(null);
     const sync = () => {
       if (!Number.isFinite(element.duration) || !element.duration) return;
       setDurationMs(element.duration * 1000);
+      if (element.videoWidth && element.videoHeight) setShape({ width: element.videoWidth, height: element.videoHeight });
       onMeta({ durationMs: element.duration * 1000, width: element.videoWidth, height: element.videoHeight });
     };
     const fail = () => setFailed(true);
@@ -180,6 +183,23 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
   return (
     <section className="rvp">
       <div className={`rvp-stage ${tool ? "is-drawing" : ""}`} ref={stage}>
+        {/*
+          * The frame carries the media's own aspect ratio, and the picture and both
+          * annotation layers all fill it exactly.
+          *
+          * The video used to sit straight in the stage at `width/height: 100%`. The height
+          * percentage never resolved — the stage's grid row is not a definite height from
+          * the item's side — so the video fell back to its intrinsic ratio at full width,
+          * `object-fit: contain` had nothing left to do, and anything taller than the stage
+          * was simply cropped by its `overflow: hidden`. A portrait clip lost its top and
+          * bottom entirely.
+          *
+          * Sizing the frame instead fixes a second thing: annotation coordinates are
+          * normalised 0–1 against the layer they are drawn on. While that layer covered the
+          * whole stage, a drawing on letterboxed media landed away from the picture it was
+          * made against.
+          */}
+        <div className={shape ? "rvp-frame" : "rvp-frame is-unsized"} style={shape ? { aspectRatio: `${shape.width} / ${shape.height}` } : undefined}>
         {source && !failed ? (
           <video
             ref={video}
@@ -236,6 +256,7 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
         )}
 
         <div className="rvp-badge">{title}</div>
+        </div>
       </div>
 
       <div className="rvp-timeline">
