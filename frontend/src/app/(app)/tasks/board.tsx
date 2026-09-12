@@ -45,12 +45,15 @@ function FileCard({file,project}:{file:ProjectFile;project?:string}){
  const ready=file.file.status==="READY";
  // A still the worker generated: one frame for video, the thumbnail for an image. Tiny
  // next to the media itself, which is why a card can afford to show it.
- const poster=file.has_poster?`/api/workspaces/${file.workspace_id}/asset-files/${file.id}/poster/`:null;
+ const poster=file.poster?`/api/workspaces/${file.workspace_id}/asset-files/${file.id}/poster/`:null;
+ // The frame's own shape, so a vertical cut is shown vertical rather than cropped into a
+ // landscape box. Posters made before dimensions were recorded fall back to the CSS default.
+ const shape=file.poster?.width&&file.poster.height?{aspectRatio:`${file.poster.width} / ${file.poster.height}`}:undefined;
  const extension=file.file.name.includes(".")?file.file.name.split(".").pop()!.toUpperCase():kind.toUpperCase();
  const author=file.added_by?.name??null;
  const Icon=kind==="video"?Clapperboard:kind==="audio"?AudioLines:kind==="image"?ImageIcon:FileIcon;
  const body=<>
-  <div className={`task-file-thumb ${kind}`}>
+  <div className={`task-file-thumb ${kind}`} style={shape}>
    <Poster src={poster} fallback={<Icon/>}/>
    <em>{extension}</em>
    {!ready&&<i className="task-file-scanning" title="Still being scanned">Scanning</i>}

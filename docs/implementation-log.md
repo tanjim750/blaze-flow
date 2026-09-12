@@ -2187,3 +2187,25 @@ rather than one per card. A poster that fails anyway falls back to the glyph.
 
 Existing files predate this. The two in the dev workspace were backfilled by re-running
 `generate_preview`; anything else needs the same, since the generator only runs on upload.
+
+## 2026-09-12 — Thumbnails keep the media's ratio
+
+The card thumbnail was a fixed 16:10 box with `object-fit: cover`, so a vertical cut was
+cropped into a landscape rectangle — the same fault the review player had, one layer out.
+
+The poster now records the frame's own dimensions, and `ProjectFileSerializer` returns
+`poster: {width, height}` in place of the earlier `has_poster` boolean: the card needs the
+shape, not just the fact one exists. The annotation became a `Subquery` over the variant's
+metadata rather than an `Exists`, so it still costs one query for a whole board.
+
+Measured at a real column width of 149px: portrait 149×265 (0.563, its own 9:16), landscape
+149×84 (1.778), and 1.6 as the fallback when no poster has been generated. The `max-height`
+cap only bites on extreme shapes, and because `aspect-ratio` reduces the width to honour it,
+the ratio holds there too.
+
+The Files grid keeps its uniform tiles — a ragged grid would be worse — but its previews
+moved from `cover` to `contain`, so a portrait poster is shown whole inside a tile instead
+of having its top and bottom cut away.
+
+Existing posters predate the dimensions, so they were dropped and regenerated; the one on
+the reported file came back 405×720.

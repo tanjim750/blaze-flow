@@ -53,9 +53,11 @@
 .al-folder-preview { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; gap: 4px; width: 100%; height: 125px; padding: 6px; border: 0; border-radius: 13px 13px 0 0; background: #191922; overflow: hidden; cursor: pointer; }
 .al-folder-preview > :first-child { grid-row: 1 / 3; }
 .al-preview-blank, .al-preview-image, .al-kind-preview { display: grid; place-items: center; min-width: 0; min-height: 0; background: #242936; color: #62d9ed; }
-.al-preview-image { background-position: center; background-size: cover; }
+/* `contain`, not `cover`: the grid keeps uniform tiles, but a portrait poster is shown
+   whole inside one rather than having its top and bottom cropped away. */
+.al-preview-image { background-position: center; background-size: contain; background-repeat: no-repeat; }
 .al-preview-video { display: block; width: 100%; height: 100%; overflow: hidden; background: #0d0e13; }
-.al-preview-video video { width: 100%; height: 100%; object-fit: cover; }
+.al-preview-video video { width: 100%; height: 100%; object-fit: contain; }
 .al-kind-preview.video { background: linear-gradient(145deg, #3d2943, #161923); color: #e28be8; }
 .al-kind-preview.image { background: linear-gradient(145deg, #2b3e5a, #181923); color: #8bbcff; }
 .al-kind-preview.document, .al-kind-preview.source { background: linear-gradient(145deg, #493b27, #181923); color: #f4c672; }

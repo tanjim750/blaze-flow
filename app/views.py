@@ -2,7 +2,7 @@ from django.contrib.auth import login, logout, update_session_auth_hash
 from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, HttpResponse
 from django.db import transaction
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, JSONField, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404
 from django.middleware.csrf import get_token
 from django.utils import timezone
@@ -1167,16 +1167,18 @@ def asset_file_download(request, workspace_id, file_id):
 
 
 def _with_poster_flag(queryset):
-    """Annotates `has_poster_annotation`, which `ProjectFileSerializer` reads.
+    """Annotates `poster_metadata_annotation`, which `ProjectFileSerializer` reads.
 
-    Without it the serializer falls back to a query per row, which on a task board of
-    media cards is one round trip per card.
+    Carries the variant's metadata rather than a bare exists, because a card needs the
+    frame's dimensions to size itself. Without the annotation the serializer falls back to
+    a query per row, which on a board of media cards is one round trip per card.
     """
-    return queryset.annotate(has_poster_annotation=Exists(
+    return queryset.annotate(poster_metadata_annotation=Subquery(
         FileVariant.objects.filter(
             file_id=OuterRef('file_id'), status=FileStatus.READY, deleted_at__isnull=True,
             metadata__variant_type__in=(POSTER_VARIANT_TYPE, 'IMAGE_THUMBNAIL'),
-        )
+        ).order_by('-created_at').values('metadata')[:1],
+        output_field=JSONField(),
     ))
 
 

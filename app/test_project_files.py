@@ -363,14 +363,17 @@ class WorkspaceAssetApiTests(WorkspaceAccessSetupMixin, TestCase):
         poster_url = reverse('api-asset-file-poster', args=[self.workspace.id, asset_id])
 
         # Nothing generated yet: the list says so, and the route 404s rather than guessing.
-        self.assertFalse(upload.json()['has_poster'])
+        self.assertIsNone(upload.json()['poster'])
         self.assertEqual(self.client.get(poster_url).status_code, 404)
 
         process_outbox_events()
         process_outbox_events()
 
         listed = self.client.get(reverse('api-asset-files', args=[self.workspace.id]))
-        self.assertTrue(next(item for item in listed.json() if item['id'] == asset_id)['has_poster'])
+        poster_meta = next(item for item in listed.json() if item['id'] == asset_id)['poster']
+        # The frame's own dimensions travel with it, so a card can size its box to the
+        # media rather than cropping it into a fixed rectangle.
+        self.assertEqual((poster_meta['width'], poster_meta['height']), (48, 32))
 
         poster = self.client.get(poster_url)
         self.assertEqual(poster.status_code, 200)

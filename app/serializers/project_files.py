@@ -28,26 +28,31 @@ class ProjectFileUploadSerializer(serializers.Serializer):
 class ProjectFileSerializer(serializers.ModelSerializer):
     file = serializers.SerializerMethodField()
     added_by = serializers.SerializerMethodField()
-    has_poster = serializers.SerializerMethodField()
+    poster = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectFile
-        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'folder_id', 'task_stage_id', 'file', 'added_by', 'has_poster', 'created_at')
+        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'folder_id', 'task_stage_id', 'file', 'added_by', 'poster', 'created_at')
         read_only_fields = fields
 
-    def get_has_poster(self, project_file):
-        """Whether `/asset-files/<id>/poster/` will answer.
+    def get_poster(self, project_file):
+        """The still a list shows, with the frame's own dimensions.
 
-        Read from an annotation where the view supplies one, so rendering a list does not
-        cost a query per row; the fallback keeps a single-object response correct.
+        The dimensions are what let a card size its box to the media rather than cropping
+        it into a fixed rectangle. Read from an annotation where the view supplies one, so
+        rendering a list costs one query rather than one per row.
         """
-        annotated = getattr(project_file, 'has_poster_annotation', None)
-        if annotated is not None:
-            return bool(annotated)
-        return FileVariant.objects.filter(
-            file_id=project_file.file_id, status=FileStatus.READY, deleted_at__isnull=True,
-            metadata__variant_type__in=(POSTER_VARIANT_TYPE, 'IMAGE_THUMBNAIL'),
-        ).exists()
+        if hasattr(project_file, 'poster_metadata_annotation'):
+            metadata = project_file.poster_metadata_annotation
+        else:
+            metadata = FileVariant.objects.filter(
+                file_id=project_file.file_id, status=FileStatus.READY, deleted_at__isnull=True,
+                metadata__variant_type__in=(POSTER_VARIANT_TYPE, 'IMAGE_THUMBNAIL'),
+            ).values_list('metadata', flat=True).first()
+        if not metadata:
+            return None
+        width, height = metadata.get('width'), metadata.get('height')
+        return {'width': width, 'height': height} if width and height else {'width': None, 'height': None}
 
     def get_added_by(self, project_file):
         """Who uploaded it. Recorded all along, but never returned, so every card that

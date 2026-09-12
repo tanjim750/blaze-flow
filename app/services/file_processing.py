@@ -388,7 +388,13 @@ def _video_poster(file):
                 timeout=settings.VIDEO_PROXY_TIMEOUT_SECONDS,
             )
             if result.returncode == 0 and output.exists() and output.stat().st_size:
-                return output.read_bytes(), 'image/jpeg', 'jpg', POSTER_VARIANT_TYPE, {
+                content = output.read_bytes()
+                # The frame's own dimensions, so a card can size its box to the media
+                # instead of cropping it into a fixed rectangle.
+                with Image.open(io.BytesIO(content)) as frame:
+                    width, height = frame.size
+                return content, 'image/jpeg', 'jpg', POSTER_VARIANT_TYPE, {
+                    'width': width, 'height': height,
                     'max_width': settings.PREVIEW_MAX_WIDTH,
                     'max_height': settings.PREVIEW_MAX_HEIGHT,
                 }
