@@ -1,17 +1,21 @@
 from rest_framework import serializers
 
-from app.models import PriorityLevel, Task, TaskAssignee, TaskAttachment, TaskStatus
+from app.models import PriorityLevel, Task, TaskAssignee, TaskAttachment, TaskStage, TaskStatus
 
 from .access import WorkspaceMembershipSerializer
 
 
 class TaskSerializer(serializers.ModelSerializer):
+    assignees = serializers.SerializerMethodField()
+
     class Meta:
         model = Task
         fields = (
             'id',
             'workspace_id',
             'project_id',
+            'client_team_id',
+            'task_stage_id',
             'title',
             'description',
             'status',
@@ -22,18 +26,31 @@ class TaskSerializer(serializers.ModelSerializer):
             'sort_order',
             'created_at',
             'updated_at',
+            'assignees',
         )
         read_only_fields = ('id', 'workspace_id', 'project_id', 'completed_at', 'created_at', 'updated_at')
+
+    def get_assignees(self, task):
+        rows = TaskAssignee.objects.filter(task=task).select_related('workspace_membership__user')
+        return [{
+            'id': str(row.workspace_membership_id),
+            'name': row.workspace_membership.user.get_full_name() or row.workspace_membership.user.email,
+            'email': row.workspace_membership.user.email,
+        } for row in rows if row.workspace_membership.user_id]
 
 
 class TaskCreateSerializer(serializers.Serializer):
     project_id = serializers.UUIDField(required=False, allow_null=True)
+    client_team_id = serializers.UUIDField(required=False, allow_null=True)
+    assignee_id = serializers.UUIDField(required=False, allow_null=True, write_only=True)
+    task_stage_id = serializers.UUIDField(required=False, allow_null=True)
     title = serializers.CharField(max_length=255)
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     priority = serializers.ChoiceField(choices=PriorityLevel.choices, default=PriorityLevel.MEDIUM)
     start_at = serializers.DateTimeField(required=False, allow_null=True)
     due_at = serializers.DateTimeField(required=False, allow_null=True)
     sort_order = serializers.IntegerField(required=False, default=0)
+    status = serializers.ChoiceField(choices=TaskStatus.choices, required=False, default=TaskStatus.TODO)
 
     def validate(self, attrs):
         start_at = attrs.get('start_at', getattr(self.instance, 'start_at', None))
@@ -48,13 +65,6 @@ class TaskUpdateSerializer(TaskCreateSerializer):
     priority = serializers.ChoiceField(choices=PriorityLevel.choices, required=False)
     status = serializers.ChoiceField(choices=TaskStatus.choices, required=False)
 
-    def get_fields(self):
-        # A task cannot be moved between projects through this endpoint; its project
-        # scope is fixed at creation since that scope determines who may edit it.
-        fields = super().get_fields()
-        fields.pop('project_id', None)
-        return fields
-
 
 class TaskAssigneeSerializer(serializers.ModelSerializer):
     workspace_membership = WorkspaceMembershipSerializer(read_only=True)
@@ -63,6 +73,19 @@ class TaskAssigneeSerializer(serializers.ModelSerializer):
         model = TaskAssignee
         fields = ('id', 'workspace_membership', 'assigned_at')
         read_only_fields = fields
+
+
+class TaskStageSerializer(serializers.ModelSerializer):
+    task_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = TaskStage
+        fields = ('id', 'name', 'color', 'sort_order', 'wip_limit', 'is_done', 'automation_enabled', 'task_count')
+        read_only_fields = ('id', 'task_count')
+
+
+class TaskStageDeleteSerializer(serializers.Serializer):
+    replacement_stage_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class TaskAssigneeCreateSerializer(serializers.Serializer):

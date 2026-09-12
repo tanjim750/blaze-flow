@@ -93,6 +93,10 @@ class ReviewReactionEmoji(models.TextChoices):
 
 class TaskStatus(models.TextChoices):
     TODO = 'TODO'
+    REVISIONS = 'REVISIONS'
+    INTERNAL_QA = 'INTERNAL_QA'
+    CLIENT = 'CLIENT'
+    APPROVED = 'APPROVED'
     IN_PROGRESS = 'IN_PROGRESS'
     COMPLETED = 'COMPLETED'
     CANCELLED = 'CANCELLED'
@@ -269,6 +273,7 @@ class Workspace(models.Model):
     timezone = models.CharField(max_length=100)
     status = models.CharField(max_length=30, choices=WorkspaceStatus.choices, default=WorkspaceStatus.ACTIVE)
     deletion_scheduled_at = models.DateTimeField(null=True, blank=True)
+    task_workflow_settings = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -940,10 +945,31 @@ class AnnotationRevision(models.Model):
         ]
 
 
+class TaskStage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='task_stages')
+    name = models.CharField(max_length=100)
+    color = models.CharField(max_length=20, default='#89909d')
+    sort_order = models.IntegerField(default=0)
+    wip_limit = models.PositiveIntegerField(null=True, blank=True)
+    is_done = models.BooleanField(default=False)
+    automation_enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'task_stages'
+        ordering = ('sort_order', 'created_at')
+        constraints = [models.UniqueConstraint(fields=['workspace', 'name'], name='task_stages_workspace_name_uniq')]
+        indexes = [models.Index(fields=['workspace', 'sort_order'])]
+
+
 class Task(models.Model):
     id = models.UUIDField(primary_key=True)
     workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
     project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', null=True, blank=True, related_name='+')
+    client_team = models.ForeignKey(ClientTeam, on_delete=models.SET_NULL, db_column='client_team_id', null=True, blank=True, related_name='+')
+    task_stage = models.ForeignKey(TaskStage, on_delete=models.PROTECT, db_column='task_stage_id', null=True, blank=True, related_name='tasks')
     created_by_workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.DO_NOTHING, db_column='created_by_workspace_membership_id', related_name='+')
     title = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True)
@@ -962,6 +988,8 @@ class Task(models.Model):
         indexes = [
             models.Index(fields=['workspace']),
             models.Index(fields=['project']),
+            models.Index(fields=['client_team']),
+            models.Index(fields=['task_stage']),
             models.Index(fields=['created_by_workspace_membership']),
             models.Index(fields=['status']),
             models.Index(fields=['priority']),
@@ -975,6 +1003,10 @@ class Task(models.Model):
         errors = {}
         if self.project_id and self.workspace_id and self.project.workspace_id != self.workspace_id:
             errors['project'] = 'The project must belong to the task workspace.'
+        if self.client_team_id and self.workspace_id and self.client_team.workspace_id != self.workspace_id:
+            errors['client_team'] = 'The client must belong to the task workspace.'
+        if self.project_id and self.client_team_id and self.project.client_team_id != self.client_team_id:
+            errors['client_team'] = 'The client must match the selected project.'
         if (
             self.created_by_workspace_membership_id
             and self.workspace_id
@@ -1088,7 +1120,9 @@ class FileSecurityScan(models.Model):
 
 class ProjectFolder(models.Model):
     id = models.UUIDField(primary_key=True)
-    project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', related_name='+')
+    workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
+    client_team = models.ForeignKey(ClientTeam, on_delete=models.SET_NULL, db_column='client_team_id', null=True, blank=True, related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', null=True, blank=True, related_name='+')
     parent_folder = models.ForeignKey('self', on_delete=models.DO_NOTHING, db_column='parent_folder_id', null=True, blank=True, related_name='+')
     name = models.CharField(max_length=255)
     created_by_workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.DO_NOTHING, db_column='created_by_workspace_membership_id', related_name='+')
@@ -1107,6 +1141,8 @@ class ProjectFolder(models.Model):
             ),
         ]
         indexes = [
+            models.Index(fields=['workspace']),
+            models.Index(fields=['client_team']),
             models.Index(fields=['project']),
             models.Index(fields=['parent_folder']),
             models.Index(fields=['created_by_workspace_membership']),
@@ -1115,12 +1151,22 @@ class ProjectFolder(models.Model):
 
     def clean(self):
         errors = {}
-        if self.parent_folder_id and self.project_id and self.parent_folder.project_id != self.project_id:
-            errors['parent_folder'] = 'The parent folder must belong to the same project.'
+        if self.project_id and self.workspace_id and self.project.workspace_id != self.workspace_id:
+            errors['project'] = 'The project must belong to the folder workspace.'
+        if self.client_team_id and self.workspace_id and self.client_team.workspace_id != self.workspace_id:
+            errors['client_team'] = 'The client must belong to the folder workspace.'
+        if self.project_id and self.client_team_id and self.project.client_team_id != self.client_team_id:
+            errors['client_team'] = 'The client must match the selected project.'
+        if self.parent_folder_id and (
+            self.parent_folder.workspace_id != self.workspace_id
+            or self.parent_folder.project_id != self.project_id
+            or self.parent_folder.client_team_id != self.client_team_id
+        ):
+            errors['parent_folder'] = 'The parent folder must have the same workspace and relationships.'
         if (
             self.created_by_workspace_membership_id
-            and self.project_id
-            and self.created_by_workspace_membership.workspace_id != self.project.workspace_id
+            and self.workspace_id
+            and self.created_by_workspace_membership.workspace_id != self.workspace_id
         ):
             errors['created_by_workspace_membership'] = (
                 'The creator membership must belong to the project workspace.'
@@ -1131,9 +1177,12 @@ class ProjectFolder(models.Model):
 
 class ProjectFile(models.Model):
     id = models.UUIDField(primary_key=True)
-    project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', related_name='+')
+    workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
+    client_team = models.ForeignKey(ClientTeam, on_delete=models.SET_NULL, db_column='client_team_id', null=True, blank=True, related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', null=True, blank=True, related_name='+')
     folder = models.ForeignKey(ProjectFolder, on_delete=models.DO_NOTHING, db_column='folder_id', null=True, blank=True, related_name='+')
     file = models.ForeignKey(File, on_delete=models.DO_NOTHING, db_column='file_id', related_name='+')
+    task_stage = models.ForeignKey('TaskStage', on_delete=models.PROTECT, db_column='task_stage_id', null=True, blank=True, related_name='+')
     added_by_workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.DO_NOTHING, db_column='added_by_workspace_membership_id', related_name='+')
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField()
@@ -1141,23 +1190,40 @@ class ProjectFile(models.Model):
 
     class Meta:
         db_table = 'project_files'
-        constraints = [models.UniqueConstraint(fields=['project', 'file'], name='project_files_project_file_uniq')]
+        constraints = [models.UniqueConstraint(fields=['workspace', 'file'], name='project_files_workspace_file_uniq')]
         indexes = [
+            models.Index(fields=['workspace']),
+            models.Index(fields=['client_team']),
             models.Index(fields=['project']),
             models.Index(fields=['folder']),
             models.Index(fields=['file']),
+            models.Index(fields=['task_stage']),
             models.Index(fields=['added_by_workspace_membership']),
             models.Index(fields=['deleted_at']),
         ]
 
     def clean(self):
         errors = {}
-        if self.folder_id and self.project_id and self.folder.project_id != self.project_id:
-            errors['folder'] = 'The folder must belong to the same project.'
+        if self.project_id and self.workspace_id and self.project.workspace_id != self.workspace_id:
+            errors['project'] = 'The project must belong to the file workspace.'
+        if self.client_team_id and self.workspace_id and self.client_team.workspace_id != self.workspace_id:
+            errors['client_team'] = 'The client must belong to the file workspace.'
+        if self.project_id and self.client_team_id and self.project.client_team_id != self.client_team_id:
+            errors['client_team'] = 'The client must match the selected project.'
+        if self.folder_id and (
+            self.folder.workspace_id != self.workspace_id
+            or self.folder.project_id != self.project_id
+            or self.folder.client_team_id != self.client_team_id
+        ):
+            errors['folder'] = 'The folder must have the same workspace and relationships.'
+        if self.file_id and self.workspace_id and self.file.workspace_id != self.workspace_id:
+            errors['file'] = 'The stored file must belong to the same workspace.'
+        if self.task_stage_id and self.workspace_id and self.task_stage.workspace_id != self.workspace_id:
+            errors['task_stage'] = 'The stage must belong to the same workspace.'
         if (
             self.added_by_workspace_membership_id
-            and self.project_id
-            and self.added_by_workspace_membership.workspace_id != self.project.workspace_id
+            and self.workspace_id
+            and self.added_by_workspace_membership.workspace_id != self.workspace_id
         ):
             errors['added_by_workspace_membership'] = (
                 'The adding membership must belong to the project workspace.'

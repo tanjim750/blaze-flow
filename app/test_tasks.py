@@ -156,6 +156,24 @@ class WorkspaceTaskApiTests(WorkspaceAccessSetupMixin, TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_production_status_and_assignee_are_returned_with_task(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(
+            reverse('api-tasks', args=[self.workspace.id]),
+            {'title': 'Client review', 'status': TaskStatus.INTERNAL_QA, 'assignee_id': str(self.owner_membership.id)},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['status'], TaskStatus.INTERNAL_QA)
+        self.assertEqual(response.json()['assignees'][0]['id'], str(self.owner_membership.id))
+
+        approved = self.client.patch(
+            reverse('api-task-detail', args=[self.workspace.id, response.json()['id']]),
+            {'status': TaskStatus.APPROVED}, format='json',
+        )
+        self.assertIsNotNone(approved.json()['completed_at'])
+
     def _make_user(self, email):
         return get_user_model().objects.create_user(
             email=email, password='a-secure-test-password', first_name='Out', last_name='Sider',

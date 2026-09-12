@@ -16,6 +16,9 @@ from rest_framework.exceptions import PermissionDenied
 from .events import DomainEvent, dispatch
 from .pagination import paginated_response
 from .serializers import (
+    AssetFileUpdateSerializer,
+    AssetFileUploadSerializer,
+    AssetFolderWriteSerializer,
     EmailVerificationConfirmSerializer,
     EmailVerificationRequestSerializer,
     GoogleLoginSerializer,
@@ -58,6 +61,8 @@ from .serializers import (
     TaskCreateSerializer,
     TaskSerializer,
     TaskUpdateSerializer,
+    TaskStageSerializer,
+    TaskStageDeleteSerializer,
     WorkflowStageSerializer,
     WorkflowTransitionSerializer,
     ProjectCreateSerializer,
@@ -127,6 +132,8 @@ from .models import (
     Role,
     RoleStatus,
     Task,
+    TaskStage,
+    TaskStatus,
     TaskAssignee,
     TaskAttachment,
     WorkflowStage,
@@ -222,6 +229,7 @@ from .services import (
     edit_review_comment,
     mark_all_notifications_read,
     mark_notification_read,
+    move_project_folder,
     get_effective_subscription,
     get_notification_preference,
     get_plan_limit,
@@ -250,6 +258,7 @@ from .services import (
     update_role,
     upload_media_version,
     update_project,
+    update_project_file,
 )
 
 
@@ -974,6 +983,187 @@ def project_access_detail(request, workspace_id, project_id, grant_id):
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+def _asset_relations(workspace, data, *, folder_key='parent_folder_id'):
+    project_id = data.get('project_id')
+    project = get_object_or_404(Project, id=project_id, workspace=workspace) if project_id else None
+    client_id = data.get('client_team_id')
+    client_team = get_object_or_404(ClientTeam, id=client_id, workspace=workspace) if client_id else None
+    if project:
+        if client_team and project.client_team_id != client_team.id:
+            raise ProjectFileError('The selected client does not own this project.')
+        client_team = project.client_team
+    folder_id = data.get(folder_key)
+    folder = None
+    if folder_id:
+        folder = get_object_or_404(ProjectFolder, id=folder_id, workspace=workspace, deleted_at__isnull=True)
+        if folder.project_id != getattr(project, 'id', None) or folder.client_team_id != getattr(client_team, 'id', None):
+            raise ProjectFileError('The selected folder does not match the client and project.')
+    return client_team, project, folder
+
+
+def _asset_stage(workspace, data):
+    """Resolves `task_stage_id` into a stage, plus whether the caller asked to clear it."""
+    if 'task_stage_id' not in data:
+        return None, False
+    stage_id = data.get('task_stage_id')
+    if not stage_id:
+        return None, True
+    return get_object_or_404(TaskStage, id=stage_id, workspace=workspace), False
+
+
+def _require_asset_permission(request, asset, permission_key):
+    if asset.project_id:
+        _require_project_permission(request, asset.project, permission_key, 'You do not have permission to access this asset.')
+    else:
+        _require_workspace_permission(request, asset.workspace, permission_key)
+
+
+def _accessible_assets(queryset, *, request, workspace, permission_key):
+    _require_workspace_permission(request, workspace, permission_key)
+    project_ids = accessible_projects(
+        user=request.user, workspace=workspace, permission_key=permission_key,
+    ).values_list('id', flat=True)
+    return queryset.filter(Q(project__isnull=True) | Q(project_id__in=project_ids))
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def asset_folder_list_create(request, workspace_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    if request.method == 'GET':
+        folders = _accessible_assets(
+            ProjectFolder.objects.filter(workspace=workspace, deleted_at__isnull=True),
+            request=request, workspace=workspace, permission_key=PROJECT_FILE_READ,
+        ).order_by('name')
+        return Response(ProjectFolderSerializer(folders, many=True).data)
+    _require_workspace_permission(request, workspace, PROJECT_FILE_CREATE)
+    serializer = AssetFolderWriteSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    if not serializer.validated_data.get('name'):
+        return Response({'name': ['This field is required.']}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        client_team, project, parent = _asset_relations(workspace, serializer.validated_data)
+        if project:
+            _require_project_permission(request, project, PROJECT_FILE_CREATE, 'You do not have permission to create assets in this project.')
+        membership = memberships_with_permission(user=request.user, workspace=workspace, permission_key=PROJECT_FILE_CREATE).first()
+        folder = create_project_folder(
+            workspace=workspace, client_team=client_team, project=project,
+            created_by_membership=membership, name=serializer.validated_data['name'], parent_folder=parent,
+        )
+    except ProjectFileError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ProjectFolderSerializer(folder).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def asset_folder_detail(request, workspace_id, folder_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    folder = get_object_or_404(ProjectFolder, id=folder_id, workspace=workspace, deleted_at__isnull=True)
+    permission_key = {'GET': PROJECT_FILE_READ, 'PATCH': PROJECT_FILE_UPDATE, 'DELETE': PROJECT_FILE_DELETE}[request.method]
+    _require_asset_permission(request, folder, permission_key)
+    if request.method == 'GET':
+        return Response(ProjectFolderSerializer(folder).data)
+    try:
+        if request.method == 'DELETE':
+            delete_project_folder(folder=folder)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = AssetFolderWriteSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        if 'name' in data:
+            folder = rename_project_folder(folder=folder, name=data['name'])
+        relation_keys = {'client_team_id', 'project_id', 'parent_folder_id'}
+        if relation_keys.intersection(data):
+            merged = {
+                'client_team_id': data.get('client_team_id', folder.client_team_id),
+                'project_id': data.get('project_id', folder.project_id),
+                'parent_folder_id': data.get('parent_folder_id', folder.parent_folder_id),
+            }
+            client_team, project, parent = _asset_relations(workspace, merged)
+            if project:
+                _require_project_permission(request, project, PROJECT_FILE_UPDATE, 'You do not have permission to move assets into this project.')
+            folder = move_project_folder(folder=folder, workspace=workspace, client_team=client_team, project=project, parent_folder=parent)
+    except ProjectFileError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ProjectFolderSerializer(folder).data)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def asset_file_list_create(request, workspace_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    if request.method == 'GET':
+        files = _accessible_assets(
+            ProjectFile.objects.filter(workspace=workspace, deleted_at__isnull=True).select_related('file'),
+            request=request, workspace=workspace, permission_key=PROJECT_FILE_READ,
+        ).order_by('-created_at')
+        return Response(ProjectFileSerializer(files, many=True).data)
+    _require_workspace_permission(request, workspace, PROJECT_FILE_CREATE)
+    serializer = AssetFileUploadSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        client_team, project, folder = _asset_relations(workspace, serializer.validated_data, folder_key='folder_id')
+        if project:
+            _require_project_permission(request, project, PROJECT_FILE_CREATE, 'You do not have permission to add assets to this project.')
+        membership = memberships_with_permission(user=request.user, workspace=workspace, permission_key=PROJECT_FILE_CREATE).first()
+        item = upload_project_file(
+            workspace=workspace, client_team=client_team, project=project, folder=folder,
+            membership=membership, upload=serializer.validated_data['file'],
+            task_stage=_asset_stage(workspace, serializer.validated_data)[0],
+        )
+    except (ProjectFileError, SubscriptionError) as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ProjectFileSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def asset_file_detail(request, workspace_id, file_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    item = get_object_or_404(ProjectFile.objects.select_related('file'), id=file_id, workspace=workspace, deleted_at__isnull=True)
+    permission_key = {'GET': PROJECT_FILE_READ, 'PATCH': PROJECT_FILE_UPDATE, 'DELETE': PROJECT_FILE_DELETE}[request.method]
+    _require_asset_permission(request, item, permission_key)
+    if request.method == 'GET':
+        return Response(ProjectFileSerializer(item).data)
+    try:
+        if request.method == 'DELETE':
+            delete_project_file(project_file=item)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = AssetFileUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        merged = {
+            'client_team_id': data.get('client_team_id', item.client_team_id),
+            'project_id': data.get('project_id', item.project_id),
+            'folder_id': data.get('folder_id', item.folder_id),
+        }
+        client_team, project, folder = _asset_relations(workspace, merged, folder_key='folder_id')
+        if project:
+            _require_project_permission(request, project, PROJECT_FILE_UPDATE, 'You do not have permission to move assets into this project.')
+        stage, clear_stage = _asset_stage(workspace, data)
+        item = update_project_file(
+            project_file=item, workspace=workspace, client_team=client_team, project=project,
+            folder=folder, name=data.get('name'), task_stage=stage, clear_stage=clear_stage,
+        )
+    except ProjectFileError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ProjectFileSerializer(item).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def asset_file_download(request, workspace_id, file_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    item = get_object_or_404(ProjectFile.objects.select_related('file'), id=file_id, workspace=workspace, deleted_at__isnull=True)
+    _require_asset_permission(request, item, PROJECT_FILE_READ)
+    if item.file.status != FileStatus.READY:
+        return Response({'detail': 'This file is still being scanned or was rejected.'}, status=status.HTTP_409_CONFLICT)
+    if not default_storage.exists(item.file.object_key):
+        raise Http404('The stored file was not found.')
+    return FileResponse(default_storage.open(item.file.object_key, 'rb'), as_attachment=True, filename=item.file.original_name, content_type=item.file.mime_type)
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def project_folder_list_create(request, workspace_id, project_id):
@@ -1125,6 +1315,70 @@ def _require_task_permission(request, workspace, task, permission_key):
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
+def task_stage_list_create(request, workspace_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    default_settings = {'wip_warning': True, 'auto_notify_client': True, 'lock_done_editing': True}
+    if request.method == 'GET':
+        _require_workspace_permission(request, workspace, TASK_READ)
+        stages = TaskStage.objects.filter(workspace=workspace).annotate(task_count=Count('tasks')).order_by('sort_order')
+        return Response({'stages': TaskStageSerializer(stages, many=True).data, 'settings': {**default_settings, **workspace.task_workflow_settings}})
+    _require_workspace_permission(request, workspace, WORKSPACE_MANAGE)
+    serializer = TaskStageSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    if serializer.validated_data.get('is_done'):
+        TaskStage.objects.filter(workspace=workspace).update(is_done=False)
+    stage = serializer.save(workspace=workspace)
+    return Response(TaskStageSerializer(stage).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def task_stage_detail(request, workspace_id, stage_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    _require_workspace_permission(request, workspace, WORKSPACE_MANAGE)
+    stage = get_object_or_404(TaskStage, id=stage_id, workspace=workspace)
+    if request.method == 'PATCH':
+        serializer = TaskStageSerializer(stage, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        if serializer.validated_data.get('is_done'):
+            TaskStage.objects.filter(workspace=workspace).exclude(id=stage.id).update(is_done=False)
+        stage = serializer.save()
+        return Response(TaskStageSerializer(stage).data)
+    serializer = TaskStageDeleteSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    if not TaskStage.objects.filter(workspace=workspace).exclude(id=stage.id).exists():
+        return Response({'detail': 'A workflow must keep at least one stage.'}, status=status.HTTP_400_BAD_REQUEST)
+    tasks = Task.objects.filter(task_stage=stage, deleted_at__isnull=True)
+    staged_files = ProjectFile.objects.filter(task_stage=stage, deleted_at__isnull=True)
+    if tasks.exists() or staged_files.exists():
+        replacement_id = serializer.validated_data.get('replacement_stage_id')
+        if not replacement_id:
+            return Response({'detail': 'Choose a replacement stage before deleting a stage that contains tasks or files.'}, status=status.HTTP_400_BAD_REQUEST)
+        replacement = get_object_or_404(TaskStage, id=replacement_id, workspace=workspace)
+        if replacement.id == stage.id:
+            return Response({'detail': 'Choose a different replacement stage.'}, status=status.HTTP_400_BAD_REQUEST)
+        tasks.update(task_stage=replacement, status=TaskStatus.APPROVED if replacement.is_done else TaskStatus.TODO, updated_at=timezone.now())
+        staged_files.update(task_stage=replacement, updated_at=timezone.now())
+    stage.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def task_workflow_settings(request, workspace_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    _require_workspace_permission(request, workspace, WORKSPACE_MANAGE)
+    allowed = {'wip_warning', 'auto_notify_client', 'lock_done_editing'}
+    workspace.task_workflow_settings = {
+        **workspace.task_workflow_settings,
+        **{key: bool(value) for key, value in request.data.items() if key in allowed},
+    }
+    workspace.save(update_fields=['task_workflow_settings', 'updated_at'])
+    return Response(workspace.task_workflow_settings)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
 def task_list_create(request, workspace_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
     if request.method == 'GET':
@@ -1144,11 +1398,18 @@ def task_list_create(request, workspace_id):
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data.copy()
     project_id = data.pop('project_id', None)
+    client_team_id = data.pop('client_team_id', None)
+    assignee_id = data.pop('assignee_id', None)
+    task_stage_id = data.pop('task_stage_id', None)
     project = None
+    client_team = get_object_or_404(ClientTeam, id=client_team_id, workspace=workspace) if client_team_id else None
     if project_id is not None:
         project = get_object_or_404(Project, id=project_id, workspace=workspace)
         if not has_project_permission(user=request.user, project=project, permission_key=TASK_CREATE):
             raise PermissionDenied('You do not have permission to create tasks in this project.')
+        if client_team and project.client_team_id != client_team.id:
+            return Response({'detail': 'The selected client does not own this project.'}, status=status.HTTP_400_BAD_REQUEST)
+        client_team = project.client_team
     creating_membership = memberships_with_permission(
         user=request.user,
         workspace=workspace,
@@ -1157,9 +1418,23 @@ def task_list_create(request, workspace_id):
     task = create_task(
         workspace=workspace,
         project=project,
+        client_team=client_team,
         created_by_membership=creating_membership,
         **data,
     )
+    requested_status = data.get('status', TaskStatus.TODO)
+    legacy_stage_names = {
+        TaskStatus.TODO: 'To Do', TaskStatus.IN_PROGRESS: 'Revisions', TaskStatus.REVISIONS: 'Revisions',
+        TaskStatus.INTERNAL_QA: 'Internal QA', TaskStatus.CLIENT: 'Client',
+        TaskStatus.COMPLETED: 'Approved', TaskStatus.APPROVED: 'Approved',
+    }
+    task_stage = get_object_or_404(TaskStage, id=task_stage_id, workspace=workspace) if task_stage_id else TaskStage.objects.filter(workspace=workspace, name=legacy_stage_names.get(requested_status, 'To Do')).first()
+    task_stage = task_stage or TaskStage.objects.filter(workspace=workspace).order_by('sort_order').first()
+    if task_stage:
+        task = update_task(task=task, task_stage=task_stage, status=requested_status)
+    if assignee_id:
+        membership = get_object_or_404(WorkspaceMembership, id=assignee_id, workspace=workspace)
+        add_task_assignee(task=task, membership=membership)
     return Response(TaskSerializer(task).data, status=status.HTTP_201_CREATED)
 
 
@@ -1179,7 +1454,37 @@ def task_detail(request, workspace_id, task_id):
     if request.method == 'PATCH':
         serializer = TaskUpdateSerializer(task, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        task = update_task(task=task, **serializer.validated_data)
+        data = serializer.validated_data.copy()
+        assignee_id = data.pop('assignee_id', None) if 'assignee_id' in data else ...
+        stage_was_supplied = 'task_stage_id' in data
+        task_stage_id = data.pop('task_stage_id', task.task_stage_id)
+        project_id = data.pop('project_id', task.project_id)
+        client_team_id = data.pop('client_team_id', task.client_team_id)
+        project = get_object_or_404(Project, id=project_id, workspace=workspace) if project_id else None
+        client_team = get_object_or_404(ClientTeam, id=client_team_id, workspace=workspace) if client_team_id else None
+        if project:
+            if not has_project_permission(user=request.user, project=project, permission_key=TASK_UPDATE):
+                raise PermissionDenied('You do not have permission to move tasks into this project.')
+            if client_team and project.client_team_id != client_team.id:
+                return Response({'detail': 'The selected client does not own this project.'}, status=status.HTTP_400_BAD_REQUEST)
+            client_team = project.client_team
+        if not stage_was_supplied and 'status' in data:
+            legacy_stage_names = {
+                TaskStatus.TODO: 'To Do', TaskStatus.IN_PROGRESS: 'Revisions', TaskStatus.REVISIONS: 'Revisions',
+                TaskStatus.INTERNAL_QA: 'Internal QA', TaskStatus.CLIENT: 'Client',
+                TaskStatus.COMPLETED: 'Approved', TaskStatus.APPROVED: 'Approved',
+            }
+            matching_stage = TaskStage.objects.filter(workspace=workspace, name=legacy_stage_names.get(data['status'])).first()
+            task_stage_id = matching_stage.id if matching_stage else task_stage_id
+        task_stage = get_object_or_404(TaskStage, id=task_stage_id, workspace=workspace) if task_stage_id else None
+        if task_stage and stage_was_supplied:
+            data['status'] = TaskStatus.APPROVED if task_stage.is_done else TaskStatus.TODO
+        task = update_task(task=task, project=project, client_team=client_team, task_stage=task_stage, **data)
+        if assignee_id is not ...:
+            TaskAssignee.objects.filter(task=task).delete()
+            if assignee_id:
+                membership = get_object_or_404(WorkspaceMembership, id=assignee_id, workspace=workspace)
+                add_task_assignee(task=task, membership=membership)
         return Response(TaskSerializer(task).data)
     try:
         delete_task(task=task)

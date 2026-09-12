@@ -49,6 +49,9 @@ from .notifications import NotificationPreferenceSerializer, NotificationSeriali
 from .review_assets import ReviewAttachmentSerializer, ReviewAttachmentUploadSerializer
 from .projects import ProjectCreateSerializer, ProjectSerializer, ProjectUpdateSerializer
 from .project_files import (
+    AssetFileUpdateSerializer,
+    AssetFileUploadSerializer,
+    AssetFolderWriteSerializer,
     ProjectFileSerializer,
     ProjectFileUploadSerializer,
     ProjectFolderCreateSerializer,
@@ -63,6 +66,8 @@ from .tasks import (
     TaskCreateSerializer,
     TaskSerializer,
     TaskUpdateSerializer,
+    TaskStageSerializer,
+    TaskStageDeleteSerializer,
 )
 from .workspaces import (
     WorkspaceCreateSerializer, WorkspaceProfileSerializer, WorkspaceProfileUpdateSerializer,

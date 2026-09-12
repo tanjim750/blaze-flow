@@ -15,6 +15,7 @@ from app.models import (
     WorkspacePrincipalType,
     WorkspaceProfile,
     WorkspaceStatus,
+    TaskStage,
     WorkflowStage,
 )
 from app.permissions import MEMBER_PERMISSION_KEYS, OWNER_PERMISSION_KEYS
@@ -82,6 +83,12 @@ def create_workspace(*, owner, name, slug, workspace_timezone):
             created_at=now,
             updated_at=now,
         )
+    for sort_order, (name, color, is_done) in enumerate((
+        ('To Do', '#89909d', False), ('Revisions', '#ff5865', False),
+        ('Internal QA', '#4ba3ff', False), ('Client', '#f4a742', False),
+        ('Approved', '#36d399', True),
+    )):
+        TaskStage.objects.create(workspace=workspace, name=name, color=color, sort_order=sort_order, is_done=is_done)
     member_role = Role.objects.create(
         id=uuid.uuid4(),
         workspace=workspace,

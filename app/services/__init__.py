@@ -46,7 +46,9 @@ from .project_files import (
     create_project_folder,
     delete_project_file,
     delete_project_folder,
+    move_project_folder,
     rename_project_folder,
+    update_project_file,
     upload_project_file,
 )
 from .resource_access import ResourceAccessError, grant_project_access

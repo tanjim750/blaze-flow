@@ -47,9 +47,10 @@ def create_task(*, workspace, created_by_membership, project=None, **fields):
 def update_task(*, task, **fields):
     if 'status' in fields:
         new_status = fields['status']
-        if new_status == TaskStatus.COMPLETED and task.status != TaskStatus.COMPLETED:
+        completed_statuses = {TaskStatus.COMPLETED, TaskStatus.APPROVED}
+        if new_status in completed_statuses and task.status not in completed_statuses:
             task.completed_at = timezone.now()
-        elif new_status != TaskStatus.COMPLETED and task.status == TaskStatus.COMPLETED:
+        elif new_status not in completed_statuses and task.status in completed_statuses:
             task.completed_at = None
     for field, value in fields.items():
         setattr(task, field, value)

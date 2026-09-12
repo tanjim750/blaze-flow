@@ -42,6 +42,21 @@ ALLOWED_HOSTS = [
     for host in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
     if host.strip()
 ]
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',')
+    if origin.strip()
+]
+# The Next.js dev server proxies /api here and forwards its own Origin, which Django checks
+# on every unsafe request. Without these a local clone cannot write at all — uploads and
+# assignments fail CSRF — and setting the variable for a tunnel would otherwise replace them.
+# Debug only; production still has to list its origins explicitly.
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS = list(dict.fromkeys([
+        *CSRF_TRUSTED_ORIGINS,
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+    ]))
 THROTTLE_TRUSTED_PROXY_COUNT = int(os.environ.get('THROTTLE_TRUSTED_PROXY_COUNT', '0'))
 if THROTTLE_TRUSTED_PROXY_COUNT < 0:
     raise ImproperlyConfigured('THROTTLE_TRUSTED_PROXY_COUNT cannot be negative.')

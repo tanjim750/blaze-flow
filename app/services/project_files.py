@@ -26,10 +26,19 @@ class ProjectFileError(Exception):
     pass
 
 
-def create_project_folder(*, project, created_by_membership, name, parent_folder=None):
+def create_project_folder(*, project, created_by_membership, name, parent_folder=None, workspace=None, client_team=None):
+    workspace = workspace or project.workspace
+    if project is not None and client_team is None:
+        client_team = project.client_team
+    if ProjectFolder.objects.filter(
+        workspace=workspace, parent_folder=parent_folder, name=name, deleted_at__isnull=True,
+    ).exists():
+        raise ProjectFileError('A folder with this name already exists in this location.')
     now = timezone.now()
     folder = ProjectFolder(
         id=uuid.uuid4(),
+        workspace=workspace,
+        client_team=client_team,
         project=project,
         parent_folder=parent_folder,
         name=name,
@@ -46,6 +55,11 @@ def create_project_folder(*, project, created_by_membership, name, parent_folder
 
 
 def rename_project_folder(*, folder, name):
+    if ProjectFolder.objects.filter(
+        workspace=folder.workspace, parent_folder=folder.parent_folder, name=name,
+        deleted_at__isnull=True,
+    ).exclude(id=folder.id).exists():
+        raise ProjectFileError('A folder with this name already exists in this location.')
     folder.name = name
     folder.updated_at = timezone.now()
     try:
@@ -54,6 +68,60 @@ def rename_project_folder(*, folder, name):
     except (IntegrityError, ValidationError) as exc:
         raise ProjectFileError('A folder with this name already exists in this location.') from exc
     return folder
+
+
+@transaction.atomic
+def move_project_folder(*, folder, workspace, client_team=None, project=None, parent_folder=None):
+    descendant_ids = _descendant_folder_ids(folder)
+    if parent_folder and parent_folder.id in descendant_ids:
+        raise ProjectFileError('A folder cannot be moved inside itself.')
+    if parent_folder and (
+        parent_folder.workspace_id != workspace.id
+        or parent_folder.client_team_id != getattr(client_team, 'id', None)
+        or parent_folder.project_id != getattr(project, 'id', None)
+    ):
+        raise ProjectFileError('The destination folder must have the same relationships.')
+    now = timezone.now()
+    ProjectFolder.objects.filter(id__in=descendant_ids).update(
+        workspace=workspace, client_team=client_team, project=project, updated_at=now,
+    )
+    ProjectFile.objects.filter(folder_id__in=descendant_ids, deleted_at__isnull=True).update(
+        workspace=workspace, client_team=client_team, project=project, updated_at=now,
+    )
+    folder.workspace = workspace
+    folder.client_team = client_team
+    folder.project = project
+    folder.parent_folder = parent_folder
+    folder.updated_at = now
+    try:
+        folder.full_clean()
+        folder.save(update_fields=['workspace', 'client_team', 'project', 'parent_folder', 'updated_at'])
+    except (IntegrityError, ValidationError) as exc:
+        raise ProjectFileError('The folder cannot be moved to that location.') from exc
+    return folder
+
+
+@transaction.atomic
+def update_project_file(*, project_file, name=None, workspace=None, client_team=None, project=None, folder=None, task_stage=None, clear_stage=False):
+    workspace = workspace or project_file.workspace
+    project_file.workspace = workspace
+    project_file.client_team = client_team
+    project_file.project = project
+    project_file.folder = folder
+    # `clear_stage` distinguishes "leave the stage alone" from "move it back to no stage".
+    if task_stage is not None or clear_stage:
+        project_file.task_stage = task_stage
+    project_file.updated_at = timezone.now()
+    if name is not None:
+        project_file.file.original_name = Path(name).name
+        project_file.file.updated_at = project_file.updated_at
+        project_file.file.save(update_fields=['original_name', 'updated_at'])
+    try:
+        project_file.full_clean()
+        project_file.save(update_fields=['workspace', 'client_team', 'project', 'folder', 'task_stage', 'updated_at'])
+    except ValidationError as exc:
+        raise ProjectFileError('The file cannot be moved to that location.') from exc
+    return project_file
 
 
 def _descendant_folder_ids(folder):
@@ -111,25 +179,28 @@ def _validate_project_file(upload):
     return detected
 
 
-def upload_project_file(*, project, upload, membership, folder=None):
+def upload_project_file(*, project, upload, membership, folder=None, workspace=None, client_team=None, task_stage=None):
+    workspace = workspace or project.workspace
+    if project is not None and client_team is None:
+        client_team = project.client_team
     mime_type = _validate_project_file(upload)
-    enforce_workspace_storage_limit(workspace=project.workspace, additional_bytes=upload.size)
+    enforce_workspace_storage_limit(workspace=workspace, additional_bytes=upload.size)
     checksum = sha256_upload(upload)
     clean_name = Path(upload.name).name or 'file'
     object_key = (
-        f'workspaces/{project.workspace_id}/projects/{project.id}/files/{uuid.uuid4()}/{clean_name}'
+        f'workspaces/{workspace.id}/assets/{uuid.uuid4()}/{clean_name}'
     )
     stored_key = default_storage.save(object_key, upload)
     now = timezone.now()
     try:
         with transaction.atomic():
             enforce_workspace_storage_limit(
-                workspace=project.workspace,
+                workspace=workspace,
                 additional_bytes=upload.size,
                 lock=True,
             )
             file_record = File.objects.create(
-                id=uuid.uuid4(), workspace=project.workspace, storage_backend=_storage_backend(now), object_key=stored_key,
+                id=uuid.uuid4(), workspace=workspace, storage_backend=_storage_backend(now), object_key=stored_key,
                 original_name=clean_name, mime_type=mime_type, size_bytes=upload.size,
                 checksum=checksum, checksum_algorithm='sha256', metadata={},
                 status=FileStatus.PENDING, created_at=now, updated_at=now,
@@ -138,10 +209,11 @@ def upload_project_file(*, project, upload, membership, folder=None):
                 file=file_record, engine=settings.FILE_SECURITY_SCANNER,
             )
             project_file = ProjectFile(
-                id=uuid.uuid4(),
+                id=uuid.uuid4(), workspace=workspace, client_team=client_team,
                 project=project,
                 folder=folder,
                 file=file_record,
+                task_stage=task_stage,
                 added_by_workspace_membership=membership,
                 created_at=now,
                 updated_at=now,
