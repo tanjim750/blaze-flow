@@ -16,7 +16,7 @@
   --rv-marker: #ffcf5a;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 56px);
+  height: 100vh;
   background: var(--rv-chrome);
   color: var(--text);
 }
@@ -100,7 +100,7 @@
  * frame stays watchable.
  */
 @media (max-width: 1080px) {
-  .rv { height: auto; min-height: calc(100vh - 56px); }
+  .rv { height: auto; min-height: 100vh; }
   .rv-body { grid-template-columns: 1fr; }
   .rvp-stage { min-height: min(56vw, 420px); }
 }

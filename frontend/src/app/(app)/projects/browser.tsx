@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useActionState, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { motion, useReducedMotion } from "motion/react";
 import {
-  Activity, Building2, ChevronDown, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
+  Activity, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
   FolderOpen, Pencil, Plus, Search, Share2, TriangleAlert, UploadCloud, X,
 } from "lucide-react";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
@@ -26,11 +27,11 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
   );
   const [expanded, setExpanded] = useState<string[]>(view.selectedClient ? [view.selectedClient.id] : []);
   const [uploading, setUploading] = useState(false);
-
+  const [railClosed, setRailClosed] = useState(false);
 
   return (
-    <div className="pb-layout">
-      <ClientRail view={view} expanded={expanded} setExpanded={setExpanded} />
+    <div className={railClosed ? "pb-layout is-rail-closed" : "pb-layout"}>
+      <ClientRail view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} />
 
       <section className="pb-canvas">
         {view.notice && (
@@ -135,16 +136,33 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
   </dialog>;
 }
 
-function ClientRail({ view, expanded, setExpanded }: { view: ProjectsView; expanded: string[]; setExpanded: (value: string[]) => void }) {
+function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: ProjectsView; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void }) {
   const [filter, setFilter] = useState("");
   const [creating, setCreating] = useState(false);
   const [clientState, submitClient] = useActionState(createClientAction, initialState);
+  const reduceMotion = useReducedMotion();
 
   const clients = view.clients.filter((client) => client.name.toLowerCase().includes(filter.trim().toLowerCase()));
   const toggle = (id: string) => setExpanded(expanded.includes(id) ? expanded.filter((value) => value !== id) : [...expanded, id]);
 
   return (
     <aside className="pb-rail">
+      {/* Same handle as the main rail, but centred on the edge: anchored to the top it
+          landed on the shell's own toggle once this rail closed to nothing. The wrapper
+          owns the positioning so `whileTap`'s scale does not fight a translate. */}
+      <div className="pb-rail-handle">
+      <motion.button
+        type="button"
+        className="pb-rail-toggle"
+        onClick={onToggle}
+        aria-label={closed ? "Show clients" : "Hide clients"}
+        aria-expanded={!closed}
+        whileTap={reduceMotion ? undefined : { scale: 0.82 }}
+        transition={{ type: "spring", stiffness: 620, damping: 14 }}
+      >
+        <ChevronLeft size={14} />
+      </motion.button>
+      </div>
       <div className="pb-rail-top">
         <div className="pb-rail-head">
           <h2><Building2 size={16} />Clients</h2>

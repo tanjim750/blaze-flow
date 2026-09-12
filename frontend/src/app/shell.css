@@ -1,4 +1,18 @@
 /* Global studio chrome, matching the Projects Stitch references. */
+
+/*
+ * The sidebar width, as a registered custom property.
+ *
+ * Registering it is what makes it animatable at all — an unregistered custom property
+ * jumps between values. One transition on this variable then drives both the rail and the
+ * main column, so they cannot drift apart mid-animation, and nothing re-renders while it
+ * runs. The curve overshoots on purpose: that is the bounce.
+ */
+@property --rail-w {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 256px;
+}
 .studio-shell {
   --shell-bg: #131316;
   --shell-rail: #0e0e11;
@@ -11,15 +25,53 @@
   --shell-on: #e4e1e6;
   --shell-variant: #c9c4d8;
   --shell-outline: #938ea1;
+  --rail-w: 256px;
   min-height: 100vh;
   background: var(--shell-bg);
   color: var(--shell-on);
+  transition: --rail-w .42s cubic-bezier(.34, 1.56, .64, 1);
 }
+.studio-shell.is-collapsed { --rail-w: 76px; }
 .studio-sidebar {
-  position: fixed; inset: 0 auto 0 0; width: 256px; z-index: 50;
+  position: fixed; inset: 0 auto 0 0; width: var(--rail-w); z-index: 50;
   background: var(--shell-rail); display: flex; flex-direction: column; justify-content: space-between;
   box-shadow: 0 1px 8px rgba(0, 0, 0, .04);
 }
+/* The nav is long enough to outgrow a short viewport, so it scrolls and the footer holds
+   its place instead of being pushed off the bottom. */
+.studio-sidebar-top { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-bottom: 8px; }
+
+/* The handle straddles the rail's edge so it is in the same place in both states. */
+.studio-rail-toggle {
+  position: absolute; top: 62px; right: -13px; z-index: 55;
+  display: grid; place-items: center; width: 26px; height: 26px;
+  border: 1px solid var(--shell-highest); border-radius: 50%;
+  background: var(--shell-container); color: var(--shell-variant);
+  cursor: pointer; box-shadow: 0 4px 12px #0007;
+}
+.studio-rail-toggle:hover { background: var(--shell-high); color: var(--shell-on); }
+.studio-rail-toggle svg { transition: transform .42s cubic-bezier(.34, 1.56, .64, 1); }
+.is-collapsed .studio-rail-toggle svg { transform: rotate(180deg); }
+
+.studio-rail-search { position: relative; display: flex; align-items: center; margin: 0 16px 10px; }
+.studio-rail-search > svg { position: absolute; left: 10px; color: var(--shell-outline); pointer-events: none; }
+.studio-rail-search input {
+  width: 100%; padding: 8px 10px 8px 31px;
+  border: 1px solid #35343899; border-radius: 8px;
+  background: var(--shell-low); color: var(--shell-on); font-size: 12px; outline: 0;
+}
+.studio-rail-search input::placeholder { color: var(--shell-outline); }
+.studio-rail-search input:focus { background: var(--shell-container); border-color: var(--shell-outline); }
+
+.studio-rail-heading {
+  margin: 14px 16px 5px; color: var(--shell-outline);
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
+}
+.studio-rail-account { display: flex; align-items: center; gap: 9px; margin-top: 10px; padding: 0 4px; }
+.studio-rail-account .studio-account { flex: none; }
+.studio-rail-who { flex: 1; min-width: 0; display: grid; }
+.studio-rail-who strong { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-rail-who small { color: var(--shell-outline); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .studio-brand { height: 56px; padding: 0 16px; display: flex; align-items: center; gap: 10px; }
 .studio-brand > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(145deg, #9c7cff, #5a35e8); color: #fff; }
 .studio-brand strong { font-size: 18px; letter-spacing: -.015em; font-weight: 600; }
@@ -34,7 +86,7 @@
 .studio-sidebar nav a:hover > svg { color: #fff; }
 .studio-sidebar nav a.active { background: var(--shell-accent); color: #fff; font-weight: 600; box-shadow: 0 3px 10px #583be855; }
 .studio-sidebar nav a.active > svg { color: #fff; }
-.studio-sidebar-foot { padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+.studio-sidebar-foot { flex: none; padding: 12px 12px 16px; display: flex; flex-direction: column; gap: 2px; }
 .studio-sidebar-foot nav { padding: 0; }
 .studio-sidebar-foot nav a { padding: 10px 16px; font-size: 14px; }
 .render-engine { margin-top: 8px; padding: 10px; border-radius: 8px; background: var(--shell-low); display: flex; align-items: center; gap: 10px; }
@@ -45,29 +97,7 @@
 .render-engine span { font: 12px var(--font-geist-mono), monospace; color: var(--shell-primary); }
 .render-engine > b { margin-left: auto; font: 500 10px var(--font-geist-mono), monospace; color: var(--shell-variant); letter-spacing: .04em; }
 
-.studio-main { padding-left: 256px; }
-.studio-topbar {
-  position: fixed; top: 0; left: 256px; right: 0; height: 56px; z-index: 40;
-  display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 16px;
-  background: #131316cc; backdrop-filter: blur(18px); box-shadow: 0 1px 8px rgba(0, 0, 0, .04);
-}
-.studio-topbar-left, .studio-topbar-right { display: flex; align-items: center; gap: 16px; min-width: 0; }
-.studio-topbar-left { flex-shrink: 0; }
-.studio-topbar-right { gap: 12px; }
-.studio-core { display: flex; align-items: center; gap: 8px; }
-.studio-core > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: linear-gradient(145deg, #9c7cff, #5a35e8); color: #fff; }
-.studio-core strong { font-size: 15px; font-weight: 600; letter-spacing: -.015em; white-space: nowrap; }
-.studio-divider { width: 1px; height: 16px; background: var(--shell-highest); flex-shrink: 0; }
-.studio-tabs { display: flex; align-items: center; gap: 4px; }
-.studio-tabs a { padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--shell-variant); white-space: nowrap; transition: background .15s, color .15s; }
-.studio-tabs a:hover { background: var(--shell-container); color: var(--shell-on); }
-.studio-tabs a.active { background: var(--shell-high); color: var(--shell-on); font-weight: 600; box-shadow: 0 1px 2px #0006; }
-.studio-search { position: relative; display: flex; align-items: center; width: clamp(150px, 22vw, 320px); flex-shrink: 1; min-width: 0; }
-.studio-search > svg { position: absolute; left: 10px; color: var(--shell-outline); pointer-events: none; }
-.studio-search input { width: 100%; background: var(--shell-rail); border: 1px solid #35343899; border-radius: 8px; padding: 7px 48px 7px 32px; color: var(--shell-on); font-size: 12px; outline: 0; transition: background .15s, border-color .15s; }
-.studio-search input::placeholder { color: var(--shell-outline); }
-.studio-search input:focus { background: var(--shell-container); border-color: var(--shell-outline); }
-.studio-search kbd { position: absolute; right: 6px; font: 500 10px var(--font-geist-mono), monospace; background: var(--shell-high); border: 1px solid var(--shell-highest); color: var(--shell-variant); padding: 2px 5px; border-radius: 4px; pointer-events: none; }
+.studio-main { padding-left: var(--rail-w); }
 .studio-icon-button { position: relative; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--shell-variant); transition: background .15s, color .15s; }
 .studio-icon-button:hover { background: var(--shell-high); color: var(--shell-on); }
 .studio-icon-button > i { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--shell-primary); box-shadow: 0 0 0 2px var(--shell-bg); }
@@ -104,20 +134,43 @@
 .studio-account-menu form { display: contents; }
 .studio-sign-out { color: #ff9ba3 !important; }
 .studio-sign-out:hover { background: #3b171d !important; }
-.studio-main > main { padding: 90px 28px 60px; }
-.studio-main > main.flush { padding: 56px 0 0; }
+/* No topbar any more, so the page starts at the top of the viewport. */
+.studio-main > main { padding: 34px 28px 60px; }
+.studio-main > main.flush { padding: 0; }
 .mobile-menu { display: none; }
 
-@media (max-width: 1100px) {
-  .studio-search { width: 200px; }
-  .studio-tabs a { padding-inline: 7px; font-size: 12px; }
-}
 @media (max-width: 900px) {
+  /* Off-canvas below this width, so the collapse toggle has nothing to do. */
+  .studio-shell, .studio-shell.is-collapsed { --rail-w: 256px; }
   .studio-sidebar { transform: translateX(-100%); transition: transform .2s; }
   .studio-sidebar.open { transform: none; box-shadow: 20px 0 60px #000; }
+  .studio-rail-toggle { display: none; }
   .studio-main { padding-left: 0; }
-  .studio-topbar { left: 0; padding-right: 76px; }
-  .studio-tabs, .studio-search { display: none; }
+  .studio-main > main, .studio-main > main.flush { padding-top: 60px; }
   .mobile-menu { display: grid; place-items: center; position: fixed; right: 16px; top: 12px; z-index: 60; width: 34px; height: 34px; border: 0; border-radius: 9px; background: var(--shell-accent); color: #fff; cursor: pointer; }
   .studio-main > main { padding-inline: 16px; }
 }
+
+/* Collapsed rail ----------------------------------------------------------
+   Everything that cannot survive at 76px is hidden rather than squeezed, and the
+   remaining icons centre themselves. `white-space: nowrap` on the labels matters: without
+   it they wrap into a tall column for the duration of the animation. */
+.studio-sidebar nav a > span { white-space: nowrap; overflow: hidden; }
+.is-collapsed .studio-brand { justify-content: center; padding: 0 8px; }
+.is-collapsed .studio-brand strong,
+.is-collapsed .studio-workspace-picker,
+.is-collapsed .studio-workspace-label,
+.is-collapsed .studio-rail-search,
+.is-collapsed .studio-rail-heading,
+.is-collapsed .studio-sidebar nav a > span,
+.is-collapsed .render-engine > div,
+.is-collapsed .render-engine > b { display: none; }
+.is-collapsed .studio-sidebar nav a { justify-content: center; padding-inline: 0; }
+.is-collapsed .studio-sidebar-foot { padding-inline: 8px; }
+.is-collapsed .render-engine { justify-content: center; padding: 10px 0; }
+.is-collapsed .studio-rail-account { flex-direction: column; gap: 10px; padding: 0; }
+.is-collapsed .studio-rail-who { display: none; }
+
+/* The menus now hang off the bottom-left of the screen, so they open upward. */
+.studio-rail-account .studio-account-menu,
+.studio-rail-account .studio-notification-menu { top: auto; bottom: calc(100% + 10px); right: auto; left: 0; }

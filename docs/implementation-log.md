@@ -1891,3 +1891,50 @@ appearing instantly this whole time. Importing it in `globals.css` switches them
   to 4 and puts `1` on the trigger, and an outside click dismisses it. Checked at 1512px,
   900px and 760px, and in the compact project view — where the client and project filters
   correctly disappear, because that view is already scoped to one project.
+
+## 2026-09-12 — One navigation rail, no topbar
+
+The app had chrome on two edges: a sidebar and, above every page, a bar carrying a second
+brand mark, four tabs, a search box, notifications and the account menu. The bar is gone.
+
+Nothing it did went with it — deleting the bar would have taken sign-out, notifications and
+three routes with it — so each piece moved into the sidebar:
+
+- **Active Reviews, Render Queue, Deliverables** became a "Workspace" group in the nav.
+  Its fourth tab, "All Projects", was the same `/projects` already linked above it.
+- **Search**, **notifications** and the **account menu** moved into the rail; the account
+  row now shows who is signed in rather than only an avatar.
+- The calendar button was dropped: it linked to `/projects`, which the nav already does.
+
+### Both rails collapse
+
+The shell rail collapses to a 76px icon strip and the projects client rail collapses to
+nothing, each behind a handle straddling its own edge. The main rail's state is a cookie
+read in `(app)/layout.tsx`, so the first paint is already the right width — restoring it
+after hydration would paint full-width and then snap shut on every load.
+
+The width is a **registered custom property** (`@property --rail-w`), transitioned in CSS.
+Registering it is what makes it animatable at all; an unregistered custom property jumps.
+One transition then drives both the rail and the main column off the same value, so they
+cannot drift apart mid-animation and nothing re-renders while it runs. The bounce is an
+overshooting curve, `cubic-bezier(.34, 1.56, .64, 1)`, and `motion` is used only for the
+handle's press — a transform, which is cheap. No GSAP: `motion` was already here, and a
+second animation runtime for one handle is not worth its weight.
+
+Measured in Chrome rather than assumed: 32 sampled frames over the transition produced 25
+distinct widths, overshot past the target, and settled on exactly 76px.
+
+### Knock-on fixes
+
+Everything positioned under a 56px bar had to stop doing so — `main` padding, the review
+workspace's `calc(100vh - 56px)`, and the projects rail's sticky offset. The review page
+now measures exactly the viewport height with no page scroll. `.studio-main > main.flush`
+also outranks the bare selector, so the mobile rule had to name it explicitly or the fixed
+menu button sat on top of full-bleed pages.
+
+### Verification
+
+- 37 tests, types, lint and a production build all clean.
+- Driven in Chrome at 1440px and 820px: both rails toggle and restore, the handles clear
+  each other when the client rail is shut, the mobile breakpoint hides both handles and
+  restores the off-canvas drawer, and neither page scrolls sideways.

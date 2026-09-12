@@ -1,8 +1,39 @@
 /* Projects: client rail + asset explorer, matching the Stitch reference. */
-.pb-layout { display: flex; min-height: calc(100vh - 56px); align-items: stretch; }
+/* Registered so it can be transitioned; see the note on `--rail-w` in `shell.css`. */
+@property --client-rail-w {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 288px;
+}
+
+.pb-layout {
+  display: flex; min-height: 100vh; align-items: stretch;
+  --client-rail-w: 288px;
+  transition: --client-rail-w .42s cubic-bezier(.34, 1.56, .64, 1);
+}
+.pb-layout.is-rail-closed { --client-rail-w: 0px; }
 
 /* ---- Client rail ---- */
-.pb-rail { width: 288px; flex-shrink: 0; background: var(--shell-low); display: flex; flex-direction: column; justify-content: space-between; box-shadow: 8px 0 24px #0000004d; position: sticky; top: 56px; height: calc(100vh - 56px); }
+.pb-rail {
+  position: sticky; top: 0; z-index: 5;
+  width: var(--client-rail-w); flex-shrink: 0; height: 100vh;
+  background: var(--shell-low);
+  display: flex; flex-direction: column; justify-content: space-between;
+  box-shadow: 8px 0 24px #0000004d;
+}
+/* Closed means zero-width, so the contents have to stop taking part in layout. */
+.is-rail-closed .pb-rail > *:not(.pb-rail-handle) { display: none; }
+
+.pb-rail-handle { position: absolute; top: 50%; right: -13px; z-index: 6; transform: translateY(-50%); }
+.pb-rail-toggle {
+  display: grid; place-items: center; width: 26px; height: 26px;
+  border: 1px solid var(--shell-highest); border-radius: 50%;
+  background: var(--shell-container); color: var(--shell-variant);
+  cursor: pointer; box-shadow: 0 4px 12px #0007;
+}
+.pb-rail-toggle:hover { background: var(--shell-high); color: var(--shell-on); }
+.pb-rail-toggle svg { transition: transform .42s cubic-bezier(.34, 1.56, .64, 1); }
+.is-rail-closed .pb-rail-toggle svg { transform: rotate(180deg); }
 .pb-rail-top { padding: 12px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .pb-rail-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; }
 .pb-rail-head h2 { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 18px; font-weight: 600; letter-spacing: -.015em; }
@@ -148,7 +179,10 @@
 
 @media (max-width: 1023px) {
   .pb-layout { flex-direction: column; }
-  .pb-rail { width: 100%; box-shadow: none; border-bottom: 1px solid #2a2a2d; position: static; height: auto; }
+  .pb-layout, .pb-layout.is-rail-closed { --client-rail-w: 100%; }
+  .pb-rail { box-shadow: none; border-bottom: 1px solid #2a2a2d; position: static; height: auto; }
+  .pb-rail-handle { display: none; }
+  .is-rail-closed .pb-rail > *:not(.pb-rail-handle) { display: revert; }
   .pb-tree { max-height: 320px; }
 }
 @media (max-width: 700px) {

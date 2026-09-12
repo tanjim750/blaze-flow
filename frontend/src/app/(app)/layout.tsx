@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { AppShell } from "@/components/app-shell";
 import { loadSession } from "@/lib/session";
 import { toShellUser } from "@/lib/user";
@@ -13,14 +14,19 @@ import { loadWorkspaceContext } from "@/lib/workspace";
  *
  * Resolving the session here also keeps the signed-out redirect ahead of any Suspense
  * boundary, so it stays a real HTTP redirect rather than a streamed meta refresh.
+ *
+ * The sidebar's collapsed state is a cookie rather than `localStorage` so it can be read
+ * here, on the server: restoring it after hydration instead would paint a full-width rail
+ * and then snap it shut on every load.
  */
 export default async function AppLayout({ children }: LayoutProps<"/">) {
-  const [session, context] = await Promise.all([loadSession(), loadWorkspaceContext()]);
+  const [session, context, jar] = await Promise.all([loadSession(), loadWorkspaceContext(), cookies()]);
   return (
     <AppShell
       user={session.user && toShellUser(session.user)}
       workspaces={context.ok ? context.data.workspaces : []}
       selectedWorkspaceId={context.ok ? context.data.selected?.id : null}
+      railCollapsed={jar.get("blazeflow_rail")?.value === "1"}
     >
       {children}
     </AppShell>

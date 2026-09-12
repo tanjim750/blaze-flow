@@ -99,7 +99,7 @@ the external-drive warning in `docs/DEVELOPMENT.md`.
 | `src/app/deliverables/` | Download-authorized media handoff view |
 | `src/app/(auth)/` | Pre-session pages and their shared layout, styles, and forms |
 | `src/app/actions.ts` | `signOutAction`, the one app-wide server action |
-| `src/components/app-shell.tsx` | Sidebar, topbar, workspace tabs, and the account menu |
+| `src/components/app-shell.tsx` | The single sidebar: navigation, search, workspace switcher, operations health, notifications, and the account menu |
 | `src/components/dashboard-tasks.tsx` | Task panel with Today/Upcoming/Overdue buckets |
 | `src/lib/api.ts` | Typed server-side Django client; the only place a URL is built |
 | `src/lib/session.ts` | Resolves the current user and decides the unauthenticated path |
