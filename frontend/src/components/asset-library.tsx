@@ -78,7 +78,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const [bulkOpen, setBulkOpen] = useState(false); const [renamingId, setRenamingId] = useState<string | null>(null);
   const stages = view?.stages ?? [];
   const serverFolders: LibraryFolder[] = (view?.folders ?? []).map((folder) => ({ id: folder.id, name: folder.name, clientId: folder.client_team_id, projectId: folder.project_id, parentFolderId: folder.parent_folder_id, createdAt: folder.created_at, createdBy: "Workspace member" }));
-  const serverFiles: LibraryFile[] = (view?.files ?? []).map((item) => ({ id: item.id, fileId: item.file.id, name: item.file.name, kind: mimeKind(item.file.mime_type, item.file.name), mimeType: item.file.mime_type, size: item.file.size_bytes, url: view?.workspaceId && item.file.status === "READY" ? `/api/workspaces/${view.workspaceId}/asset-files/${item.id}/download/` : null, preview: view?.workspaceId && item.poster ? `/api/workspaces/${view.workspaceId}/asset-files/${item.id}/poster/` : null, uploadedBy: "Workspace member", uploadedAt: item.created_at, folderId: item.folder_id, clientId: item.client_team_id, projectId: item.project_id, stageId: item.task_stage_id }));
+  const serverFiles: LibraryFile[] = (view?.files ?? []).map((item) => ({ id: item.id, fileId: item.file.id, name: item.file.name, kind: mimeKind(item.file.mime_type, item.file.name), mimeType: item.file.mime_type, size: item.file.size_bytes, durationMs: item.file.duration_ms, url: view?.workspaceId && item.file.status === "READY" ? `/api/workspaces/${view.workspaceId}/asset-files/${item.id}/download/` : null, preview: view?.workspaceId && item.poster ? `/api/workspaces/${view.workspaceId}/asset-files/${item.id}/poster/` : null, uploadedBy: "Workspace member", uploadedAt: item.created_at, folderId: item.folder_id, clientId: item.client_team_id, projectId: item.project_id, stageId: item.task_stage_id }));
   // With no workspace there is no server to be authoritative, so the sample library stands
   // in and every local edit applies. Connected, a local row may only override a server row
   // while its write is still in flight; everything else defers to the server.
@@ -325,6 +325,7 @@ function FileCard({ file, folders, view, selected, renaming, onSelect, onDetails
     <label className="al-select"><input type="checkbox" checked={selected} onChange={onSelect} aria-label={`Select ${file.name}`} /></label>
     <button className="al-file-preview" onClick={() => review ? router.push(review) : onPreview()} aria-label={review ? `Open review for ${file.name}` : `Preview ${file.name}`}>
       <Preview file={file} large />
+      {file.durationMs ? <b className="al-duration">{runtime(file.durationMs)}</b> : null}
       <i>{review ? <Clapperboard /> : <Play />}</i>
     </button>
     <div>
@@ -368,7 +369,7 @@ function RenameField({ entity, isFile, view, done }: { entity: LibraryFile | Lib
     onClick={(event) => event.stopPropagation()}
   />;
 }
-function Preview({ file, large = false }: { file: LibraryFile | null; large?: boolean }) { if (!file) return <span className="al-preview-blank" />; if (file.preview) return <span className="al-preview-image" style={{ backgroundImage: `url(${file.preview})` }} />; if (file.kind === "video" && file.url) return <span className="al-preview-video"><video src={file.url} muted preload="metadata" /></span>; const extension = file.name.includes(".") ? file.name.split(".").pop()?.toUpperCase() : null; return <span className={`al-kind-preview ${file.kind} ${large ? "large" : ""}`}><KindIcon kind={file.kind} />{file.kind === "audio" && <i><b /><b /><b /><b /><b /><b /><b /></i>}{["document", "source", "other"].includes(file.kind) && extension && <em>{extension}</em>}</span>; }
+function Preview({ file, large = false }: { file: LibraryFile | null; large?: boolean }) { if (!file) return <span className="al-preview-blank" />; if (file.preview) return <span className="al-preview-image" style={{ backgroundImage: `url(${file.preview})` }} />; const extension = file.name.includes(".") ? file.name.split(".").pop()?.toUpperCase() : null; return <span className={`al-kind-preview ${file.kind} ${large ? "large" : ""}`}><KindIcon kind={file.kind} />{file.kind === "audio" && <i><b /><b /><b /><b /><b /><b /><b /></i>}{["document", "source", "other"].includes(file.kind) && extension && <em>{extension}</em>}</span>; }
 function StageChip({ stageId, view }: { stageId: string | null; view?: FilesView }) {
   const stage = view?.stages.find((item) => item.id === stageId);
   if (!stage) return null;
@@ -521,7 +522,7 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
       for (const [index, file] of uploads.entries()) {
         if (cancelled.current) { setStatus("idle"); setProgress(0); return; }
         const preview = file.type.startsWith("image/") && file.size <= 1_000_000 ? await dataUrl(file) : null;
-        const draft = { id: newId("file"), fileId: null, name: file.name, kind: kindFor(file), mimeType: file.type || "application/octet-stream", size: file.size, url: URL.createObjectURL(file), preview, uploadedBy: "You", uploadedAt: new Date().toISOString(), folderId: folder, clientId: (projectRow?.clientId ?? client) || null, projectId: project, stageId: stageId || null } satisfies LibraryFile;
+        const draft = { id: newId("file"), fileId: null, name: file.name, kind: kindFor(file), mimeType: file.type || "application/octet-stream", size: file.size, durationMs: null, url: URL.createObjectURL(file), preview, uploadedBy: "You", uploadedAt: new Date().toISOString(), folderId: folder, clientId: (projectRow?.clientId ?? client) || null, projectId: project, stageId: stageId || null } satisfies LibraryFile;
 
         if (!view?.workspaceId) {
           updateLibrary((state) => ({ ...state, files: [...state.files, draft] }));
@@ -620,3 +621,12 @@ const formatSize = (bytes: number) => bytes < 1048576 ? `${(bytes / 1024).toFixe
 function mimeKind(mime: string, name: string): LibraryKind { return kindFor({ type: mime, name } as File); }
 function dataUrl(file: File) { return new Promise<string>((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => resolve(""); reader.readAsDataURL(file); }); }
 function relationLabel(entity: { clientId: string | null; projectId: string | null }, view?: FilesView) { const project = view?.groups.find((item) => item.projectId === entity.projectId); const client = view?.clients.find((item) => item.id === (entity.clientId ?? project?.clientId)); return [client?.name, project?.projectName].filter(Boolean).join(" / ") || "Unassigned"; }
+
+/** `mm:ss`, matching the badge on the task board. */
+function runtime(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = String(total % 60).padStart(2, "0");
+  const hours = Math.floor(minutes / 60);
+  return hours ? `${hours}:${String(minutes % 60).padStart(2, "0")}:${seconds}` : `${minutes}:${seconds}`;
+}

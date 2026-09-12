@@ -12,7 +12,7 @@ export type LibraryFolder = { id: string; name: string; clientId: string | null;
  * and a task attachment also point at, so it is the id review is addressed by. It is null
  * only while an upload is still in flight and the server has not named the file yet.
  */
-export type LibraryFile = { id: string; fileId: string | null; name: string; kind: LibraryKind; mimeType: string; size: number; url: string | null; preview: string | null; uploadedBy: string; uploadedAt: string; folderId: string | null; clientId: string | null; projectId: string | null; stageId: string | null };
+export type LibraryFile = { id: string; fileId: string | null; name: string; kind: LibraryKind; mimeType: string; size: number; durationMs: number | null; url: string | null; preview: string | null; uploadedBy: string; uploadedAt: string; folderId: string | null; clientId: string | null; projectId: string | null; stageId: string | null };
 /**
  * `pending` holds the ids of rows with a server write in flight. Only those rows — and rows
  * the server has never heard of — are allowed to override server data. See `merge` in
@@ -31,10 +31,10 @@ export const demoLibrary: LibraryState = { folders: [
   { id: "demo-graphics", name: "Graphics", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-06T10:00:00Z", createdBy: "Blaze Flow" },
   { id: "demo-sound", name: "Sound Effects", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-07T10:00:00Z", createdBy: "Blaze Flow" },
 ], files: [
-  { id: "demo-video-1", fileId: null, name: "interview-camera-a.mp4", kind: "video", mimeType: "video/mp4", size: 482344960, url: null, preview: null, uploadedBy: "Aaron Jackson", uploadedAt: "2026-09-05T11:00:00Z", folderId: "demo-footage", clientId: null, projectId: null, stageId: null },
-  { id: "demo-video-2", fileId: null, name: "b-roll-01.mov", kind: "video", mimeType: "video/quicktime", size: 894232100, url: null, preview: null, uploadedBy: "Aaron Jackson", uploadedAt: "2026-09-05T11:10:00Z", folderId: "demo-footage", clientId: null, projectId: null, stageId: null },
-  { id: "demo-image-1", fileId: null, name: "campaign-lockup.png", kind: "image", mimeType: "image/png", size: 2840000, url: null, preview: "/images/asset-vfx.svg", uploadedBy: "Sarah Lin", uploadedAt: "2026-09-06T12:00:00Z", folderId: "demo-graphics", clientId: null, projectId: null, stageId: null },
-  { id: "demo-audio-1", fileId: null, name: "city-ambience.wav", kind: "audio", mimeType: "audio/wav", size: 18400000, url: null, preview: null, uploadedBy: "Elena Rostova", uploadedAt: "2026-09-07T12:00:00Z", folderId: "demo-sound", clientId: null, projectId: null, stageId: null },
+  { id: "demo-video-1", fileId: null, name: "interview-camera-a.mp4", kind: "video", mimeType: "video/mp4", size: 482344960, durationMs: null, url: null, preview: null, uploadedBy: "Aaron Jackson", uploadedAt: "2026-09-05T11:00:00Z", folderId: "demo-footage", clientId: null, projectId: null, stageId: null },
+  { id: "demo-video-2", fileId: null, name: "b-roll-01.mov", kind: "video", mimeType: "video/quicktime", size: 894232100, durationMs: null, url: null, preview: null, uploadedBy: "Aaron Jackson", uploadedAt: "2026-09-05T11:10:00Z", folderId: "demo-footage", clientId: null, projectId: null, stageId: null },
+  { id: "demo-image-1", fileId: null, name: "campaign-lockup.png", kind: "image", mimeType: "image/png", size: 2840000, durationMs: null, url: null, preview: "/images/asset-vfx.svg", uploadedBy: "Sarah Lin", uploadedAt: "2026-09-06T12:00:00Z", folderId: "demo-graphics", clientId: null, projectId: null, stageId: null },
+  { id: "demo-audio-1", fileId: null, name: "city-ambience.wav", kind: "audio", mimeType: "audio/wav", size: 18400000, durationMs: null, url: null, preview: null, uploadedBy: "Elena Rostova", uploadedAt: "2026-09-07T12:00:00Z", folderId: "demo-sound", clientId: null, projectId: null, stageId: null },
 ], deletedIds: [], pending: [] };
 
 /*

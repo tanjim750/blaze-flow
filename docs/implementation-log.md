@@ -2235,3 +2235,25 @@ rather than three per card.
 Not built, and deliberately: the per-card checkbox and the column "+" buttons are selection
 and creation, not badges; and the custom-field grid (DEADLINE / EDITORS / PRICING …) needs
 a user-definable field model, which is its own piece of work rather than a card restyle.
+
+## 2026-09-12 — The Files card, and a stage chip with no stylesheet
+
+Reported: the file card looked unfinished. It was, and for a findable reason — **`.al-stage`
+had no CSS rule at all.**
+
+The markup moved from `.al-status` to `.al-stage` when stages became the workspace's own,
+and only the inline colours came with it; `.al-status` still sits in the stylesheet, fully
+styled, for a class nothing renders any more. An `<em>` carrying a background and nothing
+else renders as loose italic text, which is exactly what "In Progress" looked like.
+
+It is now a pill: a dot in the stage's own colour, uppercase, bordered, matching its column
+on the task board. Alongside that the card got a larger title, room to breathe, and the
+same runtime badge the board uses — hidden in the list view, where an 88px thumbnail has no
+room for two badges and the row already states the size.
+
+### A bandwidth trap removed on the way
+
+The grid's video preview fell back to `<video src={downloadUrl} preload="metadata">`. With
+posters now generated that branch is only reachable for a clip without one, but the asset
+route serves no byte ranges, so reaching it downloads the whole file to paint one frame.
+Removed; those fall back to the kind glyph like everything else.

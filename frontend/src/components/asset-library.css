@@ -72,21 +72,47 @@
 .al-folder-card > footer > button:not(.al-menu-trigger) { display: grid; gap: 3px; flex: 1; border: 0; background: none; color: var(--shell-on); text-align: left; cursor: pointer; }
 .al-name-edit { display: grid; gap: 3px; flex: 1; min-width: 0; }
 .al-rename-input { width: 100%; min-width: 0; padding: 2px 6px; border: 1px solid var(--shell-primary); border-radius: 6px; background: var(--shell-low); color: var(--shell-on); font: inherit; font-size: 11px; font-weight: 700; outline: 0; }
-.al-folder-card small, .al-file-card small { color: var(--shell-outline); font-size: 10px; }
+.al-folder-card small, .al-file-card small { color: var(--shell-outline); font-size: 10.5px; }
 .al-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; align-items: start; }
 .al-grid.dense { display: grid; grid-template-columns: 1fr; gap: 6px; }
 .al-grid.dense :is(.al-folder-card, .al-file-card) { display: flex; min-height: 58px; transform: none; }
 .al-grid.dense :is(.al-folder-preview, .al-file-preview) { flex: 0 0 88px; height: 58px; border-radius: 10px 0 0 10px; }
 .al-grid.dense :is(.al-folder-card > footer, .al-file-card > div) { flex: 1; min-width: 0; }
-.al-file-card { border-radius: 11px; }
-.al-file-preview { position: relative; width: 100%; height: 125px; padding: 0; border: 0; border-radius: 11px 11px 0 0; overflow: hidden; background: var(--shell-low); cursor: pointer; }
+/* The 88px thumbnail has no room for both badges, and the row already states the size. */
+.al-grid.dense .al-duration { display: none; }
+.al-file-card { border-radius: 12px; }
+.al-file-preview { position: relative; width: 100%; height: 132px; padding: 0; border: 0; border-radius: 12px 12px 0 0; overflow: hidden; background: var(--shell-low); cursor: pointer; }
 .al-file-preview > span { width: 100%; height: 100%; }
-.al-file-preview > i { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: #0b0b0ecc; color: #fff; }
+.al-file-preview > i { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #0b0b0ed9; color: #fff; backdrop-filter: blur(4px); }
 .al-file-preview > i svg { width: 11px; }
-.al-file-card > div { display: flex; align-items: center; gap: 7px; padding: 10px; }
-.al-file-card > div > svg { width: 14px; color: var(--shell-primary); }
-.al-file-card > div > span { display: grid; gap: 3px; flex: 1; min-width: 0; }
-.al-file-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+/* Runtime, bottom-left of the frame — the same badge the task board uses. */
+.al-duration {
+  position: absolute; left: 8px; bottom: 8px;
+  padding: 2px 6px; border-radius: 5px;
+  background: #000000a8; color: #dcd9e6;
+  font: 600 9px var(--font-geist-mono), monospace; font-style: normal;
+}
+.al-file-card > div { display: flex; align-items: flex-start; gap: 8px; padding: 11px 11px 12px; }
+.al-file-card > div > svg { width: 14px; margin-top: 2px; flex: none; color: var(--shell-primary); }
+.al-file-card > div > span { display: grid; gap: 5px; flex: 1; min-width: 0; }
+.al-file-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; letter-spacing: -.005em; }
+
+/*
+ * The workflow stage chip.
+ *
+ * It had no rule at all — the markup moved from `.al-status` to `.al-stage` when stages
+ * became the workspace's own, and only the inline colours came with it. An `<em>` with a
+ * background and nothing else renders as loose italic text, which is what it looked like.
+ * The colour still comes from the stage, so the chip matches its column on the board.
+ */
+.al-stage {
+  justify-self: start; display: inline-flex; align-items: center; gap: 5px;
+  max-width: 100%; padding: 3px 9px 3px 7px;
+  border: 1px solid transparent; border-radius: 999px;
+  font-size: 9.5px; font-style: normal; font-weight: 600; letter-spacing: .03em;
+  text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.al-stage::before { content: ""; flex: none; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .al-status { justify-self: start; padding: 2px 7px; border: 1px solid transparent; border-radius: 999px; font-size: 9px; font-style: normal; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
 .al-status.draft { border-color: #89909d59; background: #89909d24; color: #b6bcc7; }
 .al-status.in-review { border-color: #f4a74259; background: #f4a74224; color: #f0b768; }
