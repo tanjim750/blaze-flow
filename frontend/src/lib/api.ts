@@ -183,6 +183,19 @@ export const createProject = (workspaceId: string, payload: { name: string; clie
 export const createFolder = (workspaceId: string, projectId: string, payload: { name: string; parent_folder_id?: string }) =>
   request<ProjectFolder>(`/workspaces/${workspaceId}/projects/${projectId}/folders/`, jsonBody(payload));
 
+export const updateProject = (workspaceId: string, projectId: string, payload: { name?: string; status?: string; priority?: string }) =>
+  request<Project>(`/workspaces/${workspaceId}/projects/${projectId}/`, { ...jsonBody(payload), method: "PATCH" });
+
+/** Archives rather than destroys: the API keeps the row and flips its status. */
+export const archiveProject = (workspaceId: string, projectId: string) =>
+  request<void>(`/workspaces/${workspaceId}/projects/${projectId}/`, { method: "DELETE" });
+
+export const renameProjectFolder = (workspaceId: string, projectId: string, folderId: string, name: string) =>
+  request<ProjectFolder>(`/workspaces/${workspaceId}/projects/${projectId}/folders/${folderId}/`, { ...jsonBody({ name }), method: "PATCH" });
+
+export const deleteProjectFolder = (workspaceId: string, projectId: string, folderId: string) =>
+  request<void>(`/workspaces/${workspaceId}/projects/${projectId}/folders/${folderId}/`, { method: "DELETE" });
+
 export const uploadMediaVersion = (workspaceId: string, projectId: string, payload: FormData) =>
   request<MediaVersion>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/`, {
     method: "POST", body: payload,

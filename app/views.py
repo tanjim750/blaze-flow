@@ -122,6 +122,7 @@ from .models import (
     Project,
     ProjectFile,
     ProjectFolder,
+    ProjectStatus,
     ResourceAccess,
     ReviewComment,
     ReviewCommentContent,
@@ -885,7 +886,7 @@ def project_list_create(request, workspace_id):
             user=request.user,
             workspace=workspace,
             permission_key=PROJECT_READ,
-        ).order_by('-created_at')
+        ).exclude(status=ProjectStatus.ARCHIVED).order_by('-created_at')
         return Response(ProjectSerializer(projects, many=True).data)
 
     authorizing_membership = memberships_with_permission(

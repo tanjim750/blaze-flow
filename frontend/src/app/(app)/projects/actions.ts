@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClientTeam, createFolder, createProject, listWorkspaces } from "@/lib/api";
+import { archiveProject, createClientTeam, createFolder, createProject, deleteProjectFolder, listWorkspaces, renameProjectFolder, updateProject } from "@/lib/api";
 import { selectWorkspace } from "@/lib/workspace";
 
 /**
@@ -67,5 +67,60 @@ export async function createFolderAction(_prev: ActionState, form: FormData): Pr
   const folder = await createFolder(workspace.id, campaignId, parentId ? { name, parent_folder_id: parentId } : { name });
   if (!folder.ok) return { error: folder.error.detail, savedAt: null };
   revalidatePath("/projects");
+  return ok();
+}
+
+/** Renames a campaign. The tree calls this one a subfolder; the API calls it a project. */
+export async function renameCampaignAction(campaignId: string, name: string): Promise<ActionState> {
+  const trimmed = name.trim();
+  if (!trimmed) return { error: "Enter a name.", savedAt: null };
+  const workspace = await currentWorkspaceId();
+  if (isFailure(workspace)) return workspace;
+
+  const updated = await updateProject(workspace.id, campaignId, { name: trimmed });
+  if (!updated.ok) return { error: updated.error.detail, savedAt: null };
+  revalidatePath("/projects");
+  return ok();
+}
+
+/**
+ * Removes a campaign from the tree.
+ *
+ * The API archives rather than destroys — the row and everything under it survive — which
+ * is why the listing endpoint now excludes archived projects. Without that the row stayed
+ * on screen and the delete looked like it had failed.
+ */
+export async function deleteCampaignAction(campaignId: string): Promise<ActionState> {
+  const workspace = await currentWorkspaceId();
+  if (isFailure(workspace)) return workspace;
+
+  const archived = await archiveProject(workspace.id, campaignId);
+  if (!archived.ok) return { error: archived.error.detail, savedAt: null };
+  revalidatePath("/projects");
+  revalidatePath("/files");
+  revalidatePath("/tasks");
+  return ok();
+}
+
+export async function renameFolderAction(campaignId: string, folderId: string, name: string): Promise<ActionState> {
+  const trimmed = name.trim();
+  if (!trimmed) return { error: "Enter a name.", savedAt: null };
+  const workspace = await currentWorkspaceId();
+  if (isFailure(workspace)) return workspace;
+
+  const renamed = await renameProjectFolder(workspace.id, campaignId, folderId, trimmed);
+  if (!renamed.ok) return { error: renamed.error.detail, savedAt: null };
+  revalidatePath("/projects");
+  return ok();
+}
+
+export async function deleteFolderAction(campaignId: string, folderId: string): Promise<ActionState> {
+  const workspace = await currentWorkspaceId();
+  if (isFailure(workspace)) return workspace;
+
+  const removed = await deleteProjectFolder(workspace.id, campaignId, folderId);
+  if (!removed.ok) return { error: removed.error.detail, savedAt: null };
+  revalidatePath("/projects");
+  revalidatePath("/files");
   return ok();
 }

@@ -1964,3 +1964,34 @@ clicking away after typing.
 The rail handles were also reworked — a pill straddling the edge with a gradient, a
 hairline top highlight and a drop shadow, plus an accent ring on hover, in place of the
 flat disc.
+
+## 2026-09-12 — Rename and delete from the projects tree
+
+Right-clicking a subfolder or a folder in the projects rail now offers Rename and Delete.
+Both endpoints already existed (`PATCH`/`DELETE` on the project and project-folder detail
+routes); nothing new was needed server-side except one correction.
+
+### The correction
+
+`DELETE` on a project **archives** it — `archive_project` flips `status` and nothing more —
+but the listing endpoint did not filter archived projects out. A delete would therefore
+have left the row exactly where it was, in the tree, in the Files filters and on the task
+board: the same "it did nothing" failure as the inline forms. `project_list_create` now
+excludes `ARCHIVED`. No test depended on archived projects being listed.
+
+### Frontend
+
+- Radix's `ContextMenu`, not a hand-rolled one: it already handles opening at the pointer,
+  Escape, outside clicks, keyboard navigation and Shift+F10. Unlike Popover it behaves
+  under jsdom — the suite stayed at 37 passing in under two seconds.
+- Rename happens in place, pre-selected, Enter to commit and Escape to abandon.
+- Delete confirms first, and a refusal from the server is shown on the row rather than
+  being swallowed.
+
+A bug caught while testing: committing on the input's own `blur` meant clicking **Cancel**
+blurred the field, saved the rename, and *then* cancelled. Only leaving the form entirely
+commits now — verified by counting requests, which is zero during a cancel.
+
+The shadcn CLI reproduced both documented traps again (`import { cn } from "cn"` plus a
+package of that name, and the `radix-ui` umbrella). Both fixed as `frontend/AGENTS.md`
+prescribes.

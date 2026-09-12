@@ -274,3 +274,32 @@
   .pb-column { flex-basis: 240px; }
   .pb-board-card.row { grid-template-columns: 1fr; }
 }
+
+/* Right-click menu ---------------------------------------------------------
+   Radix portals this to `document.body`, outside `.studio-shell` where the `--shell-*`
+   variables live, so it uses the `:root` palette from `globals.css`. */
+.pb-context-menu {
+  min-width: 168px; padding: 5px;
+  border: 1px solid var(--border); border-radius: 11px;
+  background: var(--surface-2); color: var(--text);
+  box-shadow: var(--premium-shadow);
+}
+.pb-context-menu [role="menuitem"] {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 9px; border-radius: 7px;
+  font-size: 12px; cursor: pointer; outline: 0;
+}
+.pb-context-menu [role="menuitem"] svg { width: 13px; height: 13px; color: var(--muted); }
+.pb-context-menu [role="menuitem"][data-highlighted] { background: var(--hover); }
+.pb-context-menu [role="menuitem"][data-variant="destructive"] { color: #ff9ba3; }
+.pb-context-menu [role="menuitem"][data-variant="destructive"] svg { color: #ff9ba3; }
+.pb-context-menu [role="menuitem"][data-variant="destructive"][data-highlighted] { background: #3b171d; }
+
+/* A rename or delete that the server refused. */
+.pb-row-error {
+  display: flex; align-items: flex-start; gap: 6px;
+  margin: 6px 0 0; padding: 7px 9px;
+  border: 1px solid #7b3b42; border-radius: 8px;
+  background: #2e1a1e; color: #ffb4ab; font-size: 11px; line-height: 1.45;
+}
+.pb-row-error button { margin-left: auto; border: 0; background: none; color: inherit; cursor: pointer; padding: 0; }

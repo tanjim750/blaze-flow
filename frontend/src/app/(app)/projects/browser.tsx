@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
   Activity, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
-  FolderOpen, Pencil, Plus, Search, Share2, TriangleAlert, UploadCloud, X,
+  FolderOpen, Pencil, Plus, Search, Share2, Trash2, TriangleAlert, UploadCloud, X,
 } from "lucide-react";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
@@ -15,7 +15,8 @@ import { LinkPending } from "@/components/nav-progress";
 import { TasksBoard } from "@/app/(app)/tasks/board";
 import type { TasksView } from "@/lib/tasks-view";
 import "../tasks/tasks.css";
-import { createCampaignAction, createClientAction, createFolderAction, type ActionState } from "./actions";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, renameCampaignAction, renameFolderAction, type ActionState } from "./actions";
 
 const initialState: ActionState = { error: null, savedAt: null };
 
@@ -261,6 +262,7 @@ function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: P
 
 function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; view: ProjectsView; open: boolean; onToggle: () => void }) {
   const [adding, setAdding] = useState(false);
+  const { renaming, setRenaming, error, setError, remove } = useRowActions();
   const isSelected = view.selectedClient?.id === client.id;
 
   return (
@@ -276,13 +278,31 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
         <div className="pb-subtree">
           {client.campaigns.map((campaign) => {
             const active = view.selectedCampaign?.id === campaign.id;
+            if (renaming === campaign.id) {
+              return (
+                <InlineRename
+                  key={campaign.id}
+                  nested
+                  initial={campaign.name}
+                  onSave={(name) => renameCampaignAction(campaign.id, name)}
+                  onClose={() => setRenaming(null)}
+                />
+              );
+            }
             return (
-              <Link key={campaign.id} href={`/projects?client=${client.id}&campaign=${campaign.id}`} className={active ? "pb-sub active" : "pb-sub"}>
-                {active ? <FolderOpen size={14} /> : <Folder size={14} />}
-                <span>{campaign.name}</span>
-                <b>{campaign.assetCount || ""}</b>
-                <LinkPending />
-              </Link>
+              <RowMenu
+                key={campaign.id}
+                label={campaign.name}
+                onRename={() => setRenaming(campaign.id)}
+                onDelete={() => remove(() => deleteCampaignAction(campaign.id))}
+              >
+                <Link href={`/projects?client=${client.id}&campaign=${campaign.id}`} className={active ? "pb-sub active" : "pb-sub"}>
+                  {active ? <FolderOpen size={14} /> : <Folder size={14} />}
+                  <span>{campaign.name}</span>
+                  <b>{campaign.assetCount || ""}</b>
+                  <LinkPending />
+                </Link>
+              </RowMenu>
             );
           })}
 
@@ -301,6 +321,8 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
             </button>
           )}
 
+          {error && <p className="pb-row-error" role="alert">{error}<button type="button" onClick={() => setError(null)} aria-label="Dismiss"><X size={11} /></button></p>}
+
           {view.selectedCampaign && isSelected && <NestedFolders view={view} />}
         </div>
       )}
@@ -308,9 +330,95 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
   );
 }
 
+/** Row-level rename/delete state, shared by the campaign and folder levels. */
+function useRowActions() {
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [, start] = useTransition();
+  const remove = (run: () => Promise<ActionState>) => start(async () => {
+    setError(null);
+    const result = await run();
+    if (result.error) setError(result.error);
+  });
+  return { renaming, setRenaming, error, setError, remove };
+}
+
+/**
+ * Right-click a row for Rename and Delete.
+ *
+ * Radix's ContextMenu rather than a hand-rolled one: it already handles the things a
+ * context menu is easy to get wrong — opening at the pointer, closing on Escape or an
+ * outside click, keyboard navigation, and the Shift+F10 / menu-key route for anyone not
+ * using a mouse.
+ */
+function RowMenu({ label, onRename, onDelete, children }: {
+  label: string; onRename: () => void; onDelete: () => void; children: React.ReactNode;
+}) {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent className="pb-context-menu">
+        <ContextMenuItem onSelect={onRename}><Pencil />Rename</ContextMenuItem>
+        <ContextMenuItem variant="destructive" onSelect={() => { if (confirm(`Delete ${label}?`)) onDelete(); }}>
+          <Trash2 />Delete
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+/**
+ * Renames in place. Enter commits, Escape abandons, and leaving the field unchanged is
+ * treated as abandoning rather than as a no-op write.
+ */
+function InlineRename({ initial, onSave, onClose, nested = false }: {
+  initial: string;
+  onSave: (name: string) => Promise<ActionState>;
+  onClose: () => void;
+  nested?: boolean;
+}) {
+  const [value, setValue] = useState(initial);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  const commit = () => {
+    const name = value.trim();
+    if (!name || name === initial) return onClose();
+    start(async () => {
+      const result = await onSave(name);
+      if (result.error) setError(result.error);
+      else onClose();
+    });
+  };
+
+  return (
+    <form
+      className={nested ? "pb-inline-form nested" : "pb-inline-form"}
+      onSubmit={(event) => { event.preventDefault(); commit(); }}
+      onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}
+      // Committing on the input's own blur would save on the way to the cancel button,
+      // which pressed Cancel and renamed anyway. Only leaving the form entirely commits.
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) commit(); }}
+    >
+      <input
+        aria-label={`Rename ${initial}`}
+        autoFocus
+        value={value}
+        disabled={pending}
+        onChange={(event) => setValue(event.target.value)}
+        onFocus={(event) => event.target.select()}
+      />
+      <button type="submit" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
+      <button type="button" className="pb-inline-cancel" onClick={onClose} aria-label="Cancel"><X size={13} /></button>
+      {error && <small role="alert">{error}</small>}
+    </form>
+  );
+}
+
 /** Folders inside the selected campaign — the "and so on" level below a subfolder. */
 function NestedFolders({ view }: { view: ProjectsView }) {
   const [adding, setAdding] = useState(false);
+  const { renaming, setRenaming, error, setError, remove } = useRowActions();
   const campaign = view.selectedCampaign!;
   const roots = campaign.folders.filter((folder) => !folder.parentId);
   if (!roots.length && !adding) {
@@ -318,8 +426,23 @@ function NestedFolders({ view }: { view: ProjectsView }) {
   }
   return (
     <div className="pb-nested">
-      {roots.map((folder) => (
-        <span key={folder.id} className="pb-nested-row"><Folder size={12} />{folder.name}</span>
+      {roots.map((folder) => renaming === folder.id ? (
+        <InlineRename
+          key={folder.id}
+          nested
+          initial={folder.name}
+          onSave={(name) => renameFolderAction(campaign.id, folder.id, name)}
+          onClose={() => setRenaming(null)}
+        />
+      ) : (
+        <RowMenu
+          key={folder.id}
+          label={folder.name}
+          onRename={() => setRenaming(folder.id)}
+          onDelete={() => remove(() => deleteFolderAction(campaign.id, folder.id))}
+        >
+          <span className="pb-nested-row"><Folder size={12} />{folder.name}</span>
+        </RowMenu>
       ))}
       {adding ? (
         <InlineCreate
@@ -333,6 +456,7 @@ function NestedFolders({ view }: { view: ProjectsView }) {
       ) : (
         <button type="button" className="pb-add-sub subtle" onClick={() => setAdding(true)}><Plus size={12} />Add folder</button>
       )}
+      {error && <p className="pb-row-error" role="alert">{error}<button type="button" onClick={() => setError(null)} aria-label="Dismiss"><X size={11} /></button></p>}
     </div>
   );
 }
