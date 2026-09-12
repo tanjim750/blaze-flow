@@ -26,11 +26,22 @@ class ProjectFileUploadSerializer(serializers.Serializer):
 
 class ProjectFileSerializer(serializers.ModelSerializer):
     file = serializers.SerializerMethodField()
+    added_by = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectFile
-        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'folder_id', 'task_stage_id', 'file', 'created_at')
+        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'folder_id', 'task_stage_id', 'file', 'added_by', 'created_at')
         read_only_fields = fields
+
+    def get_added_by(self, project_file):
+        """Who uploaded it. Recorded all along, but never returned, so every card that
+        wanted to name an uploader had to say "Workspace member"."""
+        membership = project_file.added_by_workspace_membership
+        user = getattr(membership, 'user', None)
+        if user is None:
+            return None
+        name = f'{user.first_name} {user.last_name}'.strip()
+        return {'id': str(user.id), 'name': name or user.email, 'email': user.email}
 
     def get_file(self, project_file):
         item = project_file.file

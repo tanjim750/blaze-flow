@@ -1096,7 +1096,7 @@ def asset_file_list_create(request, workspace_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
     if request.method == 'GET':
         files = _accessible_assets(
-            ProjectFile.objects.filter(workspace=workspace, deleted_at__isnull=True).select_related('file'),
+            ProjectFile.objects.filter(workspace=workspace, deleted_at__isnull=True).select_related('file', 'added_by_workspace_membership__user'),
             request=request, workspace=workspace, permission_key=PROJECT_FILE_READ,
         ).order_by('-created_at')
         return Response(ProjectFileSerializer(files, many=True).data)
@@ -1122,7 +1122,7 @@ def asset_file_list_create(request, workspace_id):
 @permission_classes([IsAuthenticated])
 def asset_file_detail(request, workspace_id, file_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
-    item = get_object_or_404(ProjectFile.objects.select_related('file'), id=file_id, workspace=workspace, deleted_at__isnull=True)
+    item = get_object_or_404(ProjectFile.objects.select_related('file', 'added_by_workspace_membership__user'), id=file_id, workspace=workspace, deleted_at__isnull=True)
     permission_key = {'GET': PROJECT_FILE_READ, 'PATCH': PROJECT_FILE_UPDATE, 'DELETE': PROJECT_FILE_DELETE}[request.method]
     _require_asset_permission(request, item, permission_key)
     if request.method == 'GET':
@@ -1156,7 +1156,7 @@ def asset_file_detail(request, workspace_id, file_id):
 @permission_classes([IsAuthenticated])
 def asset_file_download(request, workspace_id, file_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
-    item = get_object_or_404(ProjectFile.objects.select_related('file'), id=file_id, workspace=workspace, deleted_at__isnull=True)
+    item = get_object_or_404(ProjectFile.objects.select_related('file', 'added_by_workspace_membership__user'), id=file_id, workspace=workspace, deleted_at__isnull=True)
     _require_asset_permission(request, item, PROJECT_FILE_READ)
     if item.file.status != FileStatus.READY:
         return Response({'detail': 'This file is still being scanned or was rejected.'}, status=status.HTTP_409_CONFLICT)
@@ -1234,7 +1234,7 @@ def project_file_list_create(request, workspace_id, project_id):
     project = get_object_or_404(Project, id=project_id, workspace=workspace)
     if request.method == 'GET':
         _require_project_permission(request, project, PROJECT_FILE_READ, 'You do not have permission to read project files.')
-        files = ProjectFile.objects.filter(project=project, deleted_at__isnull=True).select_related('file').order_by('-created_at')
+        files = ProjectFile.objects.filter(project=project, deleted_at__isnull=True).select_related('file', 'added_by_workspace_membership__user').order_by('-created_at')
         return Response(ProjectFileSerializer(files, many=True).data)
 
     _require_project_permission(request, project, PROJECT_FILE_CREATE, 'You do not have permission to add project files.')
@@ -1269,7 +1269,7 @@ def project_file_detail(request, workspace_id, project_id, file_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
     project = get_object_or_404(Project, id=project_id, workspace=workspace)
     project_file = get_object_or_404(
-        ProjectFile.objects.select_related('file'), id=file_id, project=project, deleted_at__isnull=True
+        ProjectFile.objects.select_related('file', 'added_by_workspace_membership__user'), id=file_id, project=project, deleted_at__isnull=True
     )
     if request.method == 'GET':
         _require_project_permission(request, project, PROJECT_FILE_READ, 'You do not have permission to read this file.')
@@ -1289,7 +1289,7 @@ def project_file_download(request, workspace_id, project_id, file_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
     project = get_object_or_404(Project, id=project_id, workspace=workspace)
     project_file = get_object_or_404(
-        ProjectFile.objects.select_related('file'), id=file_id, project=project, deleted_at__isnull=True
+        ProjectFile.objects.select_related('file', 'added_by_workspace_membership__user'), id=file_id, project=project, deleted_at__isnull=True
     )
     _require_project_permission(request, project, PROJECT_FILE_READ, 'You do not have permission to download this file.')
     if project_file.file.status != 'READY':

@@ -1,7 +1,8 @@
 "use client";
 import { useMemo, useState, type DragEvent, type FormEvent } from "react";
 import Link from "next/link";
-import { CalendarDays, CheckCircle2, ChevronDown, CirclePlus, Clapperboard, Columns3, Ellipsis, GripVertical, LayoutList, Paperclip, Search, Trash2, TriangleAlert, UserRound, X } from "lucide-react";
+import NextImage from "next/image";
+import { AudioLines, CalendarDays, CheckCircle2, ChevronDown, CirclePlus, Clapperboard, Columns3, Ellipsis, File as FileIcon, GripVertical, Image as ImageIcon, LayoutList, Search, Trash2, TriangleAlert, UserRound, X } from "lucide-react";
 import type { ProjectFile, Task, TaskStage, TaskWorkflowSettings } from "@/lib/api"; import type { TasksView } from "@/lib/tasks-view";
 import { updateAssetFile } from "@/lib/asset-api-client";
 import { AnimatePresence, motion } from "motion/react";
@@ -26,14 +27,47 @@ export function TasksBoard({view,projectId=null,compact=false}:{view:TasksView;p
  {mode==="KANBAN"?<div className="task-kanban" style={{gridTemplateColumns:`repeat(${columns.length}, minmax(210px, 1fr))`}}>{columns.map(col=>{const rows=filtered.filter(t=>stageId(t)===col.id),colFiles=shownFiles.filter(f=>f.task_stage_id===col.id),atLimit=Boolean(col.wip_limit&&rows.length>=col.wip_limit);return <section key={col.id} className={`task-column ${over===col.id?"over":""} ${atLimit?"at-limit":""}`} onDragOver={e=>{e.preventDefault();setOver(col.id)}} onDragLeave={()=>setOver(null)} onDrop={e=>drop(e,col.id)}><header><i style={{background:col.color}}/><strong>{col.label}</strong>{col.is_done&&<em>Done</em>}<b>{rows.length+colFiles.length}{col.wip_limit?`/${col.wip_limit}`:""}</b></header><div>{rows.map(t=><Card key={t.id} task={t} project={t.project_id?projectMap.get(t.project_id)?.name:undefined} client={clientMap.get(t.client_team_id??"")} edit={()=>setEditing(t)} remove={()=>remove(t)}/>)}{shownFiles.filter(f=>f.task_stage_id===col.id).map(f=><FileCard key={f.id} file={f} project={f.project_id?projectMap.get(f.project_id)?.name:undefined}/>)}{!rows.length&&!shownFiles.some(f=>f.task_stage_id===col.id)&&<p>Drop tasks or files here</p>}</div></section>})}</div>:<TaskList tasks={filtered} columns={columns} projectMap={projectMap} clientMap={clientMap} edit={setEditing} patch={patchTask} remove={remove}/>} {!filtered.length&&mode==="LIST"&&<div className="tasks-empty"><CheckCircle2/><strong>No matching tasks</strong><span>Adjust filters or create the next piece of work.</span></div>}
  <AnimatePresence>{editing==="stages"?<StageDialog view={view} close={()=>setEditing(null)}/>:editing&&<TaskDialog task={editing==="new"?null:editing} view={view} defaultProjectId={projectId} close={()=>setEditing(null)} saved={t=>{setTasks(xs=>xs.some(x=>x.id===t.id)?xs.map(x=>x.id===t.id?t:x):[...xs,t]);setEditing(null)}}/>}</AnimatePresence></div>}
 function Card({task,project,client,edit,remove}:{task:Task;project?:string;client?:string;edit:()=>void;remove:()=>void}){return <motion.article layout initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,scale:.97}} transition={{duration:.2,ease:[.22,1,.36,1]}} draggable onDragStart={e=>{const drag=e as unknown as DragEvent<HTMLElement>;drag.dataTransfer.setData("text/task",task.id);drag.dataTransfer.effectAllowed="move"}}><div className="task-card-top"><GripVertical/><i className={`priority-dot ${task.priority.toLowerCase()}`}/><details><summary aria-label={`Actions for ${task.title}`}><Ellipsis/></summary><div><button onClick={edit}>Edit task</button><button className="danger" onClick={remove}><Trash2/>Delete</button></div></details></div><button className="task-card-title" onClick={edit}>{task.title}</button>{task.description&&<p>{task.description}</p>}<div className="task-rel"><span>{client||"Global"}</span>{project&&<span>{project}</span>}</div><footer><span className={`task-avatar ${task.assignees.length?"assigned":""}`}>{task.assignees[0]?initials(task.assignees[0].name):<UserRound/>}</span><time className={overdue(task.due_at)?"overdue":""}><CalendarDays/>{dateLabel(task.due_at)}</time></footer></motion.article>}
+/**
+ * A media card for a file staged on the board.
+ *
+ * The thumbnail is the file itself only for images, which are small enough to fetch for a
+ * card. Video deliberately gets a rendered poster instead: the asset download route is a
+ * plain `FileResponse`, which serves no byte ranges, so a `<video>` here would pull every
+ * clip on the board down in full just to paint one frame. A real still needs a poster
+ * variant from the worker — see the note in the implementation log.
+ */
 function FileCard({file,project}:{file:ProjectFile;project?:string}){
  // `file.file.id` is the `File` row, which is what review is addressed by, so this link
  // opens the very same review as the Files library and the project tree do.
- const review=/^(video|audio)\//.test(file.file.mime_type)?`/review?media=${file.file.id}`:null;
- return <article className="task-card task-card-file" draggable onDragStart={e=>e.dataTransfer.setData("text/file",file.id)}>
-  <div className="task-card-top"><span className="task-file-badge"><Paperclip/>File</span>{review&&<Link className="task-file-review" href={review} onClick={e=>e.stopPropagation()}><Clapperboard/>Review</Link>}</div>
+ const kind=file.file.mime_type.split("/")[0];
+ const playable=kind==="video"||kind==="audio";
+ const review=playable?`/review?media=${file.file.id}`:null;
+ const ready=file.file.status==="READY";
+ const poster=kind==="image"&&ready?`/api/workspaces/${file.workspace_id}/asset-files/${file.id}/download/`:null;
+ const extension=file.file.name.includes(".")?file.file.name.split(".").pop()!.toUpperCase():kind.toUpperCase();
+ const author=file.added_by?.name??null;
+ const Icon=kind==="video"?Clapperboard:kind==="audio"?AudioLines:kind==="image"?ImageIcon:FileIcon;
+ const body=<>
+  <div className={`task-file-thumb ${kind}`}>
+   <Poster src={poster} fallback={<Icon/>}/>
+   <em>{extension}</em>
+   {!ready&&<i className="task-file-scanning" title="Still being scanned">Scanning</i>}
+  </div>
   <h4>{file.file.name}</h4>
-  {project&&<p className="task-card-meta">{project}</p>}
+  <div className="task-file-meta">
+   <span className="task-file-avatar">{author?initials(author):<UserRound/>}</span>
+   <strong>{author??"Unknown"}</strong>
+   <time>{dateLabel(file.created_at)}</time>
+  </div>
+  <footer className="task-file-foot">
+   <span>{formatBytes(file.file.size_bytes)}</span>
+   {project&&<span className="task-file-project">{project}</span>}
+  </footer>
+ </>;
+ return <article className="task-card task-card-file" draggable onDragStart={e=>e.dataTransfer.setData("text/file",file.id)}>
+  {review
+    ? <Link className="task-file-open" href={review} aria-label={`Open review for ${file.file.name}`}>{body}</Link>
+    : <div className="task-file-open">{body}</div>}
  </article>;
 }
 function TaskList({tasks,columns,projectMap,clientMap,edit,patch,remove}:{tasks:Task[];columns:readonly {id:string;label:string}[];projectMap:Map<string,TasksView["projects"][number]>;clientMap:Map<string,string>;edit:(t:Task)=>void;patch:(id:string,p:Record<string,unknown>)=>void;remove:(t:Task)=>void}){return <div className="task-table"><div className="task-tr head"><span>Task</span><span>Client</span><span>Project</span><span>Assignee</span><span>Priority</span><span>Status</span><span>Due</span><span/></div>{tasks.map(t=><div className="task-tr" key={t.id}><button onClick={()=>edit(t)}><strong>{t.title}</strong><small>{t.description||"No description"}</small></button><span>{clientMap.get(t.client_team_id??"")||"—"}</span><span>{t.project_id?projectMap.get(t.project_id)?.name:"—"}</span><span>{t.assignees[0]?.name||"Unassigned"}</span><span className={`priority-text ${t.priority.toLowerCase()}`}>{title(t.priority)}</span><select value={t.task_stage_id??normal(t.status)} onChange={e=>patch(t.id,{task_stage_id:e.target.value})}>{columns.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select><time className={overdue(t.due_at)?"overdue":""}>{dateLabel(t.due_at)}</time><button aria-label={`Delete ${t.title}`} onClick={()=>remove(t)}><Trash2/></button></div>)}</div>}
@@ -66,3 +100,11 @@ async function request<T>(workspaceId:string|null,id:string|null,method:string,p
 async function stageRequest<T>(workspaceId:string,path:string,method:string,payload?:unknown):Promise<T>{const csrf=decodeURIComponent(document.cookie.split("; ").find(x=>x.startsWith("csrftoken="))?.slice(10)??""),response=await fetch(`/api/workspaces/${workspaceId}/task-stages/${path}`,{method,credentials:"include",headers:{"Content-Type":"application/json","X-CSRFToken":csrf},...(payload===undefined?{}:{body:JSON.stringify(payload)})});if(!response.ok)throw Error((await response.json().catch(()=>null))?.detail||`Stage request failed (${response.status}).`);return response.status===204?undefined as T:response.json()}
 const normal=(v:string):ColumnId=>v==="IN_PROGRESS"?"REVISIONS":v==="COMPLETED"?"APPROVED":COLUMNS.some(x=>x.id===v)?v as ColumnId:"TODO",title=(v:string)=>v.replaceAll("_"," ").toLowerCase().replace(/\b\w/g,l=>l.toUpperCase()),nameOf=(u:NonNullable<TasksView["members"][number]["user"]>)=>`${u.first_name} ${u.last_name}`.trim()||u.email,initials=(n:string)=>n.split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase(),dateLabel=(v:string|null)=>v?new Date(v).toLocaleDateString([],{month:"short",day:"numeric"}):"No date",inputDate=(v?:string|null)=>v?new Date(v).toISOString().slice(0,16):"",overdue=(v:string|null)=>Boolean(v&&new Date(v).getTime()<Date.now()),msg=(e:unknown)=>e instanceof Error?e.message:"Something went wrong.";
 function matchesDue(v:string|null,f:DueFilter){if(!f)return true;if(f==="NONE")return!v;if(!v)return false;const now=new Date(),d=new Date(v);if(f==="OVERDUE")return d<now;if(f==="TODAY")return d.toDateString()===now.toDateString();return d>=now&&d.getTime()<=now.getTime()+604800000}
+
+function formatBytes(bytes:number){if(!bytes)return "—";const units=["B","KB","MB","GB","TB"];const i=Math.min(units.length-1,Math.floor(Math.log(bytes)/Math.log(1024)));return `${(bytes/1024**i).toFixed(i===0?0:1)} ${units[i]}`}
+
+function Poster({src,fallback}:{src:string|null;fallback:React.ReactNode}){
+ const [broken,setBroken]=useState(false);
+ if(!src||broken)return <span className="task-file-glyph">{fallback}</span>;
+ return <NextImage src={src} alt="" width={320} height={180} unoptimized onError={()=>setBroken(true)}/>;
+}

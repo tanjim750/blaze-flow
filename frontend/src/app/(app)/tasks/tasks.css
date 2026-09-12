@@ -12,11 +12,49 @@
 .tasks-page{position:relative}.tasks-page:before{content:"";position:fixed;z-index:-1;inset:56px 0 auto 256px;height:320px;pointer-events:none;background:radial-gradient(ellipse at 55% 0,rgba(101,72,218,.11),transparent 62%)}.tasks-heading h1{background:linear-gradient(115deg,#fff 20%,#c9bbff 85%);background-clip:text;color:transparent}.tasks-heading>button,.tasks-compact-head>button{border:1px solid #9177ff;background:linear-gradient(135deg,#8b6cff,#6543df);box-shadow:0 10px 28px rgba(101,67,223,.25);transition:transform .18s,box-shadow .18s}.tasks-heading>button:hover,.tasks-compact-head>button:hover{transform:translateY(-1px);box-shadow:0 14px 34px rgba(101,67,223,.34)}.tasks-toolbar{border-color:rgba(255,255,255,.08);background:linear-gradient(145deg,rgba(31,31,36,.9),rgba(22,22,27,.86));box-shadow:0 12px 35px rgba(0,0,0,.14);backdrop-filter:blur(14px)}.tasks-search:focus-within{border-color:#7763cc;box-shadow:0 0 0 3px rgba(119,99,204,.13)}.task-column{background:linear-gradient(180deg,rgba(17,18,24,.96),rgba(12,13,18,.98));box-shadow:0 14px 38px rgba(0,0,0,.12)}.task-column>header{background:linear-gradient(180deg,rgba(255,255,255,.025),transparent)}.task-column article{background:linear-gradient(145deg,#1a1b23,#15161d);transition:border-color .2s,box-shadow .2s,transform .2s}.task-column article:hover{border-color:#554b73;box-shadow:0 14px 34px rgba(0,0,0,.3),0 0 0 1px rgba(139,108,255,.06);transform:translateY(-2px)}.task-customize{background:linear-gradient(145deg,#272037,#1d1928);box-shadow:inset 0 1px rgba(255,255,255,.04)}.task-customize:hover{border-color:#745ed0;color:#e4dcff;transform:translateY(-1px)}.task-create{border-color:rgba(255,255,255,.1);background:linear-gradient(145deg,rgba(34,33,40,.99),rgba(21,21,27,.99));box-shadow:0 30px 100px rgba(0,0,0,.7),inset 0 1px rgba(255,255,255,.04)}.stage-row{transition:border-color .18s,background .18s,transform .18s}.stage-row:hover{border-color:#494452;background:#1b1c24;transform:translateX(2px)}.stage-row:active{cursor:grabbing}.stage-guardrails{background:linear-gradient(145deg,#171820,#14151b)}
 
 /* A file sitting in a stage column: draggable like a task, but edited in the Files tab. */
-.task-card-file { border-style: dashed; }
-.task-file-badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 999px; background: var(--shell-high, #26262b); color: var(--shell-outline, #9997a8); font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.task-file-badge svg { width: 10px; }
+/* Media card ---------------------------------------------------------------
+   A file on the board reads as its content, not as a row with a paperclip: poster,
+   name, who put it there, and its weight. The whole card is the link into review. */
+.task-card-file { padding: 0; overflow: hidden; }
+.task-file-open { display: block; padding: 10px; color: inherit; }
+.task-file-open:hover .task-file-thumb { border-color: #4a4756; }
+
+.task-file-thumb {
+  position: relative; display: grid; place-items: center;
+  aspect-ratio: 16 / 10; margin-bottom: 9px;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: linear-gradient(150deg, #26243a, #15141b);
+  overflow: hidden; transition: border-color .15s;
+}
+.task-file-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.task-file-thumb.audio { background: linear-gradient(150deg, #14302c, #12181c); }
+.task-file-thumb.image { background: linear-gradient(150deg, #2d2340, #17151d); }
+.task-file-glyph { display: grid; place-items: center; color: #a99bff; opacity: .75; }
+.task-file-glyph svg { width: 26px; height: 26px; }
+.task-file-thumb em {
+  position: absolute; left: 7px; bottom: 7px;
+  padding: 2px 6px; border-radius: 5px;
+  background: #000000a8; color: #dcd9e6;
+  font: 600 9px var(--font-geist-mono), monospace; font-style: normal; letter-spacing: .04em;
+}
+.task-file-scanning {
+  position: absolute; right: 7px; top: 7px;
+  padding: 2px 6px; border-radius: 5px;
+  background: #3a2f16; color: #f0d9a1; font: 600 9px var(--font-geist-mono), monospace; font-style: normal;
+}
+
+.task-card-file h4 { margin: 0; font-size: 12px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-file-meta { display: flex; align-items: center; gap: 6px; margin-top: 7px; min-width: 0; }
+.task-file-avatar {
+  display: grid; place-items: center; flex: none; width: 18px; height: 18px;
+  border-radius: 50%; background: #2c2444; color: #cbbcff;
+  font: 600 8px var(--font-geist-mono), monospace;
+}
+.task-file-avatar svg { width: 10px; height: 10px; }
+.task-file-meta strong { min-width: 0; font-size: 10px; font-weight: 500; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-file-meta time { margin-left: auto; flex: none; color: var(--muted); font-size: 10px; }
+
+.task-file-foot { display: flex; align-items: center; gap: 7px; margin-top: 8px; color: var(--muted); font-size: 9px; }
+.task-file-project { margin-left: auto; padding: 2px 6px; border: 1px solid var(--border); border-radius: 999px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* A staged file's shortcut into the review workspace. */
-.task-file-review { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 2px 6px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); font-size: 9px; }
-.task-file-review:hover { color: var(--text); border-color: var(--primary); }
-.task-file-review svg { width: 10px; height: 10px; }

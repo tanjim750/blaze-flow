@@ -2116,3 +2116,34 @@ stage).
 Before the media reports a shape, and when there is none, the frame fills the stage: a
 loading clip is still letterboxed by `object-fit`, and the empty state is not squeezed into
 a 16:9 box in the middle of a larger one.
+
+## 2026-09-12 — Media cards on the task board
+
+A staged file was a dashed row with a paperclip. It now reads as its content: poster,
+format badge, name, who uploaded it, when, size and project. The whole card is the link
+into review.
+
+`ProjectFile.added_by_workspace_membership` has recorded the uploader all along and no
+serializer returned it, so every card that wanted a name had to say "Workspace member". It
+is now exposed as `added_by`, with the membership and user pulled in the same query —
+narrowly, on the `ProjectFile` querysets only. A first attempt replaced every
+`select_related('file')` in `views.py` and broke four review-asset tests, because
+`ReviewCommentContent` has no such relation.
+
+### Why video has no real thumbnail yet
+
+Deliberate, not an oversight. The asset download route is a plain `FileResponse`, and
+Django's serves no byte ranges — so a `<video>` on a card would pull every clip on the
+board down in full just to paint one frame. A board with four 40 MB videos would cost
+160 MB a visit.
+
+Images do get a real thumbnail: they are small, and one request is the whole picture.
+Video, audio and documents get a rendered poster — gradient by kind, glyph, format badge —
+and a poster that 404s falls back to the same glyph rather than a broken-image icon.
+
+A real video still needs a `VIDEO_POSTER` variant from the worker plus a route to serve
+variants for asset files. The generator is easy (one ffmpeg frame extract beside
+`_video_proxy`), but `generate_preview` keeps exactly **one** variant per file, and that
+invariant is relied on by retention, deletion and the media-version preview lookup. Adding
+a second variant per file is a change to the file pipeline, not to a card, so it is left
+for its own pass.
