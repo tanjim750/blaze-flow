@@ -58,11 +58,20 @@
 
 .pb-client { border-radius: 12px; padding: 4px; }
 .pb-client.open { background: var(--shell-container); }
-.pb-client-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px; background: none; border: 0; color: inherit; cursor: pointer; text-align: left; }
-.pb-client-head > svg { color: var(--shell-primary); flex-shrink: 0; }
+.pb-client-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px; }
+.pb-client-toggle { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 0; background: none; border: 0; color: inherit; cursor: pointer; text-align: left; }
+.pb-client-toggle > svg { color: var(--shell-primary); flex-shrink: 0; }
 .pb-client-mark { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: #947dff33; color: var(--shell-primary); font-size: 10px; font-weight: 700; flex-shrink: 0; }
-.pb-client-head strong { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pb-client-head > b { font: 500 10px var(--font-geist-mono), monospace; background: var(--shell-highest); color: var(--shell-variant); padding: 2px 5px; border-radius: 4px; flex-shrink: 0; }
+.pb-client-toggle strong { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Replaces the old "N subs" badge: the count is visible in the tree below it anyway. */
+.pb-client-details {
+  position: relative; flex-shrink: 0;
+  padding: 3px 8px; border: 1px solid var(--shell-highest); border-radius: 999px;
+  background: var(--shell-rail); color: var(--shell-variant);
+  font-size: 10px; font-weight: 600; letter-spacing: .01em;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.pb-client-details:hover { background: var(--shell-high); border-color: var(--shell-outline); color: var(--shell-on); }
 .pb-subtree { margin-top: 4px; padding-left: 12px; display: flex; flex-direction: column; gap: 2px; }
 .pb-sub { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; color: var(--shell-variant); font-size: 13px; transition: background .15s, color .15s; }
 .pb-sub > svg { color: var(--shell-outline); flex-shrink: 0; }

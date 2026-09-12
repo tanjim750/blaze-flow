@@ -267,12 +267,17 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
 
   return (
     <div className={open || isSelected ? "pb-client open" : "pb-client"}>
-      <button type="button" className="pb-client-head" onClick={onToggle} aria-expanded={open}>
-        {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-        <span className="pb-client-mark">{client.initial}</span>
-        <strong>{client.name}</strong>
-        <b>{client.assetCount ? `${client.assetCount} assets` : `${client.campaigns.length} subs`}</b>
-      </button>
+      {/* A row, not one big button: the Details link cannot live inside a <button>. */}
+      <div className="pb-client-head">
+        <button type="button" className="pb-client-toggle" onClick={onToggle} aria-expanded={open}>
+          {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+          <span className="pb-client-mark">{client.initial}</span>
+          <strong>{client.name}</strong>
+        </button>
+        <Link className="pb-client-details" href={`/clients?client=${client.id}`} aria-label={`Details for ${client.name}`}>
+          Details<LinkPending />
+        </Link>
+      </div>
 
       {open && (
         <div className="pb-subtree">

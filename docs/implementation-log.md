@@ -1995,3 +1995,21 @@ commits now — verified by counting requests, which is zero during a cancel.
 The shadcn CLI reproduced both documented traps again (`import { cn } from "cn"` plus a
 package of that name, and the `radix-ui` umbrella). Both fixed as `frontend/AGENTS.md`
 prescribes.
+
+## 2026-09-12 — "Details" on the client row
+
+The client rows in the projects tree carried a badge reading "2 subs" or "4 assets". That
+is now a **Details** button linking to that client's record.
+
+Two things it needed:
+
+- The row was a single `<button>` wrapping everything, and a link cannot live inside one.
+  It is now a flex row: the toggle is its own button, the link a sibling. Expanding still
+  works — checked, since that is exactly the sort of thing a restructure breaks quietly.
+- `/clients` had no way to address one client. It now reads `?client=<id>`, resolved on the
+  server and passed down, then scrolls that card into view and rings it in the accent
+  colour. Landing on an unscrolled grid of cards would not have been an answer to "show me
+  this client".
+
+The count the badge used to show is not lost: expanding the row lists the campaigns, and
+the client card names the project and member totals.
