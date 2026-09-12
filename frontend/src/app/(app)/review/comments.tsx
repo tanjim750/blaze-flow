@@ -21,6 +21,54 @@ type Props = {
   onSeek: (ms: number) => void;
 };
 
+/**
+ * Which versions' notes to show while comparing.
+ *
+ * Two lists under two headings rather than one merged feed: the reason to compare is to see
+ * what was said about which cut, and a single list would destroy exactly that.
+ */
+function CompareFeeds({ view, writer, onSeek }: { view: ReviewView; writer: ReviewWriter; onSeek: (ms: number) => void }) {
+  const comparison = view.comparison!;
+  const current = view.version!;
+  const [showing, setShowing] = useState<Record<string, boolean>>({ [current.id]: true, [comparison.version.id]: true });
+  const sides = [
+    { version: current, notes: view.notes },
+    { version: comparison.version, notes: comparison.notes },
+  ];
+
+  return (
+    <div className="rvc">
+      <header className="rvc-head">
+        <h2><MessageSquareText size={15} />Comments</h2>
+      </header>
+      <div className="rvc-toggles">
+        {sides.map(({ version, notes }) => (
+          <label key={version.id}>
+            <input
+              type="checkbox"
+              checked={showing[version.id] ?? true}
+              onChange={(event) => setShowing((current) => ({ ...current, [version.id]: event.target.checked }))}
+            />
+            {version.label}<small>{notes.length}</small>
+          </label>
+        ))}
+      </div>
+      <div className="rvc-feed">
+        {sides.map(({ version, notes }) => (showing[version.id] ?? true) && (
+          <section key={version.id} className="rvc-side">
+            <h3>{version.label}</h3>
+            {notes.length === 0
+              ? <p className="rvc-empty">No comments on {version.label}.</p>
+              : notes.map((note) => (
+                  <Note key={note.id} note={note} view={view} writer={writer} focused={false} onSeek={onSeek} onReply={() => undefined} />
+                ))}
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Comments({ view, writer, notes, positionMs, focusedId, pendingAnnotation, onClearAnnotation, onSeek }: Props) {
   const [replyTo, setReplyTo] = useState<ReviewNote | null>(null);
   const [showResolved, setShowResolved] = useState(false);
@@ -38,6 +86,11 @@ export function Comments({ view, writer, notes, positionMs, focusedId, pendingAn
     if (!focusedId) return;
     feed.current?.querySelector(`[data-note="${focusedId}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [focusedId]);
+
+  // Comparing is a reading mode: two labelled feeds, and no composer, because a note
+  // written here would have to guess which cut it was about. Branching after the hooks
+  // above so this component calls the same ones on every render.
+  if (view.comparison) return <CompareFeeds view={view} writer={writer} onSeek={onSeek} />;
 
   return (
     <div className="rvc">

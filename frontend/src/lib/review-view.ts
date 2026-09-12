@@ -36,13 +36,19 @@ export type ReviewView = {
   guestInvites: GuestInvite[];
   canManageGuests: boolean;
   canComment: boolean;
+  /**
+   * The second cut, when the page is comparing two. Its notes are loaded separately and
+   * kept separately: the whole point of comparing is seeing which feedback belongs to
+   * which version, so they are never merged into one list.
+   */
+  comparison: { version: ReviewVersion; notes: ReviewNote[]; annotations: Annotation[] } | null;
   notice: string | null;
 };
 
 const EMPTY: ReviewView = {
   workspaceId: null, asset: null, version: null, target: null, notes: [], annotations: [],
   stages: [], taskStages: [], linkedTasks: [], members: [], guestInvites: [],
-  canManageGuests: false, canComment: false, notice: null,
+  canManageGuests: false, canComment: false, comparison: null, notice: null,
 };
 
 /**
@@ -52,7 +58,7 @@ const EMPTY: ReviewView = {
  * `review-media.ts`. `?project=` and `?version=` are still honoured so that links made
  * before this feature, and the ones the dashboard still builds, keep working.
  */
-export async function loadReviewView(params: { mediaId?: string; projectId?: string; versionId?: string }): Promise<ReviewView> {
+export async function loadReviewView(params: { mediaId?: string; projectId?: string; versionId?: string; compareId?: string }): Promise<ReviewView> {
   const catalogue = await loadMediaCatalogue();
   if (!catalogue.workspaceId) return { ...EMPTY, notice: catalogue.notice };
 
@@ -91,7 +97,15 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
       : [],
   };
 
-  if (!version.target) return view;
+  const comparison = params.compareId
+    ? asset.versions.find((item) => item.id === params.compareId && item.id !== version.id) ?? null
+    : null;
+  const comparisonData = comparison ? await loadVersionReview(comparison) : null;
+  const withComparison: ReviewView = comparison && comparisonData
+    ? { ...view, comparison: { version: comparison, ...comparisonData } }
+    : view;
+
+  if (!version.target) return withComparison;
 
   const { workspaceId, projectId, versionId } = version.target;
   const [comments, annotations, guestInvites] = await Promise.all([
@@ -101,7 +115,7 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
   ]);
 
   return {
-    ...view,
+    ...withComparison,
     notes: comments.ok ? nestNotes(comments.data) : [],
     annotations: annotations.ok ? annotations.data : [],
     // A 403 on the comment list means read access without comment rights.
@@ -110,6 +124,25 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
     guestInvites: guestInvites.ok ? guestInvites.data : [],
     canManageGuests: guestInvites.ok,
     notice: comments.ok ? view.notice : `Comments unavailable: ${comments.error.detail}`,
+  };
+}
+
+/**
+ * Loads one cut's review data.
+ *
+ * A cut with no project media version has no server-side notes at all — those live on the
+ * device — so this returns empty rather than pretending otherwise.
+ */
+async function loadVersionReview(version: ReviewVersion): Promise<{ notes: ReviewNote[]; annotations: Annotation[] }> {
+  if (!version.target) return { notes: [], annotations: [] };
+  const { workspaceId, projectId, versionId } = version.target;
+  const [comments, annotations] = await Promise.all([
+    listReviewComments(workspaceId, projectId, versionId),
+    listAnnotations(workspaceId, projectId, versionId),
+  ]);
+  return {
+    notes: comments.ok ? nestNotes(comments.data) : [],
+    annotations: annotations.ok ? annotations.data : [],
   };
 }
 

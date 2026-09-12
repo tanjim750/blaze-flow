@@ -2,7 +2,8 @@ from django.contrib.auth import login, logout, update_session_auth_hash
 from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, HttpResponse
 from django.db import transaction
-from django.db.models import Count, IntegerField, JSONField, OuterRef, Q, Subquery
+from django.core.exceptions import ValidationError
+from django.db.models import Count, IntegerField, JSONField, Max, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404
 from django.middleware.csrf import get_token
 from django.utils import timezone
@@ -253,6 +254,7 @@ from .services import (
     update_workspace_profile,
     update_task,
     upgrade_to_pro,
+    add_file_as_version,
     duplicate_project_file,
     upload_project_file,
     upload_review_attachment,
@@ -1188,13 +1190,43 @@ def _with_card_fields(queryset):
             ).values('media_version__original_file_id').annotate(total=Count('id')).values('total')[:1],
             output_field=IntegerField(),
         ),
-        version_number_annotation=Subquery(
-            MediaVersion.objects.filter(
-                original_file_id=OuterRef('file_id'),
-            ).order_by('-version_number').values('version_number')[:1],
+        version_count_annotation=Subquery(
+            ProjectFile.objects.filter(
+                media_asset_id=OuterRef('media_asset_id'), deleted_at__isnull=True,
+            ).values('media_asset_id').annotate(total=Count('id')).values('total')[:1],
             output_field=IntegerField(),
         ),
-    )
+        latest_version_annotation=Subquery(
+            ProjectFile.objects.filter(
+                media_asset_id=OuterRef('media_asset_id'), deleted_at__isnull=True,
+            ).values('media_asset_id').annotate(top=Max('version_number')).values('top')[:1],
+            output_field=IntegerField(),
+        ),
+    ).select_related('media_asset')
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def asset_file_versions(request, workspace_id, file_id):
+    """Adds an existing file to this one's asset as its next version.
+
+    `file_id` is the asset being versioned — the one dragged onto — and the body names the
+    file being added. Updating both is an update, not a create: no new file appears in the
+    workspace, an existing one changes which asset it belongs to.
+    """
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    live = ProjectFile.objects.select_related('file', 'media_asset').filter(deleted_at__isnull=True)
+    target = get_object_or_404(live, id=file_id, workspace=workspace)
+    source = get_object_or_404(live, id=request.data.get('file_id'), workspace=workspace)
+    for item in (target, source):
+        _require_asset_permission(request, item, PROJECT_FILE_UPDATE)
+    try:
+        version = add_file_as_version(source=source, target=target)
+    except (ProjectFileError, ValidationError) as exc:
+        # `full_clean` raises a field-keyed ValidationError; a caller only needs the sentence.
+        detail = '; '.join(exc.messages) if isinstance(exc, ValidationError) else str(exc)
+        return Response({'detail': detail}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ProjectFileSerializer(version).data)
 
 
 @api_view(['POST'])

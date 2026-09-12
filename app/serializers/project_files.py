@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
-from app.models import FileStatus, FileVariant, MediaVersion, ProjectFile, ProjectFolder, ReviewComment
+from django.db.models import Max
+
+from app.models import FileStatus, FileVariant, ProjectFile, ProjectFolder, ReviewComment
 from app.services.file_processing import POSTER_VARIANT_TYPE
 
 
@@ -30,11 +32,11 @@ class ProjectFileSerializer(serializers.ModelSerializer):
     added_by = serializers.SerializerMethodField()
     poster = serializers.SerializerMethodField()
     comment_count = serializers.SerializerMethodField()
-    version_number = serializers.SerializerMethodField()
+    media_asset = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectFile
-        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'folder_id', 'task_stage_id', 'file', 'added_by', 'poster', 'comment_count', 'version_number', 'created_at')
+        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'folder_id', 'task_stage_id', 'file', 'added_by', 'poster', 'comment_count', 'version_number', 'media_asset', 'created_at')
         read_only_fields = fields
 
     def get_comment_count(self, project_file):
@@ -50,13 +52,31 @@ class ProjectFileSerializer(serializers.ModelSerializer):
             media_version__original_file_id=project_file.file_id, deleted_at__isnull=True,
         ).count()
 
-    def get_version_number(self, project_file):
-        """The cut number, when this file was published as a project media version."""
-        if hasattr(project_file, 'version_number_annotation'):
-            return project_file.version_number_annotation
-        return MediaVersion.objects.filter(
-            original_file_id=project_file.file_id,
-        ).values_list('version_number', flat=True).first()
+    def get_media_asset(self, project_file):
+        """The asset this row is a version of, and where it sits in that history.
+
+        `version_count` and `is_latest` come from an annotation where the view supplies one,
+        because a library listing renders every version of every asset and asking per row
+        would be a query per card.
+        """
+        if project_file.media_asset_id is None:
+            return None
+        total = getattr(project_file, 'version_count_annotation', None)
+        if total is None:
+            total = ProjectFile.objects.filter(
+                media_asset_id=project_file.media_asset_id, deleted_at__isnull=True,
+            ).count()
+        highest = getattr(project_file, 'latest_version_annotation', None)
+        if highest is None:
+            highest = ProjectFile.objects.filter(
+                media_asset_id=project_file.media_asset_id, deleted_at__isnull=True,
+            ).aggregate(top=Max('version_number'))['top']
+        return {
+            'id': str(project_file.media_asset_id),
+            'name': project_file.media_asset.name,
+            'version_count': total,
+            'is_latest': project_file.version_number == highest,
+        }
 
     def get_poster(self, project_file):
         """The still a list shows, with the frame's own dimensions.

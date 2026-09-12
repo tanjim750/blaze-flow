@@ -148,10 +148,14 @@ that branch exists — the UI calls `compose` and never asks which backing it ha
 two paths cannot drift apart. It is also the seam to replace if the API grows notes for
 library files.
 
-Version lines are inferred from filenames (`Summer_V1.mp4`, `Summer_V2.mp4`), because
-nothing records "these are the same asset". The rule is deliberately conservative: strip a
-trailing version marker and nothing else, group within a project and folder. See the tests
-in `src/lib/review-media.test.ts`.
+Version lines come from `MediaAsset`, a real row that the drag gesture in Files writes.
+They used to be inferred from filenames, which could never express "this file is a version
+of that one" and quietly disagreed with the user whenever a name did not fit the pattern.
+
+A media version is not a separate cut in the catalogue: it is the *same* `File` seen from a
+project, so it attaches to the library version holding those bytes and gives it a `target` —
+the place review data lives. Only a media version with no library row still forms its own
+line. See the tests in `src/lib/review-media.test.ts`.
 
 Two things are *not* stored anywhere and are read from the loaded video at runtime:
 duration and resolution. "Uploaded by" is recorded by both models but returned by neither

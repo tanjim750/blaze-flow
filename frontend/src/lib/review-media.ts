@@ -50,11 +50,15 @@ export type ReviewVersion = {
   target: ReviewTarget | null;
   /** The asset-library row for this file, when it has one. */
   assetFileId: string | null;
+  /** Who uploaded this cut, when the API knows. */
+  uploadedBy: string | null;
 };
 
 /** A version line: one creative asset, its history, and the context it belongs to. */
 export type ReviewAsset = {
   key: string;
+  /** The `MediaAsset` row, when this line is a real asset rather than a legacy grouping. */
+  assetId: string | null;
   name: string;
   kind: MediaKind;
   clientId: string | null;
@@ -138,6 +142,19 @@ type CatalogueInput = {
  * project *and* folder, because "Final Cuts/hero.mp4" and "Archive/hero.mp4" are two
  * assets to anyone looking at the tree, whatever their names say.
  */
+/**
+ * Builds the catalogue.
+ *
+ * Grouping comes from `media_asset` — a real row the drag gesture writes — rather than from
+ * the filenames it used to be guessed from. Guessing could never express "this file is a
+ * version of that one", and it quietly disagreed with the user whenever a name did not fit
+ * the pattern.
+ *
+ * A media version is not a separate cut here. It is the *same* `File` seen from a project,
+ * so it attaches to the library version that already holds those bytes and gives it a
+ * `target` — the place review data lives. Only a media version with no library row at all
+ * still forms its own line, which is what keeps pre-library project uploads reachable.
+ */
 export function buildCatalogue(input: CatalogueInput): ReviewAsset[] {
   const { workspaceId } = input;
   const projectName = new Map(input.projects.map((project) => [project.id, project.name]));
@@ -145,63 +162,79 @@ export function buildCatalogue(input: CatalogueInput): ReviewAsset[] {
   const clientName = new Map(input.clients.map((client) => [client.id, client.name]));
   const folderName = new Map(input.folders.map((folder) => [folder.id, folder.name]));
   const stageById = new Map(input.stages.map((stage) => [stage.id, stage]));
-  const assetByFileId = new Map(input.assetFiles.map((item) => [item.file.id, item]));
 
   const groups = new Map<string, ReviewVersion[]>();
-  const context = new Map<string, { projectId: string | null; folderId: string | null; name: string }>();
+  const context = new Map<string, { projectId: string | null; folderId: string | null; name: string; row: ProjectFile }>();
+  const byFileId = new Map<string, ReviewVersion>();
 
-  for (const { projectId, versions } of input.mediaVersions) {
-    for (const version of versions) {
-      const target: ReviewTarget = { workspaceId, projectId, versionId: version.id };
-      const asset = assetByFileId.get(version.file.id) ?? null;
-      const group = `media:${projectId}:${versionKey(version.title || version.file.name)}`;
-      push(groups, group, {
-        id: version.file.id,
-        label: `V${version.version_number}`,
-        number: version.version_number,
-        title: version.title || version.file.name,
-        createdAt: version.created_at,
-        sizeBytes: version.file.size_bytes,
-        mimeType: version.file.mime_type,
-        src: previewSrc(target),
-        stageName: version.current_stage?.name ?? null,
-        target,
-        assetFileId: asset?.id ?? null,
-      });
-      context.set(group, { projectId, folderId: asset?.folder_id ?? null, name: version.file.name });
-    }
-  }
-
-  input.assetFiles.forEach((item, index) => {
-    // Already represented as a media version: the same `File`, so the same one cut.
-    if ([...groups.values()].some((versions) => versions.some((version) => version.id === item.file.id))) return;
-    const group = `asset:${item.project_id ?? "none"}:${item.folder_id ?? "root"}:${versionKey(item.file.name)}`;
-    push(groups, group, {
+  for (const item of input.assetFiles) {
+    // A row with no asset predates versioning; it stands alone rather than being guessed at.
+    const key = `asset:${item.media_asset?.id ?? item.id}`;
+    const version: ReviewVersion = {
       id: item.file.id,
-      label: `V${versionNumber(item.file.name, 1)}`,
-      number: versionNumber(item.file.name, index + 1),
+      label: `V${item.version_number}`,
+      number: item.version_number,
       title: item.file.name,
       createdAt: item.created_at,
       sizeBytes: item.file.size_bytes,
       mimeType: item.file.mime_type,
       src: item.file.status === "READY" ? downloadSrc(workspaceId, item.id) : null,
       stageName: item.task_stage_id ? stageById.get(item.task_stage_id)?.name ?? null : null,
+      uploadedBy: item.added_by?.name ?? null,
       target: null,
       assetFileId: item.id,
-    });
-    context.set(group, { projectId: item.project_id, folderId: item.folder_id, name: item.file.name });
-  });
+    };
+    push(groups, key, version);
+    byFileId.set(item.file.id, version);
+    const existing = context.get(key);
+    if (!existing || item.version_number >= existing.row.version_number) {
+      context.set(key, { projectId: item.project_id, folderId: item.folder_id, name: item.media_asset?.name ?? item.file.name, row: item });
+    }
+  }
+
+  for (const { projectId, versions } of input.mediaVersions) {
+    for (const media of versions) {
+      const target: ReviewTarget = { workspaceId, projectId, versionId: media.id };
+      const known = byFileId.get(media.file.id);
+      if (known) {
+        // Same bytes, so the same cut: give the library version somewhere to keep review data.
+        known.target = target;
+        known.src = previewSrc(target);
+        known.stageName = media.current_stage?.name ?? known.stageName;
+        continue;
+      }
+      const key = `media:${projectId}:${versionKey(media.title || media.file.name)}`;
+      push(groups, key, {
+        id: media.file.id,
+        label: `V${media.version_number}`,
+        number: media.version_number,
+        title: media.title || media.file.name,
+        createdAt: media.created_at,
+        sizeBytes: media.file.size_bytes,
+        mimeType: media.file.mime_type,
+        src: previewSrc(target),
+        stageName: media.current_stage?.name ?? null,
+        uploadedBy: null,
+        target,
+        assetFileId: null,
+      });
+      if (!context.has(key)) {
+        context.set(key, { projectId, folderId: null, name: media.title || media.file.name, row: null as unknown as ProjectFile });
+      }
+    }
+  }
 
   return [...groups.entries()].map(([key, versions]) => {
     const ordered = [...versions].sort((a, b) => a.number - b.number || a.createdAt.localeCompare(b.createdAt));
     const newest = ordered[ordered.length - 1];
     const where = context.get(key)!;
-    const assetRow = newest.assetFileId ? input.assetFiles.find((item) => item.id === newest.assetFileId) : undefined;
+    const assetRow = where.row ?? null;
     const stage = assetRow?.task_stage_id ? stageById.get(assetRow.task_stage_id) : undefined;
     const clientId = assetRow?.client_team_id ?? (where.projectId ? projectClient.get(where.projectId) ?? null : null);
     return {
       key,
-      name: newest.title,
+      assetId: assetRow?.media_asset?.id ?? null,
+      name: where.name,
       kind: mediaKind(newest.mimeType, newest.title),
       clientId,
       clientName: clientId ? clientName.get(clientId) ?? null : null,

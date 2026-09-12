@@ -26,7 +26,8 @@ const assetFile = (over: Partial<ProjectFile> & { id: string; fileId: string; na
   added_by: null,
   poster: null,
   comment_count: 0,
-  version_number: null,
+  version_number: over.version_number ?? 1,
+  media_asset: over.media_asset ?? { id: `asset-${over.id}`, name: over.name, version_count: 1, is_latest: true },
   created_at: over.created_at ?? "2026-09-02T00:00:00Z",
 });
 
@@ -74,6 +75,25 @@ describe("mediaKind", () => {
 });
 
 describe("buildCatalogue", () => {
+  it("gives a library version its review target instead of listing the media version twice", () => {
+    const asset = { id: "asset-1", name: "Hero", version_count: 2, is_latest: false };
+    const assets = build({
+      assetFiles: [
+        assetFile({ id: "af-1", fileId: "f1", name: "hero v1.mp4", project_id: "p1", version_number: 1, media_asset: asset }),
+        assetFile({ id: "af-2", fileId: "f2", name: "hero v2.mp4", project_id: "p1", version_number: 2, media_asset: { ...asset, is_latest: true } }),
+      ],
+      mediaVersions: [{ projectId: "p1", versions: [mediaVersion({ id: "mv-2", fileId: "f2", number: 7, title: "hero" })] }],
+    });
+
+    // The media version is the same bytes as V2, so it does not become a third cut.
+    expect(assets).toHaveLength(1);
+    expect(assets[0].versions.map((version) => version.label)).toEqual(["V1", "V2"]);
+    // It numbers 7 in its project, but the asset's own history is what the page shows.
+    const [first, second] = assets[0].versions;
+    expect(first.target).toBeNull();
+    expect(second.target).toEqual({ workspaceId: WORKSPACE, projectId: "p1", versionId: "mv-2" });
+  });
+
   it("treats a library file and a media version of the same File as one cut", () => {
     const assets = build({
       assetFiles: [assetFile({ id: "af-1", fileId: "file-1", name: "hero.mp4", project_id: "p1" })],
@@ -87,24 +107,28 @@ describe("buildCatalogue", () => {
     expect(assets[0].versions[0].assetFileId).toBe("af-1");
   });
 
-  it("orders a library version line by the number in its filename", () => {
+  it("orders a version line by the asset it belongs to, not by its filename", () => {
+    const asset = { id: "asset-1", name: "Summer Campaign", version_count: 3, is_latest: false };
     const assets = build({
       assetFiles: [
-        assetFile({ id: "af-3", fileId: "f3", name: "Summer_Campaign_V3.mp4", project_id: "p1", folder_id: "fo-1" }),
-        assetFile({ id: "af-1", fileId: "f1", name: "Summer_Campaign_V1.mp4", project_id: "p1", folder_id: "fo-1" }),
-        assetFile({ id: "af-2", fileId: "f2", name: "Summer_Campaign_V2.mp4", project_id: "p1", folder_id: "fo-1" }),
+        assetFile({ id: "af-3", fileId: "f3", name: "final-final.mov", project_id: "p1", folder_id: "fo-1", version_number: 3, media_asset: { ...asset, is_latest: true } }),
+        assetFile({ id: "af-1", fileId: "f1", name: "first cut.mp4", project_id: "p1", folder_id: "fo-1", version_number: 1, media_asset: asset }),
+        assetFile({ id: "af-2", fileId: "f2", name: "revised.mov", project_id: "p1", folder_id: "fo-1", version_number: 2, media_asset: asset }),
       ],
       folders: [folder("fo-1", "Final Cuts")],
     });
 
+    // One asset, three cuts — the names have nothing in common, which is the point.
     expect(assets).toHaveLength(1);
+    expect(assets[0].name).toBe("Summer Campaign");
+    expect(assets[0].assetId).toBe("asset-1");
     expect(assets[0].versions.map((version) => version.label)).toEqual(["V1", "V2", "V3"]);
     expect(assets[0].folderName).toBe("Final Cuts");
     // Nothing to review against yet, which is what puts the page on local notes.
     expect(assets[0].versions.every((version) => version.target === null)).toBe(true);
   });
 
-  it("keeps same-named files in different folders as separate assets", () => {
+  it("keeps identically named files apart unless they share an asset", () => {
     const assets = build({
       assetFiles: [
         assetFile({ id: "af-1", fileId: "f1", name: "hero.mp4", project_id: "p1", folder_id: "fo-1" }),
@@ -113,6 +137,7 @@ describe("buildCatalogue", () => {
       folders: [folder("fo-1", "Final Cuts"), folder("fo-2", "Archive")],
     });
 
+    // Two uploads are two assets until someone drags one onto the other.
     expect(assets).toHaveLength(2);
   });
 

@@ -53,7 +53,7 @@ describe("AssetLibrary", () => {
     replaceLibrary({
       deletedIds: [],
       folders: [{ id: "nested", name: "Nested", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-10", createdBy: "Ada" }],
-      files: [{ id: "hidden", fileId: null, name: "deep-take.mov", kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: "nested", clientId: null, projectId: null, stageId: null }],
+      files: [{ id: "hidden", fileId: null, name: "deep-take.mov", versioning: { assetId: null, assetName: "deep-take.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: "nested", clientId: null, projectId: null, stageId: null }],
     });
     const rendered = render(<AssetLibrary view={view} />);
     fireEvent.change(screen.getByPlaceholderText("Search this location…"), { target: { value: "deep-take" } });
@@ -75,7 +75,7 @@ describe("AssetLibrary", () => {
     replaceLibrary({
       deletedIds: [],
       folders: [{ id: "folder", name: "Footage", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-10", createdBy: "Ada" }],
-      files: [{ id: "file", fileId: null, name: "root.mov", kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: null }],
+      files: [{ id: "file", fileId: null, name: "root.mov", versioning: { assetId: null, assetName: "root.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: null }],
     });
     render(<AssetLibrary view={view} />);
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible" }));
@@ -110,8 +110,8 @@ describe("AssetLibrary", () => {
       deletedIds: [],
       folders: [],
       files: [
-        { id: "approved", fileId: null, name: "final-cut.mov", kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: "s-review" },
-        { id: "draft", fileId: null, name: "rough-cut.mov", kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: null },
+        { id: "approved", fileId: null, name: "final-cut.mov", versioning: { assetId: null, assetName: "final-cut.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: "s-review" },
+        { id: "draft", fileId: null, name: "rough-cut.mov", versioning: { assetId: null, assetName: "rough-cut.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: null },
       ],
     });
     render(<AssetLibrary view={view} />);
@@ -126,7 +126,7 @@ describe("AssetLibrary", () => {
     replaceLibrary({
       deletedIds: [],
       folders: [{ id: "folder", name: "Testing folder", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-12", createdBy: "Ada" }],
-      files: [{ id: "file", fileId: null, name: "take.mov", kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null }],
+      files: [{ id: "file", fileId: null, name: "take.mov", versioning: { assetId: null, assetName: "take.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null }],
     });
     const rendered = render(<AssetLibrary view={view} />);
 
@@ -146,7 +146,7 @@ describe("AssetLibrary", () => {
     replaceLibrary({
       deletedIds: [],
       folders: [],
-      files: [{ id: "server-file", fileId: null, name: "stale-local-name.mov", kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null }],
+      files: [{ id: "server-file", fileId: null, name: "stale-local-name.mov", versioning: { assetId: null, assetName: "stale-local-name.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null }],
     });
     const withServerRow = { ...view, files: [{ id: "server-file", workspace_id: "workspace", client_team_id: null, project_id: null, folder_id: null, stageId: "s-review", file: { id: "f", name: "server-name.mov", mime_type: "video/quicktime", size_bytes: 10, checksum_sha256: "x", stageId: "s-review" }, created_at: "2026-09-12" }] } as unknown as FilesView;
 
@@ -160,7 +160,7 @@ describe("AssetLibrary", () => {
       deletedIds: [],
       folders: [],
       pending: ["server-file"],
-      files: [{ id: "server-file", fileId: null, name: "just-renamed.mov", kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null }],
+      files: [{ id: "server-file", fileId: null, name: "just-renamed.mov", versioning: { assetId: null, assetName: "just-renamed.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null }],
     });
     const withServerRow = { ...view, files: [{ id: "server-file", workspace_id: "workspace", client_team_id: null, project_id: null, folder_id: null, stageId: null, file: { id: "f", name: "old-name.mov", mime_type: "video/quicktime", size_bytes: 10, checksum_sha256: "x", stageId: "s-review" }, created_at: "2026-09-12" }] } as unknown as FilesView;
 
@@ -185,7 +185,7 @@ describe("AssetLibrary", () => {
     replaceLibrary({
       deletedIds: [],
       folders: [],
-      files: [{ id: "doomed", fileId: null, name: "keep-me.mov", kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null }],
+      files: [{ id: "doomed", fileId: null, name: "keep-me.mov", versioning: { assetId: null, assetName: "keep-me.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null }],
     });
     render(<AssetLibrary view={view} />);
 

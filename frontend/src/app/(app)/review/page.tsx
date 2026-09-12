@@ -22,6 +22,9 @@ export default async function Review({ searchParams }: PageProps<"/review">) {
     mediaId: single("media"),
     projectId: single("project"),
     versionId: single("version"),
+    // `?compare=` is in the URL rather than component state so both cuts' notes can be
+    // loaded on the server, and so a comparison can be linked to.
+    compareId: single("compare"),
   });
 
   return (

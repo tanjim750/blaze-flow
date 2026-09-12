@@ -1175,6 +1175,32 @@ class ProjectFolder(models.Model):
             raise ValidationError(errors)
 
 
+class MediaAsset(models.Model):
+    """One creative asset, which its versions hang off.
+
+    Deliberately thin. The spec this was built to puts the client, project and folder on the
+    asset as well as the version, but every filter, board and tree in the app already reads
+    those from `ProjectFile`, and a second copy is a second thing to keep in step — move an
+    asset and you would have to update both, and a divergence would be silent. So the
+    relationships stay on the versions, and `assign_media_asset` moves them together:
+    versions of one asset are never in two different folders.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='media_assets')
+    name = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'media_assets'
+        ordering = ('-updated_at',)
+        indexes = [models.Index(fields=['workspace', 'updated_at'])]
+
+    def __str__(self):
+        return self.name
+
+
 class ProjectFile(models.Model):
     id = models.UUIDField(primary_key=True)
     workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
@@ -1183,6 +1209,10 @@ class ProjectFile(models.Model):
     folder = models.ForeignKey(ProjectFolder, on_delete=models.DO_NOTHING, db_column='folder_id', null=True, blank=True, related_name='+')
     file = models.ForeignKey(File, on_delete=models.DO_NOTHING, db_column='file_id', related_name='+')
     task_stage = models.ForeignKey('TaskStage', on_delete=models.PROTECT, db_column='task_stage_id', null=True, blank=True, related_name='+')
+    # A row is one version of an asset. Null only for rows that predate versioning and
+    # could not be grouped; those behave as a single-version asset of their own.
+    media_asset = models.ForeignKey(MediaAsset, on_delete=models.CASCADE, db_column='media_asset_id', null=True, blank=True, related_name='versions')
+    version_number = models.PositiveIntegerField(default=1)
     added_by_workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.DO_NOTHING, db_column='added_by_workspace_membership_id', related_name='+')
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField()
@@ -1190,9 +1220,14 @@ class ProjectFile(models.Model):
 
     class Meta:
         db_table = 'project_files'
-        constraints = [models.UniqueConstraint(fields=['workspace', 'file'], name='project_files_workspace_file_uniq')]
+        constraints = [
+            models.UniqueConstraint(fields=['workspace', 'file'], name='project_files_workspace_file_uniq'),
+            # Version numbers are dense and unique within an asset: V2 is never created twice.
+            models.UniqueConstraint(fields=['media_asset', 'version_number'], name='project_files_asset_version_uniq'),
+        ]
         indexes = [
             models.Index(fields=['workspace']),
+            models.Index(fields=['media_asset']),
             models.Index(fields=['client_team']),
             models.Index(fields=['project']),
             models.Index(fields=['folder']),

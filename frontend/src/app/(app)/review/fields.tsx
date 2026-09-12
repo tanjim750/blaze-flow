@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { CheckSquare, ExternalLink } from "lucide-react";
 import type { ReviewView } from "@/lib/review-view";
+import { relativeAge } from "@/lib/review-notes";
 import { timecode } from "@/lib/timecode";
 import type { ReviewWriter } from "./writer";
 
@@ -87,12 +88,13 @@ export function Fields({ view, writer, meta }: {
       <section>
         <h3>Version history</h3>
         <ul className="rvf-versions">
-          {[...asset.versions].reverse().map((item) => (
+          {[...asset.versions].reverse().map((item, index) => (
             <li key={item.id} className={item.id === version.id ? "is-current" : ""}>
               <Link href={`/review?media=${item.id}`}>
                 <strong>{item.label}</strong>
-                <span>{new Date(item.createdAt).toLocaleDateString()}</span>
-                {item.stageName && <small>{item.stageName}</small>}
+                {/* The list is newest first, so the first row is the latest cut. */}
+                {index === 0 && <b className="rvf-latest">Latest</b>}
+                <span>{item.uploadedBy ? `${item.uploadedBy} · ` : ""}{relativeAge(item.createdAt) || new Date(item.createdAt).toLocaleDateString()}</span>
                 {!item.target && <small title="No project review record, so its notes are kept on this device.">Local notes</small>}
               </Link>
             </li>

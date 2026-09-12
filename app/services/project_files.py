@@ -4,10 +4,11 @@ from pathlib import Path
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
 from app.models import (
+    MediaAsset,
     File,
     FileSecurityScan,
     FileStatus,
@@ -102,6 +103,67 @@ def move_project_folder(*, folder, workspace, client_team=None, project=None, pa
 
 
 @transaction.atomic
+def add_file_as_version(*, source, target):
+    """Makes `source` the next version of whatever asset `target` belongs to.
+
+    This is the drag-one-video-onto-another gesture. Nothing is overwritten and nothing is
+    renumbered: the newcomer takes the next number after the highest already in the asset,
+    so V1's review data is untouched and stays addressable.
+
+    The source's relationships are aligned with the target's, because versions of one asset
+    living in two different folders would be incoherent — and it is the asset, not the
+    version, that a person thinks of as being somewhere.
+    """
+    if source.pk == target.pk:
+        raise ProjectFileError('A file cannot be a version of itself.')
+    if source.workspace_id != target.workspace_id:
+        raise ProjectFileError('Both files must belong to the same workspace.')
+
+    source_kind = (source.file.mime_type or '').split('/')[0]
+    target_kind = (target.file.mime_type or '').split('/')[0]
+    if source_kind != target_kind:
+        raise ProjectFileError('A version has to be the same kind of media as the asset.')
+
+    with transaction.atomic():
+        source = ProjectFile.objects.select_for_update().get(pk=source.pk, deleted_at__isnull=True)
+        target = ProjectFile.objects.select_for_update().get(pk=target.pk, deleted_at__isnull=True)
+
+        if source.media_asset_id and source.media_asset_id == target.media_asset_id:
+            raise ProjectFileError('That file is already a version of this asset.')
+        if source.media_asset_id and source.media_asset.versions.filter(deleted_at__isnull=True).exclude(pk=source.pk).exists():
+            raise ProjectFileError(
+                'That file already has versions of its own. Move it out of its asset before adding it to another.'
+            )
+
+        asset = target.media_asset
+        if asset is None:
+            asset = MediaAsset.objects.create(workspace=target.workspace, name=Path(target.file.original_name).stem)
+            target.media_asset = asset
+            target.version_number = 1
+            target.updated_at = timezone.now()
+            target.save(update_fields=['media_asset', 'version_number', 'updated_at'])
+
+        emptied = source.media_asset
+        highest = asset.versions.aggregate(models.Max('version_number'))['version_number__max'] or 0
+        source.media_asset = asset
+        source.version_number = highest + 1
+        source.client_team = target.client_team
+        source.project = target.project
+        source.folder = target.folder
+        source.updated_at = timezone.now()
+        source.full_clean()
+        source.save(update_fields=['media_asset', 'version_number', 'client_team', 'project', 'folder', 'updated_at'])
+
+        # The asset the newcomer came from is now empty; leaving it would litter the library
+        # with assets that have no versions.
+        if emptied and emptied.pk != asset.pk and not emptied.versions.exists():
+            emptied.delete()
+
+        asset.updated_at = timezone.now()
+        asset.save(update_fields=['updated_at'])
+        return source
+
+
 def duplicate_project_file(*, project_file, membership):
     """Copies an asset, bytes and all.
 
@@ -141,6 +203,10 @@ def duplicate_project_file(*, project_file, membership):
             copy = ProjectFile(
                 id=uuid.uuid4(), workspace=workspace, client_team=project_file.client_team,
                 project=project_file.project, folder=project_file.folder, file=file_record,
+                # A copy is a new asset, not another cut of the original: duplicating is for
+                # branching off, and versioning is the gesture for adding to a history.
+                media_asset=MediaAsset.objects.create(workspace=workspace, name=Path(clean_name).stem or clean_name),
+                version_number=1,
                 task_stage=project_file.task_stage, added_by_workspace_membership=membership,
                 created_at=now, updated_at=now,
             )
@@ -269,11 +335,16 @@ def upload_project_file(*, project, upload, membership, folder=None, workspace=N
             FileSecurityScan.objects.create(
                 file=file_record, engine=settings.FILE_SECURITY_SCANNER,
             )
+            # Every upload starts as its own asset at V1. Dragging one onto another is what
+            # later merges two of these into one history.
+            asset = MediaAsset.objects.create(workspace=workspace, name=Path(clean_name).stem or clean_name)
             project_file = ProjectFile(
                 id=uuid.uuid4(), workspace=workspace, client_team=client_team,
                 project=project,
                 folder=folder,
                 file=file_record,
+                media_asset=asset,
+                version_number=1,
                 task_stage=task_stage,
                 added_by_workspace_membership=membership,
                 created_at=now,

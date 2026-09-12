@@ -320,3 +320,35 @@
 }
 .al-filter-field select:hover { border-color: #46434f; }
 .al-filter-field select:focus-visible { border-color: var(--primary); }
+
+/* Versions -----------------------------------------------------------------
+   One card per asset: the latest cut. The chip is what says the card stands for a
+   history rather than a single file. */
+.al-file-chips { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.al-version-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px 3px 6px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--shell-variant, #c9c4d8);
+  font-size: 9.5px; font-style: normal; font-weight: 600; letter-spacing: .02em;
+  white-space: nowrap;
+}
+.al-version-chip svg { width: 11px; height: 11px; color: #a99bff; }
+
+/* Drop state. Deliberately loud: merging two assets is not something to do by accident,
+   so the card says what the drop will do before it happens. */
+.al-file-card { transition: transform .12s, border-color .15s, box-shadow .15s, opacity .15s; }
+.al-file-card[draggable="true"] { cursor: grab; }
+.al-file-card.version-target {
+  border-color: var(--shell-primary, #cabeff);
+  box-shadow: 0 0 0 1px var(--shell-primary, #cabeff), 0 12px 32px #583be833;
+  transform: translateY(-2px);
+}
+.al-file-card.version-inert { opacity: .55; }
+.al-version-drop {
+  position: absolute; inset: 0; z-index: 6;
+  display: grid; place-content: center; gap: 7px; justify-items: center;
+  border-radius: 12px; background: #12102aee; color: #ded9ef;
+  font-size: 11px; font-weight: 600; letter-spacing: .01em; text-align: center; padding: 10px;
+}
+.al-version-drop svg { width: 18px; height: 18px; color: #a99bff; }

@@ -4,10 +4,10 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type For
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
-import { Archive, AudioLines, ChevronRight, Clapperboard, Copy, Download, Ellipsis, File, FileImage, FileText, Film, FolderPlus, Grid2X2, Image as ImageIcon, Info, List, ListFilter, Move, Pencil, Play, RotateCcw, Search, Tag, Trash2, TriangleAlert, Upload, X } from "lucide-react";
+import { Archive, AudioLines, ChevronRight, Clapperboard, Copy, Download, Ellipsis, File, FileImage, FileText, Film, FolderPlus, Grid2X2, GitBranch, Image as ImageIcon, Info, Layers, List, ListFilter, Move, Pencil, Play, RotateCcw, Search, Tag, Trash2, TriangleAlert, Upload, X } from "lucide-react";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
-import { createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, updateAssetFile, updateAssetFolder, uploadAssetFile } from "@/lib/asset-api-client";
+import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, updateAssetFile, updateAssetFolder, uploadAssetFile } from "@/lib/asset-api-client";
 import { TextRoll } from "@/components/ui/skiper-ui/skiper58";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -78,7 +78,13 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const [bulkOpen, setBulkOpen] = useState(false); const [renamingId, setRenamingId] = useState<string | null>(null);
   const stages = view?.stages ?? [];
   const serverFolders: LibraryFolder[] = (view?.folders ?? []).map((folder) => ({ id: folder.id, name: folder.name, clientId: folder.client_team_id, projectId: folder.project_id, parentFolderId: folder.parent_folder_id, createdAt: folder.created_at, createdBy: "Workspace member" }));
-  const serverFiles: LibraryFile[] = (view?.files ?? []).map((item) => ({ id: item.id, fileId: item.file.id, name: item.file.name, kind: mimeKind(item.file.mime_type, item.file.name), mimeType: item.file.mime_type, size: item.file.size_bytes, durationMs: item.file.duration_ms, status: item.file.status as LibraryFile["status"], url: view?.workspaceId && item.file.status === "READY" ? `/api/workspaces/${view.workspaceId}/asset-files/${item.id}/download/` : null, preview: view?.workspaceId && item.poster ? `/api/workspaces/${view.workspaceId}/asset-files/${item.id}/poster/` : null, uploadedBy: "Workspace member", uploadedAt: item.created_at, folderId: item.folder_id, clientId: item.client_team_id, projectId: item.project_id, stageId: item.task_stage_id }));
+  const serverFiles: LibraryFile[] = (view?.files ?? []).map((item) => ({ id: item.id, fileId: item.file.id, name: item.file.name, kind: mimeKind(item.file.mime_type, item.file.name), mimeType: item.file.mime_type, size: item.file.size_bytes, durationMs: item.file.duration_ms, status: item.file.status as LibraryFile["status"], versioning: {
+    assetId: item.media_asset?.id ?? null,
+    assetName: item.media_asset?.name ?? item.file.name,
+    versionNumber: item.version_number,
+    versionCount: item.media_asset?.version_count ?? 1,
+    isLatest: item.media_asset?.is_latest ?? true,
+  }, url: view?.workspaceId && item.file.status === "READY" ? `/api/workspaces/${view.workspaceId}/asset-files/${item.id}/download/` : null, preview: view?.workspaceId && item.poster ? `/api/workspaces/${view.workspaceId}/asset-files/${item.id}/poster/` : null, uploadedBy: "Workspace member", uploadedAt: item.created_at, folderId: item.folder_id, clientId: item.client_team_id, projectId: item.project_id, stageId: item.task_stage_id }));
   // With no workspace there is no server to be authoritative, so the sample library stands
   // in and every local edit applies. Connected, a local row may only override a server row
   // while its write is still in flight; everything else defers to the server.
@@ -86,8 +92,36 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const localWins = offline ? null : new Set(stored.pending ?? []);
   const folders = merge(offline ? demoLibrary.folders : serverFolders, stored.folders, localWins).filter((item) => !stored.deletedIds.includes(item.id) && (!projectId || item.projectId === projectId));
   const files = merge(offline ? demoLibrary.files : serverFiles, stored.files, localWins).filter((item) => !stored.deletedIds.includes(item.id) && (!projectId || item.projectId === projectId));
-  const current = folders.find((item) => item.id === folderId) ?? null; const recursiveSearch = searchEverywhere && Boolean(query.trim()); const filteredProjects = (view?.groups ?? []).filter((group) => !clientFilter || group.clientId === clientFilter); const scopeFolders = sortFolders(folders.filter((item) => (recursiveSearch || item.parentFolderId === folderId) && matches(item.name, query) && matchesRelation(item, clientFilter, projectFilter)), sort); const scopeFiles = sortFiles(files.filter((item) => (recursiveSearch || item.folderId === folderId) && matches(item.name, query) && matchesRelation(item, clientFilter, projectFilter) && (!kindFilter || item.kind === kindFilter) && (!stageFilter || item.stageId === stageFilter)), sort);
+  const current = folders.find((item) => item.id === folderId) ?? null; const recursiveSearch = searchEverywhere && Boolean(query.trim()); const filteredProjects = (view?.groups ?? []).filter((group) => !clientFilter || group.clientId === clientFilter); const scopeFolders = sortFolders(folders.filter((item) => (recursiveSearch || item.parentFolderId === folderId) && matches(item.name, query) && matchesRelation(item, clientFilter, projectFilter)), sort); const scopeFiles = sortFiles(files.filter((item) => (recursiveSearch || item.folderId === folderId) && matches(item.name, query) && matchesRelation(item, clientFilter, projectFilter) && (!kindFilter || item.kind === kindFilter) && (!stageFilter || item.stageId === stageFilter) && item.versioning.isLatest), sort);
   const crumbs = folderTrail(current, folders);
+
+  /**
+   * Dragging one file onto another makes it the next version of that asset.
+   *
+   * `dragging` is the row being carried and `versionTarget` the card under it, so a card
+   * can say "Drop to create V3" before anything happens — the spec asks for a drop state
+   * rather than a silent merge, and merging two assets is not something to do by accident.
+   */
+  const [dragging, setDragging] = useState<LibraryFile | null>(null);
+  const [versionTarget, setVersionTarget] = useState<string | null>(null);
+  const canVersionOnto = (target: LibraryFile) =>
+    Boolean(dragging) && dragging!.id !== target.id && dragging!.kind === target.kind
+    && dragging!.versioning.versionCount === 1 && dragging!.versioning.assetId !== target.versioning.assetId;
+  const createVersion = (target: LibraryFile) => {
+    const source = dragging;
+    setDragging(null);
+    setVersionTarget(null);
+    if (!source || !view?.workspaceId || !canVersionOnto(target)) return;
+    write({
+      ids: [source.id, target.id],
+      describe: `Adding ${source.name} to ${target.versioning.assetName}`,
+      // Removed rather than moved optimistically: the row leaves the grid the moment it
+      // becomes a version, because only the latest cut is shown.
+      optimistic: (state) => ({ ...state, files: state.files.filter((item) => item.id !== source.id) }),
+      rollback: (state) => ({ ...state, files: upsert(state.files, source) }),
+      send: () => addAssetFileVersion(view.workspaceId!, target.id, source.id),
+    });
+  };
 
   /*
    * Re-reads the server while anything is still being processed.
@@ -157,7 +191,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
     {selected.size > 0 && <div className="al-bulk" role="status" aria-live="polite"><strong>{selected.size} selected</strong><button onClick={() => setSelected(new Set())}>Clear</button><button onClick={() => setBulkOpen(true)}><Move />Move / assign</button><button className="danger" onClick={deleteSelected}><Trash2 />Delete</button></div>}
     {writeError && <p className="al-write-error" role="alert"><TriangleAlert />{writeError}<button onClick={() => setWriteError(null)} aria-label="Dismiss error"><X /></button></p>}
     {recursiveSearch && <p className="al-results-note">Showing matches from every folder in {projectName || "Files"}.</p>}
-    <section className="al-section"><header><h2>Items</h2><span>{scopeFolders.length + scopeFiles.length}</span></header><div className={`al-grid ${dense ? "dense" : ""}`}>{scopeFolders.map((folder) => <FolderCard key={folder.id} folder={folder} files={files.filter((file) => file.folderId === folder.id)} folders={folders} view={view} selected={selected.has(folder.id)} renaming={renamingId === folder.id} onSelect={() => toggleSelected(folder.id)} onDetails={() => setDetails(folder)} onOpen={() => setFolderId(folder.id)} onRename={() => setRenamingId(folder.id)} onRenameDone={() => setRenamingId(null)} />)}{scopeFiles.map((file) => <FileCard key={file.id} file={file} view={view} folders={folders} selected={selected.has(file.id)} renaming={renamingId === file.id} onSelect={() => toggleSelected(file.id)} onDetails={() => setDetails(file)} onPreview={() => setPreview(file)} onRename={() => setRenamingId(file.id)} onRenameDone={() => setRenamingId(null)} />)}{!scopeFiles.length && !scopeFolders.length && <div className="al-empty"><Archive /><strong>This location is empty</strong><span>Upload standalone files or organize them in a folder.</span><button onClick={() => setDialog("upload")}>Upload files</button></div>}</div></section>
+    <section className="al-section"><header><h2>Items</h2><span>{scopeFolders.length + scopeFiles.length}</span></header><div className={`al-grid ${dense ? "dense" : ""}`}>{scopeFolders.map((folder) => <FolderCard key={folder.id} folder={folder} files={files.filter((file) => file.folderId === folder.id)} folders={folders} view={view} selected={selected.has(folder.id)} renaming={renamingId === folder.id} onSelect={() => toggleSelected(folder.id)} onDetails={() => setDetails(folder)} onOpen={() => setFolderId(folder.id)} onRename={() => setRenamingId(folder.id)} onRenameDone={() => setRenamingId(null)} />)}{scopeFiles.map((file) => <FileCard key={file.id} file={file} view={view} folders={folders} selected={selected.has(file.id)} renaming={renamingId === file.id} onSelect={() => toggleSelected(file.id)} onDetails={() => setDetails(file)} onPreview={() => setPreview(file)} onRename={() => setRenamingId(file.id)} onRenameDone={() => setRenamingId(null)} dragging={Boolean(dragging)} isVersionTarget={versionTarget === file.id} canAcceptVersion={canVersionOnto(file)} onDragStart={() => setDragging(file)} onDragEnd={() => { setDragging(null); setVersionTarget(null); }} onDragEnter={() => canVersionOnto(file) && setVersionTarget(file.id)} onDragLeave={() => setVersionTarget((current) => current === file.id ? null : current)} onDropVersion={() => createVersion(file)} />)}{!scopeFiles.length && !scopeFolders.length && <div className="al-empty"><Archive /><strong>This location is empty</strong><span>Upload standalone files or organize them in a folder.</span><button onClick={() => setDialog("upload")}>Upload files</button></div>}</div></section>
     {dialog === "folder" && <FolderDialog view={view} folders={folders} defaultProjectId={projectId} defaultClientId={clientId} parentFolderId={folderId} close={() => setDialog(null)} />}
     {dialog === "upload" && <UploadDialog view={view} folders={folders} defaultProjectId={projectId} defaultClientId={clientId} currentFolderId={folderId} close={() => setDialog(null)} />}
     {preview && <PreviewDialog file={preview} close={() => setPreview(null)} />}
@@ -341,11 +375,22 @@ function FolderCard({ folder, files, folders, view, selected, renaming, onSelect
     </footer>
   </article>;
 }
-function FileCard({ file, folders, view, selected, renaming, onSelect, onDetails, onPreview, onRename, onRenameDone }: { file: LibraryFile; folders: LibraryFolder[]; view?: FilesView; selected: boolean; renaming: boolean; onSelect: () => void; onDetails: () => void; onPreview: () => void; onRename: () => void; onRenameDone: () => void }) {
+function FileCard({ file, folders, view, selected, renaming, onSelect, onDetails, onPreview, onRename, onRenameDone, dragging, isVersionTarget, canAcceptVersion, onDragStart, onDragEnd, onDragEnter, onDragLeave, onDropVersion }: { file: LibraryFile; folders: LibraryFolder[]; view?: FilesView; selected: boolean; renaming: boolean; onSelect: () => void; onDetails: () => void; onPreview: () => void; onRename: () => void; onRenameDone: () => void; dragging: boolean; isVersionTarget: boolean; canAcceptVersion: boolean; onDragStart: () => void; onDragEnd: () => void; onDragEnter: () => void; onDragLeave: () => void; onDropVersion: () => void }) {
   const router = useRouter();
   const working = isProcessing(file);
   const review = working ? null : reviewHref(file);
-  return <article className={`al-file-card ${selected ? "selected" : ""} ${working ? "working" : ""}`}>
+  const versions = file.versioning;
+  return <article
+    className={`al-file-card ${selected ? "selected" : ""} ${working ? "working" : ""} ${isVersionTarget ? "version-target" : ""} ${dragging && !canAcceptVersion ? "version-inert" : ""}`}
+    draggable={!working && !renaming}
+    onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/asset-file", file.id); onDragStart(); }}
+    onDragEnd={onDragEnd}
+    onDragEnter={onDragEnter}
+    onDragOver={(event) => { if (canAcceptVersion) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
+    onDragLeave={onDragLeave}
+    onDrop={(event) => { if (canAcceptVersion) { event.preventDefault(); onDropVersion(); } }}
+  >
+    {isVersionTarget && <span className="al-version-drop" aria-hidden="true"><GitBranch />Drop to create V{versions.versionCount + 1}</span>}
     <label className="al-select"><input type="checkbox" checked={selected} onChange={onSelect} aria-label={`Select ${file.name}`} /></label>
     <button className="al-file-preview" onClick={() => review ? router.push(review) : onPreview()} aria-label={review ? `Open review for ${file.name}` : `Preview ${file.name}`} disabled={working}>
       <Preview file={file} large />
@@ -358,7 +403,14 @@ function FileCard({ file, folders, view, selected, renaming, onSelect, onDetails
       <span>
         {renaming ? <RenameField entity={file} isFile view={view} done={onRenameDone} /> : <strong>{file.name}</strong>}
         <small>{formatSize(file.size)} · {relationLabel(file, view)}</small>
-        <StageChip stageId={file.stageId} view={view} />
+        <span className="al-file-chips">
+          {versions.versionCount > 1 && (
+            <em className="al-version-chip" title={`${versions.versionCount} versions of ${versions.assetName}`}>
+              <Layers />V{versions.versionNumber} · {versions.versionCount} versions
+            </em>
+          )}
+          <StageChip stageId={file.stageId} view={view} />
+        </span>
       </span>
       <ContextMenu entity={file} folders={folders} view={view} onPreview={onPreview} onDetails={onDetails} onRename={onRename} />
     </div>
@@ -560,7 +612,7 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
       for (const [index, file] of uploads.entries()) {
         if (cancelled.current) { setStatus("idle"); setProgress(0); return; }
         const preview = file.type.startsWith("image/") && file.size <= 1_000_000 ? await dataUrl(file) : null;
-        const draft = { id: newId("file"), fileId: null, name: file.name, kind: kindFor(file), mimeType: file.type || "application/octet-stream", size: file.size, durationMs: null, status: "PENDING" as const, url: URL.createObjectURL(file), preview, uploadedBy: "You", uploadedAt: new Date().toISOString(), folderId: folder, clientId: (projectRow?.clientId ?? client) || null, projectId: project, stageId: stageId || null } satisfies LibraryFile;
+        const draft = { id: newId("file"), fileId: null, name: file.name, kind: kindFor(file), mimeType: file.type || "application/octet-stream", size: file.size, durationMs: null, status: "PENDING" as const, versioning: { assetId: null, assetName: file.name, versionNumber: 1, versionCount: 1, isLatest: true }, url: URL.createObjectURL(file), preview, uploadedBy: "You", uploadedAt: new Date().toISOString(), folderId: folder, clientId: (projectRow?.clientId ?? client) || null, projectId: project, stageId: stageId || null } satisfies LibraryFile;
 
         if (!view?.workspaceId) {
           updateLibrary((state) => ({ ...state, files: [...state.files, draft] }));

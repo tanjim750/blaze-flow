@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Check, ChevronLeft, HardDriveDownload, Info, MessageSquareText, RotateCcw, Share2, SlidersHorizontal, TriangleAlert } from "lucide-react";
+import { Check, ChevronLeft, HardDriveDownload, Info, MessageSquareText, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, X } from "lucide-react";
 import type { ReviewView } from "@/lib/review-view";
 import { useLocalReview } from "@/lib/review-local";
 import type { ReviewNote } from "@/lib/review-notes";
 import type { AnnotationElement } from "@/lib/api";
 import { Comments, RevisionForm } from "./comments";
 import { Fields } from "./fields";
+import { CompareView } from "./compare";
 import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } from "./player";
 import { SharePanel } from "./share-panel";
 import { useReviewWriter } from "./writer";
@@ -59,6 +60,14 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false }: Prop
   }, [version, view.workspaceId]);
 
   const approval = view.stages.find((stage) => stage.isApproval);
+  const comparing = view.comparison;
+  const latest = asset?.versions[asset.versions.length - 1] ?? null;
+  const sourceFor = (item: typeof version) => {
+    if (!item) return null;
+    if (item.target && item.src) return item.src;
+    if (item.assetFileId && view.workspaceId) return `/api/workspaces/${view.workspaceId}/asset-files/${item.assetFileId}/download/`;
+    return item.src;
+  };
   const seek = (ms: number) => player.current?.seek(ms);
 
   if (!asset || !version) {
@@ -96,9 +105,27 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false }: Prop
           onChange={(event) => router.push(`/review?media=${event.target.value}`)}
         >
           {[...asset.versions].reverse().map((item) => (
-            <option key={item.id} value={item.id}>{item.label}</option>
+            <option key={item.id} value={item.id}>{item.label}{item.id === latest?.id ? " · Latest" : ""}</option>
           ))}
         </select>
+
+        {asset.versions.length > 1 && (comparing ? (
+          <button type="button" className="rv-compare-toggle is-on" onClick={() => router.push(`/review?media=${version.id}`)}>
+            <X size={13} />Exit compare
+          </button>
+        ) : (
+          <select
+            className="rv-compare-toggle"
+            aria-label="Compare with another version"
+            value=""
+            onChange={(event) => event.target.value && router.push(`/review?media=${version.id}&compare=${event.target.value}`)}
+          >
+            <option value="">Compare…</option>
+            {asset.versions.filter((item) => item.id !== version.id).reverse().map((item) => (
+              <option key={item.id} value={item.id}>{version.label} vs {item.label}</option>
+            ))}
+          </select>
+        ))}
 
         {(version.stageName || asset.stage) && (
           <span className="rv-stage" style={asset.stage ? { borderColor: `${asset.stage.color}66`, color: asset.stage.color } : undefined}>
@@ -156,6 +183,9 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false }: Prop
       )}
 
       <div className="rv-body">
+        {comparing ? (
+          <CompareView left={version} right={comparing.version} sources={sourceFor} />
+        ) : (
         <Player
           handle={player}
           sources={sources}
@@ -170,6 +200,7 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false }: Prop
           onDeleteAnnotation={writer.eraseAnnotation}
           onFocusNote={setFocusedId}
         />
+        )}
 
         <aside className="rv-panel">
           <div className="rv-tabs" role="tablist">

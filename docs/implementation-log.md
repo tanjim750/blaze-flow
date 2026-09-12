@@ -2341,3 +2341,51 @@ that cannot be opened. A regression test asserts the proxy survives both blowing
 
 The silent `except: pass` is gone too. It gave a card waiting forever and nothing to explain
 it; both paths now log with a traceback.
+
+## 2026-09-13 — Versioning: one asset, many cuts
+
+Versions were a guess. `review-media.ts` grouped files by stripping `_v2` off their names,
+which cannot express "this file is a version of that one" and disagreed with the user
+whenever a name did not fit. They are now a row.
+
+### The model, and one deliberate deviation
+
+`MediaAsset` is the parent; a `ProjectFile` is a version of it, carrying `version_number`,
+unique within the asset. Every upload starts as its own asset at V1, and dragging one onto
+another moves it to the target's asset at `max(version) + 1`. Nothing is renumbered and
+nothing is overwritten, so V1's review data stays exactly where it was.
+
+The spec puts client, project and folder on the asset *as well as* the version. They are
+only on the version here: every filter, board and tree already reads them from
+`ProjectFile`, and a second copy is a second thing to keep in step — move an asset and you
+would have to update both, and a divergence would be silent. Instead `add_file_as_version`
+aligns the newcomer's relationships with its target, so versions of one asset are never in
+two different folders.
+
+Migration 0027 backfills using the old filename rule, so the grouping already on screen
+carries over rather than being re-shuffled. Django's autodetector emitted the index and
+constraint on `media_asset` *before* the column itself; reordered by hand.
+
+### Version-specific review data
+
+Already true and now load-bearing: comments and annotations hang off a `MediaVersion`, and
+each cut is a different `File`, so a cut with no project record keeps its notes in the
+device-local store keyed by that `File`. Either way, V1's comments cannot appear under V2.
+
+### Compare
+
+`?compare=<file id>` is in the URL rather than component state, so both cuts' notes load on
+the server and a comparison can be linked to. Playback sync is real: the driving side
+reports position and the follower is nudged only past a 0.35s drift, because assigning
+`currentTime` every frame fights the decoder and stutters worse than the drift it corrects.
+Measured: both videos at 2.5s after playing one.
+
+Comments in compare are two labelled feeds with per-version toggles, never merged — and the
+composer is hidden, because a note written there would have to guess which cut it meant.
+
+### Verified in the browser
+
+Files: three cuts collapse to one card reading "V3 · 3 versions"; dragging another asset
+onto it shows "Drop to create V4" and POSTs to the right endpoint. Review: compare shows two
+labelled panes, 2 and 1 comments kept apart, linked playback, and the single-version path
+still has its player, composer and timeline markers.

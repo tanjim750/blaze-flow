@@ -349,6 +349,66 @@ class WorkspaceAssetApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.settings_override.disable()
         shutil.rmtree(self.media_root, ignore_errors=True)
 
+    def upload_png(self, name):
+        buffer = io.BytesIO()
+        Image.new('RGB', (24, 16), '#583be8').save(buffer, format='PNG')
+        response = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile(name, buffer.getvalue(), content_type='image/png')},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()
+
+    def test_dragging_a_file_onto_another_makes_it_the_next_version(self):
+        first = self.upload_png('campaign.png')
+        second = self.upload_png('campaign-revised.png')
+        third = self.upload_png('campaign-final.png')
+
+        # Each upload starts as its own single-version asset.
+        self.assertEqual(first['media_asset']['version_count'], 1)
+        self.assertTrue(first['media_asset']['is_latest'])
+
+        versions_url = reverse('api-asset-file-versions', args=[self.workspace.id, first['id']])
+        promoted = self.client.post(versions_url, {'file_id': second['id']}, format='json')
+        self.assertEqual(promoted.status_code, 200)
+        self.assertEqual(promoted.json()['version_number'], 2)
+        self.assertEqual(promoted.json()['media_asset']['id'], first['media_asset']['id'])
+        self.assertTrue(promoted.json()['media_asset']['is_latest'])
+
+        # A third goes on top rather than replacing V2.
+        self.client.post(versions_url, {'file_id': third['id']}, format='json')
+        listed = {item['id']: item for item in self.client.get(reverse('api-asset-files', args=[self.workspace.id])).json()}
+        self.assertEqual(listed[first['id']]['version_number'], 1)
+        self.assertEqual(listed[second['id']]['version_number'], 2)
+        self.assertEqual(listed[third['id']]['version_number'], 3)
+        # One asset, three versions, and only the newest is latest.
+        self.assertEqual({item['media_asset']['id'] for item in listed.values()}, {first['media_asset']['id']})
+        self.assertEqual(listed[third['id']]['media_asset']['version_count'], 3)
+        self.assertFalse(listed[first['id']]['media_asset']['is_latest'])
+        self.assertTrue(listed[third['id']]['media_asset']['is_latest'])
+
+    def test_versioning_refuses_the_combinations_that_would_lose_history(self):
+        first = self.upload_png('one.png')
+        second = self.upload_png('two.png')
+        third = self.upload_png('three.png')
+        versions_url = reverse('api-asset-file-versions', args=[self.workspace.id, first['id']])
+
+        itself = self.client.post(versions_url, {'file_id': first['id']}, format='json')
+        self.assertEqual(itself.status_code, 400)
+        self.assertIn('version of itself', itself.json()['detail'])
+
+        self.client.post(versions_url, {'file_id': second['id']}, format='json')
+        again = self.client.post(versions_url, {'file_id': second['id']}, format='json')
+        self.assertEqual(again.status_code, 400)
+        self.assertIn('already a version', again.json()['detail'])
+
+        # Moving an asset that has its own versions would renumber it silently.
+        onto_third = reverse('api-asset-file-versions', args=[self.workspace.id, third['id']])
+        nested = self.client.post(onto_third, {'file_id': first['id']}, format='json')
+        self.assertEqual(nested.status_code, 400)
+        self.assertIn('versions of its own', nested.json()['detail'])
+
     def test_duplicate_copies_the_bytes_and_keeps_the_relationships(self):
         """A duplicate is a real copy: the workspace cannot hold two rows for one File."""
         upload = self.client.post(
