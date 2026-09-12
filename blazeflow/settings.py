@@ -163,7 +163,10 @@ MEDIA_ROOT = BASE_DIR / 'media'
 MAX_MEDIA_UPLOAD_BYTES = int(os.environ.get('MAX_MEDIA_UPLOAD_BYTES', 1024 * 1024 * 1024))
 MAX_REVIEW_ATTACHMENT_BYTES = int(os.environ.get('MAX_REVIEW_ATTACHMENT_BYTES', 25 * 1024 * 1024))
 MAX_TASK_ATTACHMENT_BYTES = int(os.environ.get('MAX_TASK_ATTACHMENT_BYTES', 25 * 1024 * 1024))
-MAX_PROJECT_FILE_BYTES = int(os.environ.get('MAX_PROJECT_FILE_BYTES', 25 * 1024 * 1024))
+# The asset library is where video lands, so it gets the same ceiling as a project media
+# upload. It was 25 MB — an attachment-sized limit that rejected essentially every real
+# video with "The file exceeds the configured size limit."
+MAX_PROJECT_FILE_BYTES = int(os.environ.get('MAX_PROJECT_FILE_BYTES', str(MAX_MEDIA_UPLOAD_BYTES)))
 REVIEW_PAGE_SIZE = int(os.environ.get('REVIEW_PAGE_SIZE', '50'))
 REVIEW_MAX_PAGE_SIZE = int(os.environ.get('REVIEW_MAX_PAGE_SIZE', '200'))
 PREVIEW_MAX_PIXELS = int(os.environ.get('PREVIEW_MAX_PIXELS', '40000000'))

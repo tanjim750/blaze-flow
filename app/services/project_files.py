@@ -168,7 +168,10 @@ def _validate_project_file(upload):
     if upload.size <= 0:
         raise ProjectFileError('The file is empty.')
     if upload.size > settings.MAX_PROJECT_FILE_BYTES:
-        raise ProjectFileError('The file exceeds the configured size limit.')
+        limit_mb = settings.MAX_PROJECT_FILE_BYTES / (1024 * 1024)
+        raise ProjectFileError(
+            f'The file is {upload.size / (1024 * 1024):.0f} MB, over the {limit_mb:.0f} MB upload limit.'
+        )
     header = upload.read(32)
     upload.seek(0)
     detected = detect_attachment_type(header, upload) or detect_media_type(header)

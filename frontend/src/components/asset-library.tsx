@@ -30,22 +30,32 @@ function useAssetWrite(ownRefresh?: () => void, ownReport?: (message: string) =>
   const contextReport = useContext(ReportContext);
   const refresh = ownRefresh ?? contextRefresh;
   const report = ownReport ?? contextReport;
-  return function write<T>({ ids, optimistic, send, onSaved, describe }: {
+  /** Resolves to null when the write landed, or to the message explaining why it did not. */
+  return function write<T>({ ids, optimistic, rollback, send, onSaved, describe }: {
     ids: string[];
     optimistic?: (state: LibraryState) => LibraryState;
+    /**
+     * Undoes just this write. Prefer it over the whole-store snapshot whenever writes can
+     * be in flight together: restoring a snapshot taken before a *sibling* write also
+     * discards that sibling's work.
+     */
+    rollback?: (state: LibraryState) => LibraryState;
     send: () => Promise<T>;
     onSaved?: (saved: T) => void;
     describe: string;
-  }) {
+  }): Promise<string | null> {
     const before = snapshotLibrary();
     if (optimistic) updateLibrary(optimistic);
     markPending(ids, true);
     return send().then(
-      (saved) => { onSaved?.(saved); markPending(ids, false); refresh(); },
+      (saved) => { onSaved?.(saved); markPending(ids, false); refresh(); return null; },
       (error: unknown) => {
-        replaceLibrary(before);
+        if (rollback) updateLibrary(rollback);
+        else replaceLibrary(before);
         markPending(ids, false);
-        report(`${describe} failed. ${error instanceof Error ? error.message : "The server rejected the change."}`);
+        const message = `${describe} failed. ${error instanceof Error ? error.message : "The server rejected the change."}`;
+        report(message);
+        return message;
       },
     );
   };
@@ -481,34 +491,71 @@ function FolderDialog({ view, folders, defaultProjectId, defaultClientId, parent
     close(); }; return <Modal title="Create folder" close={close}><form onSubmit={submit} className="al-form"><label>Folder name<input name="name" required autoFocus placeholder="Footage" /></label><RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={selectedProject} setProject={setSelectedProject} /><label>Inside folder<select name="parent" value={parentFolderId ?? ""} disabled><option value="">Root Files area</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label><button>Create folder</button></form></Modal>; }
 function UploadDialog({ view, folders, defaultProjectId, defaultClientId, currentFolderId, close }: { view?: FilesView; folders: LibraryFolder[]; defaultProjectId: string | null; defaultClientId: string | null; currentFolderId: string | null; close: () => void }) {
   const write = useAssetWrite();
-  const [client, setClient] = useState(defaultClientId ?? ""); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const [uploads, setUploads] = useState<File[]>([]); const [stageId, setStageId] = useState(""); const [dragging, setDragging] = useState(false); const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle"); const [progress, setProgress] = useState(0); const cancelled = useRef(false);
+  const [client, setClient] = useState(defaultClientId ?? ""); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const [uploads, setUploads] = useState<File[]>([]); const [stageId, setStageId] = useState(""); const [dragging, setDragging] = useState(false); const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle"); const [progress, setProgress] = useState(0); const [failure, setFailure] = useState<string | null>(null); const cancelled = useRef(false);
   const projects = (view?.groups ?? []).filter((group) => !client || group.clientId === client); const availableFolders = folders.filter((folder) => !selectedProject || folder.projectId === selectedProject);
   const busy = status === "uploading"; const totalSize = uploads.reduce((sum, file) => sum + file.size, 0); const done = Math.min(uploads.length, Math.round((progress / 100) * uploads.length));
   const stage = (items: FileList | null) => setUploads((staged) => { const next = [...staged]; Array.from(items ?? []).filter((file) => file.size > 0).forEach((file) => { if (!next.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified)) next.push(file); }); return next; });
   const removeAt = (index: number) => setUploads((staged) => staged.filter((_, position) => position !== index));
+  /**
+   * Uploads one file at a time, and does not close until they have all landed.
+   *
+   * Two things used to go wrong here, and together they are why a video could appear in
+   * the grid and then be gone after a refresh. The optimistic rows were added to the store
+   * *after* each `write` had already snapshotted it, so a rejected upload had nothing to
+   * roll back and its row was appended anyway; and the dialog closed without awaiting any
+   * of the uploads, so a rejection arrived long after the flow looked finished. A row for
+   * a file the server refused survives only in memory, which is exactly why it vanishes on
+   * reload.
+   *
+   * Now the draft goes in as the write's own `optimistic` step, its `rollback` removes
+   * precisely that row, and a failure keeps the dialog open and says which file and why.
+   */
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!uploads.length) return;
-    cancelled.current = false; setStatus("uploading"); setProgress(0);
+    cancelled.current = false; setStatus("uploading"); setProgress(0); setFailure(null);
     const data = new FormData(event.currentTarget), project = String(data.get("project") || selectedProject || "") || null, folder = String(data.get("folder") || currentFolderId || "") || null, projectRow = view?.groups.find((item) => item.projectId === project);
     try {
-      const items: LibraryFile[] = [];
+      const remaining: File[] = [];
+      let failed: string | null = null;
       for (const [index, file] of uploads.entries()) {
         if (cancelled.current) { setStatus("idle"); setProgress(0); return; }
         const preview = file.type.startsWith("image/") && file.size <= 1_000_000 ? await dataUrl(file) : null;
         const draft = { id: newId("file"), fileId: null, name: file.name, kind: kindFor(file), mimeType: file.type || "application/octet-stream", size: file.size, url: URL.createObjectURL(file), preview, uploadedBy: "You", uploadedAt: new Date().toISOString(), folderId: folder, clientId: (projectRow?.clientId ?? client) || null, projectId: project, stageId: stageId || null } satisfies LibraryFile;
-        items.push(draft);
-        if (view?.workspaceId) {
-          write({ ids: [draft.id], describe: `Uploading ${file.name}`,
+
+        if (!view?.workspaceId) {
+          updateLibrary((state) => ({ ...state, files: [...state.files, draft] }));
+        } else {
+          const error = await write({
+            ids: [draft.id],
+            describe: `Uploading ${file.name}`,
+            optimistic: (state) => ({ ...state, files: [...state.files, draft] }),
+            rollback: (state) => ({ ...state, files: state.files.filter((item) => item.id !== draft.id) }),
             send: () => uploadAssetFile(view.workspaceId!, file, { client_team_id: draft.clientId, project_id: draft.projectId, folder_id: draft.folderId, task_stage_id: draft.stageId }),
-            onSaved: (saved) => updateLibrary((state) => ({ ...state, files: state.files.map((item) => item.id === draft.id ? { ...draft, id: saved.id, fileId: saved.file.id, uploadedAt: saved.created_at, url: null, preview: null } : item) })) });
+            onSaved: (saved) => updateLibrary((state) => ({ ...state, files: state.files.map((item) => item.id === draft.id ? { ...draft, id: saved.id, fileId: saved.file.id, uploadedAt: saved.created_at, url: null, preview: null } : item) })),
+          });
+          if (error) {
+            URL.revokeObjectURL(draft.url!);
+            failed = failed ?? error;
+            remaining.push(file);
+          }
         }
         setProgress(Math.round(((index + 1) / uploads.length) * 100));
-        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       }
-      updateLibrary((state) => ({ ...state, files: [...state.files, ...items] }));
+
+      if (failed) {
+        // Keep the ones that did not make it staged, so the fix is one more click.
+        setUploads(remaining);
+        setFailure(failed);
+        setStatus("error");
+        setProgress(0);
+        return;
+      }
       close();
-    } catch { setStatus("error"); }
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : "The upload could not be completed.");
+      setStatus("error");
+    }
   };
   return <Modal title="Upload files" subtitle="Stage your media, then choose where it lives." icon={<Upload />} wide close={close}>
     <form onSubmit={submit} className="al-form al-upload-form">
@@ -529,7 +576,7 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
         <div className="al-relations"><label>Folder (optional)<select name="folder" defaultValue={currentFolderId ?? ""}><option value="">Root Files area</option>{availableFolders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label><label>Stage<select name="stage" value={stageId} onChange={(event) => setStageId(event.target.value)}><option value="">No stage</option>{(view?.stages ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
       </fieldset>
       {busy && <div className="al-progress" role="status" aria-live="polite"><div><span>Uploading {done} of {uploads.length}…</span><strong>{progress}%</strong></div><i><b style={{ width: `${progress}%` }} /></i></div>}
-      {status === "error" && <p className="al-upload-error" role="alert">Upload preparation failed. Your staged files are still here—retry when ready.</p>}
+      {status === "error" && <p className="al-upload-error" role="alert">{failure ?? "The upload could not be completed."} The files it could not take are still staged below.</p>}
       <footer className="al-submit-row">
         <small>{uploads.length ? `${uploads.length} file${uploads.length === 1 ? "" : "s"} · ${formatSize(totalSize)}` : "No files staged yet"}</small>
         {busy ? <button type="button" className="ghost" onClick={() => { cancelled.current = true; }}>Cancel upload</button> : <><button type="button" className="ghost" onClick={close}>Cancel</button><button disabled={!uploads.length}>{status === "error" ? "Retry upload" : `Upload ${uploads.length || ""} file${uploads.length === 1 ? "" : "s"}`}</button></>}

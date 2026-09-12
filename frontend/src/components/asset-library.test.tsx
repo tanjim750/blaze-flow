@@ -9,9 +9,11 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }))
 
 // Lets a test make the server reject a write.
 const deleteAssetFile = vi.fn();
+const uploadAssetFile = vi.fn();
 vi.mock("@/lib/asset-api-client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/asset-api-client")>()),
   deleteAssetFile: (...args: unknown[]) => deleteAssetFile(...args),
+  uploadAssetFile: (...args: unknown[]) => uploadAssetFile(...args),
 }));
 
 const empty = { folders: [], files: [], deletedIds: [] };
@@ -25,7 +27,7 @@ const view = {
   folders: [],
 } satisfies FilesView;
 
-afterEach(() => { cleanup(); replaceLibrary(empty); });
+afterEach(() => { cleanup(); replaceLibrary(empty); uploadAssetFile.mockReset(); deleteAssetFile.mockReset(); });
 
 describe("AssetLibrary", () => {
   it("creates one shared project folder and switches display density", () => {
@@ -191,5 +193,44 @@ describe("AssetLibrary", () => {
     // The optimistic removal is undone and the reason is shown, rather than swallowed.
     expect(await screen.findByRole("alert")).toHaveTextContent("You do not have permission to delete this asset.");
     expect(screen.getByText("keep-me.mov")).toBeInTheDocument();
+  });
+
+  /**
+   * A rejected upload used to leave its optimistic row on the grid: the draft was added
+   * after the write had snapshotted the store, so there was nothing to roll back, and the
+   * dialog closed without waiting for the answer. The row then lived only in memory, so it
+   * disappeared on the next reload — which is what made a failed upload look like a
+   * successful one.
+   */
+  it("keeps a rejected upload off the grid and says why", async () => {
+    uploadAssetFile.mockRejectedValueOnce(new Error("The file is 120 MB, over the 25 MB upload limit."));
+    const rendered = render(<AssetLibrary view={view} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]');
+    fireEvent.change(input!, { target: { files: [new File(["x"], "hero.mp4", { type: "video/mp4" })] } });
+    fireEvent.click(screen.getByRole("button", { name: "Upload 1 file" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/over the 25 MB upload limit/));
+    expect(rendered.container.querySelector(".al-file-card")).toBeNull();
+    // Still staged, so retrying is one click rather than re-picking the file.
+    expect(screen.getByRole("button", { name: "Retry upload" })).toBeInTheDocument();
+  });
+
+  it("puts an accepted upload on the grid under the id the server gave it", async () => {
+    uploadAssetFile.mockResolvedValueOnce({
+      id: "server-row", workspace_id: "workspace", client_team_id: null, project_id: null,
+      folder_id: null, task_stage_id: null, created_at: "2026-09-12T10:00:00Z",
+      file: { id: "server-file", name: "hero.mp4", mime_type: "video/mp4", size_bytes: 10, checksum_sha256: "x", status: "PENDING" },
+    });
+    const rendered = render(<AssetLibrary view={view} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]');
+    fireEvent.change(input!, { target: { files: [new File(["x"], "hero.mp4", { type: "video/mp4" })] } });
+    fireEvent.click(screen.getByRole("button", { name: "Upload 1 file" }));
+
+    await waitFor(() => expect(rendered.container.querySelector(".al-file-card")).toBeTruthy());
+    expect(screen.getByText("hero.mp4")).toBeInTheDocument();
   });
 });

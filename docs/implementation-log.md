@@ -2018,3 +2018,42 @@ The button is finished the same way as the rail handles — a gradient body, a h
 highlight and a little depth — so the two read as one set rather than two unrelated chips.
 An outbound arrow marks it as leaving the rail and steps out on hover, which
 `prefers-reduced-motion` suppresses.
+
+## 2026-09-12 — Uploaded videos vanished on reload
+
+Reported: uploading a video appeared to work, but the file was gone after a refresh.
+
+Two faults, and it took both to produce that symptom.
+
+### Why the upload failed
+
+`MAX_PROJECT_FILE_BYTES` defaulted to **25 MB**, and `.env.example` pinned the same value.
+Project media versions already allowed 1 GB (`MAX_MEDIA_UPLOAD_BYTES`) — the asset library,
+which is where video actually lands, had been given an attachment-sized limit. Essentially
+every real video was rejected with "The file exceeds the configured size limit."
+
+The limit now defaults to `MAX_MEDIA_UPLOAD_BYTES`, `.env.example` matches, and the message
+names both numbers: "The file is 120 MB, over the 1024 MB upload limit."
+
+Checked first rather than assumed: the signature check was a plausible second suspect,
+since it demands the declared type match the detected one and `.mov`/`.mp4` share the
+`ftyp` box. Running `_validate_project_file` over real ffmpeg-produced files cleared it —
+mp4, mov and webm all pass. Size was the whole story.
+
+### Why the failure looked like a success
+
+The optimistic row was added to the store *after* each `write` had already snapshotted it,
+so a rejected upload had nothing to roll back — and the drafts were appended
+unconditionally once the loop finished, failure or not. The dialog also closed without
+awaiting any upload. So the row appeared, the rejection arrived after the flow looked
+finished, and because that row existed only in memory it was gone on the next reload.
+
+- The draft is now the write's own `optimistic` step, with a `rollback` that removes
+  exactly that row. `useAssetWrite` gained that option because a whole-store snapshot is
+  wrong whenever writes overlap: restoring it also discards a sibling write's work.
+- `write` resolves to the failure message, or null.
+- The dialog waits for every upload, stays open on failure, says which file and why, and
+  leaves the rejected files staged so a retry is one click.
+
+Two tests cover it: a rejected upload leaves no card on the grid and explains itself, and
+an accepted one appears under the id the server gave it.
