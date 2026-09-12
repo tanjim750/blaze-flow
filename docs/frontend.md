@@ -13,7 +13,7 @@ and each is wired to real API data:
 | --- | --- | --- |
 | `/` | Server component | Workspace dashboard: stats, tasks, review queue, projects, deadlines, activity |
 | `/projects` | Server component + client browser | Client → campaign → asset tree, asset grid/list, and a workflow status board |
-| `/review` | Server component + client workspace | Proxy player, comments, point annotations, reactions, attachments, workflow, and sharing |
+| `/review` | Server component + client workspace | Video review: transport and frame stepping, timeline comment markers, drawn annotations, mentions, voice/screen recordings, versions, workflow, and sharing |
 | `/guest-review` | Client component | Token-based external review without a workspace account |
 | `/onboarding` | Server component + client form | Verified-email gate and first-workspace creation |
 | `/settings` | Server component + client forms | Account identity, workspace profile, password, and verification controls |
@@ -90,7 +90,7 @@ the external-drive warning in `docs/DEVELOPMENT.md`.
 | `src/app/layout.tsx` | Root layout, fonts, document metadata |
 | `src/app/page.tsx` | Dashboard route |
 | `src/app/projects/` | Projects route: `page.tsx`, `browser.tsx` (client), `actions.ts` |
-| `src/app/review/` | Review route: `page.tsx`, `workspace.tsx` (client), `actions.ts` |
+| `src/app/(app)/review/` | Review route: `page.tsx`, `workspace.tsx`, `player.tsx`, `comments.tsx`, `fields.tsx`, `recorder.tsx`, `writer.ts`, `actions.ts` |
 | `src/app/onboarding/` | Verified-email gate and workspace creation form/action |
 | `src/app/settings/` | Account, workspace-profile, verification, and password forms/actions |
 | `src/app/tasks/` | Workspace task board and shared task mutation actions |
@@ -109,11 +109,59 @@ the external-drive warning in `docs/DEVELOPMENT.md`.
 | `src/lib/user.ts` | Name and initials helpers, importable from client components |
 | `src/lib/dashboard-view.ts` | Builds the dashboard view model |
 | `src/lib/projects-view.ts` | Builds the projects tree, asset cards, and status board |
+| `src/lib/review-media.ts` | Resolves the one media record behind every entry point, and groups version lines |
 | `src/lib/review-view.ts` | Builds the review view model and nests comment replies |
+| `src/lib/review-local.ts` | Device-local notes for media with no project review record |
 | `src/lib/timecode.ts` | `mm:ss` formatting, importable from client components |
 | `src/app/*.css` | `globals.css` tokens and reset, `shell.css` chrome, `forms.css` errors |
 | `src/app/*/*.css` | Per-route styles (`home.css`, `projects.css`, `review.css`) |
 | `public/images/` | Demo-fallback thumbnails only; not product assets |
+
+## Video review
+
+The rule the whole feature is built around is **one media file, many entry points, one
+review**. It holds because the two tables that describe a video already share a third:
+
+```
+ProjectFile.file_id ──┐
+                      ├──► File   ← the row holding the bytes
+MediaVersion.original_file_id ─┘
+TaskAttachment.file_id ─┘
+```
+
+So the `File` id is the identity. Every link into review is `/review?media=<file id>`,
+which means the Files library, a project's files, a task attachment, the deliverables list
+and the dashboard all produce the *same URL* for the same video rather than four addresses
+that happen to render alike. `?project=` and `?version=` still resolve, for older links.
+
+`src/lib/review-media.ts` builds the catalogue and decides what a cut can do:
+
+| Source | Carries | `target` | Notes and annotations |
+| --- | --- | --- | --- |
+| `MediaVersion` | comments, annotations, reactions, attachments, workflow, guest links | set | Posted to the API |
+| `ProjectFile` only | client/project/folder/stage and the bytes | `null` | Kept on the device (`review-local.ts`) |
+
+A library file has nowhere on the server to keep a note until it is published into a
+project as a media version. Rather than hide review for those files, the page runs against
+an in-memory store and says so on screen. `app/(app)/review/writer.ts` is the only place
+that branch exists — the UI calls `compose` and never asks which backing it has, so the
+two paths cannot drift apart. It is also the seam to replace if the API grows notes for
+library files.
+
+Version lines are inferred from filenames (`Summer_V1.mp4`, `Summer_V2.mp4`), because
+nothing records "these are the same asset". The rule is deliberately conservative: strip a
+trailing version marker and nothing else, group within a project and folder. See the tests
+in `src/lib/review-media.test.ts`.
+
+Two things are *not* stored anywhere and are read from the loaded video at runtime:
+duration and resolution. "Uploaded by" is recorded by both models but returned by neither
+serializer, so the details panel says so rather than inventing a name.
+
+### Recordings
+
+Voice and screen feedback use `MediaRecorder` and are real, not mocked. They needed no new
+endpoint: a review comment already accepts arbitrary file attachments, and the
+attachment's mime type is enough to decide whether it plays back as audio or video.
 
 ## Architecture
 
@@ -290,7 +338,14 @@ card or compact-list presentation. Reassigning a folder cascades its relationshi
 folders and files; descendant targets are excluded from the move menu to prevent folder cycles.
 Search can stay within the current location or explicitly scan every nested folder. File and folder
 cards support selection with recursive bulk deletion, uploads can be staged through browse or
-drag-and-drop before submission, and the context menu exposes a metadata details dialog.
+drag-and-drop before submission, and the context menu exposes a metadata details dialog. Selected
+assets can also be moved and assigned together without flattening nested folder trees. Upload
+preparation exposes progress, cancellation, and retry states. Ready images use their authenticated
+download as a thumbnail, browser-backed videos render inline frames, audio uses a waveform plate,
+and document/source cards expose their file extension.
+The library also supports N/U keyboard shortcuts, select-all-visible, explicit focus rings, and
+modal focus containment/restoration with Escape dismissal. On narrow screens the primary create
+and upload actions become a reachable bottom dock while filters, metadata, and bulk actions reflow.
 
 `src/lib/asset-library.ts` owns the frontend entity contract and a localStorage-backed mock store.
 The shared component adapts real project-file API rows into that contract, then overlays local
@@ -332,7 +387,7 @@ endpoint change would let the UI get simpler, not just prettier.
 | Media list serializer has no poster frame | Asset and review cards fall back to a tinted plate |
 | No comment count, duration, or resolution on the media list | Those fields are `null` and the card omits them rather than faking a number |
 | Comment lists are offset-paginated via `X-Pagination-*` headers | The review page requests one page of `limit=200` and does not paginate |
-| Project-file endpoints require a project and have no workspace-level nullable assignment model | Files uses a persisted frontend entity store for unassigned assets and overlays project API rows by id |
+| Asset previews do not yet have generated poster/waveform variants | Files uses the authenticated original download for ready images and media-native fallbacks elsewhere |
 
 ## Styling
 
@@ -355,9 +410,9 @@ and the palette notes in that directory's `precision_dark_media_os/DESIGN.md`.
   is still absent.
 - No shell navigation targets 404.
 - Inert controls that render but do nothing: the Format/Status/sort filter dropdowns and non-Files per-card menus.
-- Files created only in the frontend store are mock assets: Blob download URLs last for the current
-  browser session, image previews persist only for images up to 1 MB, and folder downloads are a
-  metadata manifest rather than a ZIP. A workspace-level backend API should replace this adapter.
+- Files uses workspace asset endpoints backed by the same rows exposed in each Project Files tab.
+  Optimistic browser state keeps interactions immediate; folder downloads remain a metadata manifest
+  rather than a server-generated ZIP.
 - Account identity fields are read-only because the backend exposes no user-profile update
   endpoint. Workspace business-profile fields can be edited at `/settings`.
 - Annotations support points, rectangles, ellipses, arrows, freehand paths, and text. Authors can

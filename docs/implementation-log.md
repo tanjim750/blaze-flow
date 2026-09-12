@@ -4,6 +4,53 @@ This is a living, chronological record of completed engineering work and consequ
 
 Each entry should state what changed, why, verification performed, known limitations, and the recommended next step. Product aspirations belong in `docs/implementations/domain_and_features.md`, not here.
 
+## 2026-09-10 — Files keyboard accessibility and mobile polish
+
+### Delivered
+
+- Added N/U shortcuts for folder creation and upload, plus select-all-visible across the active
+  filtered result set.
+- Upgraded every Files modal with dialog semantics, accessible naming, Escape dismissal, contained
+  Tab navigation, initial focus, and focus restoration to the triggering control.
+- Added consistent focus-visible styling and made hidden selection controls appear for keyboard
+  focus as well as pointer hover.
+- Reworked narrow-screen controls into responsive filter grids, wrapping bulk actions, condensed
+  metadata, and a fixed bottom create/upload dock.
+
+### Verification
+
+- Frontend TypeScript, ESLint, and Vitest passed (4 files / 10 tests), including keyboard dialog
+  and select-all interaction coverage. The live development frontend and backend health endpoint
+  returned successfully; a production rebuild was intentionally skipped while the dev server was active.
+
+### Known limitations and next step
+
+- The remaining major Files milestone is replacing local mock persistence with workspace-level
+  backend asset endpoints that support nullable Client, Project, and Folder relationships.
+
+## 2026-09-10 — Bulk assignment, resilient uploads, and richer previews
+
+### Delivered
+
+- Added bulk Client, Project, and destination-folder assignment to the selection toolbar. Moving a
+  selected parent and child preserves their hierarchy, and contained selected files are not
+  accidentally flattened into the destination.
+- Added upload preparation progress, cancellation, retained retry state, and disabled controls
+  while work is active.
+- Upgraded creative previews with authenticated image thumbnails, inline browser video frames,
+  expanded audio waveform plates, and extension badges for documents and source files.
+- Added focused data-layer coverage for hierarchy-preserving bulk assignment.
+
+### Verification
+
+- Frontend TypeScript, ESLint, Vitest, production build, and diff hygiene passed.
+
+### Known limitations and next step
+
+- Progress currently represents client-side preparation because mock assets are stored locally.
+  Connect it to transport-level progress and server retry identifiers when workspace asset upload
+  endpoints are available.
+
 ## 2026-09-10 — Files search, bulk actions, upload staging, and details
 
 ### Delivered
@@ -24,8 +71,7 @@ Each entry should state what changed, why, verification performed, known limitat
 
 ### Known limitations and next step
 
-- Bulk operations currently cover recursive deletion; move and assignment remain per-item. Add a
-  shared bulk assignment dialog after the workspace asset API defines partial-failure behavior.
+- This milestone was superseded by the bulk-assignment milestone above.
 
 ## 2026-09-10 — Files organization controls and relationship safety
 
@@ -1265,3 +1311,583 @@ Add database constraints for principal/authorship/ownership invariants, followed
 ### Verification
 
 - Frontend tests, TypeScript, ESLint, the Next.js production build, and patch whitespace checks pass.
+
+# 2026-09-10 — Workspace asset library persistence
+
+### Delivered
+
+- Extended existing project file/folder rows with a required workspace and nullable client/project relationships, including an in-place backfill migration.
+- Added workspace-level folder and file list/create/detail/update/delete endpoints plus authenticated downloads, while retaining project routes as filtered views of the same records.
+- Added standalone root uploads, nested folders, project/client assignment, recursive folder reassignment, rename, deletion, and relationship validation.
+- Replaced the Files page project-by-project request fan-out with one workspace asset read and connected optimistic create/upload/rename/move/delete interactions to the persistence API.
+- Added backend coverage for unassigned assets, shared project visibility, and assignment changes.
+
+### Verification
+
+- Migration 0022 applies cleanly, Django system and migration-drift checks pass, and all 19 project/asset tests pass against PostgreSQL.
+- Frontend TypeScript, ESLint, the production build, 4 test files, and all 10 tests pass.
+- The full 224-test backend run reached 221 passing tests; three pre-existing shared-media-root tests collided on filesystem paths when run as one suite, while the isolated project/asset suite is green.
+
+# 2026-09-10 — Global production task management
+
+### Delivered
+
+- Rebuilt `/tasks` as a workspace-wide five-stage production Kanban with To Do, Revisions, Internal QA, Client, and Approved columns.
+- Added persistent drag-to-status ordering, a shared List view, search, and client/project/assignee/status/priority/due-date filters.
+- Added complete create/edit/delete flows with optional client, project, assignee, and due date; selecting a project derives its client.
+- Added nullable task client ownership, production workflow statuses, embedded assignee summaries, and safe project reassignment to the task API.
+- Added a Project Tasks tab that filters the same task records and writes through the same endpoints—no duplicate task objects.
+
+### Verification
+
+- Migration 0023 applies cleanly; Django checks and migration drift are clean; all 19 task API tests pass against PostgreSQL.
+- All 12 frontend tests, TypeScript, ESLint, and the production build pass.
+- A public authenticated smoke test created a task, moved it from To Do to Revisions, and deleted it successfully through the ngrok origin.
+
+# 2026-09-10 — Asset workflow status on uploads
+
+### Delivered
+
+- Added a fixed workflow status to every asset—Draft, In Review, Approved, Final, Archived—so an upload can be linked to a client, a project, and a status in one pass.
+- Added `ProjectFile.status` (migration 0025) defaulting to `DRAFT`, indexed, and exposed on the asset API; `file.status` still reports the scan/processing state separately.
+- Accepted `status` on asset upload and PATCH, rejecting unknown values, and left relationships untouched when only the status changes.
+- Added a Status select to the upload dialog and the bulk Move / assign dialog, where an empty choice leaves each file's status alone.
+- Added a per-file Status submenu to the card context menu, a status chip on every file card, an "All statuses" filter, and a Status row in Asset details.
+- Cascaded bulk status changes from a selected folder down to every file beneath it, since status lives on files only.
+- Coerced libraries persisted before this field existed to `DRAFT` on read, so existing local state keeps working.
+
+### Verification
+
+- Migration 0025 applies cleanly, `makemigrations --check` reports no drift, and all 23 project/asset backend tests pass against PostgreSQL.
+- All 17 frontend tests, TypeScript, ESLint, and the production build pass.
+- `test_owner_can_read_and_update_workspace` fails on this branch for an unrelated reason: `Workspace.task_workflow_settings` is a `JSONField(default=dict)` without `blank=True`, so `full_clean()` rejects its own `{}` default. Pre-existing, from the task-stages work in migration 0024.
+
+# 2026-09-10 — Uploaded files reach the Status tab
+
+### Delivered
+
+- Fixed the Status tab showing nothing for a file uploaded with a status. Two causes, both addressed.
+- Applied migration 0025 to the development database. It had only ever run against the throwaway test database, so `project_files.status` did not exist and every upload carrying a status failed server-side; the card users saw came from the browser's local library copy alone.
+- Rebuilt the Status board around the five file statuses—Draft, In Review, Approved, Final, Archived—so anything uploaded through Files appears in the column for its status. Media-version stage columns still follow, and now only when versions actually exist, instead of leaving a project with stages but no media looking broken.
+- Rendered an uploaded file as a board card: extension badge, size (or "Processing" until the scan finishes), and an inline preview for ready images.
+- Refreshed the server-rendered Status tab after an asset write, once the API confirms it, so a status set in Files is not stale when the user switches tabs.
+- Corrected the board's empty-state copy, which blamed missing workflow stages for what is now an unselected campaign.
+
+### Verification
+
+- All 22 frontend tests pass, including 5 new Status-board tests covering status grouping, empty projects, a missing status falling back to Draft, card labelling and image previews, and stage columns appearing only alongside media versions.
+- TypeScript, ESLint, and the production build pass; migration 0025 is applied and `project_files.status` is present in development.
+
+### Known issue, not addressed
+
+- A failed asset upload leaves a card in the browser's local library with no error shown, because `updateNoWait` swallows the rejection. That is what hid the migration problem: the file looked uploaded and carried its status, while the server had never stored it.
+
+# 2026-09-11 — Loading states for navigation
+
+### Delivered
+
+- Added `loading.tsx` to every route that renders the app shell—dashboard, projects, tasks, files, clients, team, settings, render queue, deliverables, review, and help—so a navigation shows a placeholder instead of a frozen page.
+- Added a shared `PageSkeleton` that redraws the sidebar and topbar with the real shell classes. Each page renders its own `AppShell`, so a plain `loading.tsx` blanked the chrome on every navigation; the skeleton keeps it at the same geometry and only the content area visibly changes. Its padding mirrors `.studio-main > main` so nothing shifts when real content arrives.
+- Gave the skeleton four content shapes—board, grid, list, split—matched to each route.
+- Added a top progress bar for in-app navigation. The App Router exposes no router events, so it starts on a left-click of a same-origin link and clears when the resolved route changes; a 15s guard keeps an aborted navigation from stranding it.
+- Added an inline pending spinner, via `useLinkStatus`, to the sidebar links, the workspace tabs, and the project sidebar's campaign links. A campaign link changes only query params, so it never reaches a `loading.tsx` fallback and would otherwise give no feedback at all.
+- Replaced the Files-only placeholder with the shared skeleton and removed its now-dead CSS.
+- Honoured `prefers-reduced-motion` for the pulse, bar, and spinner.
+
+### Verification
+
+- TypeScript, ESLint, all 22 tests, and the production build pass; every shell route still returns 200.
+- Screenshotted the board, grid, and split skeletons with JavaScript disabled, which holds the streamed fallback on screen, and confirmed the chrome lands at the shell's real 256px sidebar and 56px topbar.
+
+### Known trade-off, resolved the same day
+
+- Adding the fallbacks briefly turned the signed-out redirect into a streamed `<meta http-equiv="refresh">` instead of an HTTP 307, because a Suspense boundary had already flushed. Moving the shell into a layout put `loadSession` back above that boundary and restored the real redirect. See the next entry.
+
+# 2026-09-11 — The app shell persists across navigation
+
+### Delivered
+
+- Moved the signed-in chrome out of the pages and into a layout, so the sidebar and topbar are no longer torn down and rebuilt on every navigation. Only the page body changes.
+- Grouped the eleven shell routes under `src/app/(app)/`—dashboard, projects, tasks, files, clients, team, settings, render queue, deliverables, review, help—with a single `layout.tsx` that resolves the session and workspace context once and renders `AppShell`. URLs are unchanged; a route group does not appear in the path.
+- Left `/sign-in` and the other auth routes, `/onboarding`, and the public `/guest-review` outside the group, since none of them use the shell.
+- Removed `AppShell` and its per-page session and workspace loading from all eleven pages. Seven no longer need `loadSession` or `loadWorkspaceContext` at all.
+- Reduced `PageSkeleton` to the body alone; it no longer redraws a sidebar and topbar silhouette, because the real ones stay on screen. Per-route shapes are unchanged.
+- Derived the projects page's full-bleed `flush` layout from the pathname inside `AppShell`, replacing the prop that only a layout-less page could pass.
+- Repointed `@/app/tasks/*` imports at the new group path.
+
+### Verification
+
+- TypeScript, ESLint, all 22 tests, and the production build pass. The build lists all 18 routes at their original URLs.
+- Every shell route answers 307 to a signed-out request again, `/sign-in` and `/guest-review` answer 200.
+
+# 2026-09-12 — shadcn/ui and Skiper UI as the component baseline
+
+### Delivered
+
+- Added `frontend/components.json`, so the shadcn CLI works against this project for the first time. The app already had shadcn's output—`cn`, `cva`, Radix primitives, `src/components/ui/`—but never the config file the CLI reads.
+- Declared the `@skiper-ui` registry in that config, so free Skiper UI components install with `npx shadcn add @skiper-ui/<name>`.
+- Added `src/app/shadcn-theme.css`, mapping shadcn token names onto the Blaze Flow palette so registry components arrive in the studio theme instead of shadcn's default neutral grey. The mapping is one way: `shell.css` stays the source of truth and is never redefined, because `--muted` is a text colour here and a surface in shadcn—overwriting it would turn every `.muted` label into an unreadable block.
+- Installed two free components. `TextRoll` animates the Files heading on hover and was kept. `ProgressiveBlur` was added to the projects client tree and then removed the same day—see below.
+- Wrote the conventions into `frontend/AGENTS.md`, outside the block `next dev` regenerates.
+
+### Registry components need three fixes on arrival
+
+- The CLI adds `framer-motion` as a direct dependency; `motion` already depends on it, so that is a second copy and a second motion context. Removed it—the app imports `motion/react` throughout—leaving one copy as a transitive dependency.
+- Registry items ship a `SkiperNN` demo export full of the vendor's own marketing copy and routes. Dropped, keeping only the real component.
+- `TextRoll` renders one span per character, which assistive tech announces letter by letter. The character layers are now `aria-hidden` behind a single `aria-label`.
+
+### Placement matters more than it looks
+
+- `TextRoll` was first put on the projects campaign heading and moved. That heading ellipsises long campaign names, and per-character spans break `text-overflow`. The Files heading is short and fixed, so it is a safe slot. This is now a rule in `AGENTS.md`: these components assume they own their layout, and a fixed `line-height` also clips descenders.
+
+### Verification
+
+- TypeScript, ESLint, all 22 tests, and the production build pass; `npm ls framer-motion` shows a single copy under `motion`.
+- The free tier is the 24 items that return 200 from `https://skiper-ui.com/r/<name>.json`; premium items 404 there. Nothing paid was used.
+
+### Pre-existing, unrelated
+
+- The dev server logs a hydration mismatch on `/projects` from browser-extension attributes (`webcrx`, `cz-shortcut-listen`) injected into `<html>` and `<body>`. Present before any of this work, and not fixable from application code.
+
+# 2026-09-12 — Removed ProgressiveBlur from the projects rail
+
+Reverted the `ProgressiveBlur` fade added to the client tree earlier today. It applied a
+`backdrop-filter` over the bottom 44px of the rail unconditionally, with no knowledge of
+whether the list actually overflowed, so on a short list it simply fogged the last row—in
+practice the "Add folder in <campaign>" button, which looked broken rather than faded.
+
+A scroll-aware version that appears only when the tree overflows and is not scrolled to the
+bottom would be correct, but it is a decorative cue and not worth the scroll listener. The
+component file was deleted since nothing else used it; `npx shadcn add @skiper-ui/skiper41`
+brings it back. `TextRoll` on the Files heading is unaffected.
+
+# 2026-09-12 — Asset library header actions use the shared Button
+
+- Replaced the hand-rolled New folder and Upload buttons in the asset library header with the shadcn `Button` component, following the convention in `frontend/AGENTS.md`.
+- Sized them `sm` when the library is embedded in a project tab and `md` on the standalone `/files` page. Embedded, the header block is hidden, so full-size actions sat directly under the tabs and dominated a compact view.
+- Removed the two bespoke rules that existed only for these buttons (`.al-head button` and `.al-head button.primary`), leaving the shared declaration for the form and empty-state buttons that still rely on it.
+- Replaced the fixed `.al-head svg { width: 15px }` with rules that track button size, so icons stay proportionate at `sm`.
+- Gave `.asset-library.compact` 18px of top padding. Embedded, it sits directly beneath the project tab row, whose `border-bottom` the actions were touching.
+- Right-aligned the actions in compact with `justify-content: flex-end`. The header uses `space-between`, but compact hides the heading block, and a lone remaining child under `space-between` falls to flex-start — which is why they had drifted to the left.
+
+### Verification
+
+- Rendered both sizes in a throwaway route and screenshotted them before deleting it. The first attempt was misleading: the preview did not import `asset-library.css`, so lucide's default 24px icons rendered instead of the sized ones. Importing the stylesheet and shooting at desktop width showed the real result.
+- TypeScript, ESLint, and all 22 tests pass.
+
+# 2026-09-12 — Removed the Assets tab from the project view
+
+The Assets and Files tabs were not the same data. Assets rendered `MediaVersion` rows—the
+versioned cuts that carry review stages, comments and approvals—while Files renders
+`ProjectFile` rows, the asset library with its folders and statuses. The user's call was
+that the distinction is not one this product needs to surface twice, so Assets is gone and
+Files is the single place for a project's media.
+
+### Delivered
+
+- Dropped `Assets` from `TABS`; `Files` is now the first and default tab.
+- Removed the tab's body: its toolbar, the per-asset search state, the grid, and `AssetTile`.
+- Removed the asset-card chain from `projects-view.ts`, which nothing consumed once the tab
+  was gone: the `AssetCard` type, `toAssetCard`, `demoAssets`, the `assets` field on
+  `ProjectsView`, and the assignments feeding it.
+- Kept `AssetTone` and `toneFor`—the Status board still uses both—and kept the
+  `listMediaVersions` call, which feeds the board's stage columns and `assetCount`.
+
+### Still reachable, and worth a follow-up
+
+- Media versions remain visible on the Status board and under Active Reviews, so removing
+  the tab hides no data.
+- The header's **+ Upload Asset** button still uploads a `MediaVersion`, which is now a
+  different thing from the Files tab's **Upload**. Two upload paths with near-identical
+  labels in one view is the confusion that prompted this change; the button was left alone
+  because renaming or rerouting it is a product decision, not a cleanup.
+
+### Verification
+
+- TypeScript, ESLint, all 22 tests, and the production build pass.
+
+# 2026-09-12 — Folders and files share one grid
+
+The asset library split its contents into a "Folders" section and a "Files" section, each
+with its own heading and count. With one folder and no files that read as two near-empty
+blocks. They are now a single grid, folders first.
+
+### Delivered
+
+- Merged the two sections into one `al-section` headed "Items" with a combined count.
+- Render folders ahead of files in the same grid, so folders always lead. Each kind keeps
+  its existing sort within that order.
+- Replaced `.al-folder-grid` and `.al-file-grid` with a single `.al-grid`. The folder grid
+  had wider tracks and a larger gap (245px/14px against 210px/12px), which would have made
+  the two kinds disagree about column width once they shared a row.
+- Dropped the folder preview from 150px to 125px to match the file preview, so a folder and
+  a file in the same row line up. `align-items: start` keeps card tops aligned while letting
+  each keep its natural height—file cards are slightly taller, carrying a status chip.
+- Updated the dense (list) and responsive rules, which still referenced both old grids.
+
+### Verification
+
+- TypeScript, ESLint and 23 tests pass, including a new one asserting a single grid, no
+  per-kind headings, and a folder card ahead of a file card.
+- Rendered a mixed library of two folders and three files in a throwaway route and confirmed
+  the layout before deleting it.
+
+# 2026-09-12 — Asset menus rebuilt on Radix
+
+Two reported bugs, both rooted in the menus being native `<details>` elements.
+
+- **Menus never closed.** `<details>` only toggles from its own `<summary>`. Nothing
+  dismissed it on an outside click and nothing closed a sibling, so every menu opened stayed
+  open and they accumulated on screen.
+- **Move / assign showed nothing.** The submenu was absolutely positioned outside its parent
+  panel (`right: calc(100% + 5px)`), and that panel carried `overflow: auto`, which clipped
+  it entirely. The Status submenu added earlier had the same defect.
+
+### Delivered
+
+- Added the shadcn `dropdown-menu` and rebuilt `ContextMenu`, `StatusMenu` and
+  `AssignmentMenu` on it. Radix portals the content, so nothing clips it, and handles
+  outside-click, Escape, focus and keyboard navigation.
+- Extended Move / assign to offer **clients** on their own, not just projects. Assigning to a
+  client sets `client_team_id` with no project, which is what the API already allowed but the
+  menu never exposed. Items are grouped under Clients, Projects and Folders headings.
+- Deleted the `.al-menu` / `.al-submenu` rules; only a trigger style and a density tweak
+  remain, since the panel is styled by the shadcn component.
+
+### The CLI needed correcting again
+
+- It emitted `import { cn } from "cn"` and installed an unrelated npm package named `cn` to
+  satisfy it, and pulled the `radix-ui` umbrella alongside the individual `@radix-ui/react-*`
+  packages already here. Both repointed and both packages uninstalled. Recorded in `AGENTS.md`.
+
+### A gap in the theme bridge
+
+- shadcn components use a bare `border` utility whose colour comes from a base-layer default
+  that `shadcn-theme.css` did not provide, so the browser fell back to `currentColor` and
+  painted a white outline around every panel. Measured it rather than guessing: the computed
+  `borderColor` was `#f4f3f8`, the text colour. Added the `@layer base` default, which is
+  layered and therefore still loses to the app's own unlayered stylesheets.
+- Menu text was also dropped from shadcn's 14px to 12px to sit with the surrounding cards.
+
+### Verification
+
+- Drove the menu in a browser: one menu open after a click, the assign submenu listing
+  `Root / unassigned`, both clients and the project, and zero menus open after clicking away.
+- TypeScript, ESLint, 23 tests and the production build pass.
+
+# 2026-09-12 — Menu position, inline rename, and assignment persistence
+
+### The three-dots button sat in the middle of folder cards
+
+`.al-folder-card > footer > button` gives its children `flex: 1`, and the Radix trigger is a
+real `<button>` where the old `<summary>` was not, so it claimed half the footer. A
+`flex: none` on `.al-menu-trigger` did not help—the footer selector outranks it—so the rule
+now excludes the trigger with `:not(.al-menu-trigger)`. Measured at 27px afterwards.
+
+### Rename used the browser's prompt()
+
+Replaced with an input rendered in place of the name on both card types. Enter commits,
+Escape cancels, blur commits. The old `prompt()` sat outside the page entirely.
+
+### Assignment appeared not to save
+
+The backend was never at fault—two new tests assign a file and a folder to a client with no
+project, and both persist and read back correctly (25 backend tests pass).
+
+The frontend was. `AssignmentMenu` wrote through `updateNoWait`, which swallows rejections,
+and unlike `StatusMenu` it never refreshed afterwards. So a failed write left the optimistic
+copy on screen and, because the library is mirrored into `localStorage` and local rows
+override server rows in `merge()`, that stale copy survived a reload and masked the truth.
+Assignment now refreshes the server-rendered views once the API confirms, and on rejection
+rolls the library back to its pre-write snapshot and says so.
+
+### Still worth addressing
+
+- `updateNoWait` still swallows failures everywhere else it is used—upload, delete, folder
+  creation. Assignment was fixed because it was the reported symptom; the same trap remains
+  on the other paths.
+- `merge(serverFiles, stored.files)` letting `localStorage` win over server rows is the
+  deeper design issue behind this class of bug.
+
+### Verification
+
+- Drove it in a browser: trigger 27px and flush to the footer's right padding, no native
+  dialog raised on rename, inline input present, and the name updated after Enter.
+- TypeScript, ESLint, 23 frontend tests, 25 backend tests, and the production build pass.
+
+# 2026-09-12 — Writes report failure, and the server is authoritative again
+
+The two problems flagged with the assignment fix, addressed together, because they were one
+bug wearing two hats: a write could fail silently, and the local mirror then preserved the
+lie indefinitely.
+
+### Writes no longer fail silently
+
+- Deleted `updateNoWait`, which was `promise.catch(() => undefined)` on every asset write.
+- All eight call sites—upload, folder creation, rename, delete, bulk delete, status,
+  assignment, bulk move—now go through one `useAssetWrite` helper. It applies the optimistic
+  change, marks the affected rows in flight, and then either re-fetches the server views or
+  rolls the library back to its pre-write snapshot and reports what failed.
+- Failures surface in an in-page banner rather than an `alert()` or nothing at all.
+- A component cannot consume a context it provides, so `AssetLibrary` passes its own refresh
+  and reporter into the helper directly; everything below it uses the contexts.
+
+### The local library no longer overrides the server
+
+- The library was mirrored into `localStorage` and `merge()` let those rows win over server
+  rows unconditionally and permanently. A failed write stayed on screen through a reload, and
+  the sample content seeded into that store leaked into real workspaces—which is where the
+  Footage, Graphics and Sound Effects folders nobody created came from.
+- The store is now in memory only. A reload always shows what the server has.
+- `merge()` treats server rows as the base. A local row wins only when the server has never
+  heard of its id—a create still in flight—or while that row has a write outstanding, tracked
+  by a `pending` set. Both conditions are temporary by construction.
+- The sample library is passed in explicitly when there is no workspace, and is never mixed
+  into a real one.
+
+### Verification
+
+- 27 frontend tests, four of them new: server rows beating a stale local copy, a local row
+  held on screen while its write is in flight, the sample library appearing only with no
+  workspace, and a rejected delete rolling back with its reason shown.
+- TypeScript, ESLint and the production build pass.
+
+# 2026-09-12 — Removed the Status tab from the project view
+
+Tasks and Status were two boards in one view. Tasks renders `Task` records in the
+workspace's customizable stages, with assignees, priorities and due dates; Status rendered
+project *files* grouped by their fixed asset status. The user's call was that one board is
+enough, so Status is gone and the project view is Files, Tasks, Brief & Specs, Activity Log.
+
+### Delivered
+
+- Dropped `Status` from `TABS` and removed its branch.
+- Removed everything that existed only to serve it: `StatusBoard`, `BoardTile`, `BoardRow`,
+  `CardMedia`, `CardMeta`, `AddCardButton`, `ViewToggle`, and the `dense` list-view state
+  along with the `?view=list` parameter and `initialDense` prop that fed it.
+- Removed the board chain from `projects-view.ts`, which nothing consumed once the tab was
+  gone: `BoardCard`, `BoardColumn`, `ColumnTone`, `AssetTone`, `columnTone`, `toneFor`,
+  `toBoardCard`, `toFileCard`, `buildBoard`, `demoBoard`, `shortDate`, and the `board` field.
+  Its test file went with it.
+- Narrowed the loader accordingly: it no longer fetches workflow stages or project files for
+  this page, only media versions (for `assetCount`) and folders.
+- `browser.tsx` is down from 403 to 264 lines and `projects-view.ts` from 245 to 121.
+
+### Not done, because it is a product decision
+
+The stated reason for the removal—that assigning a file a status should put it on the Tasks
+board—describes behaviour that does not exist. Asset statuses (Draft, In Review, Approved,
+Final, Archived) are a fixed enum on `ProjectFile`; task stages are per-workspace `TaskStage`
+rows, and "In Progress" is a task concept, not an asset one. Nothing currently renders files
+on the Tasks board. Asked rather than guessed at the mapping.
+
+### Verification
+
+- TypeScript, ESLint, 22 tests and the production build pass; `/projects` still serves.
+
+# 2026-09-12 — Files use task stages and appear on the Tasks board
+
+Replaced the fixed asset-status enum with a reference to the workspace's own task stages, so
+a file assigned a stage shows up in that column on the Tasks board and can be dragged
+between columns like a task. One vocabulary for work and for files.
+
+### Backend
+
+- `ProjectFile.status` (DRAFT/IN_REVIEW/APPROVED/FINAL/ARCHIVED) is gone; `ProjectFile` now
+  has a nullable `task_stage` FK with `on_delete=PROTECT`, matching `Task`. `AssetStatus` is
+  deleted. `clean()` rejects a stage from another workspace.
+- Migration 0026 adds the column, backfills by mapping each old status onto the stage of the
+  matching name in that workspace (To Do, Client, Approved; ARCHIVED deliberately drops to no
+  stage), then removes `status`. Reversible.
+- Deleting a stage already demanded a replacement when it held tasks; it now does the same
+  when it holds files, and reassigns them alongside the tasks. Without that, `PROTECT` would
+  have turned a stage deletion into a 500.
+- `task_stage_id` is accepted on upload and PATCH. A `clear_stage` flag distinguishes "leave
+  the stage alone" from "move it back to no stage", which a bare `None` cannot express.
+
+### Frontend
+
+- `FilesView` and `TasksView` both carry the workspace's stages; `TasksView` also carries the
+  project files.
+- The library's status chip, filter, per-file submenu, bulk dialog and upload dialog all work
+  in stages now, and the chip takes its colour from the stage so it matches the board column.
+- The Tasks board renders each staged file as a dashed card in its column, draggable to
+  another column, which patches the file through the asset API with the same optimistic
+  rollback the tasks use.
+
+### Verification
+
+- 25 asset tests pass, including a stage from another workspace being rejected, and a stage
+  being set then cleared without disturbing the file's client or project.
+- 23 frontend tests pass, one new: a staged file renders in its column, is counted in that
+  column's badge, and is draggable.
+- Migration 0026 applied to development: the one existing file moved from `DRAFT` to `To Do`.
+- TypeScript, ESLint and the production build pass.
+
+### Unchanged
+
+- `test_owner_can_read_and_update_workspace` still errors on `task_workflow_settings` being
+  blank. Pre-existing since 2026-09-10 and unrelated; the rest of the 231-test suite passes.
+
+# 2026-09-12 — Local writes were failing CSRF
+
+The error banner added earlier surfaced the real cause of every "it is not saving" report:
+
+    CSRF Failed: Origin checking failed - http://localhost:3000 does not match any trusted origins.
+
+Django checks the `Origin` header on unsafe requests against `CSRF_TRUSTED_ORIGINS`. That
+list is built from `DJANGO_CSRF_TRUSTED_ORIGINS`, which defaults to empty, so a local clone
+could not write at all—no upload, no assignment, no rename. Worse, setting the variable for a
+tunnel *replaced* the list rather than extending it, so this environment trusted the ngrok
+origin and nothing else.
+
+This had been failing since long before today. `updateNoWait` swallowed the rejection, the
+optimistic copy stayed on screen, and `localStorage` preserved it across reloads, so the UI
+looked like it had saved. Removing that swallow is what finally made the cause visible.
+
+### Delivered
+
+- Under `DEBUG`, `CSRF_TRUSTED_ORIGINS` now always includes `http://localhost:3000` and
+  `http://127.0.0.1:3000`, unioned with anything the environment supplies rather than
+  replaced by it. Production is unchanged and still has to list its origins explicitly.
+- Documented the variable in `.env.example`.
+
+### Verification
+
+- `CSRF_TRUSTED_ORIGINS` now resolves to the ngrok origin plus both local ones.
+- A PATCH carrying `Origin: http://localhost:3000` no longer returns the origin error; it
+  falls through to the normal authentication check.
+- 57 asset and client-team tests pass.
+
+Note the local `.env` was left alone—the fix belongs in settings so a fresh clone works, not
+in one machine's configuration.
+
+## 2026-09-12 — Video review workspace
+
+Built the review experience: a focused, dark, video-first workspace reachable from every
+place a video appears.
+
+### The problem worth solving first
+
+The brief's hard requirement was "one media file, many entry points, one review, one source
+of truth". Blaze Flow describes a video in two unrelated tables — `ProjectFile` (the Files
+library) and `MediaVersion` (a project deliverable, which is what review data hangs off) —
+and nothing links them. The obvious approaches were both bad: duplicate the record, or
+invent a join column.
+
+Neither was needed. Both tables already point at the same third row:
+
+```
+ProjectFile.file_id ──┐
+                      ├──► File
+MediaVersion.original_file_id ─┘
+TaskAttachment.file_id ─┘
+```
+
+So the `File` id became the identity. Every entry point links `/review?media=<file id>`,
+and two entry points for one video now produce a byte-identical URL. `TaskAttachment.file`
+falls out of the same join, which is why "Task → attachment → Review" opens the same cut
+with no backend change. `?project=`/`?version=` still resolve, for older links.
+
+### Delivered
+
+- `lib/review-media.ts` — the catalogue: joins the sources on `File` id, infers version
+  lines from filenames, and decides per cut whether review data has anywhere to live.
+- `lib/review-local.ts` — notes for a library file that was never published as a media
+  version. In memory only, and the page says so on screen.
+- `app/(app)/review/writer.ts` — the single write path. The UI calls `compose` and never
+  learns which backing it has, so the server and local paths cannot drift apart.
+- Player: frame-accurate stepping (frame duration measured via `requestVideoFrameCallback`
+  rather than assumed), speed, volume, source selector, fullscreen, J/K/L and arrow
+  shortcuts, and comment markers on the timeline that seek, reveal that frame's drawings,
+  and focus the note in one click.
+- Comments: timecode pinning, threading, resolve/reopen, reactions, attachments, and
+  mentions — mentions are real, `mentioned_user_ids` was already on the API and the
+  notification path with it.
+- Voice and screen recording via `MediaRecorder`. Real, not mocked, and needing no new
+  endpoint: a comment already accepts file attachments and the mime type decides playback.
+- Fields panel, version history, and a board-status control that writes the file's
+  `task_stage` — so review and the task board share one state rather than each keeping its
+  own.
+- Entry points: Files, project files, the task board, deliverables, and the dashboard.
+
+### Two hydration races, both found by looking at the page
+
+The markup is server-rendered, so the browser settles the video before hydration attaches
+any handler, and React's `onLoadedMetadata` / `onError` never fire:
+
+- Duration stayed `0`, which collapsed every comment marker onto 0% of the timeline.
+- A proxy that 404s left a blank stage instead of the "still being generated" message.
+
+Both are fixed by reading `readyState` and `error` on mount rather than waiting to be told.
+Neither was visible in the type checker, the linter, or the test suite — only in a browser.
+
+### Verification
+
+- 37 frontend tests pass, including 14 new ones covering the catalogue's grouping rules.
+- Types, lint, and a production build are clean.
+- Driven in Chrome against a generated test clip: a marker click seeks to 00:08 (confirmed
+  against the burned-in timecode), renders that frame's annotation, and focuses its note;
+  the mention picker filters and inserts; resolved notes hide and reveal; the draw tools
+  arm. Composing, resolving and the local banner were exercised on the device-local path.
+
+### Not done, and why
+
+- Attaching an *existing* library file to a task. `TaskAttachment` can be read, but its
+  upload endpoint takes a new file rather than a `file_id`, so creating that link from
+  review needs a backend change. Reading linked tasks works today.
+- "Uploaded by" — recorded by both models, returned by neither serializer. The panel says
+  so rather than inventing a name.
+- Capture paths could not be exercised here: a headless browser has no camera, microphone
+  or screen to grant.
+
+## 2026-09-12 — Files toolbar and filter panel
+
+The Files page opened with a header, then a breadcrumb row, then a row of five filter
+controls, and only then the grid. Two of those rows existed mostly to say "nothing is
+filtered".
+
+### Delivered
+
+- Search and the grid/list toggle moved onto the actions row, beside New folder and
+  Upload, so the page is a header and then content.
+- The five filters (scope, client, project, file type, stage, sort) collapsed behind one
+  **Filters** button. The trigger carries a count of what is active — with the controls
+  hidden, that badge is the only thing distinguishing a filtered list from an empty folder
+  — and a Reset appears alongside it once anything is set.
+- The panel animates in with `motion`, honouring `prefers-reduced-motion`.
+
+### Two library traps, both paid for
+
+`npx shadcn add popover select` reproduced exactly what `frontend/AGENTS.md` already warns
+about: it wrote `import { cn } from "cn"`, installed an unrelated package of that name, and
+pulled the `radix-ui` umbrella alongside the individual packages already in use.
+
+Then two new ones:
+
+- **Portalled content cannot see `--shell-*`.** Those variables are declared on
+  `.studio-shell`; Radix renders popovers into `document.body`. The panel came out fully
+  transparent over the grid. The `:root` palette in `globals.css` is what works there.
+- **Radix Popover polls under jsdom.** Floating UI's positioning never settles: a 130ms
+  test became 1.8s, and opening the panel before a dialog hung the runner outright.
+  Stubbing `ResizeObserver` and `IntersectionObserver` changed nothing. Radix `Select` was
+  worse — it never opens under jsdom at all, and one keyboard path hangs.
+
+So the panel is a small local component anchored to its trigger (no collision detection
+needed), and the filters inside it are native `<select>`s with `color-scheme: dark`. The
+suite went back to 37 passing in under two seconds. Radix Popover and Select were
+uninstalled again; the Switch, Dialog and DropdownMenu still come from the registry.
+
+### Also fixed
+
+`tw-animate-css` was never installed, so the `animate-in` / `fade-in-0` / `zoom-in-95`
+classes every shadcn component ships with resolved to nothing — menus and dialogs have been
+appearing instantly this whole time. Importing it in `globals.css` switches them all on.
+
+### Verification
+
+- 37 tests, types, lint and a production build all clean.
+- Driven in Chrome: the panel opens opaque, filtering by type drops the grid from 6 items
+  to 4 and puts `1` on the trigger, and an outside click dismisses it. Checked at 1512px,
+  900px and 760px, and in the compact project view — where the client and project filters
+  correctly disappear, because that view is already scoped to one project.
