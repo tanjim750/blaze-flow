@@ -85,6 +85,29 @@
 .al-file-preview > span { width: 100%; height: 100%; }
 .al-file-preview > i { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #0b0b0ed9; color: #fff; backdrop-filter: blur(4px); }
 .al-file-preview > i svg { width: 11px; }
+/*
+ * Still being worked on: scanned, copied, or having its thumbnail encoded.
+ *
+ * The bar is indeterminate on purpose — the worker reports no progress, and inventing a
+ * percentage that does not track anything would be worse than admitting we only know it is
+ * running.
+ */
+.al-working {
+  position: absolute; inset: 0; z-index: 2;
+  display: grid; align-content: end; gap: 8px; padding: 12px;
+  background: linear-gradient(to top, #07070bee 38%, #07070b70);
+}
+.al-working em { color: #ded9ef; font-size: 10.5px; font-style: normal; font-weight: 500; letter-spacing: .01em; }
+.al-working > i { position: relative; height: 3px; border-radius: 999px; background: #ffffff1f; overflow: hidden; }
+.al-working > i::after {
+  content: ""; position: absolute; inset: 0; width: 40%; border-radius: 999px;
+  background: linear-gradient(90deg, #8b6cff, #cbbcff);
+  animation: al-indeterminate 1.15s cubic-bezier(.65, 0, .35, 1) infinite;
+}
+@keyframes al-indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .al-working > i::after { animation: none; width: 100%; opacity: .55; } }
+.al-file-card.working .al-file-preview { cursor: default; }
+
 /* Runtime, bottom-left of the frame — the same badge the task board uses. */
 .al-duration {
   position: absolute; left: 8px; bottom: 8px;

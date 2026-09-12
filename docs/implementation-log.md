@@ -2288,3 +2288,28 @@ component to behave that way here, after Popover and Select. Rather than contort
 around it, the browser check confirms the item renders between Stage and Download, POSTs
 `/asset-files/<id>/duplicate/`, reports a refusal instead of swallowing it, and is absent
 from a folder's menu.
+
+## 2026-09-12 — Showing that a copy is still being made
+
+A duplicate is scanned and has its thumbnail encoded in the worker, so the new card sat
+there looking inert for as long as that took. It now says what it is doing.
+
+Three states, and the card distinguishes them because they take different lengths of time:
+`Copying…` while the request is in flight, `Checking file…` while the scanner has it, and
+`Generating preview…` once it is `READY` but the poster has not landed. A file that never
+gets a poster — audio, documents — is not left waiting on one, and a `FAILED` file is
+finished rather than pending. `isProcessing` holds that rule and is unit-tested.
+
+The click is optimistic: a draft row named the way the server will name it appears at once,
+with a rollback that removes exactly that row if the copy is refused.
+
+The bar is indeterminate on purpose. The worker reports no progress, and a percentage that
+tracks nothing would be worse than admitting we only know it is running.
+
+### The part that is easy to miss
+
+Nothing pushes the worker's result back, so without a poller the bar would spin until
+someone reloaded. The library re-reads every three seconds while anything is processing —
+and stops after twenty attempts, because a poster that can never be produced (an mp4 with
+no video stream does exactly that) must not keep the page polling for the rest of the
+session. Measured: three re-reads in seven seconds, and a settled card does not poll.

@@ -12,7 +12,12 @@ export type LibraryFolder = { id: string; name: string; clientId: string | null;
  * and a task attachment also point at, so it is the id review is addressed by. It is null
  * only while an upload is still in flight and the server has not named the file yet.
  */
-export type LibraryFile = { id: string; fileId: string | null; name: string; kind: LibraryKind; mimeType: string; size: number; durationMs: number | null; url: string | null; preview: string | null; uploadedBy: string; uploadedAt: string; folderId: string | null; clientId: string | null; projectId: string | null; stageId: string | null };
+/**
+ * `PENDING` until the scanner clears it, then `READY`. A card watches this — together with
+ * whether a poster has landed — to know it is still being processed.
+ */
+export type LibraryFileStatus = "PENDING" | "READY" | "FAILED" | "DUPLICATING";
+export type LibraryFile = { id: string; fileId: string | null; name: string; kind: LibraryKind; mimeType: string; size: number; durationMs: number | null; status: LibraryFileStatus; url: string | null; preview: string | null; uploadedBy: string; uploadedAt: string; folderId: string | null; clientId: string | null; projectId: string | null; stageId: string | null };
 /**
  * `pending` holds the ids of rows with a server write in flight. Only those rows — and rows
  * the server has never heard of — are allowed to override server data. See `merge` in
@@ -31,10 +36,10 @@ export const demoLibrary: LibraryState = { folders: [
   { id: "demo-graphics", name: "Graphics", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-06T10:00:00Z", createdBy: "Blaze Flow" },
   { id: "demo-sound", name: "Sound Effects", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-07T10:00:00Z", createdBy: "Blaze Flow" },
 ], files: [
-  { id: "demo-video-1", fileId: null, name: "interview-camera-a.mp4", kind: "video", mimeType: "video/mp4", size: 482344960, durationMs: null, url: null, preview: null, uploadedBy: "Aaron Jackson", uploadedAt: "2026-09-05T11:00:00Z", folderId: "demo-footage", clientId: null, projectId: null, stageId: null },
-  { id: "demo-video-2", fileId: null, name: "b-roll-01.mov", kind: "video", mimeType: "video/quicktime", size: 894232100, durationMs: null, url: null, preview: null, uploadedBy: "Aaron Jackson", uploadedAt: "2026-09-05T11:10:00Z", folderId: "demo-footage", clientId: null, projectId: null, stageId: null },
-  { id: "demo-image-1", fileId: null, name: "campaign-lockup.png", kind: "image", mimeType: "image/png", size: 2840000, durationMs: null, url: null, preview: "/images/asset-vfx.svg", uploadedBy: "Sarah Lin", uploadedAt: "2026-09-06T12:00:00Z", folderId: "demo-graphics", clientId: null, projectId: null, stageId: null },
-  { id: "demo-audio-1", fileId: null, name: "city-ambience.wav", kind: "audio", mimeType: "audio/wav", size: 18400000, durationMs: null, url: null, preview: null, uploadedBy: "Elena Rostova", uploadedAt: "2026-09-07T12:00:00Z", folderId: "demo-sound", clientId: null, projectId: null, stageId: null },
+  { id: "demo-video-1", fileId: null, name: "interview-camera-a.mp4", kind: "video", mimeType: "video/mp4", size: 482344960, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Aaron Jackson", uploadedAt: "2026-09-05T11:00:00Z", folderId: "demo-footage", clientId: null, projectId: null, stageId: null },
+  { id: "demo-video-2", fileId: null, name: "b-roll-01.mov", kind: "video", mimeType: "video/quicktime", size: 894232100, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Aaron Jackson", uploadedAt: "2026-09-05T11:10:00Z", folderId: "demo-footage", clientId: null, projectId: null, stageId: null },
+  { id: "demo-image-1", fileId: null, name: "campaign-lockup.png", kind: "image", mimeType: "image/png", size: 2840000, durationMs: null, status: "READY", url: null, preview: "/images/asset-vfx.svg", uploadedBy: "Sarah Lin", uploadedAt: "2026-09-06T12:00:00Z", folderId: "demo-graphics", clientId: null, projectId: null, stageId: null },
+  { id: "demo-audio-1", fileId: null, name: "city-ambience.wav", kind: "audio", mimeType: "audio/wav", size: 18400000, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Elena Rostova", uploadedAt: "2026-09-07T12:00:00Z", folderId: "demo-sound", clientId: null, projectId: null, stageId: null },
 ], deletedIds: [], pending: [] };
 
 /*
@@ -64,6 +69,18 @@ export function markPending(ids: Iterable<string>, inFlight: boolean) {
 }
 
 export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+/**
+ * Whether a file is still being worked on: scanned, or its thumbnail encoded.
+ *
+ * A poster is only ever produced for video and images, so nothing else is kept waiting on
+ * one. `FAILED` is finished, unhappily, and must not spin forever.
+ */
+export function isProcessing(file: LibraryFile): boolean {
+  if (file.status === "DUPLICATING" || file.status === "PENDING") return true;
+  if (file.status !== "READY") return false;
+  return (file.kind === "video" || file.kind === "image") && !file.preview;
+}
+
 export function kindFor(file: Pick<File, "type" | "name">): LibraryKind { const type = file.type.toLowerCase(), ext = file.name.split(".").pop()?.toLowerCase(); if (type.startsWith("video/")) return "video"; if (type.startsWith("audio/")) return "audio"; if (type.startsWith("image/")) return "image"; if (type.includes("pdf") || type.includes("document") || ["pdf", "doc", "docx", "txt", "rtf"].includes(ext || "")) return "document"; if (["psd", "ai", "aep", "prproj", "blend", "fig", "sketch"].includes(ext || "")) return "source"; return "other"; }
 export function libraryForProject(state: LibraryState, projectId: string) { return { folders: state.folders.filter((item) => item.projectId === projectId), files: state.files.filter((item) => item.projectId === projectId) }; }
 export function descendantFolderIds(folders: LibraryFolder[], folderId: string) {

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import NextImage from "next/image";
 import { Archive, AudioLines, ChevronRight, Clapperboard, Copy, Download, Ellipsis, File, FileImage, FileText, Film, FolderPlus, Grid2X2, Image as ImageIcon, Info, List, ListFilter, Move, Pencil, Play, RotateCcw, Search, Tag, Trash2, TriangleAlert, Upload, X } from "lucide-react";
 import type { FilesView } from "@/lib/files-view";
-import { applyLibraryStage, demoLibrary, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
+import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
 import { createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, updateAssetFile, updateAssetFolder, uploadAssetFile } from "@/lib/asset-api-client";
 import { TextRoll } from "@/components/ui/skiper-ui/skiper58";
 import { Button } from "@/components/ui/button";
@@ -78,7 +78,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const [bulkOpen, setBulkOpen] = useState(false); const [renamingId, setRenamingId] = useState<string | null>(null);
   const stages = view?.stages ?? [];
   const serverFolders: LibraryFolder[] = (view?.folders ?? []).map((folder) => ({ id: folder.id, name: folder.name, clientId: folder.client_team_id, projectId: folder.project_id, parentFolderId: folder.parent_folder_id, createdAt: folder.created_at, createdBy: "Workspace member" }));
-  const serverFiles: LibraryFile[] = (view?.files ?? []).map((item) => ({ id: item.id, fileId: item.file.id, name: item.file.name, kind: mimeKind(item.file.mime_type, item.file.name), mimeType: item.file.mime_type, size: item.file.size_bytes, durationMs: item.file.duration_ms, url: view?.workspaceId && item.file.status === "READY" ? `/api/workspaces/${view.workspaceId}/asset-files/${item.id}/download/` : null, preview: view?.workspaceId && item.poster ? `/api/workspaces/${view.workspaceId}/asset-files/${item.id}/poster/` : null, uploadedBy: "Workspace member", uploadedAt: item.created_at, folderId: item.folder_id, clientId: item.client_team_id, projectId: item.project_id, stageId: item.task_stage_id }));
+  const serverFiles: LibraryFile[] = (view?.files ?? []).map((item) => ({ id: item.id, fileId: item.file.id, name: item.file.name, kind: mimeKind(item.file.mime_type, item.file.name), mimeType: item.file.mime_type, size: item.file.size_bytes, durationMs: item.file.duration_ms, status: item.file.status as LibraryFile["status"], url: view?.workspaceId && item.file.status === "READY" ? `/api/workspaces/${view.workspaceId}/asset-files/${item.id}/download/` : null, preview: view?.workspaceId && item.poster ? `/api/workspaces/${view.workspaceId}/asset-files/${item.id}/poster/` : null, uploadedBy: "Workspace member", uploadedAt: item.created_at, folderId: item.folder_id, clientId: item.client_team_id, projectId: item.project_id, stageId: item.task_stage_id }));
   // With no workspace there is no server to be authoritative, so the sample library stands
   // in and every local edit applies. Connected, a local row may only override a server row
   // while its write is still in flight; everything else defers to the server.
@@ -88,6 +88,29 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const files = merge(offline ? demoLibrary.files : serverFiles, stored.files, localWins).filter((item) => !stored.deletedIds.includes(item.id) && (!projectId || item.projectId === projectId));
   const current = folders.find((item) => item.id === folderId) ?? null; const recursiveSearch = searchEverywhere && Boolean(query.trim()); const filteredProjects = (view?.groups ?? []).filter((group) => !clientFilter || group.clientId === clientFilter); const scopeFolders = sortFolders(folders.filter((item) => (recursiveSearch || item.parentFolderId === folderId) && matches(item.name, query) && matchesRelation(item, clientFilter, projectFilter)), sort); const scopeFiles = sortFiles(files.filter((item) => (recursiveSearch || item.folderId === folderId) && matches(item.name, query) && matchesRelation(item, clientFilter, projectFilter) && (!kindFilter || item.kind === kindFilter) && (!stageFilter || item.stageId === stageFilter)), sort);
   const crumbs = folderTrail(current, folders);
+
+  /*
+   * Re-reads the server while anything is still being processed.
+   *
+   * Scanning and thumbnail encoding happen in the worker, and nothing pushes their result
+   * back, so without this the progress bar would sit there until someone reloaded. Capped
+   * rather than endless: a poster that can never be produced — an mp4 with no video stream
+   * does exactly that — must not keep the page polling for the rest of the session.
+   */
+  const workingKey = files.filter(isProcessing).map((item) => item.id).sort().join(",");
+  const polls = useRef({ key: "", count: 0 });
+  const [poll, setPoll] = useState(0);
+  useEffect(() => {
+    if (!workingKey || !view?.workspaceId) return;
+    if (polls.current.key !== workingKey) polls.current = { key: workingKey, count: 0 };
+    if (polls.current.count >= 20) return;
+    const timer = setTimeout(() => {
+      polls.current.count += 1;
+      setPoll((value) => value + 1);
+      router.refresh();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [workingKey, poll, router, view?.workspaceId]);
   // Drives the count on the filter button, so a narrowed list is never a silent surprise.
   const activeFilters = [clientFilter, projectFilter, kindFilter, stageFilter].filter(Boolean).length
     + (searchEverywhere ? 1 : 0) + (sort === "newest" ? 0 : 1);
@@ -320,13 +343,15 @@ function FolderCard({ folder, files, folders, view, selected, renaming, onSelect
 }
 function FileCard({ file, folders, view, selected, renaming, onSelect, onDetails, onPreview, onRename, onRenameDone }: { file: LibraryFile; folders: LibraryFolder[]; view?: FilesView; selected: boolean; renaming: boolean; onSelect: () => void; onDetails: () => void; onPreview: () => void; onRename: () => void; onRenameDone: () => void }) {
   const router = useRouter();
-  const review = reviewHref(file);
-  return <article className={`al-file-card ${selected ? "selected" : ""}`}>
+  const working = isProcessing(file);
+  const review = working ? null : reviewHref(file);
+  return <article className={`al-file-card ${selected ? "selected" : ""} ${working ? "working" : ""}`}>
     <label className="al-select"><input type="checkbox" checked={selected} onChange={onSelect} aria-label={`Select ${file.name}`} /></label>
-    <button className="al-file-preview" onClick={() => review ? router.push(review) : onPreview()} aria-label={review ? `Open review for ${file.name}` : `Preview ${file.name}`}>
+    <button className="al-file-preview" onClick={() => review ? router.push(review) : onPreview()} aria-label={review ? `Open review for ${file.name}` : `Preview ${file.name}`} disabled={working}>
       <Preview file={file} large />
-      {file.durationMs ? <b className="al-duration">{runtime(file.durationMs)}</b> : null}
-      <i>{review ? <Clapperboard /> : <Play />}</i>
+      {working
+        ? <span className="al-working" role="status"><em>{file.status === "DUPLICATING" ? "Copying…" : file.status === "PENDING" ? "Checking file…" : "Generating preview…"}</em><i /></span>
+        : <>{file.durationMs ? <b className="al-duration">{runtime(file.durationMs)}</b> : null}<i>{review ? <Clapperboard /> : <Play />}</i></>}
     </button>
     <div>
       <KindIcon kind={file.kind} />
@@ -378,7 +403,19 @@ function StageChip({ stageId, view }: { stageId: string | null; view?: FilesView
 }
 function KindIcon({ kind }: { kind: LibraryKind }) { const Icon = kind === "video" ? Film : kind === "audio" ? AudioLines : kind === "image" ? ImageIcon : kind === "document" ? FileText : kind === "source" ? FileImage : File; return <Icon />; }
 
-function ContextMenu({ entity, folders, folderFiles = [], view, onPreview, onOpen, onDetails, onRename }: { entity: LibraryFile | LibraryFolder; folders: LibraryFolder[]; folderFiles?: LibraryFile[]; view?: FilesView; onPreview?: () => void; onOpen?: () => void; onDetails?: () => void; onRename?: () => void }) { const isFile = "kind" in entity; const router = useRouter(); const write = useAssetWrite(); const mutate = (action: string) => { if (action === "preview") return onPreview?.(); if (action === "open") return onOpen?.(); if (action === "details") return onDetails?.(); if (action === "rename") return onRename?.(); if (action === "download" && isFile && entity.url) { window.location.assign(entity.url); return; } if (action === "download-folder" && !isFile) { const blob = new Blob([folderFiles.map((file) => `${file.name}\t${file.mimeType}\t${file.size}`).join("\n")], { type: "text/plain" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `${entity.name}-manifest.txt`; link.click(); URL.revokeObjectURL(link.href); return; } if (action === "duplicate" && isFile) { if (!view?.workspaceId) return; write({ ids: [entity.id], describe: `Duplicating ${entity.name}`, send: () => duplicateAssetFile(view.workspaceId!, entity.id) }); return; } if (action === "delete") { if (!confirm(`Delete ${entity.name}?`)) return; const remove = (state: LibraryState) => deleteLibraryEntities(state, new Set([entity.id])); if (view?.workspaceId) write({ ids: [entity.id], optimistic: remove, describe: `Deleting ${entity.name}`, send: (): Promise<unknown> => isFile ? deleteAssetFile(view.workspaceId!, entity.id) : deleteAssetFolder(view.workspaceId!, entity.id) }); else updateLibrary(remove); return; } };
+function ContextMenu({ entity, folders, folderFiles = [], view, onPreview, onOpen, onDetails, onRename }: { entity: LibraryFile | LibraryFolder; folders: LibraryFolder[]; folderFiles?: LibraryFile[]; view?: FilesView; onPreview?: () => void; onOpen?: () => void; onDetails?: () => void; onRename?: () => void }) { const isFile = "kind" in entity; const router = useRouter(); const write = useAssetWrite(); const mutate = (action: string) => { if (action === "preview") return onPreview?.(); if (action === "open") return onOpen?.(); if (action === "details") return onDetails?.(); if (action === "rename") return onRename?.(); if (action === "download" && isFile && entity.url) { window.location.assign(entity.url); return; } if (action === "download-folder" && !isFile) { const blob = new Blob([folderFiles.map((file) => `${file.name}\t${file.mimeType}\t${file.size}`).join("\n")], { type: "text/plain" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `${entity.name}-manifest.txt`; link.click(); URL.revokeObjectURL(link.href); return; } if (action === "duplicate" && isFile) {
+      if (!view?.workspaceId) return;
+      const draft: LibraryFile = { ...entity, id: newId("copy"), fileId: null, name: copyName(entity.name), status: "DUPLICATING", url: null, preview: null, uploadedAt: new Date().toISOString() };
+      write({
+        ids: [draft.id],
+        describe: `Duplicating ${entity.name}`,
+        optimistic: (state) => ({ ...state, files: [...state.files, draft] }),
+        rollback: (state) => ({ ...state, files: state.files.filter((item) => item.id !== draft.id) }),
+        send: () => duplicateAssetFile(view.workspaceId!, entity.id),
+        onSaved: (saved) => updateLibrary((state) => ({ ...state, files: state.files.filter((item) => item.id !== draft.id && item.id !== saved.id) })),
+      });
+      return;
+    } if (action === "delete") { if (!confirm(`Delete ${entity.name}?`)) return; const remove = (state: LibraryState) => deleteLibraryEntities(state, new Set([entity.id])); if (view?.workspaceId) write({ ids: [entity.id], optimistic: remove, describe: `Deleting ${entity.name}`, send: (): Promise<unknown> => isFile ? deleteAssetFile(view.workspaceId!, entity.id) : deleteAssetFolder(view.workspaceId!, entity.id) }); else updateLibrary(remove); return; } };
   const review = isFile ? reviewHref(entity as LibraryFile) : null;
   return (
     <DropdownMenu>
@@ -523,7 +560,7 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
       for (const [index, file] of uploads.entries()) {
         if (cancelled.current) { setStatus("idle"); setProgress(0); return; }
         const preview = file.type.startsWith("image/") && file.size <= 1_000_000 ? await dataUrl(file) : null;
-        const draft = { id: newId("file"), fileId: null, name: file.name, kind: kindFor(file), mimeType: file.type || "application/octet-stream", size: file.size, durationMs: null, url: URL.createObjectURL(file), preview, uploadedBy: "You", uploadedAt: new Date().toISOString(), folderId: folder, clientId: (projectRow?.clientId ?? client) || null, projectId: project, stageId: stageId || null } satisfies LibraryFile;
+        const draft = { id: newId("file"), fileId: null, name: file.name, kind: kindFor(file), mimeType: file.type || "application/octet-stream", size: file.size, durationMs: null, status: "PENDING" as const, url: URL.createObjectURL(file), preview, uploadedBy: "You", uploadedAt: new Date().toISOString(), folderId: folder, clientId: (projectRow?.clientId ?? client) || null, projectId: project, stageId: stageId || null } satisfies LibraryFile;
 
         if (!view?.workspaceId) {
           updateLibrary((state) => ({ ...state, files: [...state.files, draft] }));
@@ -630,4 +667,10 @@ function runtime(ms: number): string {
   const seconds = String(total % 60).padStart(2, "0");
   const hours = Math.floor(minutes / 60);
   return hours ? `${hours}:${String(minutes % 60).padStart(2, "0")}:${seconds}` : `${minutes}:${seconds}`;
+}
+
+/** Mirrors the server's naming so the optimistic row reads the same as the real one. */
+function copyName(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? `${name.slice(0, dot)} (copy)${name.slice(dot)}` : `${name} (copy)`;
 }
