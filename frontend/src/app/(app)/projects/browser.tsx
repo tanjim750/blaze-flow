@@ -5,7 +5,7 @@ import { useActionState, useEffect, useRef, useState, useTransition, type FormEv
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
-  Activity, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
+  Activity, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
   FolderOpen, Pencil, Plus, Search, Share2, Trash2, TriangleAlert, UploadCloud, X,
 } from "lucide-react";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
@@ -275,7 +275,9 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
           <strong>{client.name}</strong>
         </button>
         <Link className="pb-client-details" href={`/clients?client=${client.id}`} aria-label={`Details for ${client.name}`}>
-          Details<LinkPending />
+          <span>Details</span>
+          <ArrowUpRight size={11} strokeWidth={2.5} />
+          <LinkPending />
         </Link>
       </div>
 

@@ -2013,3 +2013,8 @@ Two things it needed:
 
 The count the badge used to show is not lost: expanding the row lists the campaigns, and
 the client card names the project and member totals.
+
+The button is finished the same way as the rail handles — a gradient body, a hairline top
+highlight and a little depth — so the two read as one set rather than two unrelated chips.
+An outbound arrow marks it as leaving the rail and steps out on hover, which
+`prefers-reduced-motion` suppresses.
