@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignFolderTree, deleteLibraryEntities, descendantFolderIds, kindFor, libraryForProject, type LibraryState } from "./asset-library";
+import { applyLibraryStage, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, libraryForProject, stageFileIds, type LibraryState } from "./asset-library";
 
 describe("asset library", () => {
   it("recognizes creative source files when the browser has no MIME type", () => {
@@ -12,7 +12,7 @@ describe("asset library", () => {
     const state: LibraryState = {
       deletedIds: [],
       folders: [{ id: "folder-1", name: "Footage", clientId: "client-1", projectId: "project-1", parentFolderId: null, createdAt: "2026-09-09", createdBy: "Ada" }],
-      files: [{ id: "file-1", name: "interview.mp4", kind: "video", mimeType: "video/mp4", size: 10, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-09", folderId: "folder-1", clientId: "client-1", projectId: "project-1" }],
+      files: [{ id: "file-1", fileId: null, name: "interview.mp4", kind: "video", mimeType: "video/mp4", size: 10, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-09", folderId: "folder-1", clientId: "client-1", projectId: "project-1", stageId: null }],
     };
 
     const projected = libraryForProject(state, "project-1");
@@ -27,7 +27,7 @@ describe("asset library", () => {
         { id: "parent", name: "Footage", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-09", createdBy: "Ada" },
         { id: "child", name: "Selects", clientId: null, projectId: null, parentFolderId: "parent", createdAt: "2026-09-09", createdBy: "Ada" },
       ],
-      files: [{ id: "file", name: "take.mov", kind: "video", mimeType: "video/quicktime", size: 10, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-09", folderId: "child", clientId: null, projectId: null }],
+      files: [{ id: "file", fileId: null, name: "take.mov", kind: "video", mimeType: "video/quicktime", size: 10, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-09", folderId: "child", clientId: null, projectId: null, stageId: null }],
     };
 
     expect([...descendantFolderIds(state.folders, "parent")]).toEqual(["child"]);
@@ -43,11 +43,65 @@ describe("asset library", () => {
         { id: "parent", name: "Parent", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-10", createdBy: "Ada" },
         { id: "child", name: "Child", clientId: null, projectId: null, parentFolderId: "parent", createdAt: "2026-09-10", createdBy: "Ada" },
       ],
-      files: [{ id: "file", name: "take.mov", kind: "video", mimeType: "video/quicktime", size: 10, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: "child", clientId: null, projectId: null }],
+      files: [{ id: "file", fileId: null, name: "take.mov", kind: "video", mimeType: "video/quicktime", size: 10, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: "child", clientId: null, projectId: null, stageId: null }],
     };
     const next = deleteLibraryEntities(state, ["parent"]);
     expect(next.folders).toEqual([]);
     expect(next.files).toEqual([]);
     expect(next.deletedIds).toEqual(expect.arrayContaining(["parent", "child"]));
+  });
+
+  it("bulk moves a selected folder tree without flattening selected descendants", () => {
+    const state: LibraryState = {
+      deletedIds: [],
+      folders: [
+        { id: "parent", name: "Parent", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-10", createdBy: "Ada" },
+        { id: "child", name: "Child", clientId: null, projectId: null, parentFolderId: "parent", createdAt: "2026-09-10", createdBy: "Ada" },
+      ],
+      files: [{ id: "file", fileId: null, name: "take.mov", kind: "video", mimeType: "video/quicktime", size: 10, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: "child", clientId: null, projectId: null, stageId: null }],
+    };
+    const next = assignLibraryEntities(state, ["parent", "child", "file"], "client", "project", null);
+    expect(next.folders.find((folder) => folder.id === "child")?.parentFolderId).toBe("parent");
+    expect(next.files[0]).toMatchObject({ folderId: "child", clientId: "client", projectId: "project", stageId: null });
+  });
+
+  it("cascades a stage change from a folder down to every file beneath it", () => {
+    const state: LibraryState = {
+      deletedIds: [],
+      folders: [
+        { id: "parent", name: "Parent", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-10", createdBy: "Ada" },
+        { id: "child", name: "Child", clientId: null, projectId: null, parentFolderId: "parent", createdAt: "2026-09-10", createdBy: "Ada" },
+      ],
+      files: [
+        { id: "nested", fileId: null, name: "nested.mov", kind: "video", mimeType: "video/quicktime", size: 10, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: "child", clientId: null, projectId: null, stageId: null },
+        { id: "loose", fileId: null, name: "loose.mov", kind: "video", mimeType: "video/quicktime", size: 10, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: null },
+      ],
+    };
+
+    expect(stageFileIds(state, ["parent"])).toEqual(["nested"]);
+    const next = applyLibraryStage(state, ["parent"], "stage-approved");
+    expect(next.files.find((file) => file.id === "nested")?.stageId).toBe("stage-approved");
+    expect(next.files.find((file) => file.id === "loose")?.stageId).toBeNull();
+  });
+
+  it("sets the stage of directly selected files without touching the rest", () => {
+    const state: LibraryState = {
+      deletedIds: [],
+      folders: [],
+      files: [{ id: "picked", fileId: null, name: "picked.mov", kind: "video", mimeType: "video/quicktime", size: 10, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: null }, { id: "other", fileId: null, name: "other.mov", kind: "video", mimeType: "video/quicktime", size: 10, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: "stage-final" }],
+    };
+
+    const next = applyLibraryStage(state, ["picked"], "stage-qa");
+    expect(next.files.map((file) => file.stageId)).toEqual(["stage-qa", "stage-final"]);
+  });
+
+  it("clears a stage when none is chosen", () => {
+    const state: LibraryState = {
+      deletedIds: [],
+      folders: [],
+      files: [{ id: "staged", fileId: null, name: "staged.mov", kind: "video", mimeType: "video/quicktime", size: 10, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: "stage-qa" }],
+    };
+
+    expect(applyLibraryStage(state, ["staged"], null).files[0].stageId).toBeNull();
   });
 });

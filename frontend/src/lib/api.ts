@@ -24,9 +24,9 @@ export type ClientTeamMember = { id: string; user: CurrentUser; title: string | 
 export type ClientTeamInvite = { id: string; invite_type: "EMAIL" | "LINK"; recipient_email: string | null; label: string | null; max_uses: number | null; use_count: number; expires_at: string; revoked_at: string | null; created_at: string; token?: string };
 export type NotificationPreference = { email_mentions_enabled: boolean };
 export type Project = { id: string; workspace_id: string; client_team_id: string | null; name: string; description: string | null; status: string; priority: string; start_at: string | null; due_at: string | null; created_at: string; updated_at: string };
-export type ProjectFolder = { id: string; project_id: string; parent_folder_id: string | null; name: string; created_at: string };
+export type ProjectFolder = { id: string; workspace_id: string; client_team_id: string | null; project_id: string | null; parent_folder_id: string | null; name: string; created_at: string };
 export type MediaFile = { id: string; name: string; mime_type: string; size_bytes: number };
-export type ProjectFile = { id: string; project_id: string; folder_id: string | null; file: MediaFile & { checksum_sha256: string; status: string }; created_at: string };
+export type ProjectFile = { id: string; workspace_id: string; client_team_id: string | null; project_id: string | null; folder_id: string | null; task_stage_id: string | null; file: MediaFile & { checksum_sha256: string; status: string }; created_at: string };
 export type WorkflowStageRef = { id: string; name: string; slug: string };
 export type WorkflowStageStatus = { id: string; name: string; slug: string; sort_order: number };
 export type WorkflowStage = { id: string; name: string; slug: string; sort_order: number; statuses: WorkflowStageStatus[] };
@@ -49,6 +49,8 @@ export type ReviewComment = {
   start_time_ms: number | null; end_time_ms: number | null;
   resolved: boolean; resolved_by_user_id: string | null; resolved_at: string | null;
   revision_count: number; created_at: string; updated_at: string;
+  /** Workspace users notified by this note. The API resolves and de-duplicates the list. */
+  mentions: { id: string; email: string; name: string }[];
   reactions: { emoji: string; count: number; reactors: { id: string; name: string; type: string }[] }[];
   attachments: { id: string; content_type: string; file: MediaFile & { status: string } }[];
 };
@@ -60,11 +62,21 @@ export type Notification = {
   unread: boolean; read_at: string | null; created_at: string;
 };
 export type Task = {
-  id: string; workspace_id: string; project_id: string | null; title: string;
+  id: string; workspace_id: string; client_team_id: string | null; project_id: string | null; task_stage_id: string | null; title: string;
   description: string | null; status: string; priority: string;
   start_at: string | null; due_at: string | null; completed_at: string | null;
   sort_order: number; created_at: string; updated_at: string;
+  assignees: { id: string; name: string; email: string }[];
 };
+/**
+ * A file attached to a task. `file.id` is the same `File` row a `ProjectFile` or a
+ * `MediaVersion` points at, so this is what makes "Task -> attachment -> Review" open the
+ * very same media rather than a copy of it.
+ */
+export type TaskAttachment = { id: string; file: MediaFile & { checksum_sha256: string; status: string }; attached_at: string };
+export type TaskStage = { id: string; name: string; color: string; sort_order: number; wip_limit: number | null; is_done: boolean; automation_enabled: boolean; task_count: number };
+export type TaskWorkflowSettings = { wip_warning: boolean; auto_notify_client: boolean; lock_done_editing: boolean };
+export type TaskWorkflow = { stages: TaskStage[]; settings: TaskWorkflowSettings };
 export type Role = { id: string; name: string; description: string; is_system: boolean; status: string; permissions: string[] };
 export type WorkspaceMembership = {
   id: string; principal_type: string; user: CurrentUser | null; client_team: ClientTeam | null;
@@ -134,6 +146,8 @@ export const revokeClientTeamInvite = (workspaceId: string, clientTeamId: string
 export const listProjects = (workspaceId: string) => request<Project[]>(`/workspaces/${workspaceId}/projects/`);
 export const listFolders = (workspaceId: string, projectId: string) => request<ProjectFolder[]>(`/workspaces/${workspaceId}/projects/${projectId}/folders/`);
 export const listProjectFiles = (workspaceId: string, projectId: string) => request<ProjectFile[]>(`/workspaces/${workspaceId}/projects/${projectId}/files/`);
+export const listAssetFolders = (workspaceId: string) => request<ProjectFolder[]>(`/workspaces/${workspaceId}/asset-folders/`);
+export const listAssetFiles = (workspaceId: string) => request<ProjectFile[]>(`/workspaces/${workspaceId}/asset-files/`);
 export const listMediaVersions = (workspaceId: string, projectId: string) => request<MediaVersion[]>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/`);
 export const controlMediaRender = (workspaceId: string, projectId: string, mediaVersionId: string, action: "retry" | "cancel") => request<{ status: string }>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/render/`, jsonBody({ action }));
 export const listWorkflowStages = (workspaceId: string) => request<WorkflowStage[]>(`/workspaces/${workspaceId}/workflow-stages/`);
@@ -189,9 +203,11 @@ export const changePassword = (payload: { current_password: string; new_password
 export const requestEmailVerification = (email: string) =>
   request<{ detail: string }>("/auth/email-verification/request/", jsonBody({ email }));
 export const listTasks = (workspaceId: string) => request<Task[]>(`/workspaces/${workspaceId}/tasks/`);
-export const createTask = (workspaceId: string, payload: { title: string; project_id?: string; description?: string; priority?: string; due_at?: string | null }) =>
+export const listTaskAttachments = (workspaceId: string, taskId: string) => request<TaskAttachment[]>(`/workspaces/${workspaceId}/tasks/${taskId}/attachments/`);
+export const listTaskStages = (workspaceId: string) => request<TaskWorkflow>(`/workspaces/${workspaceId}/task-stages/`);
+export const createTask = (workspaceId: string, payload: { title: string; client_team_id?: string | null; project_id?: string | null; assignee_id?: string | null; task_stage_id?: string | null; description?: string; priority?: string; status?: string; due_at?: string | null; sort_order?: number }) =>
   request<Task>(`/workspaces/${workspaceId}/tasks/`, jsonBody(payload));
-export const updateTask = (workspaceId: string, taskId: string, payload: Partial<Pick<Task, "title" | "description" | "status" | "priority" | "start_at" | "due_at" | "sort_order">>) =>
+export const updateTask = (workspaceId: string, taskId: string, payload: Partial<Pick<Task, "title" | "description" | "status" | "priority" | "start_at" | "due_at" | "sort_order" | "client_team_id" | "project_id" | "task_stage_id">> & { assignee_id?: string | null }) =>
   request<Task>(`/workspaces/${workspaceId}/tasks/${taskId}/`, { ...jsonBody(payload), method: "PATCH" });
 
 /**
@@ -204,7 +220,7 @@ export const listReviewComments = (workspaceId: string, projectId: string, media
 
 export const createReviewComment = (
   workspaceId: string, projectId: string, mediaVersionId: string,
-  payload: { text: string; start_time_ms?: number; parent_comment_id?: string },
+  payload: { text: string; start_time_ms?: number; parent_comment_id?: string; mentioned_user_ids?: string[] },
 ) => request<ReviewComment>(
   `/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/comments/`,
   jsonBody(payload),

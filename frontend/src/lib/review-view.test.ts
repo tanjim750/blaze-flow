@@ -8,7 +8,7 @@ const comment = (id: string, parent: string | null): ReviewComment => ({
   id, parent_comment_id: parent, author: { id: "u", email: "ada@example.com", name: "Ada Lovelace", type: "user" },
   text: id, start_time_ms: null, end_time_ms: null, resolved: false,
   resolved_by_user_id: null, resolved_at: null, revision_count: 0,
-  reactions: [], attachments: [],
+  reactions: [], attachments: [], mentions: [],
   created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
 });
 

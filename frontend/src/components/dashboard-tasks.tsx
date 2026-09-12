@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import type { Bucket, DashboardTask } from "@/lib/dashboard-view";
-import { setTaskCompletedAction } from "@/app/tasks/actions";
+import { setTaskCompletedAction } from "@/app/(app)/tasks/actions";
 
 const BUCKETS: Bucket[] = ["Today", "Upcoming", "Overdue"];
 

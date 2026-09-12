@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { DashboardTasks } from "./dashboard-tasks";
 
-vi.mock("@/app/tasks/actions", () => ({ setTaskCompletedAction: vi.fn().mockResolvedValue({ error: null, message: "Task completed." }) }));
+vi.mock("@/app/(app)/tasks/actions", () => ({ setTaskCompletedAction: vi.fn().mockResolvedValue({ error: null, message: "Task completed." }) }));
 
 const tasks = [
   { id: "today", name: "Review hero", project: "Launch", priority: "High", time: "4:00 PM", status: "Due today", tone: "warning" as const, bucket: "Today" as const },

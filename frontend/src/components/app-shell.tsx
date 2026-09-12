@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { LinkPending } from "@/components/nav-progress";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Building2, CalendarDays, CheckCircle2, CircleHelp, Flame, FolderOpen, House, LogOut, Mail, Menu, Search, Settings, SquareKanban, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
 import type { ShellUser } from "@/lib/user";
 import type { Notification, Workspace } from "@/lib/api";
@@ -26,17 +28,22 @@ const workspaceTabs = [
   { href: "/deliverables", label: "Deliverables" },
 ];
 
-export function AppShell({ children, flush = false, user = null, workspaces = [], selectedWorkspaceId = null }: {
-  children: React.ReactNode; flush?: boolean; user?: ShellUser | null;
+export function AppShell({ children, user = null, workspaces = [], selectedWorkspaceId = null }: {
+  children: React.ReactNode; user?: ShellUser | null;
   workspaces?: Workspace[]; selectedWorkspaceId?: string | null;
 }) {
   const pathname = usePathname();
+  const reduceMotion = useReducedMotion();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [health, setHealth] = useState<OperationsHealth | "restricted" | "unavailable" | null>(null);
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  // Projects lays out its own full-bleed browser, so it opts out of the standard page padding.
+  // Full-bleed routes: the projects tree and the review workspace both own their own
+  // chrome and fill the viewport, so the shell gives them the frame without the padding.
+  const flush = pathname.startsWith("/projects") || pathname.startsWith("/review");
 
   useEffect(() => {
     let active = true;
@@ -80,7 +87,7 @@ export function AppShell({ children, flush = false, user = null, workspaces = []
           <nav aria-label="Main navigation">
             {primaryLinks.map(({ href, label, icon: Icon }) => (
               <Link key={label} href={href} onClick={() => setOpen(false)} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}>
-                <Icon size={20} /><span>{label}</span>
+                <Icon size={20} /><span>{label}</span><LinkPending />
               </Link>
             ))}
           </nav>
@@ -105,7 +112,7 @@ export function AppShell({ children, flush = false, user = null, workspaces = []
             <span className="studio-divider" />
             <nav className="studio-tabs" aria-label="Workspace sections">
               {workspaceTabs.map(({ href, label }) => (
-                <Link key={label} href={href} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}>{label}</Link>
+                <Link key={label} href={href} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}>{label}<LinkPending /></Link>
               ))}
             </nav>
           </div>
@@ -126,7 +133,7 @@ export function AppShell({ children, flush = false, user = null, workspaces = []
             <AccountMenu user={user} />
           </div>
         </header>
-        <main className={flush ? "flush" : undefined}>{children}</main>
+        <motion.main key={pathname} className={flush ? "flush" : undefined} initial={{ opacity: 0, y: reduceMotion ? 0 : 7 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0 : .24, ease: [.22, 1, .36, 1] }}>{children}</motion.main>
       </div>
     </div>
   );

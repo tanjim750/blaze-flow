@@ -1,1 +1,0 @@
-export default function FilesLoading() { return <div className="files-loading" aria-label="Loading asset library"><div /><div className="files-loading-grid">{Array.from({ length: 6 }, (_, index) => <span key={index} />)}</div></div>; }

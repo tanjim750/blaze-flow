@@ -25,9 +25,24 @@ export type ReviewNote = {
   age: string;
   resolved: boolean;
   reactions: { emoji: string; count: number }[];
-  attachments: { id: string; name: string; status: string }[];
+  /** `mimeType` is what decides whether an attachment plays inline or offers a download. */
+  attachments: { id: string; name: string; status: string; mimeType: string }[];
+  mentions: { id: string; name: string }[];
   replies: ReviewNote[];
+  /** Set on notes held on the device because their media has no project review record. */
+  local?: boolean;
+  /** A voice or screen recording carried by this note, resolved from its attachment. */
+  recording?: { url: string; mimeType: string; kind: "voice" | "screen" } | null;
 };
+
+/** Recordings are ordinary attachments; their mime type is the only thing marking them. */
+export function recordingOf(note: Pick<ReviewNote, "attachments">, urlFor: (id: string) => string) {
+  const media = note.attachments.find(
+    (item) => item.status === "READY" && (item.mimeType.startsWith("audio/") || item.mimeType.startsWith("video/")),
+  );
+  if (!media) return null;
+  return { url: urlFor(media.id), mimeType: media.mimeType, kind: media.mimeType.startsWith("audio/") ? "voice" as const : "screen" as const };
+}
 
 export function relativeAge(iso: string): string {
   const then = new Date(iso).getTime();
@@ -62,7 +77,8 @@ export function toNote(comment: ReviewComment): ReviewNote {
     age: relativeAge(comment.created_at),
     resolved: comment.resolved,
     reactions: comment.reactions?.map(({ emoji, count }) => ({ emoji, count })) ?? [],
-    attachments: comment.attachments?.map((item) => ({ id: item.id, name: item.file.name, status: item.file.status })) ?? [],
+    attachments: comment.attachments?.map((item) => ({ id: item.id, name: item.file.name, status: item.file.status, mimeType: item.file.mime_type })) ?? [],
+    mentions: comment.mentions?.map((item) => ({ id: item.id, name: item.name })) ?? [],
     replies: [],
   };
 }

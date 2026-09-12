@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const API_ORIGIN = process.env.BLAZEFLOW_API_URL ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["unenvying-atheistically-romeo.ngrok-free.dev"],
   /**
    * Django owns trailing slashes (`APPEND_SLASH`) and every one of its API routes ends in
    * one. Next, by default, answers `/api/auth/login/` with a 308 to the slashless path,

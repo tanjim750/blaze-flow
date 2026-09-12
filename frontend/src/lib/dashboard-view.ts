@@ -55,7 +55,7 @@ const titleCase = (value: string) => value.replace(/_/g, " ").toLowerCase().repl
 const TASK_STATUS_LABELS: Record<string, string> = { TODO: "To Do" };
 const statusLabel = (status: string) => TASK_STATUS_LABELS[status] ?? titleCase(status);
 
-const isOpen = (task: Task) => task.status !== "COMPLETED" && task.status !== "CANCELLED";
+const isOpen = (task: Task) => !["COMPLETED", "APPROVED", "CANCELLED"].includes(task.status);
 
 function bucketFor(task: Task, now: Date): Bucket {
   if (!task.due_at) return "Upcoming";
@@ -80,8 +80,8 @@ function dueLabel(task: Task, now: Date): string {
 
 function taskTone(task: Task, bucket: Bucket): Tone {
   if (bucket === "Overdue") return "danger";
-  if (task.status === "IN_PROGRESS") return "warning";
-  if (task.status === "COMPLETED") return "success";
+  if (["IN_PROGRESS", "REVISIONS", "INTERNAL_QA", "CLIENT"].includes(task.status)) return "warning";
+  if (["COMPLETED", "APPROVED"].includes(task.status)) return "success";
   return "neutral";
 }
 
@@ -171,7 +171,7 @@ export async function loadDashboardView(greetingName: string): Promise<Dashboard
         stage,
         age: relativeAge(item.created_at),
         tone: stageTone(stage),
-        href: `/review?project=${project.id}&version=${item.id}`,
+        href: `/review?media=${item.file.id}`,
         createdAt: item.created_at,
       });
     }
@@ -199,7 +199,7 @@ export async function loadDashboardView(greetingName: string): Promise<Dashboard
   // Tasks per project drive the completion bar; cancelled tasks are excluded from both sides.
   const projectCards: ProjectCard[] = projects.map((project) => {
     const own = tasks.filter((task) => task.project_id === project.id && task.status !== "CANCELLED");
-    const done = own.filter((task) => task.status === "COMPLETED").length;
+    const done = own.filter((task) => ["COMPLETED", "APPROVED"].includes(task.status)).length;
     return {
       id: project.id,
       title: project.name,
