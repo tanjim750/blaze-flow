@@ -11,6 +11,18 @@ const nextConfig: NextConfig = {
    * API call. `skipTrailingSlashRedirect` drops Next's 308.
    */
   skipTrailingSlashRedirect: true,
+  experimental: {
+    /**
+     * Every browser-side call reaches Django through the rewrite below, uploads included,
+     * and Next caps a proxied request body at 10 MiB by default. Past that the rewrite
+     * answered 500 before Django ever saw the request, so any video over ~10 MB failed
+     * with no server-side trace of it — Django's log showed nothing at all.
+     *
+     * Kept level with `MAX_PROJECT_FILE_BYTES`, which is the limit that should decide
+     * whether an upload is too big, so the proxy stops being the thing that answers first.
+     */
+    proxyClientMaxBodySize: 1024 * 1024 * 1024,
+  },
   async rewrites() {
     return [{
       source: "/api/:path*",

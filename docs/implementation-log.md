@@ -2057,3 +2057,35 @@ finished, and because that row existed only in memory it was gone on the next re
 
 Two tests cover it: a rejected upload leaves no card on the grid and explains itself, and
 an accepted one appears under the id the server gave it.
+
+## 2026-09-12 — The 500 behind the upload: Next's proxy body cap
+
+After raising `MAX_PROJECT_FILE_BYTES`, a 43.5 MB `.mov` still failed — this time with
+`Asset request failed (500)`.
+
+Django's log was the clue: **there was no 500 in it**. No traceback, no request. The last
+attempt it recorded was a `400` whose 35-byte body works out to
+`{"file":["No file was submitted."]}` — Django had been handed a POST with no file in it.
+So the request was dying in front of Django, not inside it.
+
+Every browser-side call reaches Django through the `/api/:path*` rewrite in
+`next.config.ts`, and Next caps a proxied request body at **10 MiB**
+(`experimental.proxyClientMaxBodySize`). Measured against an endpoint needing no auth:
+
+| Body | Direct to Django | Through the rewrite |
+| --- | --- | --- |
+| 8 MB | 400 | 400 |
+| 10 MB | 400 | 400 |
+| 11 MB | 400 | **500** |
+| 45 MB | 400 | **500** |
+
+Exactly 10 MiB, exactly the documented default. The limit is now level with
+`MAX_PROJECT_FILE_BYTES`, so the size rule that decides an upload is the one meant to.
+
+Verified after the change by Django's own access log: 11 MB and 45 MB bodies now arrive and
+are parsed (400 on the credentials), where before they never reached it at all. The setting
+governs the proxy generally, not just `next dev`, so a deployed build is covered too.
+
+Worth recording for next time: the reason this took a second pass is that the first fix was
+real but not sufficient — 25 MB *was* rejecting videos. Two independent ceilings sat in
+front of the same upload, and clearing one only moved the failure.
