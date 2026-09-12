@@ -1,11 +1,14 @@
+import io
 import shutil
 import tempfile
 
+from PIL import Image
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import File, Project, ProjectAccessMode, ProjectFile, ProjectFolder, TaskStage, Workspace
+from .services.outbox import process_outbox_events
 from .test_access_projects import WorkspaceAccessSetupMixin
 
 
@@ -344,6 +347,37 @@ class WorkspaceAssetApiTests(WorkspaceAccessSetupMixin, TestCase):
     def tearDown(self):
         self.settings_override.disable()
         shutil.rmtree(self.media_root, ignore_errors=True)
+
+    def test_poster_is_served_once_the_preview_worker_has_run(self):
+        """The still a card shows, and what happens before one exists."""
+        # A decodable image, unlike PNG_BYTES: the thumbnailer has to actually open it,
+        # and a header full of zeros falls back to the generic card instead.
+        buffer = io.BytesIO()
+        Image.new('RGB', (48, 32), '#583be8').save(buffer, format='PNG')
+        upload = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile('lockup.png', buffer.getvalue(), content_type='image/png')}, format='multipart',
+        )
+        self.assertEqual(upload.status_code, 201)
+        asset_id = upload.json()['id']
+        poster_url = reverse('api-asset-file-poster', args=[self.workspace.id, asset_id])
+
+        # Nothing generated yet: the list says so, and the route 404s rather than guessing.
+        self.assertFalse(upload.json()['has_poster'])
+        self.assertEqual(self.client.get(poster_url).status_code, 404)
+
+        process_outbox_events()
+        process_outbox_events()
+
+        listed = self.client.get(reverse('api-asset-files', args=[self.workspace.id]))
+        self.assertTrue(next(item for item in listed.json() if item['id'] == asset_id)['has_poster'])
+
+        poster = self.client.get(poster_url)
+        self.assertEqual(poster.status_code, 200)
+        self.assertEqual(poster['Content-Type'], 'image/jpeg')
+        # Inline: this one is meant to be rendered, unlike the download route.
+        self.assertNotIn('attachment', poster.get('Content-Disposition', ''))
+        self.assertGreater(len(b''.join(poster.streaming_content)), 0)
 
     def test_files_and_folders_can_exist_without_a_project(self):
         folder = self.client.post(

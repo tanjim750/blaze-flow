@@ -24,6 +24,7 @@ const assetFile = (over: Partial<ProjectFile> & { id: string; fileId: string; na
   folder_id: over.folder_id ?? null, task_stage_id: over.task_stage_id ?? null,
   file: { id: over.fileId, name: over.name, mime_type: "video/mp4", size_bytes: 10, checksum_sha256: "x", status: "READY" },
   added_by: null,
+  has_poster: false,
   created_at: over.created_at ?? "2026-09-02T00:00:00Z",
 });
 

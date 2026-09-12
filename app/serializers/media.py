@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from app.models import FileVariant, MediaVersion, MediaVersionStageEntry, OutboxEvent, PriorityLevel, WorkflowStageStatus
+from app.services.file_processing import PREVIEW_VARIANT_TYPES
 
 
 class MediaUploadSerializer(serializers.Serializer):
@@ -46,7 +47,7 @@ class MediaVersionSerializer(serializers.ModelSerializer):
         }
 
     def get_preview_status(self, media):
-        variant = FileVariant.objects.filter(file=media.original_file, deleted_at__isnull=True).order_by('-created_at').values_list('status', flat=True).first()
+        variant = FileVariant.objects.filter(file=media.original_file, deleted_at__isnull=True, metadata__variant_type__in=PREVIEW_VARIANT_TYPES).order_by('-created_at').values_list('status', flat=True).first()
         if variant:
             return variant
         event = OutboxEvent.objects.filter(topic='file.preview.requested', aggregate_id=str(media.original_file_id)).first()

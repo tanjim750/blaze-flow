@@ -32,10 +32,18 @@ from app.models import (
 
 SCAN_TOPIC = 'file.security-scan.requested'
 PREVIEW_TOPIC = 'file.preview.requested'
+# The playable/openable preview: exactly one of these per file, and the thing the review
+# player and `preview_status` mean when they say "the preview".
 PREVIEW_VARIANT_TYPES = (
     'REVIEW_CARD', 'IMAGE_THUMBNAIL', 'AUDIO_WAVEFORM',
     'PDF_FIRST_PAGE', 'MP3_WAVEFORM', 'VIDEO_PROXY',
 )
+
+# A still for cards, kept deliberately outside `PREVIEW_VARIANT_TYPES`. A video needs both
+# — a proxy to play and a frame to show in a list — and every lookup that means "the
+# preview" filters on the tuple above, so a poster can sit alongside without being mistaken
+# for one.
+POSTER_VARIANT_TYPE = 'VIDEO_POSTER'
 
 
 class EicarAwareScanner:
@@ -351,6 +359,42 @@ def _video_proxy(file):
         }
 
 
+def _video_poster(file):
+    """A single frame, for showing a video in a list without fetching the video.
+
+    Seeks a second in so the still is not the black frame most cuts open on, and falls
+    back to the first frame for anything shorter than that.
+    """
+    executable = shutil.which(settings.FFMPEG_COMMAND)
+    if not executable:
+        raise OSError('Video poster encoder is unavailable.')
+    with tempfile.TemporaryDirectory(prefix='blazeflow-video-poster-') as directory:
+        source = Path(directory) / 'source'
+        output = Path(directory) / 'poster.jpg'
+        _copy_private_object(file, source, max_bytes=settings.VIDEO_PROXY_MAX_INPUT_BYTES)
+        scale = (
+            f"scale='min({settings.PREVIEW_MAX_WIDTH},iw)':'min({settings.PREVIEW_MAX_HEIGHT},ih)'"
+            ':force_original_aspect_ratio=decrease'
+        )
+        # No `check=True`: seeking a second into a clip shorter than that is a failure
+        # ffmpeg reports by exit code, and raising on it would skip the fallback to the
+        # first frame — which is the one that works for short cuts.
+        for seek in ('00:00:01', '00:00:00'):
+            output.unlink(missing_ok=True)
+            result = subprocess.run(
+                [executable, '-v', 'error', '-y', '-ss', seek, '-i', str(source),
+                 '-frames:v', '1', '-vf', scale, '-q:v', '4', str(output)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=settings.VIDEO_PROXY_TIMEOUT_SECONDS,
+            )
+            if result.returncode == 0 and output.exists() and output.stat().st_size:
+                return output.read_bytes(), 'image/jpeg', 'jpg', POSTER_VARIANT_TYPE, {
+                    'max_width': settings.PREVIEW_MAX_WIDTH,
+                    'max_height': settings.PREVIEW_MAX_HEIGHT,
+                }
+        raise ValueError('Video poster encoder returned no usable output.')
+
+
 def _preview_content(file):
     try:
         if file.mime_type.startswith('image/'):
@@ -371,35 +415,39 @@ def _preview_content(file):
     return _review_card(file)
 
 
-def generate_preview(*, file_id):
-    file = File.objects.get(id=file_id, status=FileStatus.READY, deleted_at__isnull=True)
+def _store_variant(file, produce, *, types):
+    """Creates one variant for `file`, or returns the existing one of `types`.
+
+    The store-then-check order matters: the content is written to storage before the
+    transaction, so a racing worker cannot see a half-written object, and the loser of the
+    race deletes what it wrote.
+    """
     existing = FileVariant.objects.filter(
-        file=file, metadata__variant_type__in=PREVIEW_VARIANT_TYPES,
-        deleted_at__isnull=True,
+        file=file, metadata__variant_type__in=types, deleted_at__isnull=True,
     ).first()
     if existing:
         return existing
-    content, mime_type, extension, variant_type, metadata = _preview_content(file)
+    content, mime_type, extension, variant_type, metadata = produce(file)
     digest = hashlib.sha256(content).hexdigest()
-    object_key = f'{Path(file.object_key).parent}/previews/{file.id}.{extension}'
+    suffix = '' if variant_type in PREVIEW_VARIANT_TYPES else '.poster'
+    object_key = f'{Path(file.object_key).parent}/previews/{file.id}{suffix}.{extension}'
     stored_key = default_storage.save(object_key, ContentFile(content))
     now = timezone.now()
     try:
         with transaction.atomic():
-            file = File.objects.select_for_update().get(
-                id=file_id, status=FileStatus.READY, deleted_at__isnull=True,
+            locked = File.objects.select_for_update().get(
+                id=file.id, status=FileStatus.READY, deleted_at__isnull=True,
             )
             existing = FileVariant.objects.filter(
-                file=file, metadata__variant_type__in=PREVIEW_VARIANT_TYPES,
-                deleted_at__isnull=True,
+                file=locked, metadata__variant_type__in=types, deleted_at__isnull=True,
             ).first()
             if existing:
                 default_storage.delete(stored_key)
                 return existing
             return FileVariant.objects.create(
-                id=uuid.uuid4(), file=file, storage_backend=file.storage_backend,
+                id=uuid.uuid4(), file=locked, storage_backend=locked.storage_backend,
                 object_key=stored_key,
-                original_name=f'{file.original_name}.preview.{extension}',
+                original_name=f'{locked.original_name}.preview.{extension}',
                 mime_type=mime_type, size_bytes=len(content), checksum=digest,
                 checksum_algorithm='sha256',
                 metadata={'variant_type': variant_type, **metadata},
@@ -408,6 +456,23 @@ def generate_preview(*, file_id):
     except Exception:
         default_storage.delete(stored_key)
         raise
+
+
+def generate_preview(*, file_id):
+    """Ensures a file has its preview, and — for video — a poster to show in lists.
+
+    The poster is best-effort: a cut whose frame cannot be extracted still gets its proxy,
+    because failing the whole event would leave the file unplayable over a missing
+    thumbnail.
+    """
+    file = File.objects.get(id=file_id, status=FileStatus.READY, deleted_at__isnull=True)
+    preview = _store_variant(file, _preview_content, types=PREVIEW_VARIANT_TYPES)
+    if file.mime_type.startswith('video/'):
+        try:
+            _store_variant(file, _video_poster, types=(POSTER_VARIANT_TYPE,))
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+    return preview
 
 
 def handle_security_scan_event(event):

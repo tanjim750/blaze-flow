@@ -2147,3 +2147,43 @@ variants for asset files. The generator is easy (one ffmpeg frame extract beside
 invariant is relied on by retention, deletion and the media-version preview lookup. Adding
 a second variant per file is a change to the file pipeline, not to a card, so it is left
 for its own pass.
+
+## 2026-09-12 — Real video thumbnails
+
+The follow-up flagged last pass. A video now carries a poster, and cards show the frame
+rather than a glyph. On the reported file — a 43.5 MB `.mov` — the poster is **21 KB**.
+
+### Breaking the one-variant rule safely
+
+`generate_preview` kept exactly one `FileVariant` per file, and three places leaned on it by
+taking the *most recent* variant and calling it "the preview". Adding a second would have
+handed the review player a JPEG where it expects a proxy.
+
+So `VIDEO_POSTER` sits deliberately **outside** `PREVIEW_VARIANT_TYPES`, and the three
+lookups that mean the playable preview now say so: the media-version preview route, the
+render-control guard, and `preview_status` on the serializer. Variant creation moved into
+`_store_variant`, which each type calls with its own idempotency check, keeping the
+store-then-lock ordering that stops a racing worker seeing a half-written object.
+
+Poster generation is best-effort: a cut whose frame cannot be extracted still gets its
+proxy, because failing the event would leave a file unplayable over a missing thumbnail.
+That path is real — an audio-only `.mp4` in the dev workspace has no video stream, produces
+no frame, and correctly ends up with a proxy and no poster.
+
+### A bug the test suite caught
+
+The first version passed `check=True` to ffmpeg while seeking a second in, then fell back to
+frame zero for shorter cuts. The fallback could never run: a clip shorter than the seek
+makes ffmpeg exit non-zero, which raised before the loop came round. Every short clip would
+have gone without a poster. The existing proxy test found it — once the fallback worked, its
+`FileVariant.objects.get(...)` returned two rows.
+
+### Serving it
+
+`GET /workspaces/<id>/asset-files/<id>/poster/` returns the still inline — a poster for
+video, the thumbnail for an image — and 404s until one exists. `has_poster` on the file
+tells a list whether to ask, annotated with `Exists` so a board of cards costs one query
+rather than one per card. A poster that fails anyway falls back to the glyph.
+
+Existing files predate this. The two in the dev workspace were backfilled by re-running
+`generate_preview`; anything else needs the same, since the generator only runs on upload.

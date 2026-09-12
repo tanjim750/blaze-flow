@@ -43,7 +43,9 @@ function FileCard({file,project}:{file:ProjectFile;project?:string}){
  const playable=kind==="video"||kind==="audio";
  const review=playable?`/review?media=${file.file.id}`:null;
  const ready=file.file.status==="READY";
- const poster=kind==="image"&&ready?`/api/workspaces/${file.workspace_id}/asset-files/${file.id}/download/`:null;
+ // A still the worker generated: one frame for video, the thumbnail for an image. Tiny
+ // next to the media itself, which is why a card can afford to show it.
+ const poster=file.has_poster?`/api/workspaces/${file.workspace_id}/asset-files/${file.id}/poster/`:null;
  const extension=file.file.name.includes(".")?file.file.name.split(".").pop()!.toUpperCase():kind.toUpperCase();
  const author=file.added_by?.name??null;
  const Icon=kind==="video"?Clapperboard:kind==="audio"?AudioLines:kind==="image"?ImageIcon:FileIcon;

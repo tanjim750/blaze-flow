@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
-from app.models import ProjectFile, ProjectFolder
+from app.models import FileStatus, FileVariant, ProjectFile, ProjectFolder
+from app.services.file_processing import POSTER_VARIANT_TYPE
 
 
 class ProjectFolderSerializer(serializers.ModelSerializer):
@@ -27,11 +28,26 @@ class ProjectFileUploadSerializer(serializers.Serializer):
 class ProjectFileSerializer(serializers.ModelSerializer):
     file = serializers.SerializerMethodField()
     added_by = serializers.SerializerMethodField()
+    has_poster = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectFile
-        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'folder_id', 'task_stage_id', 'file', 'added_by', 'created_at')
+        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'folder_id', 'task_stage_id', 'file', 'added_by', 'has_poster', 'created_at')
         read_only_fields = fields
+
+    def get_has_poster(self, project_file):
+        """Whether `/asset-files/<id>/poster/` will answer.
+
+        Read from an annotation where the view supplies one, so rendering a list does not
+        cost a query per row; the fallback keeps a single-object response correct.
+        """
+        annotated = getattr(project_file, 'has_poster_annotation', None)
+        if annotated is not None:
+            return bool(annotated)
+        return FileVariant.objects.filter(
+            file_id=project_file.file_id, status=FileStatus.READY, deleted_at__isnull=True,
+            metadata__variant_type__in=(POSTER_VARIANT_TYPE, 'IMAGE_THUMBNAIL'),
+        ).exists()
 
     def get_added_by(self, project_file):
         """Who uploaded it. Recorded all along, but never returned, so every card that

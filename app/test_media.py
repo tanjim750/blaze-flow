@@ -239,10 +239,17 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
         process_outbox_events()
         process_outbox_events()
 
-        variant = FileVariant.objects.get(file_id=uploaded.json()['file']['id'])
-        self.assertEqual(variant.metadata['variant_type'], 'VIDEO_PROXY')
+        file_id = uploaded.json()['file']['id']
+        variant = FileVariant.objects.get(file_id=file_id, metadata__variant_type='VIDEO_PROXY')
         self.assertEqual(variant.mime_type, 'video/mp4')
         self.assertLessEqual(variant.metadata['max_width'], 960)
+
+        # A video carries two variants: the proxy to play, and a still to show in lists.
+        poster = FileVariant.objects.get(file_id=file_id, metadata__variant_type='VIDEO_POSTER')
+        self.assertEqual(poster.mime_type, 'image/jpeg')
+        self.assertGreater(poster.size_bytes, 0)
+        # Small enough that a list of cards can afford it, unlike the media itself.
+        self.assertLess(poster.size_bytes, variant.size_bytes)
 
         preview_url = reverse(
             'api-media-version-preview',
@@ -250,6 +257,8 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
         )
         response = self.client.get(preview_url)
         self.assertEqual(response.status_code, 200)
+        # Explicitly video: the poster is newer, and this endpoint used to take whichever
+        # variant was most recent.
         self.assertEqual(response['Content-Type'], 'video/mp4')
         body = b''.join(response.streaming_content)
         self.assertGreater(len(body), 0)

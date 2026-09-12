@@ -2,7 +2,7 @@ from django.contrib.auth import login, logout, update_session_auth_hash
 from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, HttpResponse
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404
 from django.middleware.csrf import get_token
 from django.utils import timezone
@@ -180,6 +180,7 @@ from .permissions import (
     memberships_with_permission,
     workspace_ids_with_permission,
 )
+from app.services.file_processing import POSTER_VARIANT_TYPE, PREVIEW_VARIANT_TYPES
 from .services import (
     InvitationError,
     ClientTeamError,
@@ -1096,7 +1097,7 @@ def asset_file_list_create(request, workspace_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
     if request.method == 'GET':
         files = _accessible_assets(
-            ProjectFile.objects.filter(workspace=workspace, deleted_at__isnull=True).select_related('file', 'added_by_workspace_membership__user'),
+            _with_poster_flag(ProjectFile.objects.filter(workspace=workspace, deleted_at__isnull=True).select_related('file', 'added_by_workspace_membership__user')),
             request=request, workspace=workspace, permission_key=PROJECT_FILE_READ,
         ).order_by('-created_at')
         return Response(ProjectFileSerializer(files, many=True).data)
@@ -1163,6 +1164,42 @@ def asset_file_download(request, workspace_id, file_id):
     if not default_storage.exists(item.file.object_key):
         raise Http404('The stored file was not found.')
     return FileResponse(default_storage.open(item.file.object_key, 'rb'), as_attachment=True, filename=item.file.original_name, content_type=item.file.mime_type)
+
+
+def _with_poster_flag(queryset):
+    """Annotates `has_poster_annotation`, which `ProjectFileSerializer` reads.
+
+    Without it the serializer falls back to a query per row, which on a task board of
+    media cards is one round trip per card.
+    """
+    return queryset.annotate(has_poster_annotation=Exists(
+        FileVariant.objects.filter(
+            file_id=OuterRef('file_id'), status=FileStatus.READY, deleted_at__isnull=True,
+            metadata__variant_type__in=(POSTER_VARIANT_TYPE, 'IMAGE_THUMBNAIL'),
+        )
+    ))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def asset_file_poster(request, workspace_id, file_id):
+    """Serves the still a list shows for this asset.
+
+    A poster for video, the thumbnail for an image. Inline rather than as an attachment —
+    unlike the download route, the point of this one is to be rendered.
+    """
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    item = get_object_or_404(
+        ProjectFile.objects.select_related('file'), id=file_id, workspace=workspace, deleted_at__isnull=True,
+    )
+    _require_asset_permission(request, item, PROJECT_FILE_READ)
+    variant = FileVariant.objects.filter(
+        file=item.file, status=FileStatus.READY, deleted_at__isnull=True,
+        metadata__variant_type__in=(POSTER_VARIANT_TYPE, 'IMAGE_THUMBNAIL'),
+    ).order_by('-created_at').first()
+    if variant is None or not default_storage.exists(variant.object_key):
+        raise Http404('No poster has been generated for this file.')
+    return FileResponse(default_storage.open(variant.object_key, 'rb'), content_type=variant.mime_type)
 
 
 @api_view(['GET', 'POST'])
@@ -1234,7 +1271,7 @@ def project_file_list_create(request, workspace_id, project_id):
     project = get_object_or_404(Project, id=project_id, workspace=workspace)
     if request.method == 'GET':
         _require_project_permission(request, project, PROJECT_FILE_READ, 'You do not have permission to read project files.')
-        files = ProjectFile.objects.filter(project=project, deleted_at__isnull=True).select_related('file', 'added_by_workspace_membership__user').order_by('-created_at')
+        files = _with_poster_flag(ProjectFile.objects.filter(project=project, deleted_at__isnull=True).select_related('file', 'added_by_workspace_membership__user')).order_by('-created_at')
         return Response(ProjectFileSerializer(files, many=True).data)
 
     _require_project_permission(request, project, PROJECT_FILE_CREATE, 'You do not have permission to add project files.')
@@ -1674,8 +1711,11 @@ def media_version_preview(request, workspace_id, project_id, media_version_id):
     workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
     if not has_project_permission(user=request.user, project=project, permission_key=MEDIA_READ):
         raise PermissionDenied('You do not have permission to view this media version.')
+    # Narrowed to the playable types: a video also carries a poster now, and serving that
+    # to the player would hand it a JPEG where it expects a proxy.
     variant = FileVariant.objects.filter(
         file=media_version.original_file, status=FileStatus.READY, deleted_at__isnull=True,
+        metadata__variant_type__in=PREVIEW_VARIANT_TYPES,
     ).order_by('-created_at').first()
     if variant is None or not default_storage.exists(variant.object_key):
         raise Http404('No preview is available for this media version yet.')
@@ -1699,7 +1739,7 @@ def media_version_render_control(request, workspace_id, project_id, media_versio
             return Response({'detail': 'No render job exists for this media version.'}, status=status.HTTP_404_NOT_FOUND)
         if event.status == 'PROCESSING':
             return Response({'detail': 'A running render cannot be changed safely.'}, status=status.HTTP_409_CONFLICT)
-        if FileVariant.objects.filter(file=media_version.original_file, status=FileStatus.READY, deleted_at__isnull=True).exists():
+        if FileVariant.objects.filter(file=media_version.original_file, status=FileStatus.READY, deleted_at__isnull=True, metadata__variant_type__in=PREVIEW_VARIANT_TYPES).exists():
             return Response({'detail': 'This media version already has a ready preview.'}, status=status.HTTP_409_CONFLICT)
         now = timezone.now()
         payload = dict(event.payload)
