@@ -10,10 +10,12 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }))
 // Lets a test make the server reject a write.
 const deleteAssetFile = vi.fn();
 const uploadAssetFile = vi.fn();
+const duplicateAssetFile = vi.fn();
 vi.mock("@/lib/asset-api-client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/asset-api-client")>()),
   deleteAssetFile: (...args: unknown[]) => deleteAssetFile(...args),
   uploadAssetFile: (...args: unknown[]) => uploadAssetFile(...args),
+  duplicateAssetFile: (...args: unknown[]) => duplicateAssetFile(...args),
 }));
 
 const empty = { folders: [], files: [], deletedIds: [] };
@@ -27,7 +29,7 @@ const view = {
   folders: [],
 } satisfies FilesView;
 
-afterEach(() => { cleanup(); replaceLibrary(empty); uploadAssetFile.mockReset(); deleteAssetFile.mockReset(); });
+afterEach(() => { cleanup(); replaceLibrary(empty); uploadAssetFile.mockReset(); deleteAssetFile.mockReset(); duplicateAssetFile.mockReset(); });
 
 describe("AssetLibrary", () => {
   it("creates one shared project folder and switches display density", () => {
@@ -233,4 +235,5 @@ describe("AssetLibrary", () => {
     await waitFor(() => expect(rendered.container.querySelector(".al-file-card")).toBeTruthy());
     expect(screen.getByText("hero.mp4")).toBeInTheDocument();
   });
+
 });

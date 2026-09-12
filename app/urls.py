@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     asset_file_detail,
     asset_file_download,
+    asset_file_duplicate,
     asset_file_poster,
     asset_file_list_create,
     asset_folder_detail,
@@ -161,6 +162,7 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/', asset_file_detail, name='api-asset-file-detail'),
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/download/', asset_file_download, name='api-asset-file-download'),
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/poster/', asset_file_poster, name='api-asset-file-poster'),
+    path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/duplicate/', asset_file_duplicate, name='api-asset-file-duplicate'),
     path('workspaces/<uuid:workspace_id>/tasks/<uuid:task_id>/', task_detail, name='api-task-detail'),
     path('workspaces/<uuid:workspace_id>/tasks/<uuid:task_id>/assignees/', task_assignees, name='api-task-assignees'),
     path('workspaces/<uuid:workspace_id>/tasks/<uuid:task_id>/assignees/<uuid:assignee_id>/', task_assignee_detail, name='api-task-assignee-detail'),

@@ -2257,3 +2257,34 @@ The grid's video preview fell back to `<video src={downloadUrl} preload="metadat
 posters now generated that branch is only reachable for a clip without one, but the asset
 route serves no byte ranges, so reaching it downloads the whole file to paint one frame.
 Removed; those fall back to the kind glyph like everything else.
+
+## 2026-09-12 — Duplicate, in the file menu
+
+A duplicate could not be a second row pointing at the same bytes:
+`project_files_workspace_file_uniq` means a workspace holds one `ProjectFile` per `File`.
+So `POST /asset-files/<id>/duplicate/` copies the stored object into a new `File`, keeps
+the client, project, folder and stage, and names it `daily life (copy).mov` — the suffix
+goes on the stem so the extension survives.
+
+Because it is a real copy it counts against the workspace's storage, and the limit is
+checked before anything is written as well as inside the transaction.
+
+The copy goes through the normal scan-then-preview pipeline rather than inheriting the
+original's READY status and variants. That re-scans and re-encodes identical bytes, so a
+duplicate shows "Scanning" for a moment and regenerates its poster — but the alternative is
+a second path into `READY` that never passes a scanner, which is not worth a cheaper copy.
+
+Folders do not offer it: duplicating one is a recursive copy of everything beneath it, which
+is its own piece of work rather than a menu entry.
+
+### Tested where each half can be
+
+The backend test covers the behaviour that matters — distinct `File`, identical bytes on
+disk, relationships carried over, `PENDING` status, two rows listed.
+
+The menu item itself is verified in Chrome, not jsdom. Radix's `DropdownMenu` will not open
+under jsdom even with the pointer-capture and `scrollIntoView` polyfills — the third Radix
+component to behave that way here, after Popover and Select. Rather than contort a unit test
+around it, the browser check confirms the item renders between Stage and Download, POSTs
+`/asset-files/<id>/duplicate/`, reports a refusal instead of swallowing it, and is absent
+from a folder's menu.

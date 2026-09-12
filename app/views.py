@@ -253,6 +253,7 @@ from .services import (
     update_workspace_profile,
     update_task,
     upgrade_to_pro,
+    duplicate_project_file,
     upload_project_file,
     upload_review_attachment,
     upload_task_attachment,
@@ -1194,6 +1195,32 @@ def _with_card_fields(queryset):
             output_field=IntegerField(),
         ),
     )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def asset_file_duplicate(request, workspace_id, file_id):
+    """Copies an asset into the same place, named "… (copy)".
+
+    Creating needs the create permission, not just the update one — a duplicate is a new
+    file in the workspace and counts against its storage.
+    """
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    item = get_object_or_404(
+        ProjectFile.objects.select_related('file'), id=file_id, workspace=workspace, deleted_at__isnull=True,
+    )
+    _require_asset_permission(request, item, PROJECT_FILE_READ)
+    _require_workspace_permission(request, workspace, PROJECT_FILE_CREATE)
+    if item.project:
+        _require_project_permission(request, item.project, PROJECT_FILE_CREATE, 'You do not have permission to add assets to this project.')
+    membership = memberships_with_permission(
+        user=request.user, workspace=workspace, permission_key=PROJECT_FILE_CREATE,
+    ).first()
+    try:
+        copy = duplicate_project_file(project_file=item, membership=membership)
+    except (ProjectFileError, SubscriptionError) as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ProjectFileSerializer(copy).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(['GET'])

@@ -102,6 +102,64 @@ def move_project_folder(*, folder, workspace, client_team=None, project=None, pa
 
 
 @transaction.atomic
+def duplicate_project_file(*, project_file, membership):
+    """Copies an asset, bytes and all.
+
+    `project_files_workspace_file_uniq` means a workspace cannot hold two rows against the
+    same `File`, so a duplicate has to be a real copy rather than a second pointer at the
+    original. The copy therefore counts against the storage limit, and is checked against
+    it before anything is written.
+
+    It goes through the normal scan-then-preview pipeline rather than inheriting the
+    original's READY status and variants. That re-does work on identical bytes, but the
+    alternative is a second path into `FileStatus.READY` that never passes a scanner, and
+    a cheaper duplicate is not worth that.
+    """
+    source = project_file.file
+    workspace = project_file.workspace
+    enforce_workspace_storage_limit(workspace=workspace, additional_bytes=source.size_bytes)
+
+    clean_name = _copy_name(source.original_name)
+    object_key = f'workspaces/{workspace.id}/assets/{uuid.uuid4()}/{clean_name}'
+    with default_storage.open(source.object_key, 'rb') as stream:
+        stored_key = default_storage.save(object_key, stream)
+
+    now = timezone.now()
+    try:
+        with transaction.atomic():
+            enforce_workspace_storage_limit(
+                workspace=workspace, additional_bytes=source.size_bytes, lock=True,
+            )
+            file_record = File.objects.create(
+                id=uuid.uuid4(), workspace=workspace, storage_backend=_storage_backend(now),
+                object_key=stored_key, original_name=clean_name, mime_type=source.mime_type,
+                size_bytes=source.size_bytes, checksum=source.checksum,
+                checksum_algorithm=source.checksum_algorithm, metadata=dict(source.metadata or {}),
+                status=FileStatus.PENDING, created_at=now, updated_at=now,
+            )
+            FileSecurityScan.objects.create(file=file_record, engine=settings.FILE_SECURITY_SCANNER)
+            copy = ProjectFile(
+                id=uuid.uuid4(), workspace=workspace, client_team=project_file.client_team,
+                project=project_file.project, folder=project_file.folder, file=file_record,
+                task_stage=project_file.task_stage, added_by_workspace_membership=membership,
+                created_at=now, updated_at=now,
+            )
+            copy.full_clean()
+            copy.save()
+            enqueue_file_event(file=file_record, topic=SCAN_TOPIC)
+            return copy
+    except Exception:
+        default_storage.delete(stored_key)
+        raise
+
+
+def _copy_name(name):
+    """`daily life.mov` -> `daily life (copy).mov`, so the suffix stays off the extension."""
+    stem = Path(name).stem or name
+    suffix = Path(name).suffix
+    return f'{stem} (copy){suffix}'[:512]
+
+
 def update_project_file(*, project_file, name=None, workspace=None, client_team=None, project=None, folder=None, task_stage=None, clear_stage=False):
     workspace = workspace or project_file.workspace
     project_file.workspace = workspace

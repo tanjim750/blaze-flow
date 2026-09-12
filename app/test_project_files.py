@@ -3,6 +3,7 @@ import shutil
 import tempfile
 
 from PIL import Image
+from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -347,6 +348,47 @@ class WorkspaceAssetApiTests(WorkspaceAccessSetupMixin, TestCase):
     def tearDown(self):
         self.settings_override.disable()
         shutil.rmtree(self.media_root, ignore_errors=True)
+
+    def test_duplicate_copies_the_bytes_and_keeps_the_relationships(self):
+        """A duplicate is a real copy: the workspace cannot hold two rows for one File."""
+        upload = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {
+                'file': SimpleUploadedFile('daily life.png', PNG_BYTES, content_type='image/png'),
+                'project_id': str(self.project.id),
+            },
+            format='multipart',
+        )
+        self.assertEqual(upload.status_code, 201)
+        original = upload.json()
+
+        copied = self.client.post(
+            reverse('api-asset-file-duplicate', args=[self.workspace.id, original['id']])
+        )
+
+        self.assertEqual(copied.status_code, 201)
+        copy = copied.json()
+        self.assertNotEqual(copy['id'], original['id'])
+        # A distinct File, because (workspace, file) is unique.
+        self.assertNotEqual(copy['file']['id'], original['file']['id'])
+        self.assertEqual(copy['file']['name'], 'daily life (copy).png')
+        self.assertEqual(copy['project_id'], original['project_id'])
+        self.assertEqual(copy['file']['size_bytes'], original['file']['size_bytes'])
+
+        # The bytes really were written, not just the row.
+        source = File.objects.get(id=original['file']['id'])
+        duplicate = File.objects.get(id=copy['file']['id'])
+        self.assertNotEqual(duplicate.object_key, source.object_key)
+        self.assertTrue(default_storage.exists(duplicate.object_key))
+        self.assertEqual(
+            default_storage.open(duplicate.object_key, 'rb').read(),
+            default_storage.open(source.object_key, 'rb').read(),
+        )
+        # And it is scanned like any other upload rather than inheriting READY.
+        self.assertEqual(duplicate.status, 'PENDING')
+
+        listed = self.client.get(reverse('api-asset-files', args=[self.workspace.id]))
+        self.assertEqual(len(listed.json()), 2)
 
     def test_poster_is_served_once_the_preview_worker_has_run(self):
         """The still a card shows, and what happens before one exists."""

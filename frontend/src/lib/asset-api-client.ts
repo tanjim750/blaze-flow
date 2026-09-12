@@ -18,4 +18,7 @@ export const uploadAssetFile = (workspaceId: string, file: File, relationships: 
   return call<ProjectFile>(`/workspaces/${workspaceId}/asset-files/`, { method: "POST", body });
 };
 export const updateAssetFile = (workspaceId: string, id: string, body: Record<string, unknown>) => call<ProjectFile>(`/workspaces/${workspaceId}/asset-files/${id}/`, json("PATCH", body));
+/** Copies an asset in place. The server names it "… (copy)" and re-scans the bytes. */
+export const duplicateAssetFile = (workspaceId: string, id: string) =>
+  call<ProjectFile>(`/workspaces/${workspaceId}/asset-files/${id}/duplicate/`, { method: "POST" });
 export const deleteAssetFile = (workspaceId: string, id: string) => call<void>(`/workspaces/${workspaceId}/asset-files/${id}/`, { method: "DELETE" });

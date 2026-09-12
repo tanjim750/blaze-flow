@@ -49,6 +49,7 @@ from .project_files import (
     move_project_folder,
     rename_project_folder,
     update_project_file,
+    duplicate_project_file,
     upload_project_file,
 )
 from .resource_access import ResourceAccessError, grant_project_access
@@ -174,6 +175,7 @@ __all__ = [
     'update_workspace_profile',
     'upgrade_to_pro',
     'upload_media_version',
+    'duplicate_project_file',
     'upload_project_file',
     'upload_review_attachment',
     'upload_task_attachment',
