@@ -2389,3 +2389,21 @@ Files: three cuts collapse to one card reading "V3 · 3 versions"; dragging anot
 onto it shows "Drop to create V4" and POSTs to the right endpoint. Review: compare shows two
 labelled panes, 2 and 1 comments kept apart, linked playback, and the single-version path
 still has its player, composer and timeline markers.
+
+## 2026-09-13 — Compare panes cropped non-16:9 cuts
+
+The same fault the single player had, written a second time in `compare.tsx`:
+`width/height: 100%` with `object-fit: contain` on a video whose container has no definite
+height. The percentage resolves to `auto`, the video falls back to its intrinsic ratio at
+full width, `object-fit` has nothing to do, and the stage's `overflow: hidden` crops the
+rest — so a portrait cut lost its top and bottom in both panes.
+
+Each pane now wraps its picture in a frame carrying that cut's own `aspect-ratio`, exactly
+as `.rvp-frame` does. Per pane, deliberately: two cuts of one asset can legitimately differ
+in shape, and a reframe between versions is precisely the kind of thing someone opens
+compare to look at.
+
+Measured: two portrait cuts render 0.563 against an intrinsic 0.563, and a portrait/landscape
+pair renders 0.563 and 1.778, neither overflowing its stage.
+
+Written into `frontend/AGENTS.md`, since getting it wrong twice is enough.

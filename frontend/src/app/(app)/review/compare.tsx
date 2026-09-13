@@ -65,13 +65,20 @@ function ComparePane({ version, src, videoRef, follower }: {
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [shape, setShape] = useState<{ width: number; height: number } | null>(null);
 
   // The same hydration race the main player has: the browser can settle the video before
   // React attaches its handlers, leaving duration at zero.
   useEffect(() => {
     const element = videoRef.current;
     if (!element) return;
-    const sync = () => Number.isFinite(element.duration) && element.duration && setDurationMs(element.duration * 1000);
+    const sync = () => {
+      if (!Number.isFinite(element.duration) || !element.duration) return;
+      setDurationMs(element.duration * 1000);
+      // The frame is sized from this, so a vertical cut is shown vertical rather than
+      // filling the pane and losing its top and bottom.
+      if (element.videoWidth && element.videoHeight) setShape({ width: element.videoWidth, height: element.videoHeight });
+    };
     const fail = () => setFailed(true);
     if (element.error) fail();
     else if (element.readyState >= 1) sync();
@@ -112,6 +119,10 @@ function ComparePane({ version, src, videoRef, follower }: {
       </header>
 
       <div className="rv-compare-stage">
+        <div
+          className={shape ? "rv-compare-frame" : "rv-compare-frame is-unsized"}
+          style={shape ? { aspectRatio: `${shape.width} / ${shape.height}` } : undefined}
+        >
         {src && !failed
           ? <video
               ref={videoRef}
@@ -130,6 +141,7 @@ function ComparePane({ version, src, videoRef, follower }: {
               }}
             />
           : <p className="rv-compare-empty">No preview available for {version.label}.</p>}
+        </div>
       </div>
 
       <div className="rv-compare-controls">

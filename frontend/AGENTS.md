@@ -70,6 +70,19 @@ back to `currentColor` and every panel gets a stark white outline.
 truth and is never redefined. `--muted` in particular means *text colour* here and *surface*
 in shadcn, so it is bridged, not overwritten.
 
+## Sizing a video to its own shape
+
+`width/height: 100%` with `object-fit: contain` looks like it letterboxes and does not, if
+the container's height is not definite from the item's side — a grid row, or a flex child
+that has not been told. The percentage resolves to `auto`, the video falls back to its
+intrinsic ratio at full width, `object-fit` has nothing left to do, and `overflow: hidden`
+crops whatever does not fit. A portrait clip loses its top and bottom entirely.
+
+Wrap the picture in a frame carrying the media's own `aspect-ratio` (read from
+`videoWidth`/`videoHeight` on load) with `max-width: 100%; max-height: 100%`. See
+`.rvp-frame` in the player and `.rv-compare-frame` in compare — both exist because this was
+written wrong twice.
+
 ## Media elements and hydration
 
 Pages here are server-rendered, so the browser starts loading a `<video>`/`<audio>` as soon

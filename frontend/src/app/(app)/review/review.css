@@ -567,8 +567,13 @@
 .rv-compare-pane > header strong { font: 600 11px var(--font-geist-mono), monospace; color: #cbbcff; }
 .rv-compare-pane > header span { min-width: 0; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.rv-compare-stage { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; background: #000; overflow: hidden; }
-.rv-compare-stage video { width: 100%; height: 100%; object-fit: contain; cursor: pointer; }
+.rv-compare-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
+/* Sized to the media, exactly as `.rvp-frame` is in the single player: `height: 100%` on
+   the video alone never resolves here — the stage is not a definite height from the item's
+   side — so it fell back to its intrinsic ratio at full width and was clipped. */
+.rv-compare-frame { position: relative; max-width: 100%; max-height: 100%; aspect-ratio: 16 / 9; display: flex; align-items: center; justify-content: center; }
+.rv-compare-frame.is-unsized { width: 100%; height: 100%; aspect-ratio: auto; }
+.rv-compare-stage video { display: block; width: 100%; height: 100%; object-fit: contain; cursor: pointer; }
 .rv-compare-empty { margin: 0; padding: 20px; color: var(--muted); font-size: 12px; text-align: center; }
 
 .rv-compare-controls { display: flex; align-items: center; gap: 9px; flex: none; padding: 10px 12px; background: var(--rv-chrome); }
