@@ -1,0 +1,647 @@
+import io
+import shutil
+import tempfile
+
+from PIL import Image
+from django.core.files.storage import default_storage
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
+from django.urls import reverse
+
+from .models import File, Project, ProjectAccessMode, ProjectFile, ProjectFolder, TaskStage, Workspace
+from .services.outbox import process_outbox_events
+from .test_access_projects import WorkspaceAccessSetupMixin
+
+
+PNG_BYTES = b'\x89PNG\r\n\x1a\n' + b'\x00' * 32
+
+
+class ProjectFolderApiTests(WorkspaceAccessSetupMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_authenticate(self.owner)
+        project_response = self.client.post(
+            reverse('api-projects', args=[self.workspace.id]),
+            {'name': 'Assets Project'},
+            format='json',
+        )
+        self.project = Project.objects.get(id=project_response.json()['id'])
+
+    def test_owner_can_create_list_and_read_root_folder(self):
+        response = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'References'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        folder = ProjectFolder.objects.get(id=response.json()['id'])
+        self.assertIsNone(folder.parent_folder_id)
+
+        listed = self.client.get(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id])
+        )
+        self.assertEqual(len(listed.json()), 1)
+
+    def test_nested_folder_can_be_created(self):
+        root = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'References'},
+            format='json',
+        ).json()
+
+        nested = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'Client Logos', 'parent_folder_id': root['id']},
+            format='json',
+        )
+
+        self.assertEqual(nested.status_code, 201)
+        self.assertEqual(nested.json()['parent_folder_id'], root['id'])
+
+    def test_duplicate_root_folder_name_is_rejected(self):
+        self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'References'},
+            format='json',
+        )
+
+        response = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'References'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_duplicate_sibling_folder_name_is_rejected(self):
+        root = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'References'},
+            format='json',
+        ).json()
+        self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'Logos', 'parent_folder_id': root['id']},
+            format='json',
+        )
+
+        response = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'Logos', 'parent_folder_id': root['id']},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_same_name_allowed_in_different_parents(self):
+        root_a = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'Campaign A'},
+            format='json',
+        ).json()
+        root_b = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'Campaign B'},
+            format='json',
+        ).json()
+
+        first = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'Assets', 'parent_folder_id': root_a['id']},
+            format='json',
+        )
+        second = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'Assets', 'parent_folder_id': root_b['id']},
+            format='json',
+        )
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+
+    def test_owner_can_rename_folder(self):
+        folder = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'Old Name'},
+            format='json',
+        ).json()
+
+        response = self.client.patch(
+            reverse('api-project-folder-detail', args=[self.workspace.id, self.project.id, folder['id']]),
+            {'name': 'New Name'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['name'], 'New Name')
+
+    def test_deleting_folder_cascades_to_descendants_and_files(self):
+        root = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'Root'},
+            format='json',
+        ).json()
+        child = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'Child', 'parent_folder_id': root['id']},
+            format='json',
+        ).json()
+        upload = self.client.post(
+            reverse('api-project-files', args=[self.workspace.id, self.project.id]),
+            {'file': SimpleUploadedFile('root-file.png', PNG_BYTES, content_type='image/png'), 'folder_id': root['id']},
+            format='multipart',
+        ).json()
+
+        response = self.client.delete(
+            reverse('api-project-folder-detail', args=[self.workspace.id, self.project.id, root['id']])
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertIsNotNone(ProjectFolder.objects.get(id=root['id']).deleted_at)
+        self.assertIsNotNone(ProjectFolder.objects.get(id=child['id']).deleted_at)
+        deleted_project_file = ProjectFile.objects.get(id=upload['id'])
+        self.assertIsNotNone(deleted_project_file.deleted_at)
+        self.assertIsNotNone(File.objects.get(id=deleted_project_file.file_id).deleted_at)
+
+        listed_folders = self.client.get(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id])
+        )
+        self.assertEqual(listed_folders.json(), [])
+
+    def test_deleting_an_already_deleted_folder_is_not_found(self):
+        folder = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'Temp'},
+            format='json',
+        ).json()
+        self.client.delete(
+            reverse('api-project-folder-detail', args=[self.workspace.id, self.project.id, folder['id']])
+        )
+
+        response = self.client.delete(
+            reverse('api-project-folder-detail', args=[self.workspace.id, self.project.id, folder['id']])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_member_without_project_access_is_denied(self):
+        self.invite_and_accept(project_access_mode=ProjectAccessMode.SELECTED)
+        self.client.force_authenticate(self.member_user)
+
+        response = self.client.get(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id])
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+
+class ProjectFileApiTests(WorkspaceAccessSetupMixin, TestCase):
+    def setUp(self):
+        self.media_root = tempfile.mkdtemp(prefix='blazeflow-project-file-tests-')
+        self.settings_override = override_settings(
+            MEDIA_ROOT=self.media_root,
+            MAX_PROJECT_FILE_BYTES=1024 * 1024,
+        )
+        self.settings_override.enable()
+        super().setUp()
+        self.client.force_authenticate(self.owner)
+        project_response = self.client.post(
+            reverse('api-projects', args=[self.workspace.id]),
+            {'name': 'Assets Project'},
+            format='json',
+        )
+        self.project = Project.objects.get(id=project_response.json()['id'])
+
+    def tearDown(self):
+        self.settings_override.disable()
+        shutil.rmtree(self.media_root, ignore_errors=True)
+
+    def _png_upload(self, name='reference.png'):
+        return SimpleUploadedFile(name, PNG_BYTES, content_type='image/png')
+
+    def test_owner_can_upload_list_and_delete_a_root_file(self):
+        response = self.client.post(
+            reverse('api-project-files', args=[self.workspace.id, self.project.id]),
+            {'file': self._png_upload()},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        file_id = response.json()['id']
+        self.assertIsNone(response.json()['folder_id'])
+        self.assertEqual(response.json()['file']['name'], 'reference.png')
+
+        listed = self.client.get(
+            reverse('api-project-files', args=[self.workspace.id, self.project.id])
+        )
+        self.assertEqual(len(listed.json()), 1)
+
+        removed = self.client.delete(
+            reverse('api-project-file-detail', args=[self.workspace.id, self.project.id, file_id])
+        )
+        self.assertEqual(removed.status_code, 204)
+        deleted_project_file = ProjectFile.objects.get(id=file_id)
+        self.assertIsNotNone(deleted_project_file.deleted_at)
+        self.assertIsNotNone(File.objects.get(id=deleted_project_file.file_id).deleted_at)
+
+    def test_file_can_be_placed_in_a_folder(self):
+        folder = self.client.post(
+            reverse('api-project-folders', args=[self.workspace.id, self.project.id]),
+            {'name': 'References'},
+            format='json',
+        ).json()
+
+        response = self.client.post(
+            reverse('api-project-files', args=[self.workspace.id, self.project.id]),
+            {'file': self._png_upload(), 'folder_id': folder['id']},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['folder_id'], folder['id'])
+
+    def test_spoofed_file_is_rejected(self):
+        upload = SimpleUploadedFile('fake.png', b'not-really-a-png', content_type='image/png')
+
+        response = self.client.post(
+            reverse('api-project-files', args=[self.workspace.id, self.project.id]),
+            {'file': upload},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(ProjectFile.objects.exists())
+
+    def test_deleted_file_is_not_found(self):
+        created = self.client.post(
+            reverse('api-project-files', args=[self.workspace.id, self.project.id]),
+            {'file': self._png_upload()},
+            format='multipart',
+        ).json()
+        self.client.delete(
+            reverse('api-project-file-detail', args=[self.workspace.id, self.project.id, created['id']])
+        )
+
+        response = self.client.get(
+            reverse('api-project-file-detail', args=[self.workspace.id, self.project.id, created['id']])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_ready_file_can_be_downloaded(self):
+        created = self.client.post(
+            reverse('api-project-files', args=[self.workspace.id, self.project.id]),
+            {'file': self._png_upload()}, format='multipart',
+        ).json()
+        project_file = ProjectFile.objects.select_related('file').get(id=created['id'])
+        project_file.file.status = 'READY'
+        project_file.file.save(update_fields=['status'])
+
+        response = self.client.get(
+            reverse('api-project-file-download', args=[self.workspace.id, self.project.id, created['id']])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b''.join(response.streaming_content), PNG_BYTES)
+        self.assertIn('attachment;', response['Content-Disposition'])
+
+    def test_pending_file_download_is_rejected(self):
+        created = self.client.post(
+            reverse('api-project-files', args=[self.workspace.id, self.project.id]),
+            {'file': self._png_upload()}, format='multipart',
+        ).json()
+
+        response = self.client.get(
+            reverse('api-project-file-download', args=[self.workspace.id, self.project.id, created['id']])
+        )
+
+        self.assertEqual(response.status_code, 409)
+
+    def test_member_cannot_delete_without_access(self):
+        created = self.client.post(
+            reverse('api-project-files', args=[self.workspace.id, self.project.id]),
+            {'file': self._png_upload()},
+            format='multipart',
+        ).json()
+        self.invite_and_accept(project_access_mode=ProjectAccessMode.SELECTED)
+        self.client.force_authenticate(self.member_user)
+
+        response = self.client.delete(
+            reverse('api-project-file-detail', args=[self.workspace.id, self.project.id, created['id']])
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+
+class WorkspaceAssetApiTests(WorkspaceAccessSetupMixin, TestCase):
+    def setUp(self):
+        self.media_root = tempfile.mkdtemp(prefix='blazeflow-asset-library-tests-')
+        self.settings_override = override_settings(MEDIA_ROOT=self.media_root, MAX_PROJECT_FILE_BYTES=1024 * 1024)
+        self.settings_override.enable()
+        super().setUp()
+        self.client.force_authenticate(self.owner)
+        self.project = Project.objects.get(id=self.client.post(
+            reverse('api-projects', args=[self.workspace.id]), {'name': 'Shared Assets'}, format='json',
+        ).json()['id'])
+
+    def tearDown(self):
+        self.settings_override.disable()
+        shutil.rmtree(self.media_root, ignore_errors=True)
+
+    def upload_png(self, name):
+        buffer = io.BytesIO()
+        Image.new('RGB', (24, 16), '#583be8').save(buffer, format='PNG')
+        response = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile(name, buffer.getvalue(), content_type='image/png')},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 201)
+        return response.json()
+
+    def test_dragging_a_file_onto_another_makes_it_the_next_version(self):
+        first = self.upload_png('campaign.png')
+        second = self.upload_png('campaign-revised.png')
+        third = self.upload_png('campaign-final.png')
+
+        # Each upload starts as its own single-version asset.
+        self.assertEqual(first['media_asset']['version_count'], 1)
+        self.assertTrue(first['media_asset']['is_latest'])
+
+        versions_url = reverse('api-asset-file-versions', args=[self.workspace.id, first['id']])
+        promoted = self.client.post(versions_url, {'file_id': second['id']}, format='json')
+        self.assertEqual(promoted.status_code, 200)
+        self.assertEqual(promoted.json()['version_number'], 2)
+        self.assertEqual(promoted.json()['media_asset']['id'], first['media_asset']['id'])
+        self.assertTrue(promoted.json()['media_asset']['is_latest'])
+
+        # A third goes on top rather than replacing V2.
+        self.client.post(versions_url, {'file_id': third['id']}, format='json')
+        listed = {item['id']: item for item in self.client.get(reverse('api-asset-files', args=[self.workspace.id])).json()}
+        self.assertEqual(listed[first['id']]['version_number'], 1)
+        self.assertEqual(listed[second['id']]['version_number'], 2)
+        self.assertEqual(listed[third['id']]['version_number'], 3)
+        # One asset, three versions, and only the newest is latest.
+        self.assertEqual({item['media_asset']['id'] for item in listed.values()}, {first['media_asset']['id']})
+        self.assertEqual(listed[third['id']]['media_asset']['version_count'], 3)
+        self.assertFalse(listed[first['id']]['media_asset']['is_latest'])
+        self.assertTrue(listed[third['id']]['media_asset']['is_latest'])
+
+    def test_versioning_refuses_the_combinations_that_would_lose_history(self):
+        first = self.upload_png('one.png')
+        second = self.upload_png('two.png')
+        third = self.upload_png('three.png')
+        versions_url = reverse('api-asset-file-versions', args=[self.workspace.id, first['id']])
+
+        itself = self.client.post(versions_url, {'file_id': first['id']}, format='json')
+        self.assertEqual(itself.status_code, 400)
+        self.assertIn('version of itself', itself.json()['detail'])
+
+        self.client.post(versions_url, {'file_id': second['id']}, format='json')
+        again = self.client.post(versions_url, {'file_id': second['id']}, format='json')
+        self.assertEqual(again.status_code, 400)
+        self.assertIn('already a version', again.json()['detail'])
+
+        # Moving an asset that has its own versions would renumber it silently.
+        onto_third = reverse('api-asset-file-versions', args=[self.workspace.id, third['id']])
+        nested = self.client.post(onto_third, {'file_id': first['id']}, format='json')
+        self.assertEqual(nested.status_code, 400)
+        self.assertIn('versions of its own', nested.json()['detail'])
+
+    def test_duplicate_copies_the_bytes_and_keeps_the_relationships(self):
+        """A duplicate is a real copy: the workspace cannot hold two rows for one File."""
+        upload = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {
+                'file': SimpleUploadedFile('daily life.png', PNG_BYTES, content_type='image/png'),
+                'project_id': str(self.project.id),
+            },
+            format='multipart',
+        )
+        self.assertEqual(upload.status_code, 201)
+        original = upload.json()
+
+        copied = self.client.post(
+            reverse('api-asset-file-duplicate', args=[self.workspace.id, original['id']])
+        )
+
+        self.assertEqual(copied.status_code, 201)
+        copy = copied.json()
+        self.assertNotEqual(copy['id'], original['id'])
+        # A distinct File, because (workspace, file) is unique.
+        self.assertNotEqual(copy['file']['id'], original['file']['id'])
+        self.assertEqual(copy['file']['name'], 'daily life (copy).png')
+        self.assertEqual(copy['project_id'], original['project_id'])
+        self.assertEqual(copy['file']['size_bytes'], original['file']['size_bytes'])
+
+        # The bytes really were written, not just the row.
+        source = File.objects.get(id=original['file']['id'])
+        duplicate = File.objects.get(id=copy['file']['id'])
+        self.assertNotEqual(duplicate.object_key, source.object_key)
+        self.assertTrue(default_storage.exists(duplicate.object_key))
+        self.assertEqual(
+            default_storage.open(duplicate.object_key, 'rb').read(),
+            default_storage.open(source.object_key, 'rb').read(),
+        )
+        # And it is scanned like any other upload rather than inheriting READY.
+        self.assertEqual(duplicate.status, 'PENDING')
+
+        listed = self.client.get(reverse('api-asset-files', args=[self.workspace.id]))
+        self.assertEqual(len(listed.json()), 2)
+
+    def test_poster_is_served_once_the_preview_worker_has_run(self):
+        """The still a card shows, and what happens before one exists."""
+        # A decodable image, unlike PNG_BYTES: the thumbnailer has to actually open it,
+        # and a header full of zeros falls back to the generic card instead.
+        buffer = io.BytesIO()
+        Image.new('RGB', (48, 32), '#583be8').save(buffer, format='PNG')
+        upload = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile('lockup.png', buffer.getvalue(), content_type='image/png')}, format='multipart',
+        )
+        self.assertEqual(upload.status_code, 201)
+        asset_id = upload.json()['id']
+        poster_url = reverse('api-asset-file-poster', args=[self.workspace.id, asset_id])
+
+        # Nothing generated yet: the list says so, and the route 404s rather than guessing.
+        self.assertIsNone(upload.json()['poster'])
+        self.assertEqual(self.client.get(poster_url).status_code, 404)
+
+        process_outbox_events()
+        process_outbox_events()
+
+        listed = self.client.get(reverse('api-asset-files', args=[self.workspace.id]))
+        poster_meta = next(item for item in listed.json() if item['id'] == asset_id)['poster']
+        # The frame's own dimensions travel with it, so a card can size its box to the
+        # media rather than cropping it into a fixed rectangle.
+        self.assertEqual((poster_meta['width'], poster_meta['height']), (48, 32))
+
+        poster = self.client.get(poster_url)
+        self.assertEqual(poster.status_code, 200)
+        self.assertEqual(poster['Content-Type'], 'image/jpeg')
+        # Inline: this one is meant to be rendered, unlike the download route.
+        self.assertNotIn('attachment', poster.get('Content-Disposition', ''))
+        self.assertGreater(len(b''.join(poster.streaming_content)), 0)
+
+    def test_files_and_folders_can_exist_without_a_project(self):
+        folder = self.client.post(
+            reverse('api-asset-folders', args=[self.workspace.id]), {'name': 'General'}, format='json',
+        )
+        upload = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile('standalone.png', PNG_BYTES, content_type='image/png')}, format='multipart',
+        )
+
+        self.assertEqual(folder.status_code, 201)
+        self.assertIsNone(folder.json()['project_id'])
+        self.assertIsNone(folder.json()['client_team_id'])
+        self.assertEqual(upload.status_code, 201)
+        self.assertIsNone(upload.json()['folder_id'])
+        self.assertIsNone(upload.json()['project_id'])
+
+    def test_project_view_returns_the_same_workspace_asset_records(self):
+        folder = self.client.post(
+            reverse('api-asset-folders', args=[self.workspace.id]),
+            {'name': 'Footage', 'project_id': str(self.project.id)}, format='json',
+        ).json()
+        upload = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile('take.png', PNG_BYTES, content_type='image/png'), 'project_id': str(self.project.id), 'folder_id': folder['id']},
+            format='multipart',
+        ).json()
+
+        project_folders = self.client.get(reverse('api-project-folders', args=[self.workspace.id, self.project.id])).json()
+        project_files = self.client.get(reverse('api-project-files', args=[self.workspace.id, self.project.id])).json()
+        self.assertEqual(project_folders[0]['id'], folder['id'])
+        self.assertEqual(project_files[0]['id'], upload['id'])
+
+    def test_asset_can_be_assigned_to_and_removed_from_a_project(self):
+        folder = self.client.post(
+            reverse('api-asset-folders', args=[self.workspace.id]), {'name': 'Movable'}, format='json',
+        ).json()
+        assigned = self.client.patch(
+            reverse('api-asset-folder-detail', args=[self.workspace.id, folder['id']]),
+            {'project_id': str(self.project.id)}, format='json',
+        )
+        unassigned = self.client.patch(
+            reverse('api-asset-folder-detail', args=[self.workspace.id, folder['id']]),
+            {'project_id': None, 'client_team_id': None}, format='json',
+        )
+
+        self.assertEqual(assigned.status_code, 200)
+        self.assertEqual(assigned.json()['project_id'], str(self.project.id))
+        self.assertEqual(unassigned.status_code, 200)
+        self.assertIsNone(unassigned.json()['project_id'])
+
+    def _stage(self, name):
+        stages = self.client.get(reverse('api-task-stages', args=[self.workspace.id])).json()
+        rows = stages['stages'] if isinstance(stages, dict) else stages
+        return next(row for row in rows if row['name'] == name)
+
+    def test_upload_links_a_file_to_a_client_project_and_stage(self):
+        stage = self._stage('Internal QA')
+        upload = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {
+                'file': SimpleUploadedFile('promo.png', PNG_BYTES, content_type='image/png'),
+                'project_id': str(self.project.id),
+                'task_stage_id': stage['id'],
+            },
+            format='multipart',
+        )
+
+        self.assertEqual(upload.status_code, 201)
+        self.assertEqual(upload.json()['project_id'], str(self.project.id))
+        self.assertEqual(upload.json()['task_stage_id'], stage['id'])
+
+    def test_upload_without_a_stage_has_none(self):
+        upload = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile('rough.png', PNG_BYTES, content_type='image/png')}, format='multipart',
+        )
+
+        self.assertEqual(upload.status_code, 201)
+        self.assertIsNone(upload.json()['task_stage_id'])
+
+    def test_stage_can_be_changed_and_cleared_without_disturbing_relationships(self):
+        upload = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile('cut.png', PNG_BYTES, content_type='image/png'), 'project_id': str(self.project.id)},
+            format='multipart',
+        ).json()
+        stage = self._stage('Approved')
+
+        moved = self.client.patch(
+            reverse('api-asset-file-detail', args=[self.workspace.id, upload['id']]),
+            {'task_stage_id': stage['id']}, format='json',
+        )
+        cleared = self.client.patch(
+            reverse('api-asset-file-detail', args=[self.workspace.id, upload['id']]),
+            {'task_stage_id': None}, format='json',
+        )
+
+        self.assertEqual(moved.status_code, 200)
+        self.assertEqual(moved.json()['task_stage_id'], stage['id'])
+        self.assertEqual(moved.json()['project_id'], str(self.project.id))
+        self.assertEqual(cleared.status_code, 200)
+        self.assertIsNone(cleared.json()['task_stage_id'])
+        self.assertEqual(cleared.json()['project_id'], str(self.project.id))
+
+    def test_a_stage_from_another_workspace_is_rejected(self):
+        import uuid
+        from django.utils import timezone
+        now = timezone.now()
+        other_workspace = Workspace.objects.create(
+            id=uuid.uuid4(), name='Other Studio', slug='other-studio', timezone='UTC',
+            created_by_user=self.workspace.created_by_user, created_at=now, updated_at=now,
+        )
+        foreign_stage = TaskStage.objects.create(workspace=other_workspace, name='Elsewhere')
+
+        response = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile('bad.png', PNG_BYTES, content_type='image/png'), 'task_stage_id': str(foreign_stage.id)},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_file_can_be_assigned_to_a_client_without_a_project(self):
+        upload = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile('loose.png', PNG_BYTES, content_type='image/png')}, format='multipart',
+        ).json()
+        team = self.client.post(
+            reverse('api-client-teams', args=[self.workspace.id]), {'name': 'Shamim'}, format='json',
+        ).json()
+
+        assigned = self.client.patch(
+            reverse('api-asset-file-detail', args=[self.workspace.id, upload['id']]),
+            {'client_team_id': team['id'], 'project_id': None, 'folder_id': None}, format='json',
+        )
+
+        self.assertEqual(assigned.status_code, 200)
+        self.assertEqual(assigned.json()['client_team_id'], team['id'])
+        self.assertIsNone(assigned.json()['project_id'])
+
+        listed = self.client.get(reverse('api-asset-files', args=[self.workspace.id])).json()
+        self.assertEqual(listed[0]['client_team_id'], team['id'])
+
+    def test_folder_can_be_assigned_to_a_client_without_a_project(self):
+        folder = self.client.post(
+            reverse('api-asset-folders', args=[self.workspace.id]), {'name': 'Sound Effects'}, format='json',
+        ).json()
+        team = self.client.post(
+            reverse('api-client-teams', args=[self.workspace.id]), {'name': 'Shamim'}, format='json',
+        ).json()
+
+        assigned = self.client.patch(
+            reverse('api-asset-folder-detail', args=[self.workspace.id, folder['id']]),
+            {'client_team_id': team['id'], 'project_id': None, 'parent_folder_id': None}, format='json',
+        )
+
+        self.assertEqual(assigned.status_code, 200)
+        self.assertEqual(assigned.json()['client_team_id'], team['id'])
+
+        listed = self.client.get(reverse('api-asset-folders', args=[self.workspace.id])).json()
+        self.assertEqual(listed[0]['client_team_id'], team['id'])

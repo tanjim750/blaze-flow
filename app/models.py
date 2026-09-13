@@ -1,4 +1,11 @@
+import uuid
+
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Lower
+
+from .managers import UserManager
 
 
 class UserStatus(models.TextChoices):
@@ -75,8 +82,21 @@ class ReviewCommentContentType(models.TextChoices):
     FILE = 'FILE'
 
 
+class ReviewReactionEmoji(models.TextChoices):
+    THUMBS_UP = '👍', 'Thumbs up'
+    HEART = '❤️', 'Heart'
+    LAUGH = '😂', 'Laugh'
+    SURPRISED = '😮', 'Surprised'
+    SAD = '😢', 'Sad'
+    CELEBRATE = '🎉', 'Celebrate'
+
+
 class TaskStatus(models.TextChoices):
     TODO = 'TODO'
+    REVISIONS = 'REVISIONS'
+    INTERNAL_QA = 'INTERNAL_QA'
+    CLIENT = 'CLIENT'
+    APPROVED = 'APPROVED'
     IN_PROGRESS = 'IN_PROGRESS'
     COMPLETED = 'COMPLETED'
     CANCELLED = 'CANCELLED'
@@ -85,6 +105,13 @@ class TaskStatus(models.TextChoices):
 class FileStatus(models.TextChoices):
     PENDING = 'PENDING'
     READY = 'READY'
+    FAILED = 'FAILED'
+
+
+class FileSecurityScanStatus(models.TextChoices):
+    PENDING = 'PENDING'
+    CLEAN = 'CLEAN'
+    INFECTED = 'INFECTED'
     FAILED = 'FAILED'
 
 
@@ -115,6 +142,29 @@ class AuditActorType(models.TextChoices):
     SYSTEM = 'SYSTEM'
 
 
+class NotificationKind(models.TextChoices):
+    REVIEW_COMMENT_MENTION = 'REVIEW_COMMENT_MENTION'
+
+
+class OutboxEventStatus(models.TextChoices):
+    PENDING = 'PENDING'
+    PROCESSING = 'PROCESSING'
+    PUBLISHED = 'PUBLISHED'
+    FAILED = 'FAILED'
+    DEAD_LETTER = 'DEAD_LETTER'
+
+
+class NotificationDeliveryChannel(models.TextChoices):
+    EMAIL = 'EMAIL'
+
+
+class NotificationDeliveryStatus(models.TextChoices):
+    PENDING = 'PENDING'
+    SENT = 'SENT'
+    SKIPPED = 'SKIPPED'
+    FAILED = 'FAILED'
+
+
 class SubscriptionPlan(models.TextChoices):
     FREE = 'FREE'
     PRO = 'PRO'
@@ -127,34 +177,41 @@ class SubscriptionStatus(models.TextChoices):
     PAST_DUE = 'PAST_DUE'
 
 
-class User(models.Model):
-    id = models.UUIDField(primary_key=True)
-    email = models.CharField(max_length=255, unique=True)
+class User(AbstractBaseUser, PermissionsMixin):
+    """The single identity used by the domain and Django authentication."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email = models.EmailField(max_length=255, unique=True)
     first_name = models.CharField(max_length=150)
     last_name = models.CharField(max_length=150)
     avatar_url = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=UserStatus.choices, default=UserStatus.ACTIVE)
     email_verified_at = models.DateTimeField(null=True, blank=True)
     timezone = models.CharField(max_length=100, null=True, blank=True)
-    last_login_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
+    is_staff = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = UserManager()
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['first_name', 'last_name']
+
+    @property
+    def is_active(self):
+        return self.status == UserStatus.ACTIVE
+
+    def get_full_name(self):
+        return f'{self.first_name} {self.last_name}'.strip()
+
+    def get_short_name(self):
+        return self.first_name
 
     class Meta:
         db_table = 'users'
-
-
-class PasswordCredential(models.Model):
-    id = models.UUIDField(primary_key=True)
-    user = models.OneToOneField(User, on_delete=models.DO_NOTHING, db_column='user_id', related_name='+')
-    password_hash = models.CharField(max_length=255)
-    password_set_at = models.DateTimeField()
-    password_changed_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
-
-    class Meta:
-        db_table = 'password_credentials'
+        constraints = [
+            models.UniqueConstraint(Lower('email'), name='users_email_case_insensitive_uniq')
+        ]
 
 
 class OAuthIdentity(models.Model):
@@ -194,6 +251,20 @@ class PasswordResetToken(models.Model):
         indexes = [models.Index(fields=['user', 'created_at'])]
 
 
+class EmailVerificationToken(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='user_id', related_name='+')
+    token_hash = models.CharField(max_length=255, unique=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    invalidated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'email_verification_tokens'
+        indexes = [models.Index(fields=['user', 'created_at'])]
+
+
 class Workspace(models.Model):
     id = models.UUIDField(primary_key=True)
     name = models.CharField(max_length=150)
@@ -202,6 +273,7 @@ class Workspace(models.Model):
     timezone = models.CharField(max_length=100)
     status = models.CharField(max_length=30, choices=WorkspaceStatus.choices, default=WorkspaceStatus.ACTIVE)
     deletion_scheduled_at = models.DateTimeField(null=True, blank=True)
+    task_workflow_settings = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -229,6 +301,19 @@ class WorkspaceProfile(models.Model):
 
     class Meta:
         db_table = 'workspace_profiles'
+
+
+class WorkspaceRetentionPolicy(models.Model):
+    id = models.UUIDField(primary_key=True)
+    workspace = models.OneToOneField(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
+    review_file_cleanup_enabled = models.BooleanField(default=True)
+    review_file_retention_days = models.PositiveIntegerField()
+    updated_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='updated_by_user_id', related_name='+')
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'workspace_retention_policies'
 
 
 class GuestSession(models.Model):
@@ -268,6 +353,7 @@ class StorageBackend(models.Model):
 
 class File(models.Model):
     id = models.UUIDField(primary_key=True)
+    workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
     storage_backend = models.ForeignKey(StorageBackend, on_delete=models.DO_NOTHING, db_column='storage_backend_id', related_name='+')
     object_key = models.CharField(max_length=1024)
     original_name = models.CharField(max_length=512)
@@ -285,6 +371,7 @@ class File(models.Model):
         db_table = 'files'
         constraints = [models.UniqueConstraint(fields=['storage_backend', 'object_key'], name='files_storage_backend_object_key_uniq')]
         indexes = [
+            models.Index(fields=['workspace']),
             models.Index(fields=['storage_backend']),
             models.Index(fields=['mime_type']),
             models.Index(fields=['status']),
@@ -297,6 +384,7 @@ class Role(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
     name = models.CharField(max_length=100)
     description = models.TextField(null=True, blank=True)
+    is_system = models.BooleanField(default=False)
     status = models.CharField(max_length=20, choices=RoleStatus.choices, default=RoleStatus.ACTIVE)
     created_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='created_by_user_id', related_name='+')
     created_at = models.DateTimeField()
@@ -304,7 +392,14 @@ class Role(models.Model):
 
     class Meta:
         db_table = 'roles'
-        constraints = [models.UniqueConstraint(fields=['workspace', 'name'], name='roles_workspace_name_uniq')]
+        constraints = [
+            models.UniqueConstraint(fields=['workspace', 'name'], name='roles_workspace_name_uniq'),
+            models.UniqueConstraint(
+                models.F('workspace'),
+                Lower('name'),
+                name='roles_workspace_name_case_insensitive_uniq',
+            ),
+        ]
 
 
 class RolePermission(models.Model):
@@ -367,6 +462,41 @@ class WorkspaceMembership(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['workspace', 'user'], name='workspace_memberships_workspace_user_uniq'),
             models.UniqueConstraint(fields=['workspace', 'client_team'], name='workspace_memberships_workspace_client_team_uniq'),
+            models.CheckConstraint(
+                check=(
+                    models.Q(
+                        principal_type=WorkspacePrincipalType.USER,
+                        user__isnull=False,
+                        client_team__isnull=True,
+                    )
+                    | models.Q(
+                        principal_type=WorkspacePrincipalType.CLIENT_TEAM,
+                        user__isnull=True,
+                        client_team__isnull=False,
+                    )
+                ),
+                name='workspace_memberships_principal_matches_type',
+            ),
+            models.CheckConstraint(
+                check=(
+                    models.Q(is_primary_owner=False)
+                    | models.Q(
+                        principal_type=WorkspacePrincipalType.USER,
+                        user__isnull=False,
+                        client_team__isnull=True,
+                        status=WorkspaceMembershipStatus.ACTIVE,
+                    )
+                ),
+                name='workspace_memberships_owner_is_active_user',
+            ),
+            models.UniqueConstraint(
+                fields=['workspace'],
+                condition=models.Q(
+                    is_primary_owner=True,
+                    status=WorkspaceMembershipStatus.ACTIVE,
+                ),
+                name='workspace_memberships_one_active_owner',
+            ),
         ]
         indexes = [
             models.Index(fields=['workspace']),
@@ -374,11 +504,84 @@ class WorkspaceMembership(models.Model):
             models.Index(fields=['client_team']),
         ]
 
+    def clean(self):
+        errors = {}
+        if self.role_id and self.workspace_id and self.role.workspace_id != self.workspace_id:
+            errors['role'] = 'The role must belong to the membership workspace.'
+        if (
+            self.client_team_id
+            and self.workspace_id
+            and self.client_team.workspace_id != self.workspace_id
+        ):
+            errors['client_team'] = 'The client team must belong to the membership workspace.'
+        if errors:
+            raise ValidationError(errors)
+
+
+class WorkspaceInvite(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, related_name='+')
+    email = models.EmailField(max_length=255)
+    role = models.ForeignKey(Role, on_delete=models.DO_NOTHING, related_name='+')
+    project_access_mode = models.CharField(
+        max_length=20,
+        choices=ProjectAccessMode.choices,
+        default=ProjectAccessMode.ALL,
+    )
+    token_hash = models.CharField(max_length=64, unique=True)
+    invited_by_membership = models.ForeignKey(
+        WorkspaceMembership,
+        on_delete=models.DO_NOTHING,
+        related_name='+',
+    )
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    accepted_by_user = models.ForeignKey(
+        User,
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'workspace_invites'
+        indexes = [
+            models.Index(fields=['workspace', 'email']),
+            models.Index(fields=['expires_at']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(accepted_at__isnull=True, accepted_by_user__isnull=True)
+                    | models.Q(accepted_at__isnull=False, accepted_by_user__isnull=False)
+                ),
+                name='workspace_invites_acceptance_pair',
+            )
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.role_id and self.workspace_id and self.role.workspace_id != self.workspace_id:
+            errors['role'] = 'The role must belong to the invitation workspace.'
+        if (
+            self.invited_by_membership_id
+            and self.workspace_id
+            and self.invited_by_membership.workspace_id != self.workspace_id
+        ):
+            errors['invited_by_membership'] = 'The inviter must belong to the invitation workspace.'
+        if errors:
+            raise ValidationError(errors)
+
 
 class Project(models.Model):
     id = models.UUIDField(primary_key=True)
     workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
     created_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='created_by_user_id', related_name='+')
+    client_team = models.ForeignKey(ClientTeam, on_delete=models.SET_NULL, db_column='client_team_id', null=True, blank=True, related_name='projects')
     name = models.CharField(max_length=200)
     description = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=30, choices=ProjectStatus.choices, default=ProjectStatus.DRAFT)
@@ -394,9 +597,14 @@ class Project(models.Model):
         db_table = 'projects'
         indexes = [
             models.Index(fields=['workspace']),
+            models.Index(fields=['client_team']),
             models.Index(fields=['created_by_user']),
             models.Index(fields=['status']),
         ]
+
+    def clean(self):
+        if self.client_team_id and self.workspace_id and self.client_team.workspace_id != self.workspace_id:
+            raise ValidationError({'client_team': 'The client team must belong to the project workspace.'})
 
 
 class ResourceAccess(models.Model):
@@ -409,6 +617,16 @@ class ResourceAccess(models.Model):
         db_table = 'resource_access'
         constraints = [models.UniqueConstraint(fields=['workspace_membership', 'project'], name='resource_access_membership_project_uniq')]
         indexes = [models.Index(fields=['project'])]
+
+    def clean(self):
+        if (
+            self.workspace_membership_id
+            and self.project_id
+            and self.workspace_membership.workspace_id != self.project.workspace_id
+        ):
+            raise ValidationError(
+                {'project': 'The project and membership must belong to the same workspace.'}
+            )
 
 
 class WorkflowStage(models.Model):
@@ -489,12 +707,37 @@ class MediaVersionStageEntry(models.Model):
 
     class Meta:
         db_table = 'media_version_stage_entries'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['media_version'],
+                condition=models.Q(exited_at__isnull=True),
+                name='media_stage_entries_one_open_entry',
+            )
+        ]
         indexes = [
             models.Index(fields=['media_version']),
             models.Index(fields=['workflow_stage']),
             models.Index(fields=['workflow_stage_status']),
             models.Index(fields=['media_version', 'entered_at']),
         ]
+
+    def clean(self):
+        errors = {}
+        project_workspace_id = self.media_version.project.workspace_id if self.media_version_id else None
+        if (
+            self.workflow_stage_id
+            and project_workspace_id
+            and self.workflow_stage.workspace_id != project_workspace_id
+        ):
+            errors['workflow_stage'] = 'The workflow stage must belong to the media workspace.'
+        if (
+            self.workflow_stage_status_id
+            and self.workflow_stage_id
+            and self.workflow_stage_status.workflow_stage_id != self.workflow_stage_id
+        ):
+            errors['workflow_stage_status'] = 'The status must belong to the selected stage.'
+        if errors:
+            raise ValidationError(errors)
 
 
 class ReviewComment(models.Model):
@@ -516,6 +759,15 @@ class ReviewComment(models.Model):
 
     class Meta:
         db_table = 'review_comments'
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(author_user__isnull=False, author_guest_session__isnull=True)
+                    | models.Q(author_user__isnull=True, author_guest_session__isnull=False)
+                ),
+                name='review_comments_exactly_one_author',
+            )
+        ]
         indexes = [
             models.Index(fields=['media_version']),
             models.Index(fields=['parent_comment']),
@@ -533,6 +785,9 @@ class ReviewCommentContent(models.Model):
     text_content = models.TextField(null=True, blank=True)
     file = models.ForeignKey(File, on_delete=models.DO_NOTHING, db_column='file_id', null=True, blank=True, related_name='+')
     sort_order = models.IntegerField(default=0)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='deleted_by_user_id', null=True, blank=True, related_name='+')
+    deleted_by_guest_session = models.ForeignKey(GuestSession, on_delete=models.DO_NOTHING, db_column='deleted_by_guest_session_id', null=True, blank=True, related_name='+')
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -542,6 +797,7 @@ class ReviewCommentContent(models.Model):
             models.Index(fields=['review_comment']),
             models.Index(fields=['file']),
             models.Index(fields=['review_comment', 'sort_order']),
+            models.Index(fields=['deleted_at']),
         ]
 
 
@@ -562,6 +818,62 @@ class ReviewCommentRevision(models.Model):
         ]
 
 
+class ReviewCommentMention(models.Model):
+    id = models.UUIDField(primary_key=True)
+    review_comment = models.ForeignKey(ReviewComment, on_delete=models.DO_NOTHING, db_column='review_comment_id', related_name='+')
+    user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='user_id', related_name='+')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'review_comment_mentions'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['review_comment', 'user'],
+                name='review_comment_mentions_comment_user_uniq',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['review_comment']),
+            models.Index(fields=['user', 'created_at']),
+        ]
+
+
+class ReviewCommentReaction(models.Model):
+    id = models.UUIDField(primary_key=True)
+    review_comment = models.ForeignKey(ReviewComment, on_delete=models.DO_NOTHING, db_column='review_comment_id', related_name='+')
+    emoji = models.CharField(max_length=16, choices=ReviewReactionEmoji.choices)
+    reacted_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='reacted_by_user_id', null=True, blank=True, related_name='+')
+    reacted_by_guest_session = models.ForeignKey(GuestSession, on_delete=models.DO_NOTHING, db_column='reacted_by_guest_session_id', null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'review_comment_reactions'
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(reacted_by_user__isnull=False, reacted_by_guest_session__isnull=True)
+                    | models.Q(reacted_by_user__isnull=True, reacted_by_guest_session__isnull=False)
+                ),
+                name='review_reactions_exactly_one_actor',
+            ),
+            models.UniqueConstraint(
+                fields=['review_comment', 'emoji', 'reacted_by_user'],
+                condition=models.Q(reacted_by_user__isnull=False),
+                name='review_reactions_comment_emoji_user_uniq',
+            ),
+            models.UniqueConstraint(
+                fields=['review_comment', 'emoji', 'reacted_by_guest_session'],
+                condition=models.Q(reacted_by_guest_session__isnull=False),
+                name='review_reactions_comment_emoji_guest_uniq',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['review_comment', 'emoji']),
+            models.Index(fields=['reacted_by_user']),
+            models.Index(fields=['reacted_by_guest_session']),
+        ]
+
+
 class Annotation(models.Model):
     id = models.UUIDField(primary_key=True)
     media_version = models.ForeignKey(MediaVersion, on_delete=models.DO_NOTHING, db_column='media_version_id', related_name='+')
@@ -578,6 +890,15 @@ class Annotation(models.Model):
 
     class Meta:
         db_table = 'annotations'
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(author_user__isnull=False, author_guest_session__isnull=True)
+                    | models.Q(author_user__isnull=True, author_guest_session__isnull=False)
+                ),
+                name='annotations_exactly_one_author',
+            )
+        ]
         indexes = [
             models.Index(fields=['media_version']),
             models.Index(fields=['review_comment']),
@@ -624,10 +945,31 @@ class AnnotationRevision(models.Model):
         ]
 
 
+class TaskStage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='task_stages')
+    name = models.CharField(max_length=100)
+    color = models.CharField(max_length=20, default='#89909d')
+    sort_order = models.IntegerField(default=0)
+    wip_limit = models.PositiveIntegerField(null=True, blank=True)
+    is_done = models.BooleanField(default=False)
+    automation_enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'task_stages'
+        ordering = ('sort_order', 'created_at')
+        constraints = [models.UniqueConstraint(fields=['workspace', 'name'], name='task_stages_workspace_name_uniq')]
+        indexes = [models.Index(fields=['workspace', 'sort_order'])]
+
+
 class Task(models.Model):
     id = models.UUIDField(primary_key=True)
     workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
     project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', null=True, blank=True, related_name='+')
+    client_team = models.ForeignKey(ClientTeam, on_delete=models.SET_NULL, db_column='client_team_id', null=True, blank=True, related_name='+')
+    task_stage = models.ForeignKey(TaskStage, on_delete=models.PROTECT, db_column='task_stage_id', null=True, blank=True, related_name='tasks')
     created_by_workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.DO_NOTHING, db_column='created_by_workspace_membership_id', related_name='+')
     title = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True)
@@ -646,6 +988,8 @@ class Task(models.Model):
         indexes = [
             models.Index(fields=['workspace']),
             models.Index(fields=['project']),
+            models.Index(fields=['client_team']),
+            models.Index(fields=['task_stage']),
             models.Index(fields=['created_by_workspace_membership']),
             models.Index(fields=['status']),
             models.Index(fields=['priority']),
@@ -654,6 +998,25 @@ class Task(models.Model):
             models.Index(fields=['workspace', 'status']),
             models.Index(fields=['project', 'status']),
         ]
+
+    def clean(self):
+        errors = {}
+        if self.project_id and self.workspace_id and self.project.workspace_id != self.workspace_id:
+            errors['project'] = 'The project must belong to the task workspace.'
+        if self.client_team_id and self.workspace_id and self.client_team.workspace_id != self.workspace_id:
+            errors['client_team'] = 'The client must belong to the task workspace.'
+        if self.project_id and self.client_team_id and self.project.client_team_id != self.client_team_id:
+            errors['client_team'] = 'The client must match the selected project.'
+        if (
+            self.created_by_workspace_membership_id
+            and self.workspace_id
+            and self.created_by_workspace_membership.workspace_id != self.workspace_id
+        ):
+            errors['created_by_workspace_membership'] = (
+                'The creator membership must belong to the task workspace.'
+            )
+        if errors:
+            raise ValidationError(errors)
 
 
 class TaskAssignee(models.Model):
@@ -669,6 +1032,16 @@ class TaskAssignee(models.Model):
             models.Index(fields=['task']),
             models.Index(fields=['workspace_membership']),
         ]
+
+    def clean(self):
+        if (
+            self.task_id
+            and self.workspace_membership_id
+            and self.task.workspace_id != self.workspace_membership.workspace_id
+        ):
+            raise ValidationError(
+                {'workspace_membership': 'The assignee must belong to the task workspace.'}
+            )
 
 
 class TaskAttachment(models.Model):
@@ -686,6 +1059,16 @@ class TaskAttachment(models.Model):
             models.Index(fields=['file']),
             models.Index(fields=['attached_by_workspace_membership']),
         ]
+
+    def clean(self):
+        if (
+            self.task_id
+            and self.attached_by_workspace_membership_id
+            and self.task.workspace_id != self.attached_by_workspace_membership.workspace_id
+        ):
+            raise ValidationError(
+                {'attached_by_workspace_membership': 'The attaching member must belong to the task workspace.'}
+            )
 
 
 class FileVariant(models.Model):
@@ -716,9 +1099,30 @@ class FileVariant(models.Model):
         ]
 
 
+class FileSecurityScan(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    file = models.OneToOneField(File, on_delete=models.DO_NOTHING, related_name='security_scan')
+    engine = models.CharField(max_length=255)
+    status = models.CharField(
+        max_length=20,
+        choices=FileSecurityScanStatus.choices,
+        default=FileSecurityScanStatus.PENDING,
+    )
+    result = models.JSONField(default=dict)
+    scanned_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'file_security_scans'
+        indexes = [models.Index(fields=['status', 'created_at'])]
+
+
 class ProjectFolder(models.Model):
     id = models.UUIDField(primary_key=True)
-    project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', related_name='+')
+    workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
+    client_team = models.ForeignKey(ClientTeam, on_delete=models.SET_NULL, db_column='client_team_id', null=True, blank=True, related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', null=True, blank=True, related_name='+')
     parent_folder = models.ForeignKey('self', on_delete=models.DO_NOTHING, db_column='parent_folder_id', null=True, blank=True, related_name='+')
     name = models.CharField(max_length=255)
     created_by_workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.DO_NOTHING, db_column='created_by_workspace_membership_id', related_name='+')
@@ -728,20 +1132,87 @@ class ProjectFolder(models.Model):
 
     class Meta:
         db_table = 'project_folders'
-        constraints = [models.UniqueConstraint(fields=['project', 'parent_folder', 'name'], name='project_folders_project_parent_name_uniq')]
+        constraints = [
+            models.UniqueConstraint(fields=['project', 'parent_folder', 'name'], name='project_folders_project_parent_name_uniq'),
+            models.UniqueConstraint(
+                fields=['project', 'name'],
+                condition=models.Q(parent_folder__isnull=True),
+                name='project_folders_root_name_uniq',
+            ),
+        ]
         indexes = [
+            models.Index(fields=['workspace']),
+            models.Index(fields=['client_team']),
             models.Index(fields=['project']),
             models.Index(fields=['parent_folder']),
             models.Index(fields=['created_by_workspace_membership']),
             models.Index(fields=['deleted_at']),
         ]
 
+    def clean(self):
+        errors = {}
+        if self.project_id and self.workspace_id and self.project.workspace_id != self.workspace_id:
+            errors['project'] = 'The project must belong to the folder workspace.'
+        if self.client_team_id and self.workspace_id and self.client_team.workspace_id != self.workspace_id:
+            errors['client_team'] = 'The client must belong to the folder workspace.'
+        if self.project_id and self.client_team_id and self.project.client_team_id != self.client_team_id:
+            errors['client_team'] = 'The client must match the selected project.'
+        if self.parent_folder_id and (
+            self.parent_folder.workspace_id != self.workspace_id
+            or self.parent_folder.project_id != self.project_id
+            or self.parent_folder.client_team_id != self.client_team_id
+        ):
+            errors['parent_folder'] = 'The parent folder must have the same workspace and relationships.'
+        if (
+            self.created_by_workspace_membership_id
+            and self.workspace_id
+            and self.created_by_workspace_membership.workspace_id != self.workspace_id
+        ):
+            errors['created_by_workspace_membership'] = (
+                'The creator membership must belong to the project workspace.'
+            )
+        if errors:
+            raise ValidationError(errors)
+
+
+class MediaAsset(models.Model):
+    """One creative asset, which its versions hang off.
+
+    Deliberately thin. The spec this was built to puts the client, project and folder on the
+    asset as well as the version, but every filter, board and tree in the app already reads
+    those from `ProjectFile`, and a second copy is a second thing to keep in step — move an
+    asset and you would have to update both, and a divergence would be silent. So the
+    relationships stay on the versions, and `assign_media_asset` moves them together:
+    versions of one asset are never in two different folders.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='media_assets')
+    name = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'media_assets'
+        ordering = ('-updated_at',)
+        indexes = [models.Index(fields=['workspace', 'updated_at'])]
+
+    def __str__(self):
+        return self.name
+
 
 class ProjectFile(models.Model):
     id = models.UUIDField(primary_key=True)
-    project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', related_name='+')
+    workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
+    client_team = models.ForeignKey(ClientTeam, on_delete=models.SET_NULL, db_column='client_team_id', null=True, blank=True, related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', null=True, blank=True, related_name='+')
     folder = models.ForeignKey(ProjectFolder, on_delete=models.DO_NOTHING, db_column='folder_id', null=True, blank=True, related_name='+')
     file = models.ForeignKey(File, on_delete=models.DO_NOTHING, db_column='file_id', related_name='+')
+    task_stage = models.ForeignKey('TaskStage', on_delete=models.PROTECT, db_column='task_stage_id', null=True, blank=True, related_name='+')
+    # A row is one version of an asset. Null only for rows that predate versioning and
+    # could not be grouped; those behave as a single-version asset of their own.
+    media_asset = models.ForeignKey(MediaAsset, on_delete=models.CASCADE, db_column='media_asset_id', null=True, blank=True, related_name='versions')
+    version_number = models.PositiveIntegerField(default=1)
     added_by_workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.DO_NOTHING, db_column='added_by_workspace_membership_id', related_name='+')
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField()
@@ -749,14 +1220,51 @@ class ProjectFile(models.Model):
 
     class Meta:
         db_table = 'project_files'
-        constraints = [models.UniqueConstraint(fields=['project', 'file'], name='project_files_project_file_uniq')]
+        constraints = [
+            models.UniqueConstraint(fields=['workspace', 'file'], name='project_files_workspace_file_uniq'),
+            # Version numbers are dense and unique within an asset: V2 is never created twice.
+            models.UniqueConstraint(fields=['media_asset', 'version_number'], name='project_files_asset_version_uniq'),
+        ]
         indexes = [
+            models.Index(fields=['workspace']),
+            models.Index(fields=['media_asset']),
+            models.Index(fields=['client_team']),
             models.Index(fields=['project']),
             models.Index(fields=['folder']),
             models.Index(fields=['file']),
+            models.Index(fields=['task_stage']),
             models.Index(fields=['added_by_workspace_membership']),
             models.Index(fields=['deleted_at']),
         ]
+
+    def clean(self):
+        errors = {}
+        if self.project_id and self.workspace_id and self.project.workspace_id != self.workspace_id:
+            errors['project'] = 'The project must belong to the file workspace.'
+        if self.client_team_id and self.workspace_id and self.client_team.workspace_id != self.workspace_id:
+            errors['client_team'] = 'The client must belong to the file workspace.'
+        if self.project_id and self.client_team_id and self.project.client_team_id != self.client_team_id:
+            errors['client_team'] = 'The client must match the selected project.'
+        if self.folder_id and (
+            self.folder.workspace_id != self.workspace_id
+            or self.folder.project_id != self.project_id
+            or self.folder.client_team_id != self.client_team_id
+        ):
+            errors['folder'] = 'The folder must have the same workspace and relationships.'
+        if self.file_id and self.workspace_id and self.file.workspace_id != self.workspace_id:
+            errors['file'] = 'The stored file must belong to the same workspace.'
+        if self.task_stage_id and self.workspace_id and self.task_stage.workspace_id != self.workspace_id:
+            errors['task_stage'] = 'The stage must belong to the same workspace.'
+        if (
+            self.added_by_workspace_membership_id
+            and self.workspace_id
+            and self.added_by_workspace_membership.workspace_id != self.workspace_id
+        ):
+            errors['added_by_workspace_membership'] = (
+                'The adding membership must belong to the project workspace.'
+            )
+        if errors:
+            raise ValidationError(errors)
 
 
 class ClientTeamMember(models.Model):
@@ -918,6 +1426,94 @@ class AuditLog(models.Model):
         ]
 
 
+class Notification(models.Model):
+    id = models.UUIDField(primary_key=True)
+    recipient_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='recipient_user_id', related_name='+')
+    workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
+    actor_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='actor_user_id', null=True, blank=True, related_name='+')
+    kind = models.CharField(max_length=100, choices=NotificationKind.choices)
+    entity_type = models.CharField(max_length=100)
+    entity_id = models.CharField(max_length=255)
+    payload = models.JSONField(default=dict)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'notifications'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['recipient_user', 'kind', 'entity_type', 'entity_id'],
+                name='notifications_recipient_kind_entity_uniq',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['recipient_user', 'created_at']),
+            models.Index(fields=['recipient_user', 'read_at']),
+            models.Index(fields=['workspace', 'created_at']),
+        ]
+
+
+class NotificationPreference(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user = models.OneToOneField(User, on_delete=models.DO_NOTHING, db_column='user_id', related_name='+')
+    email_mentions_enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'notification_preferences'
+
+
+class NotificationDelivery(models.Model):
+    id = models.UUIDField(primary_key=True)
+    notification = models.ForeignKey(Notification, on_delete=models.DO_NOTHING, db_column='notification_id', related_name='+')
+    channel = models.CharField(max_length=30, choices=NotificationDeliveryChannel.choices)
+    status = models.CharField(max_length=20, choices=NotificationDeliveryStatus.choices, default=NotificationDeliveryStatus.PENDING)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'notification_deliveries'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['notification', 'channel'],
+                name='notification_deliveries_notification_channel_uniq',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['notification']),
+            models.Index(fields=['status', 'updated_at']),
+        ]
+
+
+class OutboxEvent(models.Model):
+    id = models.UUIDField(primary_key=True)
+    topic = models.CharField(max_length=255)
+    aggregate_type = models.CharField(max_length=100)
+    aggregate_id = models.CharField(max_length=255)
+    deduplication_key = models.CharField(max_length=500, unique=True)
+    payload = models.JSONField(default=dict)
+    status = models.CharField(max_length=20, choices=OutboxEventStatus.choices, default=OutboxEventStatus.PENDING)
+    attempts = models.PositiveIntegerField(default=0)
+    available_at = models.DateTimeField()
+    locked_at = models.DateTimeField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'outbox_events'
+        indexes = [
+            models.Index(fields=['status', 'available_at']),
+            models.Index(fields=['aggregate_type', 'aggregate_id']),
+            models.Index(fields=['created_at']),
+        ]
+
+
 class UserSubscription(models.Model):
     id = models.UUIDField(primary_key=True)
     user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='user_id', related_name='+')
@@ -936,6 +1532,15 @@ class UserSubscription(models.Model):
 
     class Meta:
         db_table = 'user_subscriptions'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=models.Q(
+                    status__in=[SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE]
+                ),
+                name='user_subscriptions_one_current',
+            )
+        ]
         indexes = [
             models.Index(fields=['user']),
             models.Index(fields=['provider_subscription_id']),

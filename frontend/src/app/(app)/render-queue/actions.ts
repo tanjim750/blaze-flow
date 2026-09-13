@@ -1,0 +1,3 @@
+"use server";
+import { revalidatePath } from "next/cache"; import { controlMediaRender } from "@/lib/api"; import { loadWorkspaceContext } from "@/lib/workspace";
+export async function controlRenderAction(projectId: string, mediaVersionId: string, action: "retry" | "cancel"): Promise<{ error: string | null }> { const context = await loadWorkspaceContext(); if (!context.ok || !context.data.selected) return { error: context.ok ? "No workspace selected." : context.error.detail }; const result = await controlMediaRender(context.data.selected.id, projectId, mediaVersionId, action); if (!result.ok) return { error: result.error.detail }; revalidatePath("/render-queue"); revalidatePath("/review"); return { error: null }; }

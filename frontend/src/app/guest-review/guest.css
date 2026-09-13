@@ -1,0 +1,85 @@
+/* Guest review surface. Standalone chrome: this page has no sidebar, topbar or session. */
+
+.gr-card-wrap{min-height:100vh;display:grid;place-items:center;padding:32px}
+.gr-card{width:min(430px,100%);display:grid;gap:14px;padding:28px;background:var(--surface);border:1px solid var(--border);border-radius:14px}
+.gr-card h1{font-size:23px;letter-spacing:-.03em;margin:4px 0 0}
+.gr-card p{margin:0;line-height:1.6}
+.gr-muted{color:var(--muted)}
+
+.gr-brand{display:flex;align-items:center;gap:9px;font-weight:700}
+.gr-brand span{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--primary)}
+
+.gr-form{display:grid;gap:13px;margin-top:4px}
+.gr-form label{display:grid;gap:6px;font-size:12px;font-weight:600}
+.gr-form input{height:42px;padding:0 12px;background:#0c0c10;border:1px solid var(--border);border-radius:9px;color:var(--text);outline:0}
+.gr-form input:focus{border-color:var(--primary);box-shadow:0 0 0 3px #8b6cff22}
+.gr-form button{height:44px;border:0;border-radius:9px;background:var(--primary);color:#fff;font-weight:650;cursor:pointer}
+.gr-form button:disabled{opacity:.6;cursor:not-allowed}
+
+.gr-shell{min-height:100vh;display:grid;grid-template-rows:auto auto 1fr}
+.gr-topbar{display:flex;align-items:center;gap:20px;padding:14px 22px;border-bottom:1px solid var(--border);background:var(--surface)}
+.gr-project{flex:1;min-width:0;display:grid}
+.gr-project strong{font-size:14px}
+.gr-project small{color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gr-who{display:flex;align-items:center;gap:12px;font-size:12px}
+.gr-who button{display:flex;align-items:center;gap:5px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--muted);cursor:pointer}
+
+.gr-error{display:flex;align-items:center;gap:8px;margin:0;padding:11px 22px;background:#3a1c24;border-bottom:1px solid #6b2a38;color:#ffc2cc;font-size:12px}
+
+.gr-body{display:grid;grid-template-columns:minmax(0,1fr) 400px;min-height:0}
+.gr-viewer{display:grid;grid-template-rows:auto 1fr;background:#08080b;min-width:0}
+.gr-versions{display:flex;gap:6px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.gr-versions button{padding:6px 12px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--muted);font:600 11px var(--font-geist-mono);cursor:pointer}
+.gr-versions button.selected{background:#292143;border-color:#55418f;color:#fff}
+
+.gr-stage{display:grid;place-items:center;align-content:center;gap:9px;padding:40px;text-align:center;background:radial-gradient(circle,#252334,#08080b 68%);color:var(--muted)}
+.gr-stage strong{color:var(--text);font-size:15px}
+.gr-stage small{max-width:340px;line-height:1.6}
+.gr-spin{animation:gr-rotate 1.1s linear infinite}
+@keyframes gr-rotate{to{transform:rotate(360deg)}}
+
+.gr-notes{display:grid;grid-template-rows:auto 1fr auto;background:var(--surface);border-left:1px solid var(--border);min-height:0}
+.gr-notes>header{display:flex;align-items:center;justify-content:space-between;padding:16px 17px;border-bottom:1px solid var(--border)}
+.gr-notes h2{display:flex;align-items:center;gap:8px;font-size:14px;margin:0}
+.gr-notes>header span{color:var(--muted);font-size:11px}
+.gr-feed{padding:12px;overflow:auto}
+
+.gr-note{padding:13px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;margin-bottom:10px}
+.gr-note.is-reply{margin:10px 0 0 14px;background:var(--surface);border-left:2px solid #55418f}
+.gr-note-head{display:flex;align-items:center;gap:9px}
+.gr-note-head strong{display:block;font-size:12px}
+.gr-note-head small{color:var(--muted);font-size:10px}
+.gr-avatar{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#31294b;color:#cfc4ff;font-size:10px;flex:none}
+.gr-note p{margin:9px 0 0;font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+
+.gr-attachments{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:9px 0 0;padding:0}
+.gr-attachments button{display:flex;align-items:center;gap:5px;max-width:210px;padding:4px 8px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text);font-size:10px;cursor:pointer}
+.gr-attachments button span,.gr-attachments button em{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gr-attachments button:disabled{color:var(--muted);cursor:default}
+
+.gr-note-actions{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin-top:10px}
+.gr-note-actions button{display:flex;align-items:center;gap:4px;padding:3px 7px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--muted);font-size:10px;cursor:pointer}
+.gr-note-actions button:hover:not(:disabled){color:var(--text);background:var(--hover)}
+.gr-note-actions button:disabled{opacity:.5;cursor:not-allowed}
+.gr-note-actions b{color:var(--text)}
+.gr-hint{color:#3b3a48;margin-left:auto}
+
+.gr-edit{display:grid;gap:7px;margin-top:9px}
+.gr-edit textarea{min-height:64px;padding:9px;border:1px solid var(--border);border-radius:7px;background:#0c0c10;color:var(--text);resize:vertical;outline:0}
+.gr-edit>div{display:flex;justify-content:flex-end;gap:6px}
+.gr-edit button{padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:11px;cursor:pointer}
+.gr-edit button:last-child{background:var(--primary);border-color:var(--primary);color:#fff}
+
+.gr-composer{display:flex;align-items:flex-end;gap:9px;padding:12px;border-top:1px solid var(--border)}
+.gr-note .gr-composer{padding:10px 0 0;border-top:0}
+.gr-composer textarea{flex:1;min-width:0;padding:9px;border:1px solid var(--border);border-radius:8px;background:#0c0c10;color:var(--text);resize:vertical;outline:0;font-size:12px}
+.gr-composer textarea:focus{border-color:var(--primary)}
+.gr-composer button{display:grid;place-items:center;flex:none;width:34px;height:34px;border:0;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer}
+.gr-composer button:disabled{opacity:.5;cursor:not-allowed}
+
+@media(max-width:900px){
+  .gr-body{grid-template-columns:1fr}
+  .gr-viewer{min-height:44vh}
+  .gr-notes{border-left:0;border-top:1px solid var(--border)}
+  .gr-topbar{flex-wrap:wrap;gap:10px}
+}

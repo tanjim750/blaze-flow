@@ -6,4 +6,5 @@ class BlazeFlowAppConfig(AppConfig):
     name = 'app'
 
     def ready(self):
+        from . import checks  # noqa: F401
         from .events import handlers  # noqa: F401

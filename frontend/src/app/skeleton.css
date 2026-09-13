@@ -1,0 +1,51 @@
+/* Loading placeholders and the navigation progress bar. */
+
+.sk { display: block; background: var(--shell-high, #26262b); border-radius: 7px; animation: sk-pulse 1.4s ease-in-out infinite; }
+@keyframes sk-pulse { 50% { opacity: .42; } }
+
+.sk-line { height: 11px; width: 100%; }
+.sk-title { height: 26px; width: 260px; max-width: 60%; border-radius: 9px; }
+.sk-pill { height: 30px; border-radius: 999px; }
+.sk-w-60 { width: 60%; }
+.sk-w-140 { width: 140px; }
+
+/* Sits inside the layout's <main>, which already supplies the page padding. */
+.sk-body { display: block; }
+.sk-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 26px; }
+
+.sk-list { display: grid; gap: 10px; }
+.sk-bar { height: 68px; border-radius: 12px; }
+
+.sk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.sk-tile { height: 190px; border-radius: 13px; }
+
+.sk-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(212px, 1fr); gap: 14px; overflow: hidden; }
+.sk-column { display: grid; gap: 10px; align-content: start; padding: 12px; border-radius: 13px; background: var(--shell-low, #1b1b1e); }
+.sk-card { height: 128px; border-radius: 11px; }
+
+.sk-split { display: grid; grid-template-columns: minmax(0, 1fr) 370px; gap: 16px; }
+.sk-panel { height: 460px; border-radius: 13px; }
+.sk-panel-side { height: 460px; }
+
+@media (max-width: 950px) {
+  .sk-grid { grid-template-columns: repeat(2, 1fr); }
+  .sk-split { grid-template-columns: 1fr; }
+  .sk-panel-side { display: none; }
+}
+
+/*
+ * Navigation progress. The App Router gives no router events, so this is driven by a click
+ * on an in-app link and cleared once the resolved route changes.
+ */
+.nav-progress { position: fixed; inset: 0 0 auto; height: 2px; z-index: 200; pointer-events: none; background: transparent; }
+.nav-progress > i { display: block; height: 100%; width: 100%; transform-origin: 0 50%; background: linear-gradient(90deg, #8b6cff, #a995ff); box-shadow: 0 0 12px #8b6cffaa; animation: nav-progress-grow 10s cubic-bezier(.12, .82, .28, 1) forwards; }
+@keyframes nav-progress-grow { 0% { transform: scaleX(.02); } 30% { transform: scaleX(.52); } 70% { transform: scaleX(.82); } 100% { transform: scaleX(.96); } }
+
+/* Shown inside a link whose navigation is still resolving, so the click has feedback at its source. */
+.nav-link-spinner { flex-shrink: 0; margin-left: auto; width: 11px; height: 11px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; opacity: .7; animation: nav-spin .6s linear infinite; }
+@keyframes nav-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sk, .nav-progress > i, .nav-link-spinner { animation: none; }
+  .nav-progress > i { transform: scaleX(.6); }
+}

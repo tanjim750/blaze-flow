@@ -1,0 +1,20 @@
+.onboarding-page { min-height: 100vh; display: grid; place-items: center; padding: 80px 20px; background: radial-gradient(circle at 50% 15%, #2c205b 0, #131316 42%, #0e0e11 100%); }
+.onboarding-page > header { position: absolute; top: 24px; left: 28px; display: flex; align-items: center; gap: 9px; font-size: 17px; }
+.onboarding-page > header span, .onboarding-icon { display: grid; place-items: center; background: linear-gradient(145deg,#9c7cff,#5a35e8); color: white; }
+.onboarding-page > header span { width: 32px; height: 32px; border-radius: 9px; }
+.onboarding-card { width: min(100%, 520px); padding: 36px; border: 1px solid #393444; border-radius: 18px; background: #19191de8; box-shadow: 0 28px 90px #0008; }
+.onboarding-icon { width: 48px; height: 48px; border-radius: 13px; margin-bottom: 24px; }
+.onboarding-card h1 { margin: 8px 0 10px; font-size: 32px; letter-spacing: -.035em; }
+.onboarding-card > p:not(.eyebrow) { color: var(--muted); line-height: 1.6; }
+.onboarding-form { display: grid; gap: 17px; margin-top: 28px; }
+.onboarding-form label { display: grid; gap: 7px; color: #d8d4e1; font-size: 12px; font-weight: 600; }
+.onboarding-form input { width: 100%; padding: 11px 12px; border: 1px solid #393844; border-radius: 9px; outline: 0; background: #111114; color: white; }
+.onboarding-form input:focus { border-color: var(--primary); }
+.slug-field { display: flex; align-items: center; border: 1px solid #393844; border-radius: 9px; background: #111114; overflow: hidden; }
+.slug-field span { padding-left: 12px; color: var(--muted); white-space: nowrap; }
+.slug-field input { border: 0; padding-left: 5px; }
+.onboarding-form small { color: var(--muted); }
+.onboarding-primary { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; margin-top: 18px; padding: 11px 15px; border: 1px solid #9a80ff; border-radius: 9px; background: #6546ec; color: white; font-weight: 650; cursor: pointer; }
+.onboarding-primary:disabled { opacity: .65; cursor: wait; }
+.onboarding-link { display: block; margin: 14px auto 0; border: 0; background: none; color: var(--primary-2); cursor: pointer; }
+.form-success { padding: 10px 12px; border: 1px solid #28654e; border-radius: 8px; background: #153d30; color: #8bedc7 !important; font-size: 12px; }

@@ -1,0 +1,189 @@
+/* Global studio chrome, matching the Projects Stitch references. */
+
+/*
+ * The sidebar width, as a registered custom property.
+ *
+ * Registering it is what makes it animatable at all — an unregistered custom property
+ * jumps between values. One transition on this variable then drives both the rail and the
+ * main column, so they cannot drift apart mid-animation, and nothing re-renders while it
+ * runs. The curve overshoots on purpose: that is the bounce.
+ */
+@property --rail-w {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 256px;
+}
+.studio-shell {
+  --shell-bg: #131316;
+  --shell-rail: #0e0e11;
+  --shell-low: #1b1b1e;
+  --shell-container: #1f1f22;
+  --shell-high: #2a2a2d;
+  --shell-highest: #353438;
+  --shell-primary: #cabeff;
+  --shell-accent: #583be8;
+  --shell-on: #e4e1e6;
+  --shell-variant: #c9c4d8;
+  --shell-outline: #938ea1;
+  --rail-w: 256px;
+  min-height: 100vh;
+  background: var(--shell-bg);
+  color: var(--shell-on);
+  transition: --rail-w .42s cubic-bezier(.34, 1.56, .64, 1);
+}
+.studio-shell.is-collapsed { --rail-w: 76px; }
+.studio-sidebar {
+  position: fixed; inset: 0 auto 0 0; width: var(--rail-w); z-index: 50;
+  background: var(--shell-rail); display: flex; flex-direction: column; justify-content: space-between;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, .04);
+}
+/* The nav is long enough to outgrow a short viewport, so it scrolls and the footer holds
+   its place instead of being pushed off the bottom. */
+.studio-sidebar-top { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-bottom: 8px; }
+
+/*
+ * The collapse handle.
+ *
+ * A pill straddling the rail's edge rather than a flat disc: the gradient, the hairline
+ * top highlight and the drop shadow give it enough relief to read as a physical grip, and
+ * the accent ring on hover is what tells you it is interactive before you click it.
+ */
+.studio-rail-toggle {
+  position: absolute; top: 68px; right: -11px; z-index: 55;
+  display: grid; place-items: center; width: 22px; height: 46px; padding: 0;
+  border: 1px solid #ffffff1a; border-radius: 999px;
+  background: linear-gradient(160deg, #2c2c35, #16161b);
+  color: #b9b5c9; cursor: pointer;
+  box-shadow: inset 0 1px 0 #ffffff20, inset 0 -1px 0 #00000066, 0 6px 18px #00000099;
+  transition: color .18s, border-color .18s, background .18s, box-shadow .18s;
+}
+.studio-rail-toggle:hover {
+  color: #fff; border-color: #8b6cff66;
+  background: linear-gradient(160deg, #36314d, #1b1a24);
+  box-shadow: inset 0 1px 0 #ffffff29, 0 6px 20px #000000a6, 0 0 0 3px #8b6cff1f;
+}
+.studio-rail-toggle:focus-visible { border-color: var(--shell-primary); }
+.studio-rail-toggle svg { transition: transform .42s cubic-bezier(.34, 1.56, .64, 1); }
+.is-collapsed .studio-rail-toggle svg { transform: rotate(180deg); }
+
+.studio-rail-search { position: relative; display: flex; align-items: center; margin: 0 16px 10px; }
+.studio-rail-search > svg { position: absolute; left: 10px; color: var(--shell-outline); pointer-events: none; }
+.studio-rail-search input {
+  width: 100%; padding: 8px 10px 8px 31px;
+  border: 1px solid #35343899; border-radius: 8px;
+  background: var(--shell-low); color: var(--shell-on); font-size: 12px; outline: 0;
+}
+.studio-rail-search input::placeholder { color: var(--shell-outline); }
+.studio-rail-search input:focus { background: var(--shell-container); border-color: var(--shell-outline); }
+
+.studio-rail-heading {
+  margin: 14px 16px 5px; color: var(--shell-outline);
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
+}
+.studio-rail-account { display: flex; align-items: center; gap: 9px; margin-top: 10px; padding: 0 4px; }
+.studio-rail-account .studio-account { flex: none; }
+.studio-rail-who { flex: 1; min-width: 0; display: grid; }
+.studio-rail-who strong { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-rail-who small { color: var(--shell-outline); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-brand { height: 56px; padding: 0 16px; display: flex; align-items: center; gap: 10px; }
+.studio-brand > span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(145deg, #9c7cff, #5a35e8); color: #fff; }
+.studio-brand strong { font-size: 18px; letter-spacing: -.015em; font-weight: 600; }
+.studio-workspace-label { display: flex; align-items: center; justify-content: space-between; margin: 0 20px 4px; color: var(--shell-variant); }
+.studio-workspace-label span { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.studio-workspace-label b { font: 500 10px var(--font-geist-mono), monospace; letter-spacing: .04em; background: var(--shell-highest); padding: 2px 5px; border-radius: 4px; color: var(--shell-variant); }
+.studio-workspace-picker { display: grid; gap: 5px; margin: 0 16px 8px; }.studio-workspace-picker label { color: var(--shell-variant); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }.studio-workspace-picker select { width: 100%; padding: 7px 9px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-low); color: var(--shell-on); outline: 0; cursor: pointer; }
+.studio-sidebar nav { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; }
+.studio-sidebar nav a { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 12px; color: #b8b9c4; font-size: 15px; font-weight: 500; transition: background .15s, color .15s; }
+.studio-sidebar nav a > svg { flex-shrink: 0; color: #a2a4b2; }
+.studio-sidebar nav a:hover { background: var(--shell-high); color: #fff; }
+.studio-sidebar nav a:hover > svg { color: #fff; }
+.studio-sidebar nav a.active { background: var(--shell-accent); color: #fff; font-weight: 600; box-shadow: 0 3px 10px #583be855; }
+.studio-sidebar nav a.active > svg { color: #fff; }
+.studio-sidebar-foot { flex: none; padding: 12px 12px 16px; display: flex; flex-direction: column; gap: 2px; }
+.studio-sidebar-foot nav { padding: 0; }
+.studio-sidebar-foot nav a { padding: 10px 16px; font-size: 14px; }
+.render-engine { margin-top: 8px; padding: 10px; border-radius: 8px; background: var(--shell-low); display: flex; align-items: center; gap: 10px; }
+.render-engine > i { width: 8px; height: 8px; border-radius: 50%; background: var(--shell-primary); animation: render-pulse 2s cubic-bezier(.4, 0, .6, 1) infinite; flex-shrink: 0; }
+@keyframes render-pulse { 50% { opacity: .4; } }
+.render-engine > div { display: grid; min-width: 0; }
+.render-engine small { font-size: 11px; color: var(--shell-variant); }
+.render-engine span { font: 12px var(--font-geist-mono), monospace; color: var(--shell-primary); }
+.render-engine > b { margin-left: auto; font: 500 10px var(--font-geist-mono), monospace; color: var(--shell-variant); letter-spacing: .04em; }
+
+.studio-main { padding-left: var(--rail-w); }
+.studio-icon-button { position: relative; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--shell-variant); transition: background .15s, color .15s; }
+.studio-icon-button:hover { background: var(--shell-high); color: var(--shell-on); }
+.studio-icon-button > i { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--shell-primary); box-shadow: 0 0 0 2px var(--shell-bg); }
+.studio-icon-button{border:0;background:none;cursor:pointer}.studio-notifications{position:relative}.studio-notification-menu{position:absolute;right:0;top:calc(100% + 10px);z-index:65;width:min(360px,calc(100vw - 24px));overflow:hidden;border:1px solid var(--shell-high);border-radius:12px;background:var(--shell-container);box-shadow:0 18px 44px #0008}.studio-notification-menu>header{display:flex;align-items:center;justify-content:space-between;padding:12px;border-bottom:1px solid var(--shell-high)}.studio-notification-menu>header strong{font-size:13px}.studio-notification-menu>header button{border:0;background:none;color:var(--shell-primary);font-size:11px;cursor:pointer}.studio-notification-menu>div{max-height:360px;overflow:auto}.studio-notification-menu>div>p{margin:0;padding:24px;color:var(--shell-variant);font-size:12px;text-align:center}.studio-notification-menu article{display:flex;gap:9px;padding:11px 12px;border-bottom:1px solid var(--shell-high)}.studio-notification-menu article>i{width:6px;height:6px;margin-top:5px;border-radius:50%;background:transparent;flex:none}.studio-notification-menu article.unread>i{background:var(--shell-primary)}.studio-notification-menu article div{display:grid;gap:3px}.studio-notification-menu article strong{font-size:11px;font-weight:500;text-transform:capitalize}.studio-notification-menu article small{color:var(--shell-outline);font-size:9px}.render-engine>i.warning{background:#f1c55b}.render-engine>i.critical{background:#ff737d}.render-engine>i.healthy{background:#71d99b}.render-engine>i.warning+div span{color:#f1c55b}.render-engine>i.critical+div span{color:#ff737d}.render-engine>i.healthy+div span{color:#71d99b}
+.studio-notification-item{display:flex;width:100%;gap:9px;padding:11px 12px;border:0;border-bottom:1px solid var(--shell-high);background:none;color:var(--shell-on);text-align:left;cursor:pointer}.studio-notification-item:hover{background:var(--shell-high)}.studio-notification-item>i{width:6px;height:6px;margin-top:5px;border-radius:50%;background:transparent;flex:none}.studio-notification-item.unread>i{background:var(--shell-primary)}.studio-notification-item>span{display:grid;gap:3px}.studio-notification-item strong{font-size:11px;font-weight:500;text-transform:capitalize}.studio-notification-item em{color:var(--shell-variant);font-size:10px;font-style:normal}.studio-notification-item small{color:var(--shell-outline);font-size:9px}.studio-notification-menu footer{padding:9px 12px;border-top:1px solid var(--shell-high);font-size:10px;text-align:right}.studio-notification-menu footer a{color:var(--shell-primary)}
+.studio-avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #302744; border: 1px solid var(--shell-highest); color: #d7c6ff; font-size: 11px; font-weight: 600; }
+.studio-avatar:hover { border-color: var(--shell-primary); }
+.studio-avatar { cursor: pointer; font-family: inherit; }
+.studio-avatar.is-anonymous { color: var(--shell-outline); }
+
+/* Account menu, anchored under the avatar in the topbar. */
+.studio-account { position: relative; }
+.studio-account-menu {
+  position: absolute; right: 0; top: calc(100% + 9px); z-index: 60; width: 236px;
+  display: grid; padding: 6px; border-radius: 12px;
+  background: var(--shell-container); border: 1px solid var(--shell-high);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .48);
+}
+.studio-account-who { padding: 10px 11px 12px; border-bottom: 1px solid var(--shell-high); margin-bottom: 6px; }
+.studio-account-who strong { display: block; font-size: 13px; }
+.studio-account-who small {
+  display: flex; align-items: center; gap: 5px; margin-top: 4px;
+  color: var(--shell-variant); font-size: 11px; overflow-wrap: anywhere;
+}
+.studio-account-menu a,
+.studio-account-menu button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 11px; border: 0; border-radius: 8px;
+  background: none; color: var(--shell-on); font-size: 13px; font-weight: 500;
+  text-align: left; cursor: pointer;
+}
+.studio-account-menu a:hover,
+.studio-account-menu button:hover { background: var(--shell-high); }
+.studio-account-menu form { display: contents; }
+.studio-sign-out { color: #ff9ba3 !important; }
+.studio-sign-out:hover { background: #3b171d !important; }
+/* No topbar any more, so the page starts at the top of the viewport. */
+.studio-main > main { padding: 34px 28px 60px; }
+.studio-main > main.flush { padding: 0; }
+.mobile-menu { display: none; }
+
+@media (max-width: 900px) {
+  /* Off-canvas below this width, so the collapse toggle has nothing to do. */
+  .studio-shell, .studio-shell.is-collapsed { --rail-w: 256px; }
+  .studio-sidebar { transform: translateX(-100%); transition: transform .2s; }
+  .studio-sidebar.open { transform: none; box-shadow: 20px 0 60px #000; }
+  .studio-rail-toggle { display: none; }
+  .studio-main { padding-left: 0; }
+  .studio-main > main, .studio-main > main.flush { padding-top: 60px; }
+  .mobile-menu { display: grid; place-items: center; position: fixed; right: 16px; top: 12px; z-index: 60; width: 34px; height: 34px; border: 0; border-radius: 9px; background: var(--shell-accent); color: #fff; cursor: pointer; }
+  .studio-main > main { padding-inline: 16px; }
+}
+
+/* Collapsed rail ----------------------------------------------------------
+   Everything that cannot survive at 76px is hidden rather than squeezed, and the
+   remaining icons centre themselves. `white-space: nowrap` on the labels matters: without
+   it they wrap into a tall column for the duration of the animation. */
+.studio-sidebar nav a > span { white-space: nowrap; overflow: hidden; }
+.is-collapsed .studio-brand { justify-content: center; padding: 0 8px; }
+.is-collapsed .studio-brand strong,
+.is-collapsed .studio-workspace-picker,
+.is-collapsed .studio-workspace-label,
+.is-collapsed .studio-rail-search,
+.is-collapsed .studio-rail-heading,
+.is-collapsed .studio-sidebar nav a > span,
+.is-collapsed .render-engine > div,
+.is-collapsed .render-engine > b { display: none; }
+.is-collapsed .studio-sidebar nav a { justify-content: center; padding-inline: 0; }
+.is-collapsed .studio-sidebar-foot { padding-inline: 8px; }
+.is-collapsed .render-engine { justify-content: center; padding: 10px 0; }
+.is-collapsed .studio-rail-account { flex-direction: column; gap: 10px; padding: 0; }
+.is-collapsed .studio-rail-who { display: none; }
+
+/* The menus now hang off the bottom-left of the screen, so they open upward. */
+.studio-rail-account .studio-account-menu,
+.studio-rail-account .studio-notification-menu { top: auto; bottom: calc(100% + 10px); right: auto; left: 0; }
