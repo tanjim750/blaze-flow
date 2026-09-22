@@ -9,3 +9,9 @@ __pycache__/
 .venv/
 venv/
 env/
+media/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/coverage/
+stitch_blaze_flow_creative_operating_system/
