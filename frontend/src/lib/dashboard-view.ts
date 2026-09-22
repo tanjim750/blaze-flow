@@ -117,7 +117,9 @@ function initialsFrom(name: string): string {
 }
 
 const describe = (status: number, detail: string) =>
-  status === 0
+  process.env.NODE_ENV === "production"
+    ? detail
+    : status === 0
     ? `${detail} Showing demo content until the API is running.`
     : `The API returned ${status}: ${detail}. Showing demo content.`;
 
@@ -136,7 +138,7 @@ export async function loadDashboardView(greetingName: string): Promise<Dashboard
   const workspaces = await listWorkspaces();
   if (!workspaces.ok) return demoView(greetingName, today, describe(workspaces.error.status, workspaces.error.detail));
   const workspace = await selectWorkspace(workspaces.data);
-  if (!workspace) return demoView(greetingName, today, "This account has no workspace yet, so demo content is shown.");
+  if (!workspace) return demoView(greetingName, today, "This account has no workspace yet.");
 
   const [projectsResult, tasksResult, notificationsResult] = await Promise.all([
     listProjects(workspace.id),
@@ -282,6 +284,13 @@ export async function loadDashboardView(greetingName: string): Promise<Dashboard
 
 /** Content from the Stitch reference, used only when the API cannot answer. */
 function demoView(greetingName: string, today: string, notice: string): DashboardView {
+  if (process.env.NODE_ENV === "production") {
+    return {
+      greetingName, workspaceName: "Blaze Flow", today, activeProjectCount: 0,
+      stats: { activeProjects: 0, dueToday: 0, overdue: 0, awaitingReview: 0 },
+      attention: [], tasks: [], reviewQueue: [], projects: [], deadlines: [], activity: [], notice,
+    };
+  }
   return {
     greetingName,
     workspaceName: "Blaze Flow Studio",

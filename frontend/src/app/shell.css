@@ -76,10 +76,6 @@
 .studio-rail-search input::placeholder { color: var(--shell-outline); }
 .studio-rail-search input:focus { background: var(--shell-container); border-color: var(--shell-outline); }
 
-.studio-rail-heading {
-  margin: 14px 16px 5px; color: var(--shell-outline);
-  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em;
-}
 .studio-rail-account { display: flex; align-items: center; gap: 9px; margin-top: 10px; padding: 0 4px; }
 .studio-rail-account .studio-account { flex: none; }
 .studio-rail-who { flex: 1; min-width: 0; display: grid; }
@@ -174,7 +170,6 @@
 .is-collapsed .studio-workspace-picker,
 .is-collapsed .studio-workspace-label,
 .is-collapsed .studio-rail-search,
-.is-collapsed .studio-rail-heading,
 .is-collapsed .studio-sidebar nav a > span,
 .is-collapsed .render-engine > div,
 .is-collapsed .render-engine > b { display: none; }

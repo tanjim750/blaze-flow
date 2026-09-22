@@ -27,6 +27,9 @@ function buildFolders(folders: ProjectFolder[]): FolderNode[] {
  */
 /** Demo fallback that still honours the ?client / ?campaign selection, so the tree stays navigable. */
 function demoView(params: { clientId?: string; campaignId?: string }, notice: string): ProjectsView {
+  if (process.env.NODE_ENV === "production") {
+    return { workspaceId: null, workspaceName: "Blaze Flow", clients: [], selectedClient: null, selectedCampaign: null, notice };
+  }
   const client = DEMO_VIEW.clients.find((item) => item.id === params.clientId) ?? DEMO_VIEW.selectedClient;
   const campaign = client?.campaigns.find((item) => item.id === params.campaignId) ?? client?.campaigns[0] ?? null;
   return { ...DEMO_VIEW, selectedClient: client, selectedCampaign: campaign, notice };
@@ -36,7 +39,7 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
   const workspaces = await listWorkspaces();
   if (!workspaces.ok) return demoView(params, describe(workspaces.error.status, workspaces.error.detail));
   const workspace = await selectWorkspace(workspaces.data);
-  if (!workspace) return demoView(params, "This account has no workspace yet, so demo content is shown.");
+  if (!workspace) return demoView(params, "This account has no workspace yet.");
 
   const [teams, projects] = await Promise.all([listClientTeams(workspace.id), listProjects(workspace.id)]);
   if (!teams.ok) return demoView(params, describe(teams.error.status, teams.error.detail));
@@ -89,7 +92,9 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
 }
 
 const describe = (status: number, detail: string) =>
-  status === 0
+  process.env.NODE_ENV === "production"
+    ? detail
+    : status === 0
     ? `${detail} Showing demo content until the API is running.`
     : status === 401 || status === 403
       ? "You are not signed in to the Blaze Flow API, so demo content is shown."

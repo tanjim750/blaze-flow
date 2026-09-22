@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { LinkPending } from "@/components/nav-progress";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Building2, CheckCircle2, ChevronLeft, CircleHelp, Clapperboard, Flame, FolderOpen, House, LogOut, Mail, Menu, PackageCheck, Search, Server, Settings, SquareKanban, Users, X } from "lucide-react";
+import { Bell, Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, LogOut, Mail, Menu, Search, Settings, SquareKanban, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
@@ -19,17 +19,6 @@ const primaryLinks = [
   { href: "/files", label: "Files", icon: FolderOpen },
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/team", label: "Team & Roles", icon: Users },
-];
-
-/**
- * What used to be the topbar's tab strip. The bar itself is gone, but these are the only
- * routes it was the way to reach, so they moved here rather than disappearing with it.
- * "All Projects" is not among them: that was the same `/projects` as the link above.
- */
-const workspaceLinks = [
-  { href: "/review", label: "Active Reviews", icon: Clapperboard },
-  { href: "/render-queue", label: "Render Queue", icon: Server },
-  { href: "/deliverables", label: "Deliverables", icon: PackageCheck },
 ];
 
 /** Mirrors the cookie the layout reads, so a reload opens at the width you left it. */
@@ -134,14 +123,6 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
             ))}
           </nav>
 
-          <p className="studio-rail-heading">Workspace</p>
-          <nav aria-label="Workspace sections">
-            {workspaceLinks.map(({ href, label, icon: Icon }) => (
-              <Link key={label} href={href} onClick={() => setOpen(false)} title={label} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}>
-                <Icon size={20} /><span>{label}</span><LinkPending />
-              </Link>
-            ))}
-          </nav>
         </div>
 
         <div className="studio-sidebar-foot">
