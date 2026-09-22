@@ -16,9 +16,9 @@ import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } fr
 import { SharePanel } from "./share-panel";
 import { useReviewWriter } from "./writer";
 
-type Props = { view: ReviewView; author: string; initialShareOpen?: boolean };
+type Props = { view: ReviewView; author: string; initialShareOpen?: boolean; embedded?: boolean };
 
-export function ReviewWorkspace({ view, author, initialShareOpen = false }: Props) {
+export function ReviewWorkspace({ view, author, initialShareOpen = false, embedded = false }: Props) {
   const router = useRouter();
   const reduced = useReducedMotion();
   const player = useRef<PlayerHandle>(null);
@@ -68,13 +68,14 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false }: Prop
     if (item.assetFileId && view.workspaceId) return `/api/workspaces/${view.workspaceId}/asset-files/${item.assetFileId}/download/`;
     return item.src;
   };
+  const reviewHref = (query: string) => `${embedded ? "/review-embed" : "/review"}?${query}`;
   const seek = (ms: number) => player.current?.seek(ms);
 
   if (!asset || !version) {
     return (
-      <div className="rv">
+      <div className={`rv ${embedded ? "is-embedded" : ""}`}>
         <header className="rv-top">
-          <Link href="/files" className="rv-back"><ChevronLeft size={16} />Files</Link>
+          <Link href="/files" target={embedded ? "_top" : undefined} className="rv-back"><ChevronLeft size={16} />Files</Link>
           <div className="rv-crumbs"><strong>Nothing to review</strong></div>
         </header>
         <p className="rv-blank">
@@ -85,9 +86,9 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false }: Prop
   }
 
   return (
-    <div className="rv">
+    <div className={`rv ${embedded ? "is-embedded" : ""}`}>
       <header className="rv-top">
-        <Link href={asset.projectId ? "/projects" : "/files"} className="rv-back" aria-label="Back">
+        <Link href={asset.projectId ? "/projects" : "/files"} target={embedded ? "_top" : undefined} className="rv-back" aria-label="Back">
           <ChevronLeft size={16} />
         </Link>
 
@@ -102,7 +103,7 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false }: Prop
           className="rv-version"
           aria-label="Version"
           value={version.id}
-          onChange={(event) => router.push(`/review?media=${event.target.value}`)}
+          onChange={(event) => router.push(reviewHref(`media=${event.target.value}`))}
         >
           {[...asset.versions].reverse().map((item) => (
             <option key={item.id} value={item.id}>{item.label}{item.id === latest?.id ? " · Latest" : ""}</option>
@@ -110,7 +111,7 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false }: Prop
         </select>
 
         {asset.versions.length > 1 && (comparing ? (
-          <button type="button" className="rv-compare-toggle is-on" onClick={() => router.push(`/review?media=${version.id}`)}>
+          <button type="button" className="rv-compare-toggle is-on" onClick={() => router.push(reviewHref(`media=${version.id}`))}>
             <X size={13} />Exit compare
           </button>
         ) : (
@@ -118,7 +119,7 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false }: Prop
             className="rv-compare-toggle"
             aria-label="Compare with another version"
             value=""
-            onChange={(event) => event.target.value && router.push(`/review?media=${version.id}&compare=${event.target.value}`)}
+            onChange={(event) => event.target.value && router.push(reviewHref(`media=${version.id}&compare=${event.target.value}`))}
           >
             <option value="">Compare…</option>
             {asset.versions.filter((item) => item.id !== version.id).reverse().map((item) => (

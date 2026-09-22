@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TasksView } from "@/lib/tasks-view";
 import { TasksBoard } from "./board";
 
@@ -18,7 +18,10 @@ const view = {
   tasks: [{ id: "task", workspace_id: "workspace", client_team_id: "client", project_id: "project", task_stage_id: "revisions-stage", title: "Edit Summer Campaign V3", description: "Tighten the opening", status: "REVISIONS", priority: "HIGH", start_at: null, due_at: "2026-09-18T12:00:00Z", completed_at: null, sort_order: 0, created_at: "2026-09-10", updated_at: "2026-09-10", assignees: [] }],
 } satisfies TasksView;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 describe("TasksBoard", () => {
   it("uses one task collection across Kanban, List, and project views", () => {
     const rendered = render(<TasksBoard view={view} />);
@@ -54,5 +57,38 @@ describe("TasksBoard", () => {
     // It is draggable, which is how a stage change is made from here.
     expect(card).toHaveAttribute("draggable");
     rendered.unmount();
+  });
+
+  it("starts a new task in the column where it was added", () => {
+    render(<TasksBoard view={view} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add task to Revisions" }));
+
+    expect(screen.getByRole("heading", { name: "New task" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Stage")).toHaveValue("revisions-stage");
+  });
+
+  it("opens task details beside the board and loads its attachments on demand", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+    render(<TasksBoard view={view} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Summer Campaign V3" }));
+
+    expect(screen.getByRole("heading", { name: "Edit Summer Campaign V3" })).toBeInTheDocument();
+    expect(await screen.findByText("No attachments yet")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith("/api/workspaces/workspace/tasks/task/attachments/", { credentials: "include" });
+  });
+
+  it("opens a staged video in the adjacent review workspace", () => {
+    const staged = {
+      ...view,
+      files: [{ id: "file", workspace_id: "workspace", client_team_id: "client", project_id: "project", folder_id: null, task_stage_id: "todo-stage", file: { id: "source-file", name: "daily life.mov", mime_type: "video/quicktime", size_bytes: 10, checksum_sha256: "x", status: "READY", duration_ms: null }, poster: null, added_by: null, comment_count: 0, version_number: 1, media_asset: null, created_at: "2026-09-12" }],
+    } satisfies TasksView;
+    render(<TasksBoard view={staged} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open review for daily life.mov" }));
+
+    expect(screen.getByTitle("Review daily life.mov")).toHaveAttribute("src", "/review-embed?media=source-file");
+    expect(screen.getByRole("link", { name: "Open full review" })).toHaveAttribute("href", "/review?media=source-file");
   });
 });
