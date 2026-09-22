@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type For
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
-import { Archive, AudioLines, ChevronRight, Clapperboard, Copy, Download, Ellipsis, File, FileImage, FileText, Film, FolderPlus, Grid2X2, GitBranch, Image as ImageIcon, Info, Layers, List, ListFilter, Move, Pencil, Play, RotateCcw, Search, Tag, Trash2, TriangleAlert, Upload, X } from "lucide-react";
+import { Archive, AudioLines, ChevronRight, Clapperboard, Copy, Download, Ellipsis, File, FileImage, FileText, Film, FolderPlus, Grid2X2, GitBranch, Image as ImageIcon, Info, Layers, List, ListFilter, Move, Pencil, Play, RefreshCw, RotateCcw, Search, Tag, Trash2, TriangleAlert, Upload, X } from "lucide-react";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
 import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, updateAssetFile, updateAssetFolder, uploadAssetFile } from "@/lib/asset-api-client";
@@ -168,8 +168,11 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const toggleAllVisible = () => setSelected((value) => { const next = new Set(value); visibleIds.forEach((id) => allVisibleSelected ? next.delete(id) : next.add(id)); return next; });
   useEffect(() => { const shortcuts = (event: KeyboardEvent) => { const target = event.target; if ((target instanceof Element && target.matches("input, select, textarea, [contenteditable=true]")) || event.metaKey || event.ctrlKey || event.altKey) return; if (event.key.toLowerCase() === "u") { event.preventDefault(); setDialog("upload"); } if (event.key.toLowerCase() === "n") { event.preventDefault(); setDialog("folder"); } }; window.addEventListener("keydown", shortcuts); return () => window.removeEventListener("keydown", shortcuts); }, []);
   return <RefreshContext.Provider value={() => router.refresh()}><ReportContext.Provider value={setWriteError}><div className={compact ? "asset-library compact" : "asset-library"}>
-    <div className="al-head">
-      <div>{!compact && <><p className="eyebrow">Central asset library</p><h1><TextRoll>Files</TextRoll></h1><p>Creative files, folders, clients, and projects—connected in one place.</p></>}</div>
+    {!compact && <div className="al-head">
+      <div><p className="eyebrow">Central asset library</p><h1><TextRoll>Files</TextRoll></h1><p>Creative files, folders, clients, and projects—connected in one place.</p></div>
+      <div className="al-library-totals"><strong>{files.length + folders.length}</strong><span>{files.length} files · {folders.length} folders</span></div>
+    </div>}
+    <div className="al-commandbar">
       <div className="al-actions">
         <label className="al-search"><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this location…" /></label>
         <div className="al-view-toggle"><button className={!dense ? "active" : ""} onClick={() => setDense(false)} aria-label="Card view" aria-pressed={!dense}><Grid2X2 /></button><button className={dense ? "active" : ""} onClick={() => setDense(true)} aria-label="List view" aria-pressed={dense}><List /></button></div>
@@ -182,11 +185,14 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
           stageFilter={stageFilter} setStageFilter={setStageFilter}
           sort={sort} setSort={setSort} onReset={resetFilters}
         />
+      </div>
+      <div className="al-command-actions">
         <Button variant="secondary" size={compact ? "sm" : "md"} onClick={() => setDialog("folder")}><FolderPlus />New folder</Button>
+        <Button className="al-refresh" variant="ghost" size="icon" onClick={() => router.refresh()} aria-label="Refresh assets"><RefreshCw /></Button>
         <Button variant="primary" size={compact ? "sm" : "md"} onClick={() => setDialog("upload")}><Upload />Upload</Button>
       </div>
     </div>
-    <div className="al-toolbar"><nav><button onClick={() => setFolderId(null)}>{projectName || "All Files"}</button>{crumbs.map((folder) => <span key={folder.id}><ChevronRight /><button onClick={() => setFolderId(folder.id)}>{folder.name}</button></span>)}</nav></div>
+    <div className="al-toolbar"><nav><button onClick={() => setFolderId(null)}>{projectName || "All Files"}</button>{crumbs.map((folder) => <span key={folder.id}><ChevronRight /><button onClick={() => setFolderId(folder.id)}>{folder.name}</button></span>)}</nav><span>{scopeFolders.length + scopeFiles.length} item{scopeFolders.length + scopeFiles.length === 1 ? "" : "s"}</span></div>
     {visibleIds.length > 0 && <div className="al-selection-row"><label><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} />Select all visible</label><span>Shortcuts: N new folder · U upload</span></div>}
     {selected.size > 0 && <div className="al-bulk" role="status" aria-live="polite"><strong>{selected.size} selected</strong><button onClick={() => setSelected(new Set())}>Clear</button><button onClick={() => setBulkOpen(true)}><Move />Move / assign</button><button className="danger" onClick={deleteSelected}><Trash2 />Delete</button></div>}
     {writeError && <p className="al-write-error" role="alert"><TriangleAlert />{writeError}<button onClick={() => setWriteError(null)} aria-label="Dismiss error"><X /></button></p>}

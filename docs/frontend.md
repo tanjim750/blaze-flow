@@ -42,12 +42,13 @@ Every sidebar and topbar navigation target now resolves to a real route.
 | Framework | Next.js 16 App Router, React 19 |
 | Language | TypeScript, `strict` |
 | Icons | `lucide-react` |
-| Styling | Plain CSS files imported per route, on a small Tailwind v4 base |
+| Styling | shadcn/Radix primitives, Tailwind v4 tokens, and route-level CSS |
+| Motion | Motion for React with reduced-motion support |
 | Fonts | `next/font` Geist Sans and Geist Mono |
 | State | Server components for data; `useState`/`useActionState` for local interaction only |
 
-There is no client-side data-fetching library, no global store, and no component library.
-Every page renders from data the server already resolved.
+There is no client-side data-fetching library or global store. Shared interactive primitives
+live in `src/components/ui/`; pages render from data the server already resolved.
 
 ## Running it
 

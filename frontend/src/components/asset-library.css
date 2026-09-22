@@ -7,7 +7,6 @@
 .compact .al-head { justify-content: flex-end; }
 /* Search, view mode and filters all sit on the actions row, so the page is a header and
    then the grid — no band of controls in between. */
-.al-head > div:last-child { display: flex; align-items: center; gap: 8px; }
 .al-actions { flex-wrap: wrap; justify-content: flex-end; }
 .al-form > button, .al-empty button { display: flex; align-items: center; gap: 6px; padding: 9px 12px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-container); color: var(--shell-on); cursor: pointer; }
 .al-form > button { border-color: #9278ff; background: var(--shell-accent); color: #fff; }
@@ -253,7 +252,7 @@
 .al-full-preview audio { width: 100%; }
 .al-full-preview > .al-kind-preview { width: 100%; height: 280px; }
 .al-full-preview p { color: var(--shell-outline); font-size: 10px; }
-@media (max-width: 700px) { .asset-library { padding-bottom: 70px; } .al-head, .al-toolbar { align-items: stretch; flex-direction: column; } .al-head > div:last-child { position: fixed; z-index: 45; right: 12px; bottom: 12px; left: 12px; justify-content: flex-end; padding: 8px; border: 1px solid var(--shell-highest); border-radius: 12px; background: #17171def; box-shadow: 0 12px 35px #000a; backdrop-filter: blur(12px); } .al-actions { width: 100%; justify-content: flex-start; } .al-search { width: 100%; order: -1; } .al-relations { grid-template-columns: 1fr; } .al-grid { grid-template-columns: 1fr 1fr; } .al-modal > section { margin: 3vh auto; max-height: 94vh; } }
+@media (max-width: 700px) { .asset-library { padding-bottom: 70px; } .al-toolbar { align-items: center; flex-direction: row; } .al-actions { width: 100%; justify-content: flex-start; } .al-search { width: 100%; order: -1; } .al-relations { grid-template-columns: 1fr; } .al-grid { grid-template-columns: 1fr 1fr; } .al-modal > section { margin: 3vh auto; max-height: 94vh; } }
 @media (max-width: 480px) { .al-grid { grid-template-columns: 1fr; } .al-selection-row span { display: none; } .al-bulk { flex-wrap: wrap; } .al-bulk strong { width: 100%; } .al-details dl > div { grid-template-columns: 95px 1fr; } }
 
 @media (prefers-reduced-motion: reduce) { .al-modal > section, .al-backdrop { animation: none; } .al-submit-row button:hover:not(:disabled), .al-form > button:hover, .al-drop.dragging .al-drop-orb { transform: none; } }
@@ -352,3 +351,140 @@
   font-size: 11px; font-weight: 600; letter-spacing: .01em; text-align: center; padding: 10px;
 }
 .al-version-drop svg { width: 18px; height: 18px; color: #a99bff; }
+
+/* Wasabi-inspired asset canvas --------------------------------------------
+   Keep Blaze Flow's shared file/folder model and actions, while adopting the
+   reference library's quiet two-level toolbar, drop target, and media-card rhythm. */
+.asset-library { max-width: 1400px; }
+.al-head { align-items: center; margin-bottom: 14px; }
+.al-head > div:last-child { display: grid; }
+.al-library-totals {
+  min-width: 132px; justify-items: end; gap: 2px;
+  padding: 9px 12px; border: 1px solid #292d39; border-radius: 11px;
+  background: linear-gradient(145deg, #191b24, #14151c);
+  box-shadow: inset 0 1px #ffffff08;
+}
+.al-library-totals strong { color: #e3e4ea; font-size: 18px; line-height: 1; }
+.al-library-totals span { color: #7f8596; font-size: 9px; white-space: nowrap; }
+
+.al-commandbar {
+  position: relative; z-index: 12;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 58px; padding: 10px 11px;
+  border: 1px solid #272a35; border-radius: 13px;
+  background: #12141edb;
+  box-shadow: 0 10px 30px #0000001c, inset 0 1px #ffffff07;
+  backdrop-filter: blur(14px);
+}
+.al-actions,
+.al-command-actions { display: flex; align-items: center; gap: 8px; }
+.al-actions { min-width: 0; flex: 1; }
+.al-command-actions { flex: none; }
+.al-commandbar .al-search { width: clamp(210px, 30vw, 390px); }
+.al-commandbar .al-search input { border-radius: 999px; background: #191c28; }
+.al-commandbar .al-view-toggle,
+.al-commandbar .al-filter-trigger { border-radius: 999px; background: #171923; }
+.al-commandbar .al-view-toggle button { border-radius: 999px; }
+.al-commandbar .al-filter-trigger { height: 36px; }
+.al-commandbar .ui-button { border-radius: 999px; white-space: nowrap; }
+.al-commandbar .ui-button-primary {
+  border-color: #8069f4;
+  background: linear-gradient(100deg, #6d58ed, #8a65fa);
+  box-shadow: 0 6px 18px #604aff30;
+}
+.al-refresh { width: 34px; height: 34px; padding: 0; color: #9298aa; }
+.al-refresh svg { width: 15px; height: 15px; }
+
+.al-toolbar {
+  min-height: 42px; margin: 7px 2px 9px; padding: 0 2px;
+  align-items: center; border: 0;
+}
+.al-toolbar > span { margin-left: auto; color: #7f8596; font-size: 10px; }
+.al-toolbar nav button { padding: 5px 4px; border-radius: 6px; }
+.al-toolbar nav button:hover { background: #1d202c; color: #e1e3ea; }
+
+.al-selection-row {
+  min-height: 38px; margin: 0 0 6px; padding: 0 3px;
+  border-bottom: 1px solid #20232d;
+}
+.al-selection-row label { color: #9298aa; }
+.al-section > header { min-height: 36px; margin: 0 0 9px; }
+.al-section > header h2 { color: #aeb3c2; font-size: 11px; font-weight: 550; }
+.al-section > header span { border-radius: 999px; background: #20232d; }
+
+.al-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+.al-folder-card,
+.al-file-card {
+  border-color: #262b39; border-radius: 9px;
+  background: #171a24;
+  box-shadow: 0 4px 14px #0000001f;
+  transition: border-color .18s, transform .18s, box-shadow .18s, opacity .15s;
+}
+.al-folder-card:hover,
+.al-file-card:hover {
+  border-color: #40465a; transform: translateY(-1px);
+  box-shadow: 0 12px 28px #00000038;
+}
+.al-folder-preview,
+.al-file-preview {
+  width: 100%; height: auto; aspect-ratio: 16 / 9;
+  border-radius: 9px 9px 0 0; background: #08090d;
+}
+.al-grid:not(.dense) .al-file-card {
+  display: flex; flex-direction: column;
+  height: 100%;
+}
+.al-grid:not(.dense) .al-file-card > div {
+  flex: 0 0 124px; height: 124px;
+  overflow: hidden;
+}
+.al-folder-preview { padding: 5px; }
+.al-folder-card > footer { min-height: 58px; padding: 12px; border-top: 1px solid #2b3040; }
+.al-file-card > div { min-height: 68px; padding: 12px; border-top: 1px solid #2b3040; }
+.al-folder-card strong,
+.al-file-card strong { font-size: 12px; }
+.al-folder-card small,
+.al-file-card small { color: #888e9f; font-size: 10px; }
+.al-menu-trigger { color: #9298a9; }
+.al-menu-trigger:hover { background: #282b36; }
+.al-select { top: 10px; left: 10px; background: #14161bd9; }
+.al-file-preview > i { right: 9px; bottom: 9px; width: 27px; height: 27px; }
+
+.al-empty {
+  min-height: 280px; align-content: center;
+  border-color: #2d313e; background: linear-gradient(145deg, #15172080, #11131a80);
+}
+
+.al-grid.dense { gap: 8px; }
+.al-grid.dense :is(.al-folder-card, .al-file-card) { min-height: 64px; }
+.al-grid.dense :is(.al-folder-preview, .al-file-preview) { flex-basis: 102px; height: 64px; aspect-ratio: auto; border-radius: 9px 0 0 9px; }
+.al-grid.dense .al-folder-card > footer,
+.al-grid.dense .al-file-card > div { min-height: 64px; height: 64px; border-top: 0; }
+
+@media (max-width: 900px) {
+  .al-commandbar { align-items: stretch; flex-direction: column; }
+  .al-actions, .al-command-actions { width: 100%; }
+  .al-commandbar .al-search { width: auto; flex: 1; }
+  .al-command-actions { justify-content: flex-end; }
+}
+@media (max-width: 700px) {
+  .al-head { align-items: center; flex-direction: row; }
+  .al-head > .al-library-totals { position: static; display: grid; width: auto; padding: 8px 10px; border-radius: 10px; box-shadow: none; backdrop-filter: none; }
+  .al-commandbar { position: static; padding: 8px; }
+  .al-actions { flex-wrap: wrap; }
+  .al-commandbar .al-search { order: -1; flex-basis: 100%; width: 100%; }
+  .al-command-actions { position: fixed; z-index: 45; right: 12px; bottom: 12px; left: 12px; width: auto; padding: 8px; border: 1px solid #343744; border-radius: 12px; background: #171923ed; box-shadow: 0 12px 35px #000a; backdrop-filter: blur(12px); }
+  .al-command-actions .ui-button-primary { margin-left: auto; }
+  .al-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+}
+@media (max-width: 480px) {
+  .al-library-totals { display: none !important; }
+  .al-grid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .al-folder-card,
+  .al-file-card { transition: none; }
+  .al-folder-card:hover,
+  .al-file-card:hover { transform: none; }
+}

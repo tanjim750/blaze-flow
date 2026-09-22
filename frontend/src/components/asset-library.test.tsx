@@ -65,7 +65,7 @@ describe("AssetLibrary", () => {
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
 
     fireEvent.click(screen.getByRole("button", { name: "Upload" }));
-    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]');
+    const input = rendered.container.querySelector<HTMLInputElement>('.al-drop input[type="file"]');
     fireEvent.change(input!, { target: { files: [new File(["a"], "brief.pdf", { type: "application/pdf" }), new File(["b"], "mix.wav", { type: "audio/wav" })] } });
     expect(screen.getByText("2 files ready")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Upload 2 files" })).toBeEnabled();
@@ -92,7 +92,7 @@ describe("AssetLibrary", () => {
     replaceLibrary(empty);
     const rendered = render(<AssetLibrary view={{ ...view, workspaceId: null }} />);
     fireEvent.click(screen.getByRole("button", { name: "Upload" }));
-    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]');
+    const input = rendered.container.querySelector<HTMLInputElement>('.al-drop input[type="file"]');
     fireEvent.change(input!, { target: { files: [new File(["a"], "promo.mp4", { type: "video/mp4" })] } });
     fireEvent.change(screen.getByLabelText("Client (optional)"), { target: { value: "client" } });
     fireEvent.change(screen.getByLabelText("Project (optional)"), { target: { value: "project" } });
@@ -209,7 +209,7 @@ describe("AssetLibrary", () => {
     const rendered = render(<AssetLibrary view={view} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Upload" }));
-    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]');
+    const input = rendered.container.querySelector<HTMLInputElement>('.al-drop input[type="file"]');
     fireEvent.change(input!, { target: { files: [new File(["x"], "hero.mp4", { type: "video/mp4" })] } });
     fireEvent.click(screen.getByRole("button", { name: "Upload 1 file" }));
 
@@ -228,7 +228,7 @@ describe("AssetLibrary", () => {
     const rendered = render(<AssetLibrary view={view} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Upload" }));
-    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]');
+    const input = rendered.container.querySelector<HTMLInputElement>('.al-drop input[type="file"]');
     fireEvent.change(input!, { target: { files: [new File(["x"], "hero.mp4", { type: "video/mp4" })] } });
     fireEvent.click(screen.getByRole("button", { name: "Upload 1 file" }));
 
