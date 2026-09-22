@@ -5,6 +5,8 @@ from django.utils import timezone
 
 from app.models import (
     Notification,
+    ClientTeamMember,
+    ClientTeamMemberStatus,
     NotificationKind,
     OutboxEvent,
     ReviewCommentMention,
@@ -16,6 +18,55 @@ from app.permissions import REVIEW_COMMENT_READ, has_project_permission
 
 class NotificationError(Exception):
     pass
+
+
+@transaction.atomic
+def notify_client_task_ready(*, task, actor):
+    """Create one in-app handoff notification per active client contact and task."""
+    if not task.client_team_id:
+        return 0
+    now = timezone.now()
+    recipients = User.objects.filter(
+        id__in=ClientTeamMember.objects.filter(
+            client_team_id=task.client_team_id,
+            status=ClientTeamMemberStatus.ACTIVE,
+        ).values('user_id'),
+        status=UserStatus.ACTIVE,
+    ).exclude(id=actor.id)
+    created_count = 0
+    for recipient in recipients:
+        notification, created = Notification.objects.get_or_create(
+            recipient_user=recipient,
+            kind=NotificationKind.TASK_CLIENT_READY,
+            entity_type='task',
+            entity_id=str(task.id),
+            defaults={
+                'id': uuid.uuid4(),
+                'workspace_id': task.workspace_id,
+                'actor_user': actor,
+                'payload': {
+                    'task_id': str(task.id),
+                    'project_id': str(task.project_id) if task.project_id else None,
+                    'title': task.title,
+                },
+                'created_at': now,
+            },
+        )
+        if not created:
+            continue
+        OutboxEvent.objects.create(
+            id=uuid.uuid4(), topic='notification.created', aggregate_type='notification',
+            aggregate_id=str(notification.id),
+            deduplication_key=f'notification:{notification.id}:created',
+            payload={
+                'notification_id': str(notification.id),
+                'recipient_user_id': str(recipient.id),
+                'kind': notification.kind,
+            },
+            available_at=now, created_at=now, updated_at=now,
+        )
+        created_count += 1
+    return created_count
 
 
 def resolve_mention_users(*, project, actor, user_ids):

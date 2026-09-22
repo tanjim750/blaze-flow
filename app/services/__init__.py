@@ -37,6 +37,7 @@ from .notifications import (
     NotificationError,
     mark_all_notifications_read,
     mark_notification_read,
+    notify_client_task_ready,
 )
 from .outbox import process_outbox_events, requeue_dead_letter_events
 from .review_assets import ReviewAttachmentError, delete_review_attachment, upload_review_attachment
@@ -146,6 +147,7 @@ __all__ = [
     'get_plan_limit',
     'mark_all_notifications_read',
     'mark_notification_read',
+    'notify_client_task_ready',
     'delete_review_comment_tree',
     'delete_annotation',
     'delete_project_file',

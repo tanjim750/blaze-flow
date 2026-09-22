@@ -232,6 +232,7 @@ from .services import (
     edit_review_comment,
     mark_all_notifications_read,
     mark_notification_read,
+    notify_client_task_ready,
     move_project_folder,
     get_effective_subscription,
     get_notification_preference,
@@ -1453,6 +1454,12 @@ def task_stage_detail(request, workspace_id, stage_id):
     if request.method == 'PATCH':
         serializer = TaskStageSerializer(stage, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        if (
+            serializer.validated_data.get('is_done') is False
+            and stage.is_done
+            and not TaskStage.objects.filter(workspace=workspace, is_done=True).exclude(id=stage.id).exists()
+        ):
+            return Response({'detail': 'A workflow must keep one completed stage.'}, status=status.HTTP_400_BAD_REQUEST)
         if serializer.validated_data.get('is_done'):
             TaskStage.objects.filter(workspace=workspace).exclude(id=stage.id).update(is_done=False)
         stage = serializer.save()
@@ -1470,6 +1477,9 @@ def task_stage_detail(request, workspace_id, stage_id):
         replacement = get_object_or_404(TaskStage, id=replacement_id, workspace=workspace)
         if replacement.id == stage.id:
             return Response({'detail': 'Choose a different replacement stage.'}, status=status.HTTP_400_BAD_REQUEST)
+        if stage.is_done and not replacement.is_done:
+            replacement.is_done = True
+            replacement.save(update_fields=['is_done', 'updated_at'])
         tasks.update(task_stage=replacement, status=TaskStatus.APPROVED if replacement.is_done else TaskStatus.TODO, updated_at=timezone.now())
         staged_files.update(task_stage=replacement, updated_at=timezone.now())
     stage.delete()
@@ -1528,13 +1538,6 @@ def task_list_create(request, workspace_id):
         workspace=workspace,
         permission_key=TASK_CREATE,
     ).first()
-    task = create_task(
-        workspace=workspace,
-        project=project,
-        client_team=client_team,
-        created_by_membership=creating_membership,
-        **data,
-    )
     requested_status = data.get('status', TaskStatus.TODO)
     legacy_stage_names = {
         TaskStatus.TODO: 'To Do', TaskStatus.IN_PROGRESS: 'Revisions', TaskStatus.REVISIONS: 'Revisions',
@@ -1543,8 +1546,17 @@ def task_list_create(request, workspace_id):
     }
     task_stage = get_object_or_404(TaskStage, id=task_stage_id, workspace=workspace) if task_stage_id else TaskStage.objects.filter(workspace=workspace, name=legacy_stage_names.get(requested_status, 'To Do')).first()
     task_stage = task_stage or TaskStage.objects.filter(workspace=workspace).order_by('sort_order').first()
-    if task_stage:
-        task = update_task(task=task, task_stage=task_stage, status=requested_status)
+    if task_stage is None:
+        return Response({'detail': 'This workspace has no task stages.'}, status=status.HTTP_409_CONFLICT)
+    data['status'] = requested_status if not task_stage_id else (TaskStatus.APPROVED if task_stage.is_done else TaskStatus.TODO)
+    task = create_task(
+        workspace=workspace,
+        project=project,
+        client_team=client_team,
+        task_stage=task_stage,
+        created_by_membership=creating_membership,
+        **data,
+    )
     if assignee_id:
         membership = get_object_or_404(WorkspaceMembership, id=assignee_id, workspace=workspace)
         add_task_assignee(task=task, membership=membership)
@@ -1565,8 +1577,19 @@ def task_detail(request, workspace_id, task_id):
     if request.method == 'GET':
         return Response(TaskSerializer(task).data)
     if request.method == 'PATCH':
+        previous_stage_id = task.task_stage_id
         serializer = TaskUpdateSerializer(task, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        if (
+            task.task_stage_id
+            and task.task_stage.is_done
+            and workspace.task_workflow_settings.get('lock_done_editing', True)
+            and set(request.data) - {'task_stage_id', 'status', 'sort_order'}
+        ):
+            return Response(
+                {'detail': 'Move this task out of the completed stage before editing it.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         data = serializer.validated_data.copy()
         assignee_id = data.pop('assignee_id', None) if 'assignee_id' in data else ...
         stage_was_supplied = 'task_stage_id' in data
@@ -1593,6 +1616,14 @@ def task_detail(request, workspace_id, task_id):
         if task_stage and stage_was_supplied:
             data['status'] = TaskStatus.APPROVED if task_stage.is_done else TaskStatus.TODO
         task = update_task(task=task, project=project, client_team=client_team, task_stage=task_stage, **data)
+        if (
+            task_stage
+            and task_stage.id != previous_stage_id
+            and task_stage.automation_enabled
+            and 'client' in task_stage.name.casefold()
+            and workspace.task_workflow_settings.get('auto_notify_client', True)
+        ):
+            notify_client_task_ready(task=task, actor=request.user)
         if assignee_id is not ...:
             TaskAssignee.objects.filter(task=task).delete()
             if assignee_id:

@@ -10,10 +10,14 @@ from django.urls import reverse
 
 from .models import (
     File,
+    Notification,
+    NotificationKind,
+    OutboxEvent,
     ProjectAccessMode,
     Task,
     TaskAssignee,
     TaskAttachment,
+    TaskStage,
     TaskStatus,
 )
 from .test_access_projects import WorkspaceAccessSetupMixin
@@ -178,6 +182,72 @@ class WorkspaceTaskApiTests(WorkspaceAccessSetupMixin, TestCase):
         return get_user_model().objects.create_user(
             email=email, password='a-secure-test-password', first_name='Out', last_name='Sider',
         )
+
+
+    def test_done_stage_lock_blocks_content_edits_but_allows_reopening(self):
+        self.client.force_authenticate(self.owner)
+        done = TaskStage.objects.get(workspace=self.workspace, is_done=True)
+        todo = TaskStage.objects.filter(workspace=self.workspace, is_done=False).order_by('sort_order').first()
+        created = self.client.post(
+            reverse('api-tasks', args=[self.workspace.id]),
+            {'title': 'Final export', 'task_stage_id': str(done.id)}, format='json',
+        )
+
+        blocked = self.client.patch(
+            reverse('api-task-detail', args=[self.workspace.id, created.json()['id']]),
+            {'title': 'Changed after approval'}, format='json',
+        )
+        reopened = self.client.patch(
+            reverse('api-task-detail', args=[self.workspace.id, created.json()['id']]),
+            {'task_stage_id': str(todo.id)}, format='json',
+        )
+
+        self.assertEqual(blocked.status_code, 409)
+        self.assertEqual(reopened.status_code, 200)
+        self.assertEqual(reopened.json()['task_stage_id'], str(todo.id))
+
+    def test_only_done_stage_cannot_be_unmarked(self):
+        self.client.force_authenticate(self.owner)
+        done = TaskStage.objects.get(workspace=self.workspace, is_done=True)
+
+        response = self.client.patch(
+            reverse('api-task-stage-detail', args=[self.workspace.id, done.id]),
+            {'is_done': False}, format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        done.refresh_from_db()
+        self.assertTrue(done.is_done)
+
+    def test_moving_task_to_client_stage_notifies_active_client_contacts(self):
+        self.client.force_authenticate(self.owner)
+        client_user = self._make_user('client-reviewer@example.com')
+        team_response = self.client.post(
+            reverse('api-client-teams', args=[self.workspace.id]),
+            {'name': 'Acme'}, format='json',
+        )
+        team_id = team_response.json()['id']
+        member_response = self.client.post(
+            reverse('api-client-team-members', args=[self.workspace.id, team_id]),
+            {'email': client_user.email}, format='json',
+        )
+        self.assertEqual(member_response.status_code, 201)
+        created = self.client.post(
+            reverse('api-tasks', args=[self.workspace.id]),
+            {'title': 'Review the final cut', 'client_team_id': team_id}, format='json',
+        )
+        client_stage = TaskStage.objects.get(workspace=self.workspace, name='Client')
+
+        moved = self.client.patch(
+            reverse('api-task-detail', args=[self.workspace.id, created.json()['id']]),
+            {'task_stage_id': str(client_stage.id)}, format='json',
+        )
+
+        self.assertEqual(moved.status_code, 200)
+        notification = Notification.objects.get(recipient_user=client_user)
+        self.assertEqual(notification.kind, NotificationKind.TASK_CLIENT_READY)
+        self.assertEqual(notification.payload['task_id'], created.json()['id'])
+        self.assertEqual(OutboxEvent.objects.get().topic, 'notification.created')
 
 
 class ProjectTaskScopeApiTests(WorkspaceAccessSetupMixin, TestCase):

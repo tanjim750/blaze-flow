@@ -144,6 +144,7 @@ class AuditActorType(models.TextChoices):
 
 class NotificationKind(models.TextChoices):
     REVIEW_COMMENT_MENTION = 'REVIEW_COMMENT_MENTION'
+    TASK_CLIENT_READY = 'TASK_CLIENT_READY'
 
 
 class OutboxEventStatus(models.TextChoices):
@@ -969,7 +970,7 @@ class Task(models.Model):
     workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
     project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', null=True, blank=True, related_name='+')
     client_team = models.ForeignKey(ClientTeam, on_delete=models.SET_NULL, db_column='client_team_id', null=True, blank=True, related_name='+')
-    task_stage = models.ForeignKey(TaskStage, on_delete=models.PROTECT, db_column='task_stage_id', null=True, blank=True, related_name='tasks')
+    task_stage = models.ForeignKey(TaskStage, on_delete=models.PROTECT, db_column='task_stage_id', related_name='tasks')
     created_by_workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.DO_NOTHING, db_column='created_by_workspace_membership_id', related_name='+')
     title = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True)
@@ -1001,6 +1002,8 @@ class Task(models.Model):
 
     def clean(self):
         errors = {}
+        if self.task_stage_id and self.workspace_id and self.task_stage.workspace_id != self.workspace_id:
+            errors['task_stage'] = 'The task stage must belong to the task workspace.'
         if self.project_id and self.workspace_id and self.project.workspace_id != self.workspace_id:
             errors['project'] = 'The project must belong to the task workspace.'
         if self.client_team_id and self.workspace_id and self.client_team.workspace_id != self.workspace_id:
