@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TasksView } from "@/lib/tasks-view";
+import { UniversalReviewLayout } from "@/components/universal-review";
 import { TasksBoard } from "./board";
 
 const view = {
@@ -84,7 +85,7 @@ describe("TasksBoard", () => {
       ...view,
       files: [{ id: "file", workspace_id: "workspace", client_team_id: "client", project_id: "project", folder_id: null, task_stage_id: "todo-stage", file: { id: "source-file", name: "daily life.mov", mime_type: "video/quicktime", size_bytes: 10, checksum_sha256: "x", status: "READY", duration_ms: null }, poster: null, added_by: null, comment_count: 0, version_number: 1, media_asset: null, created_at: "2026-09-12" }],
     } satisfies TasksView;
-    render(<TasksBoard view={staged} />);
+    render(<UniversalReviewLayout pathname="/tasks"><TasksBoard view={staged} /></UniversalReviewLayout>);
 
     fireEvent.click(screen.getByRole("button", { name: "Open review for daily life.mov" }));
 

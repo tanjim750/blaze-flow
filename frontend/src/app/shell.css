@@ -143,9 +143,10 @@
 .studio-account-menu form { display: contents; }
 .studio-sign-out { color: #ff9ba3 !important; }
 .studio-sign-out:hover { background: #3b171d !important; }
-/* No topbar any more, so the page starts at the top of the viewport. */
-.studio-main > main { padding: 34px 28px 60px; }
-.studio-main > main.flush { padding: 0; }
+/* No topbar any more, so the page starts at the top of the viewport. The universal review
+   wrapper persists across routes; its page slot owns the same padding `main` used to. */
+.universal-review-page > main { padding: 34px 28px 60px; }
+.universal-review-page > main.flush { padding: 0; }
 .mobile-menu { display: none; }
 
 @media (max-width: 900px) {
@@ -155,9 +156,9 @@
   .studio-sidebar.open { transform: none; box-shadow: 20px 0 60px #000; }
   .studio-rail-toggle { display: none; }
   .studio-main { padding-left: 0; }
-  .studio-main > main, .studio-main > main.flush { padding-top: 60px; }
+  .universal-review-page > main, .universal-review-page > main.flush { padding-top: 60px; }
   .mobile-menu { display: grid; place-items: center; position: fixed; right: 16px; top: 12px; z-index: 60; width: 34px; height: 34px; border: 0; border-radius: 9px; background: var(--shell-accent); color: #fff; cursor: pointer; }
-  .studio-main > main { padding-inline: 16px; }
+  .universal-review-page > main { padding-inline: 16px; }
 }
 
 /* Collapsed rail ----------------------------------------------------------
@@ -182,3 +183,167 @@
 /* The menus now hang off the bottom-left of the screen, so they open upward. */
 .studio-rail-account .studio-account-menu,
 .studio-rail-account .studio-notification-menu { top: auto; bottom: calc(100% + 10px); right: auto; left: 0; }
+
+/* Universal review workspace ---------------------------------------------
+   Files, Tasks, Projects, Dashboard and Deliverables all open this same shell-level
+   surface. The route underneath stays mounted on the right, exactly like the reference
+   application, while `/review` remains available through the expand control. */
+.universal-review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 100vh;
+  align-items: start;
+}
+.universal-review-layout.is-open {
+  grid-template-columns: minmax(450px, var(--universal-review-size, 54%)) 13px minmax(390px, 1fr);
+}
+.universal-review-page { min-width: 0; overflow: hidden; }
+.universal-review-layout.is-open .universal-review-page { container: universal-page / inline-size; }
+
+.universal-review-pane {
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100vh;
+  overflow: hidden;
+  border-right: 1px solid #373440;
+  background: #0b0b0e;
+  box-shadow: 18px 0 52px #00000066;
+}
+.universal-review-pane > header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 9px;
+  height: 50px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #292a32;
+  background: linear-gradient(180deg, #17181e, #111217);
+}
+.universal-review-pane > header > span {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid #4d416c;
+  border-radius: 999px;
+  background: #241f31;
+  color: #c6b7fa;
+  font: 600 9px var(--font-geist-mono), monospace;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.universal-review-pane > header > span svg { width: 11px; height: 11px; }
+.universal-review-pane > header > strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #ececf1;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.universal-review-pane > header > a,
+.universal-review-pane > header > button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  padding: 0;
+  border: 1px solid #34353f;
+  border-radius: 8px;
+  background: #1c1d24;
+  color: #9a9daa;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.universal-review-pane > header > a:hover,
+.universal-review-pane > header > button:hover { border-color: #66558e; background: #292334; color: #d7c9ff; }
+.universal-review-pane > header svg { width: 14px; height: 14px; }
+.universal-review-pane > iframe { display: block; flex: 1; width: 100%; min-height: 0; border: 0; background: #08080b; }
+
+.universal-review-resizer {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  width: 13px;
+  height: 100vh;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+.universal-review-resizer::before {
+  content: "";
+  position: absolute;
+  inset: 0 5px;
+  background: #413d4a;
+  box-shadow: 0 0 14px #000b;
+  transition: inset .15s, background .15s;
+}
+.universal-review-resizer > span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 62px;
+  border: 1px solid #595469;
+  border-radius: 12px;
+  background: #24222df2;
+  color: #aaa3be;
+  box-shadow: 0 8px 22px #0009;
+  font-size: 20px;
+  transform: translate(-50%, -50%);
+}
+.universal-review-resizer:hover::before,
+.universal-review-resizer:focus-visible::before,
+.universal-review-layout.is-resizing .universal-review-resizer::before { inset-inline: 4px; background: #8d72ff; }
+.universal-review-resizer:focus-visible > span,
+.universal-review-layout.is-resizing .universal-review-resizer > span { outline: 2px solid #8d72ff; outline-offset: 2px; color: #fff; }
+.universal-review-layout.is-resizing,
+.universal-review-layout.is-resizing * { cursor: col-resize !important; user-select: none !important; }
+
+/* The page half deliberately reflows from its own width while the divider moves. */
+@container universal-page (max-width: 720px) {
+  .tasks-heading .tasks-stage-totals,
+  .tasks-compact-head .tasks-stage-totals { display: none; }
+  .home-shell .attention-grid,
+  .home-shell .dashboard-columns,
+  .home-shell .stat-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 1180px) {
+  .universal-review-layout.is-open { display: block; }
+  .universal-review-layout.is-open .universal-review-page { filter: brightness(.55); pointer-events: none; }
+  .universal-review-resizer { display: none; }
+  .universal-review-pane {
+    position: fixed;
+    inset: 0 0 0 var(--rail-w);
+    z-index: 48;
+    width: auto;
+    height: 100dvh;
+    border-right: 0;
+    box-shadow: 0 24px 90px #000c;
+  }
+}
+
+@media (max-width: 900px) {
+  .universal-review-pane { left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .universal-review-pane > header > a,
+  .universal-review-pane > header > button,
+  .universal-review-resizer::before { transition: none; }
+}

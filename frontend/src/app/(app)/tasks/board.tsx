@@ -1,15 +1,15 @@
 "use client";
 import { useMemo, useRef, useState, type CSSProperties, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import Link from "next/link";
 import NextImage from "next/image";
-import { AudioLines, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, CirclePlus, Clapperboard, Columns3, Ellipsis, ExternalLink, File as FileIcon, FolderOpen, GripVertical, Image as ImageIcon, LayoutList, MessageSquare, Paperclip, Pencil, Play, Search, Trash2, TriangleAlert, UserRound, X } from "lucide-react";
+import { AudioLines, CalendarDays, CheckCircle2, ChevronDown, CirclePlus, Clapperboard, Columns3, Ellipsis, File as FileIcon, FolderOpen, GripVertical, Image as ImageIcon, LayoutList, MessageSquare, Paperclip, Pencil, Play, Search, Trash2, TriangleAlert, UserRound, X } from "lucide-react";
 import type { ProjectFile, Task, TaskAttachment, TaskStage, TaskWorkflowSettings } from "@/lib/api"; import type { TasksView } from "@/lib/tasks-view";
 import { updateAssetFile } from "@/lib/asset-api-client";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Switch } from "@/components/ui/switch";
+import { openUniversalReview } from "@/components/universal-review";
 const COLUMNS = [{ id:"TODO",label:"To Do",color:"#89909d",wip_limit:null,is_done:false},{id:"REVISIONS",label:"Revisions",color:"#ff5865",wip_limit:null,is_done:false},{id:"INTERNAL_QA",label:"Internal QA",color:"#4ba3ff",wip_limit:null,is_done:false},{id:"CLIENT",label:"Client",color:"#f4a742",wip_limit:null,is_done:false},{id:"APPROVED",label:"Approved",color:"#36d399",wip_limit:null,is_done:true}] as const;
 type ColumnId=string; type DueFilter=""|"OVERDUE"|"TODAY"|"WEEK"|"NONE";
-type Inspection = { kind:"task"; id:string } | { kind:"review"; fileId:string; taskId?:string };
+type Inspection = { kind:"task"; id:string };
 export function TasksBoard({view,projectId=null,compact=false}:{view:TasksView;projectId?:string|null;compact?:boolean}){
  const reduceMotion=useReducedMotion();
  const [tasks,setTasks]=useState(view.tasks),[mode,setMode]=useState<"KANBAN"|"LIST">("KANBAN"),[query,setQuery]=useState(""),[client,setClient]=useState(""),[project,setProject]=useState(projectId??""),[assignee,setAssignee]=useState(""),[status,setStatus]=useState(""),[priority,setPriority]=useState(""),[due,setDue]=useState<DueFilter>(""),[editing,setEditing]=useState<Task|"new"|"stages"|null>(null),[newStage,setNewStage]=useState<string|null>(null),[over,setOver]=useState<ColumnId|null>(null),[error,setError]=useState("");
@@ -24,8 +24,7 @@ export function TasksBoard({view,projectId=null,compact=false}:{view:TasksView;p
  const filtered=tasks.filter(t=>{const p=t.project_id?projectMap.get(t.project_id):null,c=t.client_team_id??p?.client_team_id??null,hay=`${t.title} ${t.description??""} ${p?.name??""} ${t.assignees.map(x=>x.name).join(" ")}`.toLowerCase();return(!projectId||t.project_id===projectId)&&(!query.trim()||hay.includes(query.trim().toLowerCase()))&&(!client||c===client)&&(!project||t.project_id===project)&&(!assignee||t.assignees.some(x=>x.id===assignee))&&(!status||stageId(t)===status)&&(!priority||t.priority===priority)&&matchesDue(t.due_at,due)}).sort((a,b)=>a.sort_order-b.sort_order||b.updated_at.localeCompare(a.updated_at));
  const itemCount=filtered.length+shownFiles.length,doneStages=new Set(columns.filter(x=>x.is_done).map(x=>x.id)),doneCount=filtered.filter(x=>doneStages.has(stageId(x))).length+shownFiles.filter(x=>x.task_stage_id&&doneStages.has(x.task_stage_id)).length,progress=itemCount?Math.round(doneCount/itemCount*100):0;
  const visibleAssignees=Array.from(new Map(filtered.flatMap(x=>x.assignees).map(x=>[x.id,x])).values()).slice(0,3);
- const inspectedTask=inspection?.kind==="task"?tasks.find(x=>x.id===inspection.id)??null:inspection?.taskId?tasks.find(x=>x.id===inspection.taskId)??null:null;
- const inspectedFile=inspection?.kind==="review"?files.find(x=>x.file.id===inspection.fileId)??null:null;
+ const inspectedTask=inspection?tasks.find(x=>x.id===inspection.id)??null:null;
  const fileBySourceId=useMemo(()=>new Map(files.map(file=>[file.file.id,file])),[files]);
  async function patchTask(id:string,payload:Record<string,unknown>){setError("");const before=tasks;setTasks(xs=>xs.map(x=>x.id===id?{...x,...payload,updated_at:new Date().toISOString()} as Task:x));try{const saved=await request<Task>(view.workspaceId,id,"PATCH",payload);setTasks(xs=>xs.map(x=>x.id===id?saved:x))}catch(e){setTasks(before);setError(msg(e))}}
  async function drop(e:DragEvent,target:ColumnId){e.preventDefault();setOver(null);const fileId=e.dataTransfer.getData("text/file");if(fileId){await moveFile(fileId,target);return}const id=e.dataTransfer.getData("text/task");if(id){const col=columns.find(x=>x.id===target),count=filtered.filter(x=>stageId(x)===target&&x.id!==id).length;if(col?.wip_limit&&count>=col.wip_limit&&view.workflowSettings.wip_warning&&!confirm(`${col.label} has reached its WIP limit. Move anyway?`))return;await patchTask(id,{task_stage_id:target,sort_order:count})}}
@@ -41,7 +40,10 @@ export function TasksBoard({view,projectId=null,compact=false}:{view:TasksView;p
   }catch(e){setAttachments(current=>({...current,[task.id]:[]}));setError(msg(e))}
   finally{setAttachmentsLoading(current=>current===task.id?null:current)}
  }
- function inspectFile(file:ProjectFile,taskId?:string){setInspection({kind:"review",fileId:file.file.id,taskId})}
+ function inspectFile(file:ProjectFile){
+  setInspection(null);
+  openUniversalReview({href:`/review?media=${file.file.id}`,title:file.file.name});
+ }
  function resizeInspector(event:ReactPointerEvent<HTMLButtonElement>){
   if(!event.currentTarget.hasPointerCapture(event.pointerId)||!splitRef.current)return;
   const bounds=splitRef.current.getBoundingClientRect();
@@ -66,11 +68,9 @@ export function TasksBoard({view,projectId=null,compact=false}:{view:TasksView;p
     exit={reduceMotion?undefined:{opacity:0,x:-18}}
     transition={reduceMotion?{duration:0}:{duration:.22,ease:[.22,1,.36,1]}}
    >
-    {inspection.kind==="review"&&inspectedFile
-     ? <ReviewInspector file={inspectedFile} task={inspectedTask} close={()=>setInspection(null)} back={inspectedTask?()=>setInspection({kind:"task",id:inspectedTask.id}):null}/>
-     : inspectedTask
-      ? <TaskInspector task={inspectedTask} view={view} columns={columns} attachments={attachments[inspectedTask.id]} loading={attachmentsLoading===inspectedTask.id} fileBySourceId={fileBySourceId} close={()=>setInspection(null)} edit={()=>setEditing(inspectedTask)} review={file=>inspectFile(file,inspectedTask.id)} patch={payload=>patchTask(inspectedTask.id,payload)}/>
-      : <div className="task-inspector-missing"><p>This item is no longer available.</p><button onClick={()=>setInspection(null)}>Close</button></div>}
+    {inspectedTask
+     ? <TaskInspector task={inspectedTask} view={view} columns={columns} attachments={attachments[inspectedTask.id]} loading={attachmentsLoading===inspectedTask.id} fileBySourceId={fileBySourceId} close={()=>setInspection(null)} edit={()=>setEditing(inspectedTask)} review={inspectFile} patch={payload=>patchTask(inspectedTask.id,payload)}/>
+     : <div className="task-inspector-missing"><p>This item is no longer available.</p><button onClick={()=>setInspection(null)}>Close</button></div>}
    </motion.aside>}
   </AnimatePresence>
   {inspection&&<button
@@ -135,20 +135,6 @@ function FileCard({file,project,open}:{file:ProjectFile;project?:string;open:()=
     ? <button type="button" className="task-file-open" onClick={open} aria-label={`Open review for ${file.file.name}`}>{body}</button>
     : <div className="task-file-open">{body}</div>}
  </article>;
-}
-
-function ReviewInspector({file,task,close,back}:{file:ProjectFile;task:Task|null;close:()=>void;back:(()=>void)|null}){
- return <div className="task-review-inspector">
-  <header className="task-inspector-top">
-   {back?<button type="button" className="task-inspector-back" onClick={back}><ChevronLeft/>Task</button>:<span className="task-inspector-kicker"><Play/>Review</span>}
-   <div><strong title={file.file.name}>{file.file.name}</strong>{task&&<small>{task.title}</small>}</div>
-   <Link href={`/review?media=${file.file.id}`} target="_top" aria-label="Open full review" title="Open full review"><ExternalLink/></Link>
-   <button type="button" onClick={close} aria-label="Close review"><X/></button>
-  </header>
-  <div className="task-review-frame">
-   <iframe src={`/review-embed?media=${file.file.id}`} title={`Review ${file.file.name}`} allow="fullscreen" allowFullScreen/>
-  </div>
- </div>
 }
 
 function TaskInspector({task,view,columns,attachments,loading,fileBySourceId,close,edit,review,patch}:{

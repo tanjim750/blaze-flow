@@ -15,10 +15,11 @@ import type { ReviewWriter } from "./writer";
  * neither. "Uploaded by" is shown as unavailable for the same reason: both `ProjectFile`
  * and `MediaVersion` record the member who uploaded, but neither serializer returns it.
  */
-export function Fields({ view, writer, meta }: {
+export function Fields({ view, writer, meta, embedded = false }: {
   view: ReviewView;
   writer: ReviewWriter;
   meta: { durationMs: number; width: number; height: number } | null;
+  embedded?: boolean;
 }) {
   const { asset, version } = view;
   if (!asset || !version) return null;
@@ -78,7 +79,7 @@ export function Fields({ view, writer, meta }: {
               {view.linkedTasks.map((task) => (
                 <li key={task.id}>
                   <CheckSquare size={13} />
-                  <Link href="/tasks">{task.title}<ExternalLink size={11} /></Link>
+                  <Link href="/tasks" target={embedded ? "_top" : undefined}>{task.title}<ExternalLink size={11} /></Link>
                 </li>
               ))}
             </ul>
@@ -90,7 +91,7 @@ export function Fields({ view, writer, meta }: {
         <ul className="rvf-versions">
           {[...asset.versions].reverse().map((item, index) => (
             <li key={item.id} className={item.id === version.id ? "is-current" : ""}>
-              <Link href={`/review?media=${item.id}`}>
+              <Link href={`${embedded ? "/review-embed" : "/review"}?media=${item.id}`}>
                 <strong>{item.label}</strong>
                 {/* The list is newest first, so the first row is the latest cut. */}
                 {index === 0 && <b className="rvf-latest">Latest</b>}

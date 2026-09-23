@@ -12,6 +12,7 @@ import { TextRoll } from "@/components/ui/skiper-ui/skiper58";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
+import { openUniversalReview } from "@/components/universal-review";
 
 const RefreshContext = createContext<() => void>(() => {});
 const useServerRefresh = () => useContext(RefreshContext);
@@ -382,7 +383,6 @@ function FolderCard({ folder, files, folders, view, selected, renaming, onSelect
   </article>;
 }
 function FileCard({ file, folders, view, selected, renaming, onSelect, onDetails, onPreview, onRename, onRenameDone, dragging, isVersionTarget, canAcceptVersion, onDragStart, onDragEnd, onDragEnter, onDragLeave, onDropVersion }: { file: LibraryFile; folders: LibraryFolder[]; view?: FilesView; selected: boolean; renaming: boolean; onSelect: () => void; onDetails: () => void; onPreview: () => void; onRename: () => void; onRenameDone: () => void; dragging: boolean; isVersionTarget: boolean; canAcceptVersion: boolean; onDragStart: () => void; onDragEnd: () => void; onDragEnter: () => void; onDragLeave: () => void; onDropVersion: () => void }) {
-  const router = useRouter();
   const working = isProcessing(file);
   const review = working ? null : reviewHref(file);
   const versions = file.versioning;
@@ -398,7 +398,7 @@ function FileCard({ file, folders, view, selected, renaming, onSelect, onDetails
   >
     {isVersionTarget && <span className="al-version-drop" aria-hidden="true"><GitBranch />Drop to create V{versions.versionCount + 1}</span>}
     <label className="al-select"><input type="checkbox" checked={selected} onChange={onSelect} aria-label={`Select ${file.name}`} /></label>
-    <button className="al-file-preview" onClick={() => review ? router.push(review) : onPreview()} aria-label={review ? `Open review for ${file.name}` : `Preview ${file.name}`} disabled={working}>
+    <button className="al-file-preview" onClick={() => review ? openUniversalReview({ href: review, title: file.name }) : onPreview()} aria-label={review ? `Open review for ${file.name}` : `Preview ${file.name}`} disabled={working}>
       <Preview file={file} large />
       {working
         ? <span className="al-working" role="status"><em>{file.status === "DUPLICATING" ? "Copying…" : file.status === "PENDING" ? "Checking file…" : "Generating preview…"}</em><i /></span>
@@ -461,7 +461,7 @@ function StageChip({ stageId, view }: { stageId: string | null; view?: FilesView
 }
 function KindIcon({ kind }: { kind: LibraryKind }) { const Icon = kind === "video" ? Film : kind === "audio" ? AudioLines : kind === "image" ? ImageIcon : kind === "document" ? FileText : kind === "source" ? FileImage : File; return <Icon />; }
 
-function ContextMenu({ entity, folders, folderFiles = [], view, onPreview, onOpen, onDetails, onRename }: { entity: LibraryFile | LibraryFolder; folders: LibraryFolder[]; folderFiles?: LibraryFile[]; view?: FilesView; onPreview?: () => void; onOpen?: () => void; onDetails?: () => void; onRename?: () => void }) { const isFile = "kind" in entity; const router = useRouter(); const write = useAssetWrite(); const mutate = (action: string) => { if (action === "preview") return onPreview?.(); if (action === "open") return onOpen?.(); if (action === "details") return onDetails?.(); if (action === "rename") return onRename?.(); if (action === "download" && isFile && entity.url) { window.location.assign(entity.url); return; } if (action === "download-folder" && !isFile) { const blob = new Blob([folderFiles.map((file) => `${file.name}\t${file.mimeType}\t${file.size}`).join("\n")], { type: "text/plain" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `${entity.name}-manifest.txt`; link.click(); URL.revokeObjectURL(link.href); return; } if (action === "duplicate" && isFile) {
+function ContextMenu({ entity, folders, folderFiles = [], view, onPreview, onOpen, onDetails, onRename }: { entity: LibraryFile | LibraryFolder; folders: LibraryFolder[]; folderFiles?: LibraryFile[]; view?: FilesView; onPreview?: () => void; onOpen?: () => void; onDetails?: () => void; onRename?: () => void }) { const isFile = "kind" in entity; const write = useAssetWrite(); const mutate = (action: string) => { if (action === "preview") return onPreview?.(); if (action === "open") return onOpen?.(); if (action === "details") return onDetails?.(); if (action === "rename") return onRename?.(); if (action === "download" && isFile && entity.url) { window.location.assign(entity.url); return; } if (action === "download-folder" && !isFile) { const blob = new Blob([folderFiles.map((file) => `${file.name}\t${file.mimeType}\t${file.size}`).join("\n")], { type: "text/plain" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `${entity.name}-manifest.txt`; link.click(); URL.revokeObjectURL(link.href); return; } if (action === "duplicate" && isFile) {
       if (!view?.workspaceId) return;
       const draft: LibraryFile = { ...entity, id: newId("copy"), fileId: null, name: copyName(entity.name), status: "DUPLICATING", url: null, preview: null, uploadedAt: new Date().toISOString() };
       write({
@@ -480,7 +480,7 @@ function ContextMenu({ entity, folders, folderFiles = [], view, onPreview, onOpe
       <DropdownMenuTrigger className="al-menu-trigger" aria-label={`Actions for ${entity.name}`}><Ellipsis /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="al-menu-content">
         {!isFile && <DropdownMenuItem onSelect={() => mutate("open")}>Open</DropdownMenuItem>}
-        {review && <DropdownMenuItem onSelect={() => router.push(review)}><Clapperboard />Open review</DropdownMenuItem>}
+        {review && <DropdownMenuItem onSelect={() => openUniversalReview({ href: review, title: entity.name })}><Clapperboard />Open review</DropdownMenuItem>}
         {isFile && <DropdownMenuItem onSelect={() => mutate("preview")}>Preview</DropdownMenuItem>}
         <DropdownMenuItem onSelect={() => mutate("details")}><Info />Details</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => mutate("rename")}><Pencil />Rename</DropdownMenuItem>

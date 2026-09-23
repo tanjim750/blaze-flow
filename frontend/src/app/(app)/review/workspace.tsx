@@ -234,7 +234,7 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false, embedd
                   onSeek={seek}
                 />
               ) : (
-                <Fields view={view} writer={writer} meta={meta} />
+                <Fields view={view} writer={writer} meta={meta} embedded={embedded} />
               )}
             </motion.div>
           </AnimatePresence>

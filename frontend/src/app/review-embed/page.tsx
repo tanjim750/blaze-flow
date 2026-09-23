@@ -8,7 +8,7 @@ import "./review-embed.css";
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 /**
- * A chrome-free version of Review used by the Tasks split pane.
+ * A chrome-free version of Review used by the universal split pane.
  *
  * It deliberately loads the same ReviewView and renders the same ReviewWorkspace as
  * `/review`; the iframe is only a layout boundary, not a second implementation or a copy
@@ -30,6 +30,7 @@ export default async function EmbeddedReview({ searchParams }: Props) {
       <ReviewWorkspace
         view={session.notice ? { ...view, notice: session.notice } : view}
         author={session.user ? displayName(session.user) : "You"}
+        initialShareOpen={single("share") === "1"}
         embedded
       />
     </main>

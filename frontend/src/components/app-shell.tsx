@@ -9,6 +9,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
 import type { ShellUser } from "@/lib/user";
 import type { Notification, Workspace } from "@/lib/api";
+import { openUniversalReview, UniversalReviewLayout } from "@/components/universal-review";
 
 type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { severity: string; code: string; count: number }[] };
 
@@ -82,7 +83,10 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
       const response = await fetch(`/api/notifications/${item.id}/read/`, { method: "POST", credentials: "include", headers: { "X-CSRFToken": browserCsrfToken() } });
       if (response.ok) setNotifications((items) => items.map((candidate) => candidate.id === item.id ? { ...candidate, unread: false, read_at: new Date().toISOString() } : candidate));
     }
-    setNotificationsOpen(false); router.push(notificationHref(item));
+    setNotificationsOpen(false);
+    const href = notificationHref(item);
+    if (href.startsWith("/review?")) openUniversalReview({ href, title: notificationTitle(item) });
+    else router.push(href);
   }
 
   const shellClass = `studio-shell${collapsed ? " is-collapsed" : ""}`;
@@ -150,7 +154,9 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
       </aside>
 
       <div className="studio-main">
-        <motion.main key={pathname} className={flush ? "flush" : undefined} initial={{ opacity: 0, y: reduceMotion ? 0 : 7 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0 : .24, ease: [.22, 1, .36, 1] }}>{children}</motion.main>
+        <UniversalReviewLayout pathname={pathname}>
+          <motion.main key={pathname} className={flush ? "flush" : undefined} initial={{ opacity: 0, y: reduceMotion ? 0 : 7 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0 : .24, ease: [.22, 1, .36, 1] }}>{children}</motion.main>
+        </UniversalReviewLayout>
       </div>
     </div>
   );
