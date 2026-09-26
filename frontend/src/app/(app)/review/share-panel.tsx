@@ -3,10 +3,8 @@
 import { useActionState, useState, useTransition } from "react";
 import { Check, Copy, Link2, TriangleAlert, UserMinus, X } from "lucide-react";
 import type { GuestInvite } from "@/lib/api";
-import {
-  createGuestInviteAction, emptyGuestInviteState, GUEST_PRESETS,
-  revokeGuestAccessAction, revokeGuestInviteAction,
-} from "./actions";
+import { createGuestInviteAction, revokeGuestAccessAction, revokeGuestInviteAction } from "./actions";
+import { emptyGuestInviteState, GUEST_PRESETS } from "./guest-presets";
 
 /** Stable regardless of the viewer's locale, so the server and client markup agree. */
 const day = (iso: string) => new Date(iso).toISOString().slice(0, 10);
