@@ -215,10 +215,10 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
     } catch { setError("The upload could not reach Blaze Flow. Try again."); setBusy(false); }
   }
 
-  return <dialog ref={dialog} open className="pb-upload-dialog" onCancel={onClose} aria-labelledby="upload-title">
-    <button type="button" className="pb-upload-backdrop" onClick={onClose} aria-label="Close upload dialog" />
+  return <dialog ref={dialog} open className="pb-upload-dialog" onCancel={onClose} onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.stopPropagation(); onClose(); } }} aria-modal="true" aria-labelledby="upload-title">
+    <button type="button" className="pb-upload-backdrop" onClick={onClose} tabIndex={-1} aria-hidden="true" />
     <form onSubmit={submit} className="pb-upload-panel">
-      <header><div><p>New media version</p><h2 id="upload-title">Upload to {projectName}</h2></div><button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button></header>
+      <header><div><p>New media version</p><h2 id="upload-title">Upload to {projectName}</h2></div><button type="button" onClick={onClose} aria-label="Close dialog"><X size={18} /></button></header>
       <label className="pb-file-drop"><UploadCloud size={26} /><strong>Choose an asset</strong><span>PNG, JPEG, GIF, WebP, MP4, MOV, or WebM</span><input name="file" type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm" required /></label>
       <label>Title<input name="title" placeholder="Spring campaign — hero cut" required /></label>
       <label>Notes<textarea name="note" rows={3} placeholder="What changed in this version?" /></label>
