@@ -15,10 +15,12 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/project
   const [loaded, filesView, tasksView] = await Promise.all([loadProjectsView({ clientId, campaignId }), loadFilesView(), loadTasksView()]);
   const view = session.notice ? { ...loaded, notice: session.notice } : loaded;
   const tab = typeof params.tab === "string" ? params.tab : undefined;
+  // The sidebar search submits here as `?q=`; it filters the client/campaign rail.
+  const query = typeof params.q === "string" ? params.q : "";
 
   return (
     <>
-      <ProjectsBrowser view={view} filesView={filesView} tasksView={tasksView} initialTab={tab} />
+      <ProjectsBrowser view={view} filesView={filesView} tasksView={tasksView} initialTab={tab} initialQuery={query} />
     </>
   );
 }

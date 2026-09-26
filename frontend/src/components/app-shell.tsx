@@ -116,7 +116,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
 
           <form className="studio-rail-search" action="/projects">
             <Search size={14} />
-            <input name="q" aria-label="Search cuts, markers, tags" placeholder="Search cuts, markers…" />
+            <input name="q" type="search" aria-label="Search clients and projects" placeholder="Search clients & projects" />
           </form>
 
           <nav aria-label="Main navigation">

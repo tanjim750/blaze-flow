@@ -14,6 +14,7 @@ import { AssetLibrary } from "@/components/asset-library";
 import { LinkPending } from "@/components/nav-progress";
 import { TasksBoard } from "@/app/(app)/tasks/board";
 import type { TasksView } from "@/lib/tasks-view";
+import { filterClientTree } from "@/lib/client-filter";
 import "../tasks/tasks.css";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, renameCampaignAction, renameFolderAction, type ActionState } from "./actions";
@@ -79,7 +80,7 @@ function InlineCreate({ action, hidden, placeholder, label, onClose, nested = fa
 }
 const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log"] as const;
 
-export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string }) {
+export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initialQuery = "" }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string; initialQuery?: string }) {
   const router = useRouter();
   const [tab, setTab] = useState<(typeof TABS)[number]>(
     () => TABS.find((value) => value.toLowerCase() === initialTab?.toLowerCase()) ?? "Files",
@@ -90,7 +91,8 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
 
   return (
     <div className={railClosed ? "pb-layout is-rail-closed" : "pb-layout"}>
-      <ClientRail view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} />
+      {/* Keyed on the query so a new sidebar search replaces the filter instead of being ignored. */}
+      <ClientRail key={initialQuery} initialFilter={initialQuery} view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} />
 
       <section className="pb-canvas">
         {view.notice && (
@@ -195,12 +197,12 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
   </dialog>;
 }
 
-function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: ProjectsView; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void }) {
-  const [filter, setFilter] = useState("");
+function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onToggle }: { view: ProjectsView; initialFilter: string; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void }) {
+  const [filter, setFilter] = useState(initialFilter);
   const [creating, setCreating] = useState(false);
   const reduceMotion = useReducedMotion();
 
-  const clients = view.clients.filter((client) => client.name.toLowerCase().includes(filter.trim().toLowerCase()));
+  const rows = filterClientTree(view.clients, filter);
   const toggle = (id: string) => setExpanded(expanded.includes(id) ? expanded.filter((value) => value !== id) : [...expanded, id]);
 
   return (
@@ -231,7 +233,8 @@ function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: P
 
         <div className="pb-rail-search">
           <Search size={14} />
-          <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Filter clients... ⌘K" aria-label="Filter clients" />
+          <input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Filter clients & projects" aria-label="Filter clients and projects" />
+          {filter && <button type="button" className="pb-rail-clear" onClick={() => setFilter("")} aria-label="Clear filter"><X size={12} /></button>}
         </div>
 
         {creating && (
@@ -244,10 +247,15 @@ function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: P
         )}
 
         <div className="pb-tree">
-          {clients.map((client) => (
-            <ClientBranch key={client.id} client={client} view={view} open={expanded.includes(client.id)} onToggle={() => toggle(client.id)} />
+          {rows.map(({ client, campaigns, matchedCampaign }) => (
+            <ClientBranch key={client.id} client={client} campaigns={campaigns} view={view} open={matchedCampaign || expanded.includes(client.id)} onToggle={() => toggle(client.id)} />
           ))}
-          {!clients.length && <p className="pb-rail-empty">No clients match.</p>}
+          {!rows.length && (
+            <p className="pb-rail-empty" role="status">
+              No matches for “{filter.trim()}”.{" "}
+              <button type="button" className="pb-rail-empty-clear" onClick={() => setFilter("")}>Clear</button>
+            </p>
+          )}
         </div>
       </div>
 
@@ -260,7 +268,7 @@ function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: P
   );
 }
 
-function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; view: ProjectsView; open: boolean; onToggle: () => void }) {
+function ClientBranch({ client, campaigns = client.campaigns, view, open, onToggle }: { client: ClientNode; campaigns?: ClientNode["campaigns"]; view: ProjectsView; open: boolean; onToggle: () => void }) {
   const [adding, setAdding] = useState(false);
   const { renaming, setRenaming, error, setError, remove } = useRowActions();
   const isSelected = view.selectedClient?.id === client.id;
@@ -283,7 +291,7 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
 
       {open && (
         <div className="pb-subtree">
-          {client.campaigns.map((campaign) => {
+          {campaigns.map((campaign) => {
             const active = view.selectedCampaign?.id === campaign.id;
             if (renaming === campaign.id) {
               return (
