@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAnnotation, createGuestInvite, createReviewComment, deleteAnnotation, requestMediaRevision, revokeGuestAccess, revokeGuestInvite, setCommentReaction, setCommentResolution, transitionMediaVersion, updateAnnotation } from "@/lib/api";
 import type { AnnotationElement } from "@/lib/api";
+import { startTimeField } from "@/lib/review-timing";
 import { GUEST_PRESETS, type GuestInviteState, type GuestPreset } from "./guest-presets";
 
 export type ActionState = { error: string | null };
@@ -10,15 +11,15 @@ const ok: ActionState = { error: null };
 
 export async function addPointAnnotationAction(workspaceId: string, projectId: string, versionId: string, x: number, y: number, atMs: number): Promise<ActionState> {
   const result = await createAnnotation(workspaceId, projectId, versionId, {
-    ...(atMs > 0 ? { start_time_ms: Math.round(atMs) } : {}),
+    ...startTimeField(atMs),
     elements: [{ element_type: "POINT", geometry: { x, y }, style: { color: "#ffcf5a" }, payload: {} }],
   });
   if (!result.ok) return { error: result.error.detail };
   revalidatePath("/review"); return ok;
 }
 
-export async function addAnnotationAction(workspaceId: string, projectId: string, versionId: string, element: Omit<AnnotationElement, "id">, atMs: number): Promise<ActionState> {
-  const result = await createAnnotation(workspaceId, projectId, versionId, { ...(atMs > 0 ? { start_time_ms: Math.round(atMs) } : {}), elements: [element] });
+export async function addAnnotationAction(workspaceId: string, projectId: string, versionId: string, element: Omit<AnnotationElement, "id">, atMs: number | null): Promise<ActionState> {
+  const result = await createAnnotation(workspaceId, projectId, versionId, { ...startTimeField(atMs), elements: [element] });
   if (!result.ok) return { error: result.error.detail }; revalidatePath("/review"); return ok;
 }
 
@@ -57,7 +58,7 @@ export async function postNoteAction(payload: {
   const created = await createReviewComment(payload.workspaceId, payload.projectId, payload.versionId, {
     text,
     ...(payload.parentId ? { parent_comment_id: payload.parentId } : {}),
-    ...(!payload.parentId && payload.startMs !== null && payload.startMs > 0 ? { start_time_ms: Math.round(payload.startMs) } : {}),
+    ...(!payload.parentId ? startTimeField(payload.startMs) : {}),
     ...(payload.mentionedUserIds.length ? { mentioned_user_ids: payload.mentionedUserIds } : {}),
   });
   if (!created.ok) return { error: created.error.detail, commentId: null };
@@ -108,7 +109,7 @@ export async function requestRevisionAction(
   if (!workspaceId || !projectId || !versionId || !text.trim()) return { error: "Describe the requested revision first." };
   const result = await requestMediaRevision(workspaceId, projectId, versionId, {
     text: text.trim(),
-    ...(startMs !== null && startMs > 0 ? { start_time_ms: Math.round(startMs) } : {}),
+    ...startTimeField(startMs),
   });
   if (!result.ok) return { error: result.error.detail };
   revalidatePath("/review");
