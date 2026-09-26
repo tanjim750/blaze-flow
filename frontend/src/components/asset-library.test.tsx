@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FilesView } from "@/lib/files-view";
 import { replaceLibrary } from "@/lib/asset-library";
@@ -29,7 +29,7 @@ const view = {
   folders: [],
 } satisfies FilesView;
 
-afterEach(() => { cleanup(); replaceLibrary(empty); uploadAssetFile.mockReset(); deleteAssetFile.mockReset(); duplicateAssetFile.mockReset(); });
+afterEach(() => { cleanup(); window.localStorage.clear(); replaceLibrary(empty); uploadAssetFile.mockReset(); deleteAssetFile.mockReset(); duplicateAssetFile.mockReset(); });
 
 describe("AssetLibrary", () => {
   it("creates one shared project folder and switches display density", () => {
@@ -39,13 +39,22 @@ describe("AssetLibrary", () => {
     fireEvent.change(screen.getByLabelText("Folder name"), { target: { value: "Campaign Assets" } });
     fireEvent.change(screen.getByLabelText("Project (optional)"), { target: { value: "project" } });
     fireEvent.click(screen.getByRole("button", { name: "Create folder" }));
-    expect(screen.getByText("Campaign Assets")).toBeInTheDocument();
+    // Once as a tile, once as a row in the folder tree.
+    expect(within(screen.getByRole("grid", { name: "Folders" })).getByText("Campaign Assets")).toBeInTheDocument();
+    expect(within(screen.getByRole("tree", { name: "Folders" })).getByText("Campaign Assets")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "List view" }));
-    expect(document.querySelector(".al-grid.dense")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "List view" })).toHaveAttribute("aria-pressed", "true");
+    expect(document.querySelector(".fx-item.is-row")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
+    fireEvent.change(screen.getByLabelText("Density"), { target: { value: "compact" } });
+    expect(document.querySelector(".fx-item.is-row.is-compact")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
 
     rendered.unmount();
     render(<AssetLibrary view={view} projectId="project" projectName="Summer Campaign" clientId="client" compact />);
+    // The project tab has no tree, so the folder shows once.
+    expect(screen.queryByRole("tree")).not.toBeInTheDocument();
     expect(screen.getByText("Campaign Assets")).toBeInTheDocument();
   });
 
@@ -99,10 +108,17 @@ describe("AssetLibrary", () => {
     fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "s-review" } });
     fireEvent.click(screen.getByRole("button", { name: "Upload 1 file" }));
 
-    // The staged name is still on screen while the dialog closes, so wait for the card itself.
-    await waitFor(() => expect(rendered.container.querySelector(".al-file-card")).toBeTruthy());
-    expect(rendered.container.querySelector(".al-file-card small")?.textContent).toContain("Acme / Summer Campaign");
-    expect(rendered.container.querySelector(".al-file-card .al-stage")?.textContent).toBe("Internal QA");
+    // The staged name is still on screen while the dialog closes, so wait for the item itself.
+    await waitFor(() => expect(rendered.container.querySelector('.fx-item[data-kind="file"]')).toBeTruthy());
+    const item = rendered.container.querySelector<HTMLElement>('.fx-item[data-kind="file"]')!;
+    // Grouped under its campaign, with the stage on the tile.
+    expect(item.closest("[role=grid]")).toHaveAttribute("aria-label", "Summer Campaign");
+    expect(within(item).getByText("Internal QA")).toBeInTheDocument();
+    // Selecting it fills the inspector with the link and the stage.
+    fireEvent.click(item);
+    const inspector = screen.getByRole("complementary", { name: "Video" });
+    expect(within(inspector).getByText("Linked to").nextElementSibling?.textContent).toBe("Acme / Summer Campaign");
+    expect(within(inspector).getByRole("button", { name: /^Stage: Internal QA/ })).toBeInTheDocument();
   });
 
   it("filters the library down to a single stage", async () => {
@@ -122,22 +138,30 @@ describe("AssetLibrary", () => {
     expect(screen.queryByText("rough-cut.mov")).not.toBeInTheDocument();
   });
 
-  it("shows folders and files in one grid, folders first", () => {
+  it("groups folders first, then campaigns, each in a collapsible section", () => {
     replaceLibrary({
       deletedIds: [],
       folders: [{ id: "folder", name: "Testing folder", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-12", createdBy: "Ada" }],
-      files: [{ id: "file", fileId: null, name: "take.mov", versioning: { assetId: null, assetName: "take.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null }],
+      files: [
+        { id: "file", fileId: null, name: "take.mov", versioning: { assetId: null, assetName: "take.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: "project", stageId: null },
+        { id: "loose", fileId: null, name: "loose.png", versioning: { assetId: null, assetName: "loose.png", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "image", mimeType: "image/png", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null },
+      ],
     });
-    const rendered = render(<AssetLibrary view={view} />);
+    render(<AssetLibrary view={view} />);
 
-    // One grid, not a Folders section and a Files section.
-    expect(rendered.container.querySelectorAll(".al-grid")).toHaveLength(1);
-    expect(screen.queryByRole("heading", { name: "Folders" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Files", level: 2 })).not.toBeInTheDocument();
+    const grids = screen.getAllByRole("grid");
+    expect(grids.map((grid) => grid.getAttribute("aria-label"))).toEqual(["Folders", "Summer Campaign", "Unassigned"]);
+    expect(within(grids[0]).getByRole("row", { name: /Testing folder, folder/ })).toBeInTheDocument();
+    expect(within(grids[1]).getByRole("row", { name: /^take\.mov/ })).toBeInTheDocument();
 
-    const cards = [...rendered.container.querySelectorAll(".al-grid > article")];
-    expect(cards[0].className).toContain("al-folder-card");
-    expect(cards[1].className).toContain("al-file-card");
+    const toggle = within(screen.getByRole("heading", { name: /^Summer Campaign/ })).getByRole("button");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("grid", { name: "Summer Campaign" })).not.toBeInTheDocument();
+    expect(screen.queryByText("take.mov")).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(screen.getByText("take.mov")).toBeInTheDocument();
   });
 
   it("lets server rows win over a stale local copy", () => {
@@ -172,11 +196,11 @@ describe("AssetLibrary", () => {
   it("shows the sample library only when there is no workspace", () => {
     replaceLibrary(empty);
     const { unmount } = render(<AssetLibrary view={{ ...view, workspaceId: null }} />);
-    expect(screen.getByText("Footage")).toBeInTheDocument();
+    expect(screen.getAllByText("Footage").length).toBeGreaterThan(0);
     unmount();
 
     render(<AssetLibrary view={view} />);
-    expect(screen.queryByText("Footage")).not.toBeInTheDocument();
+    expect(screen.queryAllByText("Footage")).toHaveLength(0);
   });
 
   it("rolls back and reports when the server rejects a write", async () => {
@@ -214,7 +238,7 @@ describe("AssetLibrary", () => {
     fireEvent.click(screen.getByRole("button", { name: "Upload 1 file" }));
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/over the 25 MB upload limit/));
-    expect(rendered.container.querySelector(".al-file-card")).toBeNull();
+    expect(rendered.container.querySelector('.fx-item[data-kind="file"]')).toBeNull();
     // Still staged, so retrying is one click rather than re-picking the file.
     expect(screen.getByRole("button", { name: "Retry upload" })).toBeInTheDocument();
   });
@@ -232,8 +256,8 @@ describe("AssetLibrary", () => {
     fireEvent.change(input!, { target: { files: [new File(["x"], "hero.mp4", { type: "video/mp4" })] } });
     fireEvent.click(screen.getByRole("button", { name: "Upload 1 file" }));
 
-    await waitFor(() => expect(rendered.container.querySelector(".al-file-card")).toBeTruthy());
-    expect(screen.getByText("hero.mp4")).toBeInTheDocument();
+    await waitFor(() => expect(rendered.container.querySelector('.fx-item[data-kind="file"]')).toBeTruthy());
+    expect(screen.getByRole("row", { name: /^hero\.mp4/ })).toBeInTheDocument();
   });
 
 
