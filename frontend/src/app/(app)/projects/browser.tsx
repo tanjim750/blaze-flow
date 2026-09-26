@@ -122,7 +122,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
             </div>
             <div className="pb-title-actions">
               <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions"><Ellipsis size={15} /></button>
-              <button className="pb-primary-button" type="button" disabled={!view.workspaceId || !view.selectedCampaign} onClick={() => setUploading(true)}><CloudUpload size={15} />+ Upload Asset</button>
+              <button className="pb-primary-button" type="button" disabled={!view.workspaceId || !view.selectedCampaign} onClick={() => setUploading(true)}><CloudUpload size={15} />Upload Asset</button>
             </div>
           </div>
 
@@ -358,7 +358,7 @@ function ClientBranch({ client, campaigns = client.campaigns, view, open, onTogg
             />
           ) : (
             <button type="button" className="pb-add-sub" onClick={() => setAdding(true)}>
-              <Plus size={13} />+ Add Subfolder <span>(e.g. March 2026)</span>
+              <Plus size={13} />Add Subfolder <span>(e.g. March 2026)</span>
             </button>
           )}
 

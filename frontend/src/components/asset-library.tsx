@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type For
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
-import { Archive, AudioLines, ChevronRight, Clapperboard, Copy, Download, Ellipsis, File, FileImage, FileText, Film, FolderPlus, Grid2X2, GitBranch, Image as ImageIcon, Info, Layers, List, ListFilter, Move, Pencil, Play, RefreshCw, RotateCcw, Search, Tag, Trash2, TriangleAlert, Upload, X } from "lucide-react";
+import { Archive, AudioLines, ChevronRight, Clapperboard, Copy, Download, Ellipsis, Eye, File, FileImage, FileText, Film, FolderOpen, FolderPlus, Grid2X2, GitBranch, Image as ImageIcon, Info, Layers, List, ListFilter, Move, Pencil, Play, RefreshCw, RotateCcw, Search, Tag, Trash2, TriangleAlert, Upload, X } from "lucide-react";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
 import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, updateAssetFile, updateAssetFolder, uploadAssetFile } from "@/lib/asset-api-client";
@@ -483,9 +483,9 @@ function ContextMenu({ entity, folders, folderFiles = [], view, onPreview, onOpe
     <DropdownMenu>
       <DropdownMenuTrigger className="al-menu-trigger" aria-label={`Actions for ${entity.name}`}><Ellipsis /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="al-menu-content">
-        {!isFile && <DropdownMenuItem onSelect={() => mutate("open")}>Open</DropdownMenuItem>}
+        {!isFile && <DropdownMenuItem onSelect={() => mutate("open")}><FolderOpen />Open</DropdownMenuItem>}
         {review && <DropdownMenuItem onSelect={() => openUniversalReview({ href: review, title: entity.name })}><Clapperboard />Open review</DropdownMenuItem>}
-        {isFile && <DropdownMenuItem onSelect={() => mutate("preview")}>Preview</DropdownMenuItem>}
+        {isFile && <DropdownMenuItem onSelect={() => mutate("preview")}><Eye />Preview</DropdownMenuItem>}
         <DropdownMenuItem onSelect={() => mutate("details")}><Info />Details</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => mutate("rename")}><Pencil />Rename</DropdownMenuItem>
         <AssignmentMenu entity={entity} folders={folders} view={view} />

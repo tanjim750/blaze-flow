@@ -49,7 +49,6 @@ export default async function Dashboard() {
       <section className="section-block">
         <div className="section-heading">
           <h2><Zap size={17} />Needs Attention <span>{view.attention.length} {view.attention.length === 1 ? "Item" : "Items"}</span></h2>
-          <p>Calm urgency · Prioritized by client milestones</p>
         </div>
         <div className="attention-grid">
           {view.attention.map((item: AttentionItem) => {
