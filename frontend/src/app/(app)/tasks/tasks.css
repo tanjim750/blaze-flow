@@ -6,11 +6,7 @@
  * `--primary`, `--warning` mean different things in shell.css) are written as literals.
  */
 
-/* New DS token, exactly as files-design-system.md §14 defines it (the Files redesign
-   may add the identical rule; keep one copy when the DS tokens land globally). */
-:root, .dark { --teal: oklch(0.80 0.12 190); }
-.light { --teal: oklch(0.48 0.078 190); }
-[data-tone=teal] { --tone: var(--teal); }
+/* `--teal` (DS §14, Review stage) is defined once in app/globals.css. */
 
 .tb-root, .tb-sheet, .tb-sheet-overlay, .tb-dialog, .tb-menu, .tb-toast, .tb-drag-root {
   --tb-canvas: var(--canvas, oklch(0.13 0.004 285));

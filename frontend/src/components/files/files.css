@@ -14,10 +14,7 @@
  * type 11px minimum, control heights 24/28/32/40, radii 4/6/8/12/16.
  */
 
-/* ---- DS §14 addition, verbatim (the Tasks builder may add the identical definition). ---- */
-:root, .dark { --teal: oklch(0.80 0.12 190); }  /* Review stage */
-.light       { --teal: oklch(0.48 0.078 190); }
-[data-tone=teal]{--tone:var(--teal)}
+/* `--teal` (DS §14, Review stage) and its `[data-tone=teal]` rule live in app/globals.css. */
 
 .fx {
   --canvas: oklch(0.13 0.004 285);
