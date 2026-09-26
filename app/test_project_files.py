@@ -540,7 +540,7 @@ class WorkspaceAssetApiTests(WorkspaceAccessSetupMixin, TestCase):
         return next(row for row in rows if row['name'] == name)
 
     def test_upload_links_a_file_to_a_client_project_and_stage(self):
-        stage = self._stage('Internal QA')
+        stage = self._stage('Review')
         upload = self.client.post(
             reverse('api-asset-files', args=[self.workspace.id]),
             {

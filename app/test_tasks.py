@@ -236,7 +236,7 @@ class WorkspaceTaskApiTests(WorkspaceAccessSetupMixin, TestCase):
             reverse('api-tasks', args=[self.workspace.id]),
             {'title': 'Review the final cut', 'client_team_id': team_id}, format='json',
         )
-        client_stage = TaskStage.objects.get(workspace=self.workspace, name='Client')
+        client_stage = TaskStage.objects.get(workspace=self.workspace, name='Client Review')
 
         moved = self.client.patch(
             reverse('api-task-detail', args=[self.workspace.id, created.json()['id']]),
