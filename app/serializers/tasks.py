@@ -7,6 +7,9 @@ from .access import WorkspaceMembershipSerializer
 
 class TaskSerializer(serializers.ModelSerializer):
     assignees = serializers.SerializerMethodField()
+    # Attached File ids in attach order. The board joins these to asset files for the card
+    # thumbnail and review-note count, so no media fields are duplicated here.
+    attachment_file_ids = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -27,8 +30,18 @@ class TaskSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
             'assignees',
+            'attachment_file_ids',
         )
         read_only_fields = ('id', 'workspace_id', 'project_id', 'completed_at', 'created_at', 'updated_at')
+
+    def get_attachment_file_ids(self, task):
+        prefetched = self.context.get('attachment_file_ids')
+        if prefetched is not None:
+            return prefetched.get(task.id, [])
+        return [
+            str(file_id) for file_id in
+            TaskAttachment.objects.filter(task=task).order_by('attached_at').values_list('file_id', flat=True)
+        ]
 
     def get_assignees(self, task):
         rows = TaskAssignee.objects.filter(task=task).select_related('workspace_membership__user')
@@ -80,7 +93,7 @@ class TaskStageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TaskStage
-        fields = ('id', 'name', 'color', 'sort_order', 'wip_limit', 'is_done', 'automation_enabled', 'task_count')
+        fields = ('id', 'name', 'color', 'sort_order', 'wip_limit', 'is_done', 'automation_enabled', 'kind', 'task_count')
         read_only_fields = ('id', 'task_count')
 
 
@@ -93,7 +106,19 @@ class TaskAssigneeCreateSerializer(serializers.Serializer):
 
 
 class TaskAttachmentUploadSerializer(serializers.Serializer):
-    file = serializers.FileField()
+    """Either upload a new ``file`` or link an existing workspace file by ``file_id``."""
+    file = serializers.FileField(required=False)
+    file_id = serializers.UUIDField(required=False)
+
+    def validate(self, attrs):
+        if bool(attrs.get('file')) == bool(attrs.get('file_id')):
+            raise serializers.ValidationError('Send either a file to upload or the file_id of an existing file.')
+        return attrs
+
+
+class TaskMoveSerializer(serializers.Serializer):
+    task_stage_id = serializers.UUIDField()
+    position = serializers.IntegerField(required=False, allow_null=True, min_value=0)
 
 
 class TaskAttachmentSerializer(serializers.ModelSerializer):

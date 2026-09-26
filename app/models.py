@@ -102,6 +102,17 @@ class TaskStatus(models.TextChoices):
     CANCELLED = 'CANCELLED'
 
 
+class TaskStageKind(models.TextChoices):
+    """What a task stage means to the product, independent of its (renamable) name."""
+    TODO = 'todo'
+    IN_PROGRESS = 'in_progress'
+    REVIEW = 'review'
+    CLIENT_REVIEW = 'client_review'
+    REVISIONS = 'revisions'
+    APPROVED = 'approved'
+    CUSTOM = 'custom'
+
+
 class FileStatus(models.TextChoices):
     PENDING = 'PENDING'
     READY = 'READY'
@@ -955,6 +966,9 @@ class TaskStage(models.Model):
     wip_limit = models.PositiveIntegerField(null=True, blank=True)
     is_done = models.BooleanField(default=False)
     automation_enabled = models.BooleanField(default=True)
+    # Built-in meaning of the stage. Renaming a stage keeps its kind, so behaviour that used
+    # to match on the name (the client-ready notification) keys off this instead.
+    kind = models.CharField(max_length=20, choices=TaskStageKind.choices, default=TaskStageKind.CUSTOM)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
