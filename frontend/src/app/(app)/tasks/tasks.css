@@ -8,7 +8,7 @@
 
 /* `--teal` (DS §14, Review stage) is defined once in app/globals.css. */
 
-.tb-root, .tb-sheet, .tb-sheet-overlay, .tb-dialog, .tb-menu, .tb-toast, .tb-drag-root {
+.tb-root, .tb-sheet, .tb-sheet-overlay, .tb-dialog, .tb-menu, .tb-drag-root {
   --tb-canvas: var(--canvas, oklch(0.13 0.004 285));
   --tb-bg: var(--background, oklch(0.185 0.006 285));
   --tb-field: var(--field, oklch(0.20 0.006 285));
@@ -307,15 +307,7 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 .tb-toggle strong { font-size: 13px; font-weight: 500; }
 .tb-toggle small { color: var(--tb-muted-fg); font-size: 12px; }
 
-/* ---- Toasts (sonner) -------------------------------------------------------------------- */
-[data-sonner-toaster] { pointer-events: auto; }
-[data-sonner-toast].tb-toast { border: 1px solid var(--tb-border-strong); border-radius: 8px; background: var(--tb-popover); color: var(--tb-fg); box-shadow: var(--tb-elevation-2); font-size: 13px; }
-[data-sonner-toast].tb-toast [data-description] { color: var(--tb-muted-fg); }
-[data-sonner-toast].tb-toast [data-button] { height: 28px; border-radius: 6px; background: var(--tb-accent); color: var(--tb-fg); font-weight: 500; }
-[data-sonner-toast].tb-toast[data-type=error] [data-icon] { color: var(--tb-danger); }
-[data-sonner-toast].tb-toast[data-type=warning] [data-icon] { color: var(--tb-warning); }
-[data-sonner-toast].tb-toast[data-type=success] [data-icon] { color: var(--tb-success); }
-[data-sonner-toast].tb-toast[data-type=info] [data-icon] { color: var(--tb-info); }
+/* Toasts (sonner) are app-wide now: see components/app-toaster.tsx / app-toaster.css. */
 
 /* ---- Loading skeleton ------------------------------------------------------------------- */
 .tb-bone { display: block; border-radius: 6px; background: var(--tb-muted); animation: tb-pulse 1.4s ease-in-out infinite; }

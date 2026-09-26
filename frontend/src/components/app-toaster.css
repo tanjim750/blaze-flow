@@ -1,0 +1,23 @@
+/*
+ * App-wide sonner toasts (`bf-toast`). Design-system popover surface, read from the DS
+ * token names first with the DS dark values as fallback (the tokens are not global yet).
+ * Moved from the Tasks board (`tb-toast`) when the toaster moved to the app layout.
+ */
+[data-sonner-toaster] { pointer-events: auto; }
+[data-sonner-toast].bf-toast {
+  --bf-toast-fg: var(--foreground, oklch(0.955 0.005 285));
+  --bf-toast-muted-fg: var(--muted-foreground, oklch(0.72 0.018 285));
+  --bf-toast-accent: var(--accent, oklch(0.28 0.009 285));
+  border: 1px solid var(--border-strong, oklch(1 0 0 / 14%));
+  border-radius: 8px;
+  background: var(--popover, oklch(0.245 0.008 285));
+  color: var(--bf-toast-fg);
+  box-shadow: var(--elevation-2, 0 8px 24px oklch(0 0 0 / 40%));
+  font-size: 13px;
+}
+[data-sonner-toast].bf-toast [data-description] { color: var(--bf-toast-muted-fg); }
+[data-sonner-toast].bf-toast [data-button] { height: 28px; border-radius: 6px; background: var(--bf-toast-accent); color: var(--bf-toast-fg); font-weight: 500; }
+[data-sonner-toast].bf-toast[data-type=error] [data-icon] { color: var(--destructive, oklch(0.72 0.17 20)); }
+[data-sonner-toast].bf-toast[data-type=warning] [data-icon] { color: oklch(0.82 0.15 80); }
+[data-sonner-toast].bf-toast[data-type=success] [data-icon] { color: var(--success, oklch(0.78 0.14 158)); }
+[data-sonner-toast].bf-toast[data-type=info] [data-icon] { color: var(--info, oklch(0.74 0.13 250)); }

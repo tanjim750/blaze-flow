@@ -8,7 +8,7 @@
  * → reconcile, with an 8-second Undo toast and a Retry toast on failure.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import { Columns3, LayoutList, Plus, Settings2, TriangleAlert, X } from "lucide-react";
 import type { ProjectFile, Task, TaskAttachment } from "@/lib/api";
 import type { TasksView } from "@/lib/tasks-view";
@@ -305,7 +305,6 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
     {dialog === "new" && <NewTaskDialog open view={view} stages={stages} defaultProjectId={projectId} defaultStageId={null} onClose={() => setDialog(null)}
       onCreated={(task) => { setTasks((current) => [...current, task]); setDialog(null); toast.success(`Created “${task.title}”`); }} />}
     {dialog === "stages" && <StageDialog open view={view} onClose={() => setDialog(null)} />}
-    <Toaster theme="dark" position="bottom-right" closeButton toastOptions={{ className: "tb-toast" }} />
   </div>;
 }
 
