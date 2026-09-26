@@ -54,7 +54,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   // Projects lays out its own full-bleed browser, so it opts out of the standard page padding.
   // Full-bleed routes: the projects tree and the review workspace both own their own
   // chrome and fill the viewport, so the shell gives them the frame without the padding.
-  const flush = pathname.startsWith("/projects") || pathname.startsWith("/review");
+  const flush = pathname.startsWith("/projects") || pathname.startsWith("/review") || pathname.startsWith("/files");
 
   useEffect(() => {
     let active = true;

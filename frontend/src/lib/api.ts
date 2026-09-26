@@ -73,6 +73,8 @@ export type Task = {
   start_at: string | null; due_at: string | null; completed_at: string | null;
   sort_order: number; created_at: string; updated_at: string;
   assignees: { id: string; name: string; email: string }[];
+  /** Attached `File` ids in attach order (joined to asset files for thumbnails). Older payloads omit it. */
+  attachment_file_ids?: string[];
 };
 /**
  * A file attached to a task. `file.id` is the same `File` row a `ProjectFile` or a
@@ -80,7 +82,9 @@ export type Task = {
  * very same media rather than a copy of it.
  */
 export type TaskAttachment = { id: string; file: MediaFile & { checksum_sha256: string; status: string }; attached_at: string };
-export type TaskStage = { id: string; name: string; color: string; sort_order: number; wip_limit: number | null; is_done: boolean; automation_enabled: boolean; task_count: number };
+/** What a stage means, independent of its name. `custom` for user-made stages; absent on older payloads. */
+export type TaskStageKind = "todo" | "in_progress" | "review" | "client_review" | "revisions" | "approved" | "custom";
+export type TaskStage = { id: string; name: string; color: string; sort_order: number; wip_limit: number | null; is_done: boolean; automation_enabled: boolean; task_count: number; kind?: TaskStageKind };
 export type TaskWorkflowSettings = { wip_warning: boolean; auto_notify_client: boolean; lock_done_editing: boolean };
 export type TaskWorkflow = { stages: TaskStage[]; settings: TaskWorkflowSettings };
 export type Role = { id: string; name: string; description: string; is_system: boolean; status: string; permissions: string[] };

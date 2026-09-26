@@ -19,7 +19,11 @@ export type LibraryFolder = { id: string; name: string; clientId: string | null;
 export type LibraryFileStatus = "PENDING" | "READY" | "FAILED" | "DUPLICATING";
 /** Where a row sits in its asset's history. One card is shown per asset: the latest. */
 export type LibraryVersioning = { assetId: string | null; assetName: string; versionNumber: number; versionCount: number; isLatest: boolean };
-export type LibraryFile = { id: string; fileId: string | null; name: string; kind: LibraryKind; mimeType: string; size: number; durationMs: number | null; status: LibraryFileStatus; versioning: LibraryVersioning; url: string | null; preview: string | null; uploadedBy: string; uploadedAt: string; folderId: string | null; clientId: string | null; projectId: string | null; stageId: string | null };
+export type LibraryFile = { id: string; fileId: string | null; name: string; kind: LibraryKind; mimeType: string; size: number; durationMs: number | null; status: LibraryFileStatus; versioning: LibraryVersioning; url: string | null; preview: string | null; uploadedBy: string; uploadedAt: string; folderId: string | null; clientId: string | null; projectId: string | null; stageId: string | null;
+  /** Poster frame size from the server, when it has produced one. Drives the inspector's dimensions and aspect. */
+  width?: number | null; height?: number | null;
+  /** Open review comments on this cut, shown as the amber feedback count. */
+  commentCount?: number };
 /**
  * `pending` holds the ids of rows with a server write in flight. Only those rows — and rows
  * the server has never heard of — are allowed to override server data. See `merge` in

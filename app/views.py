@@ -59,6 +59,7 @@ from .serializers import (
     TaskAssigneeSerializer,
     TaskAttachmentSerializer,
     TaskAttachmentUploadSerializer,
+    TaskMoveSerializer,
     TaskCreateSerializer,
     TaskSerializer,
     TaskUpdateSerializer,
@@ -111,6 +112,7 @@ from .throttles import (
 from .models import (
     MediaVersion,
     FileVariant,
+    File,
     Annotation,
     AnnotationRevision,
     ClientTeam,
@@ -182,6 +184,7 @@ from .permissions import (
     workspace_ids_with_permission,
 )
 from app.services.file_processing import POSTER_VARIANT_TYPE, PREVIEW_VARIANT_TYPES
+from app.services.task_stages import is_client_review_stage, stage_for_status
 from .services import (
     InvitationError,
     ClientTeamError,
@@ -260,6 +263,7 @@ from .services import (
     upload_project_file,
     upload_review_attachment,
     upload_task_attachment,
+    link_task_attachment,
     transition_media_version,
     update_role,
     upload_media_version,
@@ -1514,7 +1518,9 @@ def task_list_create(request, workspace_id):
         tasks = Task.objects.filter(workspace=workspace, deleted_at__isnull=True).filter(
             Q(project__isnull=True) | Q(project_id__in=accessible_project_ids)
         ).order_by('sort_order', '-created_at')
-        return Response(TaskSerializer(tasks, many=True).data)
+        return Response(TaskSerializer(tasks, many=True, context={
+            'attachment_file_ids': _task_attachment_file_ids(tasks),
+        }).data)
 
     _require_workspace_permission(request, workspace, TASK_CREATE)
     serializer = TaskCreateSerializer(data=request.data)
@@ -1539,12 +1545,7 @@ def task_list_create(request, workspace_id):
         permission_key=TASK_CREATE,
     ).first()
     requested_status = data.get('status', TaskStatus.TODO)
-    legacy_stage_names = {
-        TaskStatus.TODO: 'To Do', TaskStatus.IN_PROGRESS: 'Revisions', TaskStatus.REVISIONS: 'Revisions',
-        TaskStatus.INTERNAL_QA: 'Internal QA', TaskStatus.CLIENT: 'Client',
-        TaskStatus.COMPLETED: 'Approved', TaskStatus.APPROVED: 'Approved',
-    }
-    task_stage = get_object_or_404(TaskStage, id=task_stage_id, workspace=workspace) if task_stage_id else TaskStage.objects.filter(workspace=workspace, name=legacy_stage_names.get(requested_status, 'To Do')).first()
+    task_stage = get_object_or_404(TaskStage, id=task_stage_id, workspace=workspace) if task_stage_id else stage_for_status(workspace, requested_status)
     task_stage = task_stage or TaskStage.objects.filter(workspace=workspace).order_by('sort_order').first()
     if task_stage is None:
         return Response({'detail': 'This workspace has no task stages.'}, status=status.HTTP_409_CONFLICT)
@@ -1605,25 +1606,13 @@ def task_detail(request, workspace_id, task_id):
                 return Response({'detail': 'The selected client does not own this project.'}, status=status.HTTP_400_BAD_REQUEST)
             client_team = project.client_team
         if not stage_was_supplied and 'status' in data:
-            legacy_stage_names = {
-                TaskStatus.TODO: 'To Do', TaskStatus.IN_PROGRESS: 'Revisions', TaskStatus.REVISIONS: 'Revisions',
-                TaskStatus.INTERNAL_QA: 'Internal QA', TaskStatus.CLIENT: 'Client',
-                TaskStatus.COMPLETED: 'Approved', TaskStatus.APPROVED: 'Approved',
-            }
-            matching_stage = TaskStage.objects.filter(workspace=workspace, name=legacy_stage_names.get(data['status'])).first()
+            matching_stage = stage_for_status(workspace, data['status'])
             task_stage_id = matching_stage.id if matching_stage else task_stage_id
         task_stage = get_object_or_404(TaskStage, id=task_stage_id, workspace=workspace) if task_stage_id else None
         if task_stage and stage_was_supplied:
             data['status'] = TaskStatus.APPROVED if task_stage.is_done else TaskStatus.TODO
         task = update_task(task=task, project=project, client_team=client_team, task_stage=task_stage, **data)
-        if (
-            task_stage
-            and task_stage.id != previous_stage_id
-            and task_stage.automation_enabled
-            and 'client' in task_stage.name.casefold()
-            and workspace.task_workflow_settings.get('auto_notify_client', True)
-        ):
-            notify_client_task_ready(task=task, actor=request.user)
+        _run_stage_entry_effects(request, workspace, task, previous_stage_id)
         if assignee_id is not ...:
             TaskAssignee.objects.filter(task=task).delete()
             if assignee_id:
@@ -1635,6 +1624,79 @@ def task_detail(request, workspace_id, task_id):
     except TaskError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def _task_attachment_file_ids(tasks):
+    """``{task_id: [file_id, ...]}`` in attach order, in one query, for a list of tasks."""
+    by_task = {}
+    rows = TaskAttachment.objects.filter(task__in=tasks).order_by('attached_at').values_list('task_id', 'file_id')
+    for task_id, file_id in rows:
+        by_task.setdefault(task_id, []).append(str(file_id))
+    return by_task
+
+
+def _run_stage_entry_effects(request, workspace, task, previous_stage_id):
+    """Side effects of a task entering a new stage. Returns the names of those that ran.
+
+    The client-ready notification fires on the Client Review stage (``kind``), with the old
+    "name contains client" rule kept as a fallback, only when the stage has automation on
+    and the workspace allows it.
+    """
+    effects = []
+    stage = task.task_stage
+    if (
+        stage
+        and stage.id != previous_stage_id
+        and stage.automation_enabled
+        and is_client_review_stage(stage)
+        and workspace.task_workflow_settings.get('auto_notify_client', True)
+    ):
+        if notify_client_task_ready(task=task, actor=request.user):
+            effects.append('client_notified')
+    return effects
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def task_move(request, workspace_id, task_id):
+    """Move a task to a stage and position in one call.
+
+    Drag and drop, the "Move to" menu and the keyboard all end here. The target column is
+    renumbered densely (0..n) with the task at ``position`` (default: the end), so a drop
+    lands exactly where it was made instead of always appending. Moving never counts as an
+    edit, so the done-stage lock does not block it.
+    """
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    task = get_object_or_404(Task, id=task_id, workspace=workspace, deleted_at__isnull=True)
+    _require_task_permission(request, workspace, task, TASK_UPDATE)
+    serializer = TaskMoveSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    stage = get_object_or_404(TaskStage, id=serializer.validated_data['task_stage_id'], workspace=workspace)
+    previous_stage_id = task.task_stage_id
+    with transaction.atomic():
+        column = list(
+            Task.objects.select_for_update().filter(workspace=workspace, task_stage=stage, deleted_at__isnull=True)
+            .exclude(id=task.id).order_by('sort_order', 'created_at')
+        )
+        position = serializer.validated_data.get('position')
+        position = len(column) if position is None else max(0, min(position, len(column)))
+        if stage.id != previous_stage_id:
+            task = update_task(task=task, task_stage=stage)
+        column.insert(position, task)
+        changed = []
+        for index, row in enumerate(column):
+            if row.sort_order != index:
+                row.sort_order = index
+                changed.append(row)
+        if changed:
+            Task.objects.bulk_update(changed, ['sort_order'])
+    task.refresh_from_db()
+    effects = _run_stage_entry_effects(request, workspace, task, previous_stage_id)
+    return Response({
+        'task': TaskSerializer(task).data,
+        'order': [{'id': str(row.id), 'sort_order': index} for index, row in enumerate(column)],
+        'side_effects': effects,
+    })
 
 
 @api_view(['GET', 'POST'])
@@ -1692,9 +1754,15 @@ def task_attachments(request, workspace_id, task_id):
         permission_key=TASK_UPDATE,
     ).first()
     try:
-        attachment = upload_task_attachment(
-            task=task, upload=serializer.validated_data['file'], membership=attaching_membership
-        )
+        if serializer.validated_data.get('file_id'):
+            existing = get_object_or_404(
+                File, id=serializer.validated_data['file_id'], workspace_id=workspace.id, deleted_at__isnull=True,
+            )
+            attachment = link_task_attachment(task=task, file=existing, membership=attaching_membership)
+        else:
+            attachment = upload_task_attachment(
+                task=task, upload=serializer.validated_data['file'], membership=attaching_membership
+            )
     except (TaskError, SubscriptionError) as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(TaskAttachmentSerializer(attachment).data, status=status.HTTP_201_CREATED)

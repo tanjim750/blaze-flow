@@ -117,6 +117,25 @@ def _validate_task_attachment(upload):
     return detected
 
 
+def link_task_attachment(*, task, file, membership):
+    """Attach a file that already exists in the workspace (a library asset or a cut).
+
+    Nothing is copied: the attachment points at the same ``File`` row, so the task opens the
+    very same review the Files library does.
+    """
+    if file.workspace_id != task.workspace_id:
+        raise TaskError('The file must belong to the task workspace.')
+    if TaskAttachment.objects.filter(task=task, file=file).exists():
+        raise TaskError('This file is already attached to the task.')
+    attachment = TaskAttachment(
+        id=uuid.uuid4(), task=task, file=file,
+        attached_by_workspace_membership=membership, attached_at=timezone.now(),
+    )
+    attachment.full_clean()
+    attachment.save()
+    return attachment
+
+
 def upload_task_attachment(*, task, upload, membership):
     mime_type = _validate_task_attachment(upload)
     enforce_workspace_storage_limit(workspace=task.workspace, additional_bytes=upload.size)

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { AppShell } from "@/components/app-shell";
+import { AppToaster } from "@/components/app-toaster";
 import { loadSession } from "@/lib/session";
 import { toShellUser } from "@/lib/user";
 import { loadWorkspaceContext } from "@/lib/workspace";
@@ -22,13 +23,17 @@ import { loadWorkspaceContext } from "@/lib/workspace";
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const [session, context, jar] = await Promise.all([loadSession(), loadWorkspaceContext(), cookies()]);
   return (
-    <AppShell
-      user={session.user && toShellUser(session.user)}
-      workspaces={context.ok ? context.data.workspaces : []}
-      selectedWorkspaceId={context.ok ? context.data.selected?.id : null}
-      railCollapsed={jar.get("blazeflow_rail")?.value === "1"}
-    >
-      {children}
-    </AppShell>
+    <>
+      <AppShell
+        user={session.user && toShellUser(session.user)}
+        workspaces={context.ok ? context.data.workspaces : []}
+        selectedWorkspaceId={context.ok ? context.data.selected?.id : null}
+        railCollapsed={jar.get("blazeflow_rail")?.value === "1"}
+      >
+        {children}
+      </AppShell>
+      {/* Outside the shell so no animated (transformed) ancestor re-anchors its fixed position. */}
+      <AppToaster />
+    </>
   );
 }

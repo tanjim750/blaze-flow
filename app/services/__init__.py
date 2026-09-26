@@ -81,6 +81,7 @@ from .tasks import (
     remove_task_assignee,
     update_task,
     upload_task_attachment,
+    link_task_attachment,
 )
 from .workspaces import (
     WorkspaceLifecycleError,
@@ -183,6 +184,7 @@ __all__ = [
     'upload_project_file',
     'upload_review_attachment',
     'upload_task_attachment',
+    'link_task_attachment',
     'update_annotation',
     'transition_media_version',
     'update_project',
