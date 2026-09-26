@@ -92,4 +92,31 @@ describe("TasksBoard", () => {
     expect(screen.getByTitle("Review daily life.mov")).toHaveAttribute("src", "/review-embed?media=source-file");
     expect(screen.getByRole("link", { name: "Open full review" })).toHaveAttribute("href", "/review?media=source-file");
   });
+
+  it("Clear resets the search too, and the board says when nothing matches", () => {
+    render(<TasksBoard view={view} />);
+    fireEvent.change(screen.getByPlaceholderText("Search tasks, projects, assignees…"), { target: { value: "nothing like this" } });
+    expect(screen.queryByText("Edit Summer Campaign V3")).not.toBeInTheDocument();
+    expect(screen.getByText("No matching tasks")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+
+    expect(screen.getByPlaceholderText("Search tasks, projects, assignees…")).toHaveValue("");
+    expect(screen.getByText("Edit Summer Campaign V3")).toBeInTheDocument();
+  });
+
+  it("does not mark a past-due task overdue once it is in a done stage", () => {
+    const done = {
+      ...view,
+      stages: [...view.stages, { id: "approved-stage", name: "Approved", color: "#36d399", sort_order: 2, wip_limit: null, is_done: true, automation_enabled: false, task_count: 1 }],
+      tasks: [
+        { ...view.tasks[0], id: "open", title: "Open late task", due_at: "2020-01-01T12:00:00Z" },
+        { ...view.tasks[0], id: "done", title: "Approved late task", task_stage_id: "approved-stage", due_at: "2020-01-01T12:00:00Z" },
+      ],
+    } satisfies TasksView;
+    render(<TasksBoard view={done} />);
+    const dateOf = (name: string) => screen.getByText(name).closest("article")!.querySelector("time")!;
+    expect(dateOf("Open late task")).toHaveClass("overdue");
+    expect(dateOf("Approved late task")).not.toHaveClass("overdue");
+  });
 });

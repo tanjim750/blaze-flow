@@ -236,4 +236,18 @@ describe("AssetLibrary", () => {
     expect(screen.getByText("hero.mp4")).toBeInTheDocument();
   });
 
+
+  it("says nothing matches a search instead of offering an upload", () => {
+    replaceLibrary({
+      deletedIds: [], folders: [],
+      files: [{ id: "one", fileId: null, name: "hero-cut.mov", versioning: { assetId: null, assetName: "hero-cut.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: null }],
+    });
+    render(<AssetLibrary view={view} />);
+    fireEvent.change(screen.getByPlaceholderText("Search this location…"), { target: { value: "zzz" } });
+    expect(screen.getByText("No files match “zzz”")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Upload files" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(screen.getByText("hero-cut.mov")).toBeInTheDocument();
+  });
 });

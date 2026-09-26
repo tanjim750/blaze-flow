@@ -8,6 +8,7 @@ import {
 import type { AnnotationElement } from "@/lib/api";
 import type { ReviewNote } from "@/lib/review-notes";
 import { timecode } from "@/lib/timecode";
+import { playerShouldIgnoreKey } from "./player-keys";
 
 export type DrawTool = "POINT" | "RECTANGLE" | "ELLIPSE" | "ARROW" | "PATH" | "TEXT";
 export type PlayerHandle = { seek: (ms: number) => void; position: () => number };
@@ -148,11 +149,10 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
     if (element) { element.volume = volume; element.muted = muted; element.playbackRate = speed; }
   }, [muted, speed, volume]);
 
-  // Transport shortcuts, skipped whenever the viewer is typing a note.
+  // Transport shortcuts, skipped while typing and for keys a focused control owns.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const node = event.target;
-      if ((node instanceof Element && node.matches("input, textarea, select, [contenteditable=true]")) || event.metaKey || event.ctrlKey) return;
+      if (playerShouldIgnoreKey(event)) return;
       const keys: Record<string, () => void> = {
         " ": toggle, k: toggle,
         j: () => step(-fps.current), l: () => step(fps.current),

@@ -11,6 +11,12 @@ const nextConfig: NextConfig = {
    * API call. `skipTrailingSlashRedirect` drops Next's 308.
    */
   skipTrailingSlashRedirect: true,
+  /**
+   * The Next dev-tools badge only ever renders under `next dev`. Its default bottom-left
+   * spot sat on top of the sidebar's account row and notification bell, so it moves to the
+   * empty bottom-right corner. Production builds are unaffected.
+   */
+  devIndicators: { position: "bottom-right" },
   experimental: {
     /**
      * Every browser-side call reaches Django through the rewrite below, uploads included,

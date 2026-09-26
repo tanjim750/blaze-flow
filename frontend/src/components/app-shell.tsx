@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { LinkPending } from "@/components/nav-progress";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, LogOut, Mail, Menu, Search, Settings, SquareKanban, Users, X } from "lucide-react";
+import { Bell, Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, PackageCheck, Search, Settings, SquareKanban, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
@@ -20,6 +20,17 @@ const primaryLinks = [
   { href: "/files", label: "Files", icon: FolderOpen },
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/team", label: "Team & Roles", icon: Users },
+];
+
+/**
+ * Render Queue and Deliverables had pages but no way to reach them (Help even tells people
+ * to use Deliverables), so they sit with Settings and Help rather than in the main list.
+ */
+const secondaryLinks = [
+  { href: "/render-queue", label: "Render Queue", icon: ListVideo },
+  { href: "/deliverables", label: "Deliverables", icon: PackageCheck },
+  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/help", label: "Help", icon: CircleHelp },
 ];
 
 /** Mirrors the cookie the layout reads, so a reload opens at the width you left it. */
@@ -116,7 +127,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
 
           <form className="studio-rail-search" action="/projects">
             <Search size={14} />
-            <input name="q" aria-label="Search cuts, markers, tags" placeholder="Search cuts, markers…" />
+            <input name="q" type="search" aria-label="Search clients and projects" placeholder="Search clients & projects" />
           </form>
 
           <nav aria-label="Main navigation">
@@ -131,8 +142,11 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
 
         <div className="studio-sidebar-foot">
           <nav aria-label="Secondary navigation">
-            <Link href="/settings" title="Settings"><Settings size={18} /><span>Settings</span></Link>
-            <Link href="/help" title="Help"><CircleHelp size={18} /><span>Help</span></Link>
+            {secondaryLinks.map(({ href, label, icon: Icon }) => (
+              <Link key={label} href={href} onClick={() => setOpen(false)} title={label} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}>
+                <Icon size={18} /><span>{label}</span><LinkPending />
+              </Link>
+            ))}
           </nav>
           <div className="render-engine">
             <i className={typeof health === "object" && health ? health.status : undefined} />

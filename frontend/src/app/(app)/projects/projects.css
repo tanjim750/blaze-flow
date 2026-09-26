@@ -121,14 +121,6 @@
 .pb-inline-form .pb-inline-cancel:hover { background: var(--shell-high); color: var(--shell-on); filter: none; }
 .pb-inline-form small { flex-basis: 100%; color: #ffb4ab; font-size: 11px; line-height: 1.45; }
 
-.pb-storage { padding: 12px; border-top: 1px solid #2a2a2d80; }
-.pb-storage-head { display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
-.pb-storage-head span { display: flex; align-items: center; gap: 5px; color: var(--shell-variant); text-transform: uppercase; letter-spacing: .06em; }
-.pb-storage-head b { font: 500 10px var(--font-geist-mono), monospace; color: var(--shell-outline); }
-.pb-storage-track { height: 5px; margin: 8px 0; border-radius: 4px; background: var(--shell-highest); overflow: hidden; }
-.pb-storage-track i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #7c5cfc, #cabeff); }
-.pb-storage-foot { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--shell-outline); }
-.pb-storage-foot a { color: var(--shell-primary); }
 
 /* ---- Asset explorer ---- */
 .pb-canvas { flex: 1; min-width: 0; padding: 16px 20px 48px; }
@@ -331,3 +323,20 @@
   background: #2e1a1e; color: #ffb4ab; font-size: 11px; line-height: 1.45;
 }
 .pb-row-error button { margin-left: auto; border: 0; background: none; color: inherit; cursor: pointer; padding: 0; }
+
+/* Rail filter: clear control and the "no matches" state (quick win Q5). */
+.pb-rail-search input::-webkit-search-cancel-button { display: none; }
+.pb-rail-search input { padding-right: 28px; }
+.pb-rail-clear { position: absolute; right: 6px; display: grid; place-items: center; width: 18px; height: 18px; border: 0; border-radius: 4px; background: transparent; color: var(--shell-outline); cursor: pointer; }
+.pb-rail-clear:hover { color: var(--shell-on); background: var(--shell-high); }
+.pb-rail-empty { padding: 8px 4px; line-height: 1.5; }
+.pb-rail-empty-clear { border: 0; background: none; padding: 0; color: var(--shell-primary); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Honest "coming soon" / no-campaign state for tabs without content (quick win Q6). */
+.pb-soon { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 420px; margin: 56px auto; padding: 32px 24px; text-align: center; color: var(--shell-variant); border: 1px solid #2a2a2d80; border-radius: 12px; }
+.pb-soon > svg { color: var(--shell-outline); }
+.pb-soon h2 { margin: 0; font-size: 16px; font-weight: 600; color: var(--shell-on); }
+.pb-soon p { margin: 0; font-size: 13px; line-height: 1.5; }
+.pb-soon-tag { font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--shell-outline); }
+.pb-soon-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 6px 12px; border: 1px solid #ffffff24; border-radius: 8px; background: transparent; color: var(--shell-on); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.pb-soon-link:hover { background: var(--shell-high); }

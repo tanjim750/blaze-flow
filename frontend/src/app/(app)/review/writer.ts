@@ -122,7 +122,7 @@ export function useReviewWriter(view: ReviewView, author: string) {
       if (created.error || !created.commentId) return { error: created.error ?? "The comment was not created." };
       if (input.recording) await attachRecording(created.commentId, input.recording);
       if (input.annotation) {
-        const drawn = await addAnnotationAction(target.workspaceId, target.projectId, target.versionId, input.annotation, input.startMs ?? 0);
+        const drawn = await addAnnotationAction(target.workspaceId, target.projectId, target.versionId, input.annotation, input.startMs);
         if (drawn.error) return drawn;
       }
       return undefined;

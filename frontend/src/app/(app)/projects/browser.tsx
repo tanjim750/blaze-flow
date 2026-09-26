@@ -14,6 +14,7 @@ import { AssetLibrary } from "@/components/asset-library";
 import { LinkPending } from "@/components/nav-progress";
 import { TasksBoard } from "@/app/(app)/tasks/board";
 import type { TasksView } from "@/lib/tasks-view";
+import { filterClientTree } from "@/lib/client-filter";
 import "../tasks/tasks.css";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, renameCampaignAction, renameFolderAction, type ActionState } from "./actions";
@@ -79,7 +80,7 @@ function InlineCreate({ action, hidden, placeholder, label, onClose, nested = fa
 }
 const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log"] as const;
 
-export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string }) {
+export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initialQuery = "" }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string; initialQuery?: string }) {
   const router = useRouter();
   const [tab, setTab] = useState<(typeof TABS)[number]>(
     () => TABS.find((value) => value.toLowerCase() === initialTab?.toLowerCase()) ?? "Files",
@@ -90,7 +91,8 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
 
   return (
     <div className={railClosed ? "pb-layout is-rail-closed" : "pb-layout"}>
-      <ClientRail view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} />
+      {/* Keyed on the query so a new sidebar search replaces the filter instead of being ignored. */}
+      <ClientRail key={initialQuery} initialFilter={initialQuery} view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} />
 
       <section className="pb-canvas">
         {view.notice && (
@@ -120,7 +122,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
             </div>
             <div className="pb-title-actions">
               <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions"><Ellipsis size={15} /></button>
-              <button className="pb-primary-button" type="button" disabled={!view.workspaceId || !view.selectedCampaign} onClick={() => setUploading(true)}><CloudUpload size={15} />+ Upload Asset</button>
+              <button className="pb-primary-button" type="button" disabled={!view.workspaceId || !view.selectedCampaign} onClick={() => setUploading(true)}><CloudUpload size={15} />Upload Asset</button>
             </div>
           </div>
 
@@ -135,7 +137,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
                 </button>
               ))}
             </div>
-            <small>{view.notice ? "Demo content" : "Synced just now"}</small>
+            {view.notice && <small>Demo content</small>}
           </div>
         </div>
 
@@ -144,12 +146,44 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
         ) : tab === "Tasks" && view.selectedCampaign ? (
           <TasksBoard compact view={tasksView} projectId={view.selectedCampaign.id} />
         ) : (
-          <p className="pb-empty">The {tab} view is not built yet.</p>
+          <ComingSoon tab={tab} hasCampaign={Boolean(view.selectedCampaign)} briefFolder={view.selectedCampaign?.folders.find((folder) => /brief/i.test(folder.name))?.name ?? null} onOpenFiles={() => setTab("Files")} />
         )}
       </section>
       {uploading && view.workspaceId && view.selectedCampaign && (
         <UploadDialog workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} onClose={() => setUploading(false)} onUploaded={() => { setUploading(false); router.refresh(); }} />
       )}
+    </div>
+  );
+}
+
+/**
+ * The tab body when there is nothing real to show: no campaign yet, or a tab whose feature
+ * has not shipped. It says so plainly instead of "not built yet", and offers the one useful
+ * next step without dressing it up as a primary action.
+ */
+function ComingSoon({ tab, hasCampaign, briefFolder, onOpenFiles }: { tab: (typeof TABS)[number]; hasCampaign: boolean; briefFolder: string | null; onOpenFiles: () => void }) {
+  if (!hasCampaign) {
+    return (
+      <div className="pb-soon" role="status">
+        <FolderOpen size={24} strokeWidth={1.75} aria-hidden="true" />
+        <h2>No campaign selected</h2>
+        <p>Pick a campaign in the client list, or add one with “Add Subfolder”.</p>
+      </div>
+    );
+  }
+  const brief = tab === "Brief & Specs";
+  const Icon = brief ? FileText : Activity;
+  return (
+    <div className="pb-soon" role="status">
+      <Icon size={24} strokeWidth={1.75} aria-hidden="true" />
+      <span className="pb-soon-tag">Coming soon</span>
+      <h2>{brief ? "Brief & specs" : "Activity log"}</h2>
+      <p>
+        {brief
+          ? `A place for the brief, deliverable specs and due dates is on the way. Until then, keep brief documents in ${briefFolder ? `the “${briefFolder}” folder` : "this campaign’s Files"}.`
+          : "A timeline of uploads, reviews, approvals and guest visits for this campaign is on the way."}
+      </p>
+      {brief && <button type="button" className="pb-soon-link" onClick={onOpenFiles}><FolderOpen size={14} />Open Files</button>}
     </div>
   );
 }
@@ -181,10 +215,10 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
     } catch { setError("The upload could not reach Blaze Flow. Try again."); setBusy(false); }
   }
 
-  return <dialog ref={dialog} open className="pb-upload-dialog" onCancel={onClose} aria-labelledby="upload-title">
-    <button type="button" className="pb-upload-backdrop" onClick={onClose} aria-label="Close upload dialog" />
+  return <dialog ref={dialog} open className="pb-upload-dialog" onCancel={onClose} onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.stopPropagation(); onClose(); } }} aria-modal="true" aria-labelledby="upload-title">
+    <button type="button" className="pb-upload-backdrop" onClick={onClose} tabIndex={-1} aria-hidden="true" />
     <form onSubmit={submit} className="pb-upload-panel">
-      <header><div><p>New media version</p><h2 id="upload-title">Upload to {projectName}</h2></div><button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button></header>
+      <header><div><p>New media version</p><h2 id="upload-title">Upload to {projectName}</h2></div><button type="button" onClick={onClose} aria-label="Close dialog"><X size={18} /></button></header>
       <label className="pb-file-drop"><UploadCloud size={26} /><strong>Choose an asset</strong><span>PNG, JPEG, GIF, WebP, MP4, MOV, or WebM</span><input name="file" type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm" required /></label>
       <label>Title<input name="title" placeholder="Spring campaign — hero cut" required /></label>
       <label>Notes<textarea name="note" rows={3} placeholder="What changed in this version?" /></label>
@@ -195,12 +229,12 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
   </dialog>;
 }
 
-function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: ProjectsView; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void }) {
-  const [filter, setFilter] = useState("");
+function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onToggle }: { view: ProjectsView; initialFilter: string; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void }) {
+  const [filter, setFilter] = useState(initialFilter);
   const [creating, setCreating] = useState(false);
   const reduceMotion = useReducedMotion();
 
-  const clients = view.clients.filter((client) => client.name.toLowerCase().includes(filter.trim().toLowerCase()));
+  const rows = filterClientTree(view.clients, filter);
   const toggle = (id: string) => setExpanded(expanded.includes(id) ? expanded.filter((value) => value !== id) : [...expanded, id]);
 
   return (
@@ -231,7 +265,8 @@ function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: P
 
         <div className="pb-rail-search">
           <Search size={14} />
-          <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Filter clients... ⌘K" aria-label="Filter clients" />
+          <input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Filter clients & projects" aria-label="Filter clients and projects" />
+          {filter && <button type="button" className="pb-rail-clear" onClick={() => setFilter("")} aria-label="Clear filter"><X size={12} /></button>}
         </div>
 
         {creating && (
@@ -244,23 +279,22 @@ function ClientRail({ view, expanded, setExpanded, closed, onToggle }: { view: P
         )}
 
         <div className="pb-tree">
-          {clients.map((client) => (
-            <ClientBranch key={client.id} client={client} view={view} open={expanded.includes(client.id)} onToggle={() => toggle(client.id)} />
+          {rows.map(({ client, campaigns, matchedCampaign }) => (
+            <ClientBranch key={client.id} client={client} campaigns={campaigns} view={view} open={matchedCampaign || expanded.includes(client.id)} onToggle={() => toggle(client.id)} />
           ))}
-          {!clients.length && <p className="pb-rail-empty">No clients match.</p>}
+          {!rows.length && (
+            <p className="pb-rail-empty" role="status">
+              No matches for “{filter.trim()}”.{" "}
+              <button type="button" className="pb-rail-empty-clear" onClick={() => setFilter("")}>Clear</button>
+            </p>
+          )}
         </div>
-      </div>
-
-      <div className="pb-storage">
-        <div className="pb-storage-head"><span><FolderOpen size={13} />Client Storage</span><b>56% used</b></div>
-        <div className="pb-storage-track"><i style={{ width: "56.1%" }} /></div>
-        <div className="pb-storage-foot"><span>842 GB / 1.5 TB</span><Link href="/settings">Manage Access</Link></div>
       </div>
     </aside>
   );
 }
 
-function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; view: ProjectsView; open: boolean; onToggle: () => void }) {
+function ClientBranch({ client, campaigns = client.campaigns, view, open, onToggle }: { client: ClientNode; campaigns?: ClientNode["campaigns"]; view: ProjectsView; open: boolean; onToggle: () => void }) {
   const [adding, setAdding] = useState(false);
   const { renaming, setRenaming, error, setError, remove } = useRowActions();
   const isSelected = view.selectedClient?.id === client.id;
@@ -283,7 +317,7 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
 
       {open && (
         <div className="pb-subtree">
-          {client.campaigns.map((campaign) => {
+          {campaigns.map((campaign) => {
             const active = view.selectedCampaign?.id === campaign.id;
             if (renaming === campaign.id) {
               return (
@@ -324,7 +358,7 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
             />
           ) : (
             <button type="button" className="pb-add-sub" onClick={() => setAdding(true)}>
-              <Plus size={13} />+ Add Subfolder <span>(e.g. March 2026)</span>
+              <Plus size={13} />Add Subfolder <span>(e.g. March 2026)</span>
             </button>
           )}
 

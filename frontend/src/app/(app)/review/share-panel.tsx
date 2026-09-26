@@ -1,12 +1,10 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { Check, Copy, Link2, TriangleAlert, UserMinus, X } from "lucide-react";
 import type { GuestInvite } from "@/lib/api";
-import {
-  createGuestInviteAction, emptyGuestInviteState, GUEST_PRESETS,
-  revokeGuestAccessAction, revokeGuestInviteAction,
-} from "./actions";
+import { createGuestInviteAction, revokeGuestAccessAction, revokeGuestInviteAction } from "./actions";
+import { emptyGuestInviteState, GUEST_PRESETS } from "./guest-presets";
 
 /** Stable regardless of the viewer's locale, so the server and client markup agree. */
 const day = (iso: string) => new Date(iso).toISOString().slice(0, 10);
@@ -38,6 +36,14 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
   // The action only produces a token in the browser, so the guarded origin stays safe
   // during the server render while still making the copied link absolute.
   const shareUrl = state.token ? `${typeof window === "undefined" ? "" : window.location.origin}/guest-review?token=${state.token}` : "";
+
+  // "Copied" is feedback for one click, not a state: it reverts after 2 s, so copying the
+  // link a second time (or a new link) still visibly confirms.
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
 
   const copy = async () => {
     try {
@@ -87,9 +93,10 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
               <p><TriangleAlert size={13} /> Copy this now — it is shown only once.</p>
               <div>
                 <input readOnly value={shareUrl} aria-label="Client review link" onFocus={(event) => event.currentTarget.select()} />
-                <button type="button" onClick={copy} aria-label="Copy link">
+                <button type="button" onClick={copy} aria-label={copied ? "Link copied" : "Copy link"} title={copied ? "Copied" : "Copy link"}>
                   {copied ? <Check size={14} /> : <Copy size={14} />}
                 </button>
+                <span className="sr-only" aria-live="polite">{copied ? "Link copied" : ""}</span>
               </div>
             </div>
           )}

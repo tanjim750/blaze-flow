@@ -2,22 +2,24 @@
 
 import { revalidatePath } from "next/cache";
 import { createAnnotation, createGuestInvite, createReviewComment, deleteAnnotation, requestMediaRevision, revokeGuestAccess, revokeGuestInvite, setCommentReaction, setCommentResolution, transitionMediaVersion, updateAnnotation } from "@/lib/api";
-import type { AnnotationElement, GuestPermission } from "@/lib/api";
+import type { AnnotationElement } from "@/lib/api";
+import { startTimeField } from "@/lib/review-timing";
+import { GUEST_PRESETS, type GuestInviteState, type GuestPreset } from "./guest-presets";
 
 export type ActionState = { error: string | null };
 const ok: ActionState = { error: null };
 
 export async function addPointAnnotationAction(workspaceId: string, projectId: string, versionId: string, x: number, y: number, atMs: number): Promise<ActionState> {
   const result = await createAnnotation(workspaceId, projectId, versionId, {
-    ...(atMs > 0 ? { start_time_ms: Math.round(atMs) } : {}),
+    ...startTimeField(atMs),
     elements: [{ element_type: "POINT", geometry: { x, y }, style: { color: "#ffcf5a" }, payload: {} }],
   });
   if (!result.ok) return { error: result.error.detail };
   revalidatePath("/review"); return ok;
 }
 
-export async function addAnnotationAction(workspaceId: string, projectId: string, versionId: string, element: Omit<AnnotationElement, "id">, atMs: number): Promise<ActionState> {
-  const result = await createAnnotation(workspaceId, projectId, versionId, { ...(atMs > 0 ? { start_time_ms: Math.round(atMs) } : {}), elements: [element] });
+export async function addAnnotationAction(workspaceId: string, projectId: string, versionId: string, element: Omit<AnnotationElement, "id">, atMs: number | null): Promise<ActionState> {
+  const result = await createAnnotation(workspaceId, projectId, versionId, { ...startTimeField(atMs), elements: [element] });
   if (!result.ok) return { error: result.error.detail }; revalidatePath("/review"); return ok;
 }
 
@@ -56,7 +58,7 @@ export async function postNoteAction(payload: {
   const created = await createReviewComment(payload.workspaceId, payload.projectId, payload.versionId, {
     text,
     ...(payload.parentId ? { parent_comment_id: payload.parentId } : {}),
-    ...(!payload.parentId && payload.startMs !== null && payload.startMs > 0 ? { start_time_ms: Math.round(payload.startMs) } : {}),
+    ...(!payload.parentId ? startTimeField(payload.startMs) : {}),
     ...(payload.mentionedUserIds.length ? { mentioned_user_ids: payload.mentionedUserIds } : {}),
   });
   if (!created.ok) return { error: created.error.detail, commentId: null };
@@ -107,7 +109,7 @@ export async function requestRevisionAction(
   if (!workspaceId || !projectId || !versionId || !text.trim()) return { error: "Describe the requested revision first." };
   const result = await requestMediaRevision(workspaceId, projectId, versionId, {
     text: text.trim(),
-    ...(startMs !== null && startMs > 0 ? { start_time_ms: Math.round(startMs) } : {}),
+    ...startTimeField(startMs),
   });
   if (!result.ok) return { error: result.error.detail };
   revalidatePath("/review");
@@ -115,46 +117,6 @@ export async function requestRevisionAction(
   revalidatePath("/tasks");
   return ok;
 }
-
-/**
- * Guest permission presets.
- *
- * The API accepts thirteen individual keys, but a share dialog that asks someone to
- * assemble them by hand invites mistakes with a credential that leaves the workspace.
- * These three cover what a client link is actually for; the edit/delete keys are scoped
- * by the backend to the guest's own content, so "Review" cannot touch anyone else's notes.
- */
-export const GUEST_PRESETS = {
-  view: {
-    label: "View only",
-    description: "Can open the cut list and read notes.",
-    permissions: ["media.read", "review.comment.read", "annotation.read"],
-  },
-  comment: {
-    label: "View and comment",
-    description: "Can read, leave notes, and react.",
-    permissions: [
-      "media.read", "review.comment.read", "review.comment.create",
-      "review.comment.edit", "review.reaction.create", "annotation.read",
-    ],
-  },
-  review: {
-    label: "Full review",
-    description: "Adds attachments, annotations, and downloads.",
-    permissions: [
-      "media.read", "media.download", "review.comment.read", "review.comment.create",
-      "review.comment.edit", "review.comment.delete", "review.reaction.create",
-      "review.attachment.create", "review.attachment.delete",
-      "annotation.read", "annotation.create", "annotation.edit", "annotation.delete",
-    ],
-  },
-} satisfies Record<string, { label: string; description: string; permissions: GuestPermission[] }>;
-
-export type GuestPreset = keyof typeof GUEST_PRESETS;
-
-/** Carries the one-time token back to the dialog, because the API never returns it again. */
-export type GuestInviteState = { error: string | null; token: string | null };
-export const emptyGuestInviteState: GuestInviteState = { error: null, token: null };
 
 export async function createGuestInviteAction(_prev: GuestInviteState, form: FormData): Promise<GuestInviteState> {
   const workspaceId = String(form.get("workspaceId") ?? "");

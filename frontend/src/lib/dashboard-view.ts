@@ -1,6 +1,7 @@
 import { listMediaVersions, listNotifications, listProjects, listTasks, listWorkspaces } from "./api";
 import type { MediaVersion, Notification, Task } from "./api";
 import { selectWorkspace } from "./workspace";
+import { upcomingDeadlines } from "./deadlines";
 
 export type Bucket = "Today" | "Upcoming" | "Overdue";
 export type Tone = "neutral" | "warning" | "danger" | "success" | "accent" | "blue";
@@ -215,11 +216,10 @@ export async function loadDashboardView(greetingName: string): Promise<Dashboard
     };
   });
 
-  const deadlines: DeadlineItem[] = dashboardTasks
-    .filter((task) => task.bucket !== "Overdue")
-    .slice(0, 5)
-    .map((task) => {
-      const source = tasks.find((item) => item.id === task.id)!;
+  const openById = new Map(dashboardTasks.map((task) => [task.id, task]));
+  const deadlines: DeadlineItem[] = upcomingDeadlines(tasks.filter((task) => openById.has(task.id)), now)
+    .map((source) => {
+      const task = openById.get(source.id)!;
       const due = source.due_at ? new Date(source.due_at) : null;
       return {
         id: task.id,
