@@ -1,6 +1,7 @@
 import { listAnnotations, listGuestInvites, listReviewComments, listTaskAttachments, listTasks, listWorkflowStages, listWorkspaceMembers } from "./api";
 import type { Annotation, GuestInvite, TaskStage } from "./api";
 import { nestNotes, type ReviewNote } from "./review-notes";
+import { approvalStageId } from "./review-stages";
 import { defaultSelection, loadMediaCatalogue, locate, locateByTarget, type ReviewAsset, type ReviewTarget, type ReviewVersion } from "./review-media";
 
 export type { ReviewNote } from "./review-notes";
@@ -92,9 +93,7 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
     members: members.ok
       ? members.data.flatMap((row) => row.user ? [{ id: row.user.id, name: `${row.user.first_name} ${row.user.last_name}`.trim() || row.user.email, email: row.user.email }] : [])
       : [],
-    stages: stages.ok
-      ? stages.data.map((stage) => ({ id: stage.id, name: stage.name, isApproval: /approv|done|complete|deliver/i.test(`${stage.name} ${stage.slug}`) }))
-      : [],
+    stages: stages.ok ? withApproval(stages.data) : [],
   };
 
   const comparison = params.compareId
@@ -125,6 +124,12 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
     canManageGuests: guestInvites.ok,
     notice: comments.ok ? view.notice : `Comments unavailable: ${comments.error.detail}`,
   };
+}
+
+/** Marks exactly one stage — the one Approve moves the cut into — as the approval target. */
+function withApproval(stages: { id: string; name: string; slug: string }[]): ReviewView["stages"] {
+  const approvedId = approvalStageId(stages);
+  return stages.map((stage) => ({ id: stage.id, name: stage.name, isApproval: stage.id === approvedId }));
 }
 
 /**
