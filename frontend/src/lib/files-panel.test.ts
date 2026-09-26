@@ -194,6 +194,12 @@ describe("formatters and tones", () => {
     expect(stageTone("Approved")).toBe("success");
     expect(stageTone("Colour grade")).toBeNull();
   });
+  it("prefers the stage kind over the name, matching the Tasks board", () => {
+    expect(stageTone("QA pass", "review")).toBe("teal");
+    expect(stageTone("Sent to client", "client_review")).toBe("info");
+    expect(stageTone("Final check", "custom")).toBeNull();
+    expect(stageTone("Approved", "approved")).toBe("success");
+  });
   it("summarizes size and stage mix", () => {
     const summary = summarize([file("a", "a", { size: 5, stageId: "s" }), file("b", "b", { size: 7 })], [folder("f", "F")]);
     expect(summary).toMatchObject({ files: 2, folders: 1, bytes: 12 });

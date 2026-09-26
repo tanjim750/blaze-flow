@@ -7,6 +7,7 @@
 import type { CSSProperties } from "react";
 import { AudioLines, CircleCheck, CircleDashed, CircleDot, Eye, File, FileImage, FileText, Film, Image as ImageIcon, RotateCcw, Tag, Users } from "lucide-react";
 import type { LibraryFile, LibraryKind } from "@/lib/asset-library";
+import type { TaskStageKind } from "@/lib/api";
 import { middleTruncate, stageTone, type StageTone } from "@/lib/files-panel";
 
 export function KindIcon({ kind, className }: { kind: LibraryKind; className?: string }) {
@@ -49,6 +50,10 @@ export function Thumb({ file, size = "md" }: { file: LibraryFile | null; size?: 
   );
 }
 
+/** A stage as the Files panel sees it: a `TaskStage` payload (`kind` from migration 0030, absent on older backends). */
+export type StageLike = { name: string; color: string; kind?: TaskStageKind };
+
+/* Same icon per tone as the Tasks board's `StagePill` (components/tasks/stage-ui.tsx). */
 const TONE_ICON: Record<StageTone, typeof Tag> = { neutral: CircleDashed, brand: CircleDot, teal: Eye, info: Users, destructive: RotateCcw, success: CircleCheck };
 
 /**
@@ -56,9 +61,9 @@ const TONE_ICON: Record<StageTone, typeof Tag> = { neutral: CircleDashed, brand:
  * 14% tint). A custom stage falls back to the neutral `is-stage` pill with the workspace's
  * colour as a dot only, because an arbitrary hex cannot be relied on for 4.5:1 text.
  */
-export function StagePill({ stage, variant = "dot" }: { stage: { name: string; color: string } | null | undefined; variant?: "dot" | "icon" }) {
+export function StagePill({ stage, variant = "dot" }: { stage: StageLike | null | undefined; variant?: "dot" | "icon" }) {
   if (!stage) return null;
-  const tone = stageTone(stage.name);
+  const tone = stageTone(stage.name, stage.kind);
   const Icon = tone ? TONE_ICON[tone] : null;
   return (
     <span className={`fx-pill ${tone ? "" : "is-stage"}`} data-tone={tone ?? undefined} style={tone ? undefined : ({ "--stage-color": stage.color } as CSSProperties)}>

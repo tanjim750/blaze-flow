@@ -14,7 +14,7 @@ import { Clapperboard, Eye, FolderOpen, GitBranch, Layers, MessageSquareText, Tr
 import type { LibraryFile, LibraryFolder } from "@/lib/asset-library";
 import { isProcessing } from "@/lib/asset-library";
 import { aspectLabel, formatSize, KIND_NAME, runtime, type Density, type ViewMode } from "@/lib/files-panel";
-import { FileName, KindIcon, StagePill, Thumb } from "./files-ui";
+import { FileName, KindIcon, StagePill, Thumb, type StageLike } from "./files-ui";
 
 const shortDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
 const longDate = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
@@ -80,7 +80,7 @@ function Check({ checked, name, onToggle }: { checked: boolean; name: string; on
 }
 
 export function FileItem({ file, stage, relation, reviewable, common }: {
-  file: LibraryFile; stage: { name: string; color: string } | null; relation: string | null; reviewable: boolean; common: Common;
+  file: LibraryFile; stage: StageLike | null; relation: string | null; reviewable: boolean; common: Common;
 }) {
   const working = isProcessing(file);
   const failed = file.status === "FAILED";

@@ -6,6 +6,7 @@
  * Nothing here touches React or the DOM, so every rule is unit-tested in
  * `files-panel.test.ts` rather than through a rendered component.
  */
+import type { TaskStageKind } from "./api";
 import type { LibraryFile, LibraryFolder, LibraryKind } from "./asset-library";
 
 export type SortKey = "newest" | "name" | "size";
@@ -216,14 +217,23 @@ export function folderTreeRows(folders: LibraryFolder[], files: LibraryFile[], e
 
 export type StageTone = "neutral" | "brand" | "teal" | "info" | "destructive" | "success";
 
+/** Built-in stage kinds (backend `TaskStage.kind`, migration 0030) → DS tone, same table the Tasks board uses. */
+const KIND_TONE: Record<Exclude<TaskStageKind, "custom">, StageTone> = {
+  todo: "neutral", in_progress: "brand", review: "teal", client_review: "info", revisions: "destructive", approved: "success",
+};
+
 /**
- * The DS tone for a workspace stage (spec §13). Built-in stage names map onto the tone
- * table: To Do neutral, In Progress violet, Review/QA teal, Client info, Revisions
- * destructive, Approved success. A name the table does not know returns null, so the
- * caller falls back to the neutral `is-stage` pill with the stage's own colour as a dot
- * only, because a user's hex cannot be relied on to reach 4.5:1.
+ * The DS tone for a workspace stage (spec §13), kept in step with the Tasks board's
+ * `StagePill`: when the stage payload carries a `kind`, the kind decides (so a renamed
+ * built-in stage keeps its colour and a `custom` stage is always neutral, exactly as on the
+ * board). Older payloads without `kind` fall back to the name: To Do neutral, In Progress
+ * violet, Review/QA teal, Client info, Revisions destructive, Approved success. A name the
+ * table does not know returns null, so the caller falls back to the neutral `is-stage` pill
+ * with the stage's own colour as a dot only, because a user's hex cannot be relied on to
+ * reach 4.5:1.
  */
-export function stageTone(name: string): StageTone | null {
+export function stageTone(name: string, kind?: TaskStageKind | null): StageTone | null {
+  if (kind) return kind === "custom" ? null : KIND_TONE[kind];
   const value = name.toLowerCase();
   if (/approv|done|deliver|final/.test(value)) return "success";
   if (/revision|changes|reject/.test(value)) return "destructive";
