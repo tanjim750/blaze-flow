@@ -137,7 +137,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
                 </button>
               ))}
             </div>
-            <small>{view.notice ? "Demo content" : "Synced just now"}</small>
+            {view.notice && <small>Demo content</small>}
           </div>
         </div>
 
@@ -146,12 +146,44 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
         ) : tab === "Tasks" && view.selectedCampaign ? (
           <TasksBoard compact view={tasksView} projectId={view.selectedCampaign.id} />
         ) : (
-          <p className="pb-empty">The {tab} view is not built yet.</p>
+          <ComingSoon tab={tab} hasCampaign={Boolean(view.selectedCampaign)} briefFolder={view.selectedCampaign?.folders.find((folder) => /brief/i.test(folder.name))?.name ?? null} onOpenFiles={() => setTab("Files")} />
         )}
       </section>
       {uploading && view.workspaceId && view.selectedCampaign && (
         <UploadDialog workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} onClose={() => setUploading(false)} onUploaded={() => { setUploading(false); router.refresh(); }} />
       )}
+    </div>
+  );
+}
+
+/**
+ * The tab body when there is nothing real to show: no campaign yet, or a tab whose feature
+ * has not shipped. It says so plainly instead of "not built yet", and offers the one useful
+ * next step without dressing it up as a primary action.
+ */
+function ComingSoon({ tab, hasCampaign, briefFolder, onOpenFiles }: { tab: (typeof TABS)[number]; hasCampaign: boolean; briefFolder: string | null; onOpenFiles: () => void }) {
+  if (!hasCampaign) {
+    return (
+      <div className="pb-soon" role="status">
+        <FolderOpen size={24} strokeWidth={1.75} aria-hidden="true" />
+        <h2>No campaign selected</h2>
+        <p>Pick a campaign in the client list, or add one with “Add Subfolder”.</p>
+      </div>
+    );
+  }
+  const brief = tab === "Brief & Specs";
+  const Icon = brief ? FileText : Activity;
+  return (
+    <div className="pb-soon" role="status">
+      <Icon size={24} strokeWidth={1.75} aria-hidden="true" />
+      <span className="pb-soon-tag">Coming soon</span>
+      <h2>{brief ? "Brief & specs" : "Activity log"}</h2>
+      <p>
+        {brief
+          ? `A place for the brief, deliverable specs and due dates is on the way. Until then, keep brief documents in ${briefFolder ? `the “${briefFolder}” folder` : "this campaign’s Files"}.`
+          : "A timeline of uploads, reviews, approvals and guest visits for this campaign is on the way."}
+      </p>
+      {brief && <button type="button" className="pb-soon-link" onClick={onOpenFiles}><FolderOpen size={14} />Open Files</button>}
     </div>
   );
 }
@@ -257,12 +289,6 @@ function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onTogg
             </p>
           )}
         </div>
-      </div>
-
-      <div className="pb-storage">
-        <div className="pb-storage-head"><span><FolderOpen size={13} />Client Storage</span><b>56% used</b></div>
-        <div className="pb-storage-track"><i style={{ width: "56.1%" }} /></div>
-        <div className="pb-storage-foot"><span>842 GB / 1.5 TB</span><Link href="/settings">Manage Access</Link></div>
       </div>
     </aside>
   );
