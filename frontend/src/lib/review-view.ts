@@ -1,6 +1,7 @@
 import { listAnnotations, listGuestInvites, listReviewComments, listTaskAttachments, listTasks, listWorkflowStages, listWorkspaceMembers } from "./api";
 import type { Annotation, GuestInvite, TaskStage } from "./api";
 import { nestNotes, type ReviewNote } from "./review-notes";
+import { normalizeSpecs, specChips, type DeliverableSpecs } from "./project-brief";
 import { approvalStageId } from "./review-stages";
 import { defaultSelection, loadMediaCatalogue, locate, locateByTarget, type ReviewAsset, type ReviewTarget, type ReviewVersion } from "./review-media";
 
@@ -43,13 +44,15 @@ export type ReviewView = {
    * which version, so they are never merged into one list.
    */
   comparison: { version: ReviewVersion; notes: ReviewNote[]; annotations: Annotation[] } | null;
+  /** The project's deliverable specs, when it has any, for the header's mismatch chip. */
+  specs: DeliverableSpecs | null;
   notice: string | null;
 };
 
 const EMPTY: ReviewView = {
   workspaceId: null, asset: null, version: null, target: null, notes: [], annotations: [],
   stages: [], taskStages: [], linkedTasks: [], members: [], guestInvites: [],
-  canManageGuests: false, canComment: false, comparison: null, notice: null,
+  canManageGuests: false, canComment: false, comparison: null, specs: null, notice: null,
 };
 
 /**
@@ -94,6 +97,7 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
       ? members.data.flatMap((row) => row.user ? [{ id: row.user.id, name: `${row.user.first_name} ${row.user.last_name}`.trim() || row.user.email, email: row.user.email }] : [])
       : [],
     stages: stages.ok ? withApproval(stages.data) : [],
+    specs: projectSpecs(catalogue.projects.find((project) => project.id === asset.projectId)?.deliverable_specs),
   };
 
   const comparison = params.compareId
@@ -167,4 +171,15 @@ async function linkedTasks(workspaceId: string, projectId: string | null, fileId
   return scans
     .filter(({ attachments }) => attachments.ok && attachments.data.some((item) => item.file.id === fileId))
     .map(({ task }) => ({ id: task.id, title: task.title, stageName: null }));
+}
+
+function projectSpecs(raw: unknown): DeliverableSpecs | null {
+  const specs = normalizeSpecs(raw);
+  return specChips(specs).length ? specs : null;
+}
+
+/** `?t=` from a deep link: whole non-negative milliseconds, else null. */
+export function timeParam(raw: string | undefined): number | null {
+  if (!raw || !/^\d{1,10}$/.test(raw)) return null;
+  return Number(raw);
 }

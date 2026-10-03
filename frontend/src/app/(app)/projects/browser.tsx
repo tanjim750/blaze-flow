@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
   Activity, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
-  FolderOpen, Pencil, Plus, Search, Share2, Trash2, TriangleAlert, UploadCloud, X,
+  FolderOpen, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, X,
 } from "lucide-react";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
 import { AssetLibrary } from "@/components/asset-library";
+import { ProjectBrief } from "@/components/project-brief";
+import "@/components/project-brief.css";
 import { LinkPending } from "@/components/nav-progress";
 import { TasksBoard } from "@/app/(app)/tasks/board";
 import type { TasksView } from "@/lib/tasks-view";
@@ -145,6 +147,16 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
           <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient?.id ?? null} />
         ) : tab === "Tasks" && view.selectedCampaign ? (
           <TasksBoard compact view={tasksView} projectId={view.selectedCampaign.id} />
+        ) : tab === "Brief & Specs" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (
+          // Keyed on the project so switching campaigns never carries one brief's unsaved text into another.
+          <ProjectBrief key={view.selectedCampaign.id} workspaceId={view.workspaceId} project={view.selectedCampaign.project} />
+        ) : tab === "Brief & Specs" && view.selectedCampaign?.briefError ? (
+          <div className="pb-soon" role="alert">
+            <TriangleAlert size={24} strokeWidth={1.75} aria-hidden="true" />
+            <h2>The brief couldn&rsquo;t be loaded</h2>
+            <p>{view.selectedCampaign.briefError}</p>
+            <button type="button" className="pb-soon-link" onClick={() => router.refresh()}><RotateCcw size={14} />Retry</button>
+          </div>
         ) : (
           <ComingSoon tab={tab} hasCampaign={Boolean(view.selectedCampaign)} briefFolder={view.selectedCampaign?.folders.find((folder) => /brief/i.test(folder.name))?.name ?? null} onOpenFiles={() => setTab("Files")} />
         )}
@@ -173,6 +185,7 @@ function ComingSoon({ tab, hasCampaign, briefFolder, onOpenFiles }: { tab: (type
   }
   const brief = tab === "Brief & Specs";
   const Icon = brief ? FileText : Activity;
+  // The Brief tab only lands here for demo content, which has no project to edit.
   return (
     <div className="pb-soon" role="status">
       <Icon size={24} strokeWidth={1.75} aria-hidden="true" />

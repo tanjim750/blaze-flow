@@ -10,6 +10,7 @@ import { useLocalReview } from "@/lib/review-local";
 import { clientView, type ReviewNote } from "@/lib/review-notes";
 import type { AnnotationElement } from "@/lib/api";
 import { loadDraft, patchDraft, unsavedWarning } from "@/lib/review-drafts";
+import { specMismatches } from "@/lib/project-brief";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import { Comments, RevisionForm, type ComposerState } from "./comments";
 import { Fields } from "./fields";
@@ -20,7 +21,13 @@ import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } fr
 import { SharePanel } from "./share-panel";
 import { useReviewWriter } from "./writer";
 
-type Props = { view: ReviewView; author: string; userId?: string | null; initialShareOpen?: boolean; embedded?: boolean };
+type Props = {
+  view: ReviewView; author: string; userId?: string | null; initialShareOpen?: boolean; embedded?: boolean;
+  /** `?comment=` from a notification: the note to scroll to and highlight. */
+  initialCommentId?: string | null;
+  /** `?t=` in milliseconds: where to seek once the media has loaded. */
+  initialTimeMs?: number | null;
+};
 
 /** "3 Oct 2026, 20:41" — fixed locale so the server and browser render the same text. */
 const stamp = (iso: string | null) => iso
@@ -29,7 +36,7 @@ const stamp = (iso: string | null) => iso
 
 const shortDate = (iso: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(iso));
 
-export function ReviewWorkspace({ view, author, userId = null, initialShareOpen = false, embedded = false }: Props) {
+export function ReviewWorkspace({ view, author, userId = null, initialShareOpen = false, embedded = false, initialCommentId = null, initialTimeMs = null }: Props) {
   const router = useRouter();
   const reduced = useReducedMotion();
   const player = useRef<PlayerHandle>(null);
@@ -46,7 +53,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const [panel, setPanel] = useState<"comments" | "fields">("comments");
   const [positionMs, setPositionMs] = useState(0);
   const [meta, setMeta] = useState<{ durationMs: number; width: number; height: number } | null>(null);
-  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(initialCommentId);
   const [pending, setPending] = useState<AnnotationElement | null>(null);
   const [shareOpen, setShareOpen] = useState(initialShareOpen);
   const [revisionOpen, setRevisionOpen] = useState(false);
@@ -92,6 +99,17 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     ...note.replies.filter((reply) => reply.visibility === "team").map((reply) => reply.id),
   ])), [allNotes]);
   const notes = useMemo(() => clientPreview ? clientView(allNotes) : allNotes, [allNotes, clientPreview]);
+  // A deep link from a notification: seek to its timecode (or its note's) once, as soon as
+  // the player knows the media, and say so if the note has since gone.
+  const linkedNote = useMemo(() => initialCommentId
+    ? allNotes.flatMap((note) => [note, ...note.replies]).find((note) => note.id === initialCommentId) ?? null
+    : null, [allNotes, initialCommentId]);
+  const pendingSeek = useRef<number | null>(initialTimeMs ?? linkedNote?.startMs ?? null);
+  useEffect(() => {
+    if (!meta || pendingSeek.current === null) return;
+    player.current?.seek(pendingSeek.current);
+    pendingSeek.current = null;
+  }, [meta]);
   const annotations: DrawnAnnotation[] = useMemo(() => [
     ...view.annotations
       .filter((item) => !clientPreview || !item.review_comment_id || !teamNoteIds.has(item.review_comment_id))
@@ -114,6 +132,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   }, [version, view.workspaceId]);
 
   const approval = view.stages.find((stage) => stage.isApproval);
+  // Compared against what the player measured, so it only appears once the media has loaded.
+  const mismatches = useMemo(() => specMismatches(view.specs, meta), [meta, view.specs]);
   const comparing = view.comparison;
   const latest = asset?.versions[asset.versions.length - 1] ?? null;
   const approved = Boolean(approval && version?.workflowStage?.id === approval.id);
@@ -223,6 +243,13 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           </span>
         )}
 
+        {mismatches.length > 0 && (
+          <span className="rv-spec-warn" role="status" title={mismatches.map((item) => item.message).join(". ")}>
+            <TriangleAlert size={11} />
+            Off spec: {mismatches.map((item) => item.short).join(" · ")}
+          </span>
+        )}
+
         <div className="rv-actions">
           <button
             type="button"
@@ -297,6 +324,9 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
       />
 
       {view.notice && <p className="rv-banner" role="status"><TriangleAlert size={14} /><span>{view.notice}</span></p>}
+      {initialCommentId && view.target && !linkedNote && (
+        <p className="rv-banner" role="status"><Info size={14} /><span>The note this link points to has been deleted or is no longer visible to you.</span></p>
+      )}
 
       {!view.target && (
         <p className="rv-banner is-local" role="status">
