@@ -619,6 +619,11 @@ class Project(models.Model):
     # Structured deliverable specs for the Brief tab: aspect_ratio, target_length_seconds,
     # platform, resolution and notes. Shape is enforced by DeliverableSpecsSerializer.
     deliverable_specs = models.JSONField(default=dict, blank=True)
+    # Billing (demo). What the client pays for the project as a whole; per-task prices are
+    # added on top (see services/billing.py). Never serialised by ProjectSerializer: prices
+    # only leave the API through the billing routes, which check billing.view.
+    client_fee = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    client_fee_currency = models.CharField(max_length=3, null=True, blank=True)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -1014,6 +1019,10 @@ class Task(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     sort_order = models.IntegerField(default=0)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    # Billing (demo). Optional client price for this deliverable, on top of the project fee.
+    # Kept out of TaskSerializer for the same reason as Project.client_fee.
+    client_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    client_price_currency = models.CharField(max_length=3, null=True, blank=True)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -1613,4 +1622,181 @@ class UserSubscription(models.Model):
             models.Index(fields=['user']),
             models.Index(fields=['provider_subscription_id']),
             models.Index(fields=['user', 'status']),
+        ]
+
+
+# --- Billing (demo) -----------------------------------------------------------------------
+# Agency money tracking: what clients owe (invoices + payments) and what editors are owed
+# (task pay + payouts). Every amount carries its own ISO 4217 currency code so a later
+# multi-currency or gateway integration does not need a data migration. See
+# services/billing.py; the only way anything becomes "paid" is billing.record_payment().
+
+DEFAULT_BILLING_CURRENCY = 'GBP'
+
+
+class InvoiceStatus(models.TextChoices):
+    # "Overdue" is not stored: it is a sent invoice past its due date with money outstanding.
+    DRAFT = 'draft'
+    SENT = 'sent'
+    PAID = 'paid'
+
+
+class InvoiceLineKind(models.TextChoices):
+    PROJECT_FEE = 'project_fee'
+    TASK = 'task'
+
+
+class PaymentDirection(models.TextChoices):
+    INCOMING = 'incoming'  # a client paying an invoice
+    OUTGOING = 'outgoing'  # the studio paying an editor
+
+
+class PaymentMethod(models.TextChoices):
+    BANK_TRANSFER = 'bank_transfer'
+    CARD = 'card'
+    CASH = 'cash'
+    OTHER = 'other'
+
+
+class PaymentProvider(models.TextChoices):
+    # Only the manual (demo) provider exists. A gateway such as Stripe would add its own
+    # value here and call billing.record_payment() from its webhook.
+    MANUAL = 'manual'
+
+
+class EditorPayStatus(models.TextChoices):
+    PENDING = 'pending'  # task not approved yet; the amount can still change
+    EARNED = 'earned'    # task reached the Approved stage kind; the amount is frozen
+
+
+class WorkspaceBillingSettings(models.Model):
+    workspace = models.OneToOneField(Workspace, on_delete=models.CASCADE, primary_key=True, db_column='workspace_id', related_name='+')
+    currency = models.CharField(max_length=3, default=DEFAULT_BILLING_CURRENCY)
+    invoice_prefix = models.CharField(max_length=20, default='INV')
+    next_invoice_number = models.PositiveIntegerField(default=1)
+    payment_terms_days = models.PositiveIntegerField(default=14)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'workspace_billing_settings'
+
+
+class MemberPayRate(models.Model):
+    """Optional default pay per task for a team member; pre-fills their pay when assigned."""
+    workspace_membership = models.OneToOneField(WorkspaceMembership, on_delete=models.CASCADE, primary_key=True, db_column='workspace_membership_id', related_name='+')
+    default_task_rate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    currency = models.CharField(max_length=3, default=DEFAULT_BILLING_CURRENCY)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'member_pay_rates'
+
+
+class EditorPay(models.Model):
+    """What one assignee is paid for one task. Frozen (status earned) once the task is approved."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, db_column='task_id', related_name='+')
+    workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.PROTECT, db_column='workspace_membership_id', related_name='+')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=3, default=DEFAULT_BILLING_CURRENCY)
+    status = models.CharField(max_length=10, choices=EditorPayStatus.choices, default=EditorPayStatus.PENDING)
+    earned_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'editor_pay'
+        constraints = [
+            models.UniqueConstraint(fields=['task', 'workspace_membership'], name='editor_pay_task_membership_uniq'),
+            models.CheckConstraint(check=models.Q(amount__gte=0), name='editor_pay_amount_non_negative'),
+        ]
+        indexes = [models.Index(fields=['workspace', 'workspace_membership', 'status'])]
+
+
+class Invoice(models.Model):
+    """A bill to a client. Called an invoice in the UI."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    client_team = models.ForeignKey(ClientTeam, on_delete=models.PROTECT, db_column='client_team_id', related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, db_column='project_id', null=True, blank=True, related_name='+')
+    number = models.CharField(max_length=40)
+    status = models.CharField(max_length=10, choices=InvoiceStatus.choices, default=InvoiceStatus.DRAFT)
+    currency = models.CharField(max_length=3, default=DEFAULT_BILLING_CURRENCY)
+    issue_date = models.DateField(null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default='')
+    created_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='created_by_user_id', null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'invoices'
+        constraints = [models.UniqueConstraint(fields=['workspace', 'number'], name='invoices_workspace_number_uniq')]
+        indexes = [
+            models.Index(fields=['workspace', 'status']),
+            models.Index(fields=['client_team']),
+        ]
+
+
+class InvoiceLine(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, db_column='invoice_id', related_name='lines')
+    kind = models.CharField(max_length=20, choices=InvoiceLineKind.choices)
+    task = models.ForeignKey(Task, on_delete=models.SET_NULL, db_column='task_id', null=True, blank=True, related_name='+')
+    description = models.CharField(max_length=255)
+    # A snapshot: changing the task's price later does not rewrite an issued invoice.
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    sort_order = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = 'invoice_lines'
+        ordering = ('sort_order',)
+
+
+class Payment(models.Model):
+    """One money movement: a client paying an invoice (incoming) or a payout to an editor (outgoing).
+
+    Rows are only ever written by services.billing.record_payment().
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    direction = models.CharField(max_length=10, choices=PaymentDirection.choices)
+    invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, db_column='invoice_id', null=True, blank=True, related_name='payments')
+    payee_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.PROTECT, db_column='payee_membership_id', null=True, blank=True, related_name='+')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=3)
+    paid_on = models.DateField()
+    method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.BANK_TRANSFER)
+    note = models.TextField(blank=True, default='')
+    provider = models.CharField(max_length=30, choices=PaymentProvider.choices, default=PaymentProvider.MANUAL)
+    # The gateway's own id (e.g. a Stripe PaymentIntent). Unique per provider, so a webhook
+    # delivered twice records the payment once.
+    provider_reference = models.CharField(max_length=255, null=True, blank=True)
+    recorded_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='recorded_by_user_id', null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'payments'
+        constraints = [
+            models.CheckConstraint(check=models.Q(amount__gt=0), name='payments_amount_positive'),
+            models.CheckConstraint(
+                check=(
+                    models.Q(direction='incoming', invoice__isnull=False, payee_membership__isnull=True)
+                    | models.Q(direction='outgoing', invoice__isnull=True, payee_membership__isnull=False)
+                ),
+                name='payments_direction_matches_target',
+            ),
+            models.UniqueConstraint(
+                fields=['provider', 'provider_reference'],
+                condition=models.Q(provider_reference__isnull=False),
+                name='payments_provider_reference_uniq',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['workspace', 'direction']),
+            models.Index(fields=['payee_membership']),
         ]

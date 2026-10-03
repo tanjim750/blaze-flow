@@ -103,6 +103,7 @@ from .dashboard_views import dashboard_my_cuts, dashboard_notes_to_address, dash
 from .activity_views import (
     project_activity, project_activity_export, workspace_activity, workspace_activity_export,
 )
+from . import billing_views
 
 urlpatterns = [
     path('health/', health_check, name='api-health'),
@@ -183,6 +184,18 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/dashboard/notes-to-address/', dashboard_notes_to_address, name='api-dashboard-notes-to-address'),
     path('workspaces/<uuid:workspace_id>/dashboard/my-cuts/', dashboard_my_cuts, name='api-dashboard-my-cuts'),
     path('workspaces/<uuid:workspace_id>/dashboard/workload/', dashboard_workload, name='api-dashboard-workload'),
+    path('workspaces/<uuid:workspace_id>/billing/settings/', billing_views.billing_settings, name='api-billing-settings'),
+    path('workspaces/<uuid:workspace_id>/billing/summary/', billing_views.billing_summary, name='api-billing-summary'),
+    path('workspaces/<uuid:workspace_id>/billing/invoices/', billing_views.invoice_list_create, name='api-billing-invoices'),
+    path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/', billing_views.invoice_detail, name='api-billing-invoice-detail'),
+    path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/send/', billing_views.invoice_send, name='api-billing-invoice-send'),
+    path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/payments/', billing_views.invoice_payments, name='api-billing-invoice-payments'),
+    path('workspaces/<uuid:workspace_id>/billing/payouts/', billing_views.payouts, name='api-billing-payouts'),
+    path('workspaces/<uuid:workspace_id>/billing/projects/<uuid:project_id>/', billing_views.project_pricing, name='api-billing-project'),
+    path('workspaces/<uuid:workspace_id>/billing/tasks/<uuid:task_id>/', billing_views.task_money, name='api-billing-task'),
+    path('workspaces/<uuid:workspace_id>/billing/members/<uuid:membership_id>/rate/', billing_views.member_rate, name='api-billing-member-rate'),
+    path('workspaces/<uuid:workspace_id>/billing/my-earnings/', billing_views.my_earnings, name='api-billing-my-earnings'),
+    path('workspaces/<uuid:workspace_id>/billing/my-invoices/', billing_views.my_invoices, name='api-billing-my-invoices'),
     path('workspaces/<uuid:workspace_id>/activity/export/', workspace_activity_export, name='api-workspace-activity-export'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/activity/', project_activity, name='api-project-activity'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/activity/export/', project_activity_export, name='api-project-activity-export'),

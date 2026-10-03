@@ -195,6 +195,7 @@ from .permissions import (
 from app.services.file_processing import POSTER_VARIANT_TYPE, PREVIEW_VARIANT_TYPES
 from app.services.task_stages import is_client_review_stage, stage_for_status
 from .services.comments import can_see_team_notes, client_visible_comments
+from .services import billing
 from .services.dashboard import dashboard_role
 from .services.notifications import (
     CONFIGURABLE_KINDS,
@@ -502,6 +503,9 @@ def workspace_list_create(request):
         for item in data:
             item['my_membership_id'] = own.get(str(item['id']))
             item['dashboard_role'] = dashboard_role(user=request.user, workspace=by_id[str(item['id'])])
+            # What the viewer may do with money here (Money page, prices, pay). Always false
+            # for someone who reaches the workspace only through a client team.
+            item['billing'] = billing.billing_access(user=request.user, workspace=by_id[str(item['id'])])
         return Response(data)
 
     _require_verified_email(request)
@@ -1530,7 +1534,10 @@ def task_stage_detail(request, workspace_id, stage_id):
         # A bulk move is still a move: each task's stage history gets the row it needs.
         for moved in tasks.select_related('workspace'):
             record_task_stage_move(task=moved, actor=request.user, from_stage=stage, to_stage=replacement, reason='stage_deleted', at=moved_at)
+        moved_ids = list(tasks.values_list('id', flat=True))
         tasks.update(task_stage=replacement, status=TaskStatus.APPROVED if replacement.is_done else TaskStatus.TODO, updated_at=moved_at)
+        for moved in Task.objects.filter(id__in=moved_ids).select_related('task_stage', 'workspace'):
+            billing.on_task_stage_changed(task=moved, from_stage=stage)
         staged_files.update(task_stage=replacement, updated_at=timezone.now())
     stage.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
