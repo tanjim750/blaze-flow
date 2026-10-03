@@ -12,6 +12,7 @@ import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
 import { AssetLibrary } from "@/components/asset-library";
 import { ProjectBrief } from "@/components/project-brief";
+import { ActivityFeed } from "@/components/activity/activity-feed";
 import "@/components/project-brief.css";
 import { LinkPending } from "@/components/nav-progress";
 import { TasksBoard } from "@/app/(app)/tasks/board";
@@ -150,6 +151,9 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
         ) : tab === "Brief & Specs" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (
           // Keyed on the project so switching campaigns never carries one brief's unsaved text into another.
           <ProjectBrief key={view.selectedCampaign.id} workspaceId={view.workspaceId} project={view.selectedCampaign.project} />
+        ) : tab === "Activity Log" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (
+          // Keyed on the project so a campaign switch starts a fresh timeline and filter.
+          <ActivityFeed key={view.selectedCampaign.id} workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} />
         ) : tab === "Brief & Specs" && view.selectedCampaign?.briefError ? (
           <div className="pb-soon" role="alert">
             <TriangleAlert size={24} strokeWidth={1.75} aria-hidden="true" />
@@ -185,16 +189,16 @@ function ComingSoon({ tab, hasCampaign, briefFolder, onOpenFiles }: { tab: (type
   }
   const brief = tab === "Brief & Specs";
   const Icon = brief ? FileText : Activity;
-  // The Brief tab only lands here for demo content, which has no project to edit.
+  // Both tabs only land here for demo content, which has no real project behind it.
   return (
     <div className="pb-soon" role="status">
       <Icon size={24} strokeWidth={1.75} aria-hidden="true" />
-      <span className="pb-soon-tag">Coming soon</span>
+      {brief && <span className="pb-soon-tag">Coming soon</span>}
       <h2>{brief ? "Brief & specs" : "Activity log"}</h2>
       <p>
         {brief
           ? `A place for the brief, deliverable specs and due dates is on the way. Until then, keep brief documents in ${briefFolder ? `the “${briefFolder}” folder` : "this campaign’s Files"}.`
-          : "A timeline of uploads, reviews, approvals and guest visits for this campaign is on the way."}
+          : "This is sample content, so there is no history to show. Real campaigns list uploads, reviews, approvals, task moves and client link visits here."}
       </p>
       {brief && <button type="button" className="pb-soon-link" onClick={onOpenFiles}><FolderOpen size={14} />Open Files</button>}
     </div>

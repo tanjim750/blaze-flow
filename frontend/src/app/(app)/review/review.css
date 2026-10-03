@@ -555,6 +555,10 @@
 .rv-share-row strong{display:block;font-size:12px}
 .rv-share-row small{display:block;margin-top:3px;color:var(--muted);font-size:10px}
 .rv-share-row small.is-ended{color:var(--danger)}
+.rv-share-row small.rv-share-activity{display:flex;align-items:center;gap:5px;margin-top:4px;color:var(--text);font-size:10.5px}
+.rv-share-row small.rv-share-activity svg{flex:none;color:var(--muted)}
+.rv-share-row small.rv-share-activity.is-approved{color:var(--success,#71e6b5)}
+.rv-share-row small.rv-share-activity.is-changes_requested{color:var(--warning,#f1c55b)}
 .rv-share-row button{padding:6px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--muted);font-size:11px;cursor:pointer}
 .rv-share-row button:hover:not(:disabled){color:var(--danger);border-color:var(--danger)}
 .rv-share-guests{list-style:none;display:grid;gap:6px;margin:10px 0 0;padding:10px 0 0;border-top:1px solid var(--border)}

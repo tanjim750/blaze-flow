@@ -7,7 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from app.models import (
-    GuestInvite, GuestInvitePermission, GuestReviewAccess,
+    AuditLog, GuestInvite, GuestInvitePermission, GuestReviewAccess,
     GuestReviewAccessPermission, GuestSession,
 )
 from .audit import record_guest_audit, record_user_audit
@@ -27,12 +27,17 @@ class GuestAccessError(Exception):
     pass
 
 
+# A guest polling or flipping between cuts is one visit, not hundreds: a version view is
+# audited at most once per access per this window.
+GUEST_VIEW_DEDUPE = timedelta(minutes=30)
+
+
 def _hash(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
 
 @transaction.atomic
-def create_guest_invite(*, project, membership, label, permissions, expires_in_hours=168):
+def create_guest_invite(*, project, membership, label, permissions, expires_in_hours=168, actor=None):
     requested = set(permissions)
     if not requested or not requested.issubset(GUEST_ALLOWED_PERMISSIONS):
         raise GuestAccessError('Select one or more supported guest permissions.')
@@ -47,6 +52,12 @@ def create_guest_invite(*, project, membership, label, permissions, expires_in_h
         GuestInvitePermission(guest_invite=invite, permission_key=key, created_at=now)
         for key in sorted(requested)
     ])
+    record_user_audit(
+        user=actor or (membership.user if membership else None), workspace=project.workspace,
+        action='guest.invite.created', entity_type='guest_invite', entity_id=invite.id,
+        project=project, team_only=False,
+        metadata={'guest_invite_id': str(invite.id), 'label': invite.label, 'expires_at': invite.expires_at.isoformat()},
+    )
     return invite, token
 
 
@@ -73,7 +84,34 @@ def exchange_guest_invite(*, token, name, email):
         GuestReviewAccessPermission(guest_review_access=access, permission_key=key, created_at=now)
         for key in permissions
     ])
+    record_guest_audit(
+        guest_session=session, workspace=invite.project.workspace,
+        action='guest.link.opened', entity_type='guest_review_access', entity_id=access.id,
+        project=invite.project, team_only=False, at=now,
+        metadata={'guest_invite_id': str(invite.id), 'label': invite.label, 'guest_name': session.name},
+    )
     return access, access_key
+
+
+def record_guest_view(*, access, media_version):
+    """Audit a guest looking at one cut through their link (deduplicated, see above)."""
+    now = timezone.now()
+    if AuditLog.objects.filter(
+        action='guest.media.viewed', actor_guest_session_id=access.guest_session_id,
+        entity_type='media_version', entity_id=str(media_version.id),
+        created_at__gte=now - GUEST_VIEW_DEDUPE,
+    ).exists():
+        return None
+    return record_guest_audit(
+        guest_session=access.guest_session, workspace=media_version.project.workspace,
+        action='guest.media.viewed', entity_type='media_version', entity_id=media_version.id,
+        project=media_version.project_id, team_only=False, at=now,
+        metadata={
+            'guest_invite_id': str(access.guest_invite_id), 'guest_review_access_id': str(access.id),
+            'guest_name': access.guest_session.name, 'media_version_id': str(media_version.id),
+            'version_number': media_version.version_number, 'title': media_version.title,
+        },
+    )
 
 
 def authenticate_guest_access(*, project, access_key, permission):
@@ -139,7 +177,8 @@ def revoke_guest_invite(*, invite, membership, user):
     )
     record_user_audit(
         user=user, workspace=locked.project.workspace, action='guest.invite.revoked',
-        entity_type='guest_invite', entity_id=locked.id,
+        entity_type='guest_invite', entity_id=locked.id, project=locked.project_id, team_only=False,
+        metadata={'guest_invite_id': str(locked.id), 'label': locked.label},
     )
     return locked
 
@@ -147,7 +186,7 @@ def revoke_guest_invite(*, invite, membership, user):
 @transaction.atomic
 def revoke_guest_review_access(*, access, membership, user):
     locked = GuestReviewAccess.objects.select_for_update().select_related(
-        'guest_invite__project__workspace'
+        'guest_invite__project__workspace', 'guest_session',
     ).get(id=access.id)
     if locked.revoked_at is not None:
         raise GuestAccessError('This guest access is already revoked.')
@@ -159,6 +198,10 @@ def revoke_guest_review_access(*, access, membership, user):
     record_user_audit(
         user=user, workspace=locked.guest_invite.project.workspace,
         action='guest.access.revoked', entity_type='guest_review_access',
-        entity_id=locked.id,
+        entity_id=locked.id, project=locked.guest_invite.project_id, team_only=False,
+        metadata={
+            'guest_invite_id': str(locked.guest_invite_id), 'label': locked.guest_invite.label,
+            'guest_name': locked.guest_session.name,
+        },
     )
     return locked

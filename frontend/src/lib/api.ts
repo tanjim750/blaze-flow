@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { describeErrorBody } from "./errors";
+import type { ActivityPage, GuestLinkActivity } from "./activity";
 
 /**
  * Server-side client for the Blaze Flow Django API.
@@ -298,6 +299,14 @@ export const transitionMediaVersion = (workspaceId: string, projectId: string, m
 
 export const listNotifications = () => request<Notification[]>("/notifications/");
 
+/** The activity feed, already permission-scoped by the API. `type` is a category (tasks, comments, media, guests). */
+export const listActivity = (workspaceId: string, options: { pageSize?: number; page?: number; projectId?: string; type?: string } = {}) => {
+  const query = new URLSearchParams({ page: String(options.page ?? 1), page_size: String(options.pageSize ?? 30) });
+  if (options.type) query.set("type", options.type);
+  const base = options.projectId ? `/workspaces/${workspaceId}/projects/${options.projectId}/activity/` : `/workspaces/${workspaceId}/activity/`;
+  return request<ActivityPage>(`${base}?${query.toString()}`);
+};
+
 /**
  * A guest review link, plus every guest who has exchanged it for a session.
  *
@@ -321,6 +330,8 @@ export type GuestInvite = {
   id: string; project_id: string; label: string; permissions: GuestPermission[];
   expires_at: string; revoked_at: string | null; created_at: string;
   accesses: GuestAccess[];
+  /** Built from guest events: last opened, on which cut, and that cut's decision. List route only. */
+  activity?: GuestLinkActivity | null;
   /** Returned only by the create call, and only once. */
   token?: string;
 };

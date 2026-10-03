@@ -1441,6 +1441,11 @@ class AuditLog(models.Model):
     actor_type = models.CharField(max_length=20, choices=AuditActorType.choices)
     actor_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='actor_user_id', null=True, blank=True, related_name='+')
     actor_guest_session = models.ForeignKey(GuestSession, on_delete=models.DO_NOTHING, db_column='actor_guest_session_id', null=True, blank=True, related_name='+')
+    # The project an event belongs to, resolved when it is written, so the activity feed can
+    # filter and permission-scope by project without joining every entity table.
+    project = models.ForeignKey('Project', on_delete=models.DO_NOTHING, db_column='project_id', null=True, blank=True, related_name='+')
+    # True for events about a team-only review note: never shown to client-team members.
+    team_only = models.BooleanField(default=False)
     action = models.CharField(max_length=255)
     entity_type = models.CharField(max_length=100, null=True, blank=True)
     entity_id = models.CharField(max_length=255, null=True, blank=True)
@@ -1459,6 +1464,7 @@ class AuditLog(models.Model):
             models.Index(fields=['actor_guest_session']),
             models.Index(fields=['action']),
             models.Index(fields=['request_id']),
+            models.Index(fields=['project', 'created_at']),
         ]
 
 

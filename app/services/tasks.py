@@ -17,6 +17,7 @@ from app.models import (
     TaskStatus,
 )
 
+from .audit import record_user_audit
 from .file_processing import SCAN_TOPIC, enqueue_file_event
 from .notifications import notify_task_assigned
 from .media import _storage_backend, detect_media_type, sha256_upload
@@ -28,8 +29,41 @@ class TaskError(Exception):
     pass
 
 
+def stage_ref(stage):
+    """A stage as stored in task history: id plus the name and kind it had at the time."""
+    if stage is None:
+        return None
+    return {'id': str(stage.id), 'name': stage.name, 'kind': stage.kind}
+
+
+def _iso(value):
+    return value.isoformat() if value else None
+
+
+def _task_audit(*, actor, task, action, at=None, **metadata):
+    """Every task event carries the title it had then, so history reads right after a rename.
+
+    ``task.created`` and ``task.stage.moved`` together are the task's stage history: each
+    row's ``created_at`` is when the task entered ``to_stage`` (or ``stage`` on creation),
+    and the next move is when it left, which is all time-in-stage needs.
+    """
+    return record_user_audit(
+        user=actor, workspace=task.workspace, action=action, entity_type='task',
+        entity_id=task.id, project=task.project_id, team_only=False, at=at,
+        metadata={'task_title': task.title, **metadata},
+    )
+
+
+def record_task_stage_move(*, task, actor, from_stage, to_stage, reason=None, at=None):
+    extra = {'reason': reason} if reason else {}
+    return _task_audit(
+        actor=actor, task=task, action='task.stage.moved', at=at,
+        from_stage=stage_ref(from_stage), to_stage=stage_ref(to_stage), **extra,
+    )
+
+
 @transaction.atomic
-def create_task(*, workspace, created_by_membership, project=None, **fields):
+def create_task(*, workspace, created_by_membership, project=None, actor=None, **fields):
     now = timezone.now()
     task = Task(
         id=uuid.uuid4(),
@@ -42,10 +76,17 @@ def create_task(*, workspace, created_by_membership, project=None, **fields):
     )
     task.full_clean()
     task.save()
+    _task_audit(
+        actor=actor, task=task, action='task.created', at=now,
+        stage=stage_ref(task.task_stage), due_at=_iso(task.due_at),
+    )
     return task
 
 
-def update_task(*, task, **fields):
+@transaction.atomic
+def update_task(*, task, actor=None, **fields):
+    before_stage = task.task_stage if task.task_stage_id else None
+    before_due = task.due_at
     if 'task_stage' in fields and fields['task_stage'] is not None:
         is_completed = fields['task_stage'].is_done
         fields.setdefault('status', TaskStatus.APPROVED if is_completed else TaskStatus.TODO)
@@ -61,6 +102,10 @@ def update_task(*, task, **fields):
     task.updated_at = timezone.now()
     task.full_clean()
     task.save()
+    if task.task_stage_id != (before_stage.id if before_stage else None):
+        record_task_stage_move(task=task, actor=actor, from_stage=before_stage, to_stage=task.task_stage, at=task.updated_at)
+    if task.due_at != before_due:
+        _task_audit(actor=actor, task=task, action='task.due_date.changed', at=task.updated_at, before=_iso(before_due), after=_iso(task.due_at))
     return task
 
 
@@ -97,11 +142,24 @@ def add_task_assignee(*, task, membership, actor=None):
     assignee.full_clean()
     assignee.save()
     notify_task_assigned(assignee=assignee, actor=actor)
+    _task_audit(
+        actor=actor, task=task, action='task.assigned', at=assignee.assigned_at,
+        assignee=_membership_ref(membership),
+    )
     return assignee
 
 
-def remove_task_assignee(*, assignee):
+def _membership_ref(membership):
+    user = membership.user
+    name = (user.get_full_name() or user.email) if user else (membership.client_team.name if membership.client_team_id else 'Someone')
+    return {'membership_id': str(membership.id), 'user_id': str(user.id) if user else None, 'name': name}
+
+
+def remove_task_assignee(*, assignee, actor=None):
+    task = assignee.task
+    membership = assignee.workspace_membership
     assignee.delete()
+    _task_audit(actor=actor, task=task, action='task.unassigned', assignee=_membership_ref(membership))
 
 
 def _validate_task_attachment(upload):

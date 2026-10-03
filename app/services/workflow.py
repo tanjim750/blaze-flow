@@ -60,7 +60,11 @@ def transition_media_version(*, media_version, stage, stage_status, user, commen
         action='media.workflow.transitioned',
         entity_type='media_version',
         entity_id=locked_media.id,
-        metadata={'from_entry_id': str(current.id), 'to_entry_id': str(entry.id)},
+        metadata={
+            'from_entry_id': str(current.id), 'to_entry_id': str(entry.id),
+            'from_stage': {'name': current.workflow_stage.name, 'slug': current.workflow_stage.slug},
+            'to_stage': {'name': stage.name, 'slug': stage.slug},
+        },
     )
     if current.workflow_stage_id != stage.id:
         notify_stage_outcome(media_version=locked_media, entry=entry, stage=stage, actor=user, comment=comment)

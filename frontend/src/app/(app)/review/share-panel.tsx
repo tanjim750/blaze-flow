@@ -1,8 +1,9 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { Check, Copy, Link2, TriangleAlert, UserMinus, X } from "lucide-react";
+import { Check, Copy, Eye, Link2, TriangleAlert, UserMinus, X } from "lucide-react";
 import type { GuestInvite } from "@/lib/api";
+import { guestLinkStatus } from "@/lib/activity";
 import { createGuestInviteAction, revokeGuestAccessAction, revokeGuestInviteAction } from "./actions";
 import { emptyGuestInviteState, GUEST_PRESETS } from "./guest-presets";
 
@@ -118,6 +119,12 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
                   <small className={status.tone === "live" ? "" : "is-ended"}>
                     {status.label} · {invite.permissions.length} permissions · {active.length} {active.length === 1 ? "reviewer" : "reviewers"}
                   </small>
+                  {invite.activity !== undefined && (
+                    // From guest events: when it was last opened, which cut, and that cut's decision.
+                    <small className={`rv-share-activity${invite.activity?.decision ? ` is-${invite.activity.decision}` : ""}`} suppressHydrationWarning>
+                      <Eye size={11} aria-hidden="true" />{guestLinkStatus(invite.activity)}
+                    </small>
+                  )}
                 </div>
                 {!invite.revoked_at && (
                   <button

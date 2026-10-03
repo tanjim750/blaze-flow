@@ -116,17 +116,19 @@ export default async function Dashboard() {
         </div>
       </section>
       <section className="panel activity-panel">
-        {/* Built from the viewer's notifications only until the activity endpoint (D8) lands. */}
-        <div className="panel-title"><h2><Layers2 size={16} />Recent activity</h2><small>From your notifications</small></div>
+        <div className="panel-title"><h2><Layers2 size={16} />Recent activity</h2><small>Across the workspace</small></div>
         <div className="activity-list">
           {view.problems.activity && <p className="home-inline-problem" role="status"><TriangleAlert size={13} aria-hidden="true" />{view.problems.activity}</p>}
           {!view.problems.activity && view.activity.length === 0 && <div className="home-empty-state">
-            <strong>Nothing new</strong>
-            <p>Mentions in review notes and tasks handed to you for review show up here.</p>
+            <strong>Nothing yet</strong>
+            <p>Uploads, review notes, approvals, task moves and client link visits show up here.</p>
           </div>}
           {view.activity.map(item => {
             const body = <>
-              <span className={`activity-avatar ${item.tone}`} aria-hidden="true">{item.initials}</span>
+              <span className={`activity-avatar ${item.tone}`} aria-hidden="true">
+                {/* eslint-disable-next-line @next/next/no-img-element -- avatars are arbitrary user URLs */}
+                {item.avatarUrl ? <img src={item.avatarUrl} alt="" /> : item.initials}
+              </span>
               <div><p><strong>{item.actor}</strong> {item.action}</p><small>{item.detail}</small></div>
             </>;
             return item.href
