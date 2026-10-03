@@ -191,3 +191,22 @@ describe("selection", () => {
     expect(defaultSelection([])).toBeNull();
   });
 });
+
+describe("download flag and approval position", () => {
+  it("carries allow_download and who moved the cut into its stage", () => {
+    const media = {
+      ...mediaVersion({ id: "mv1", fileId: "f1", number: 2, title: "Hero" }),
+      allow_download: true,
+      current_stage: { id: "s-approved", name: "Approved", slug: "approved", entered_at: "2026-10-03T19:41:00Z", changed_by: { id: "u1", name: "Alex Morgan" } },
+    };
+    const [asset] = build({ mediaVersions: [{ projectId: "p1", versions: [media] }] });
+    expect(asset.versions[0].allowDownload).toBe(true);
+    expect(asset.versions[0].workflowStage).toEqual({ id: "s-approved", slug: "approved", name: "Approved", enteredAt: "2026-10-03T19:41:00Z", changedBy: "Alex Morgan" });
+  });
+
+  it("leaves a library-only file without a download flag", () => {
+    const [asset] = build({ assetFiles: [assetFile({ id: "af1", fileId: "f9", name: "cut.mp4" })] });
+    expect(asset.versions[0].allowDownload).toBeNull();
+    expect(asset.versions[0].workflowStage).toBeNull();
+  });
+});

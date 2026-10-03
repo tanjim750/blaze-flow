@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAnnotation, createGuestInvite, createReviewComment, deleteAnnotation, requestMediaRevision, revokeGuestAccess, revokeGuestInvite, setCommentReaction, setCommentResolution, transitionMediaVersion, updateAnnotation } from "@/lib/api";
-import type { AnnotationElement } from "@/lib/api";
+import type { AnnotationElement, CommentVisibility } from "@/lib/api";
 import { startTimeField } from "@/lib/review-timing";
 import { GUEST_PRESETS, type GuestInviteState, type GuestPreset } from "./guest-presets";
 
@@ -18,8 +18,13 @@ export async function addPointAnnotationAction(workspaceId: string, projectId: s
   revalidatePath("/review"); return ok;
 }
 
-export async function addAnnotationAction(workspaceId: string, projectId: string, versionId: string, element: Omit<AnnotationElement, "id">, atMs: number | null): Promise<ActionState> {
-  const result = await createAnnotation(workspaceId, projectId, versionId, { ...startTimeField(atMs), elements: [element] });
+/**
+ * `reviewCommentId` links a drawing made while composing to the note it was drawn for, so
+ * the drawing shares the note's visibility: a drawing on a team note is hidden from guests
+ * along with the note.
+ */
+export async function addAnnotationAction(workspaceId: string, projectId: string, versionId: string, element: Omit<AnnotationElement, "id">, atMs: number | null, reviewCommentId?: string): Promise<ActionState> {
+  const result = await createAnnotation(workspaceId, projectId, versionId, { ...startTimeField(atMs), ...(reviewCommentId ? { review_comment_id: reviewCommentId } : {}), elements: [element] });
   if (!result.ok) return { error: result.error.detail }; revalidatePath("/review"); return ok;
 }
 
@@ -48,6 +53,7 @@ export async function updateAnnotationElementsAction(workspaceId: string, projec
 export async function postNoteAction(payload: {
   workspaceId: string; projectId: string; versionId: string;
   text: string; startMs: number | null; parentId: string | null; mentionedUserIds: string[];
+  visibility?: CommentVisibility;
 }): Promise<{ error: string | null; commentId: string | null }> {
   const text = payload.text.trim();
   if (!text) return { error: "Write a comment first.", commentId: null };
@@ -60,6 +66,7 @@ export async function postNoteAction(payload: {
     ...(payload.parentId ? { parent_comment_id: payload.parentId } : {}),
     ...(!payload.parentId ? startTimeField(payload.startMs) : {}),
     ...(payload.mentionedUserIds.length ? { mentioned_user_ids: payload.mentionedUserIds } : {}),
+    ...(payload.visibility ? { visibility: payload.visibility } : {}),
   });
   if (!created.ok) return { error: created.error.detail, commentId: null };
 

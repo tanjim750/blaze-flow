@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
-import type { AnnotationElement } from "@/lib/api";
+import type { AnnotationElement, CommentVisibility } from "@/lib/api";
 import type { ReviewNote } from "@/lib/review-notes";
 import type { ReviewView } from "@/lib/review-view";
 import { addLocalAnnotation, addLocalNote, removeLocalAnnotation, removeLocalNote, setLocalNoteResolved, toggleLocalReaction } from "@/lib/review-local";
@@ -35,6 +35,8 @@ export type ComposeInput = {
   recording: RecordedClip | null;
   /** Drawn over the frame while composing; saved with the note rather than on the video. */
   annotation: AnnotationElement | null;
+  /** Team notes stay inside the workspace. Ignored for device-local notes. */
+  visibility?: CommentVisibility;
 };
 
 function csrfToken(): string {
@@ -118,11 +120,12 @@ export function useReviewWriter(view: ReviewView, author: string) {
         startMs: input.startMs,
         parentId: input.parentId,
         mentionedUserIds: input.mentions.map((mention) => mention.id),
+        visibility: input.visibility,
       });
       if (created.error || !created.commentId) return { error: created.error ?? "The comment was not created." };
       if (input.recording) await attachRecording(created.commentId, input.recording);
       if (input.annotation) {
-        const drawn = await addAnnotationAction(target.workspaceId, target.projectId, target.versionId, input.annotation, input.startMs);
+        const drawn = await addAnnotationAction(target.workspaceId, target.projectId, target.versionId, input.annotation, input.startMs, created.commentId);
         if (drawn.error) return drawn;
       }
       return undefined;

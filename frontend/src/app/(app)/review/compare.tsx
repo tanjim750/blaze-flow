@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Link2, Link2Off, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import type { ReviewVersion } from "@/lib/review-view";
 import { timecode } from "@/lib/timecode";
@@ -16,14 +16,28 @@ import { timecode } from "@/lib/timecode";
  */
 const DRIFT_TOLERANCE_SECONDS = 0.35;
 
-export function CompareView({ left, right, sources }: {
+/** Lets the comments panel's timecode chips seek the pane that shows their cut. */
+export type CompareHandle = { seek: (versionId: string, ms: number) => void };
+
+export function CompareView({ left, right, sources, handle }: {
   left: ReviewVersion;
   right: ReviewVersion;
   sources: (version: ReviewVersion) => string | null;
+  handle?: React.Ref<CompareHandle>;
 }) {
   const [synced, setSynced] = useState(true);
   const leftRef = useRef<HTMLVideoElement>(null);
   const rightRef = useRef<HTMLVideoElement>(null);
+
+  useImperativeHandle(handle, () => ({
+    seek(versionId, ms) {
+      const [own, other] = versionId === right.id ? [rightRef.current, leftRef.current] : [leftRef.current, rightRef.current];
+      if (!own) return;
+      // Same rule as the pane's own scrubber: linked playback moves both sides.
+      own.currentTime = ms / 1000;
+      if (synced && other) other.currentTime = ms / 1000;
+    },
+  }), [right.id, synced]);
 
   /** Mirrors one side onto the other while linked. Returns the follower, if any. */
   const follower = (side: "left" | "right") => {

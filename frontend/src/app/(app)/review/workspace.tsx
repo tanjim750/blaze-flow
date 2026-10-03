@@ -2,27 +2,45 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Check, ChevronLeft, HardDriveDownload, Info, MessageSquareText, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, X } from "lucide-react";
 import type { ReviewView } from "@/lib/review-view";
 import { useLocalReview } from "@/lib/review-local";
-import type { ReviewNote } from "@/lib/review-notes";
+import { clientView, type ReviewNote } from "@/lib/review-notes";
 import type { AnnotationElement } from "@/lib/api";
-import { Comments, RevisionForm } from "./comments";
+import { loadDraft, patchDraft, unsavedWarning } from "@/lib/review-drafts";
+import { ConfirmDialog } from "@/components/tasks/task-dialogs";
+import { Comments, RevisionForm, type ComposerState } from "./comments";
 import { Fields } from "./fields";
-import { CompareView } from "./compare";
+import { CompareView, type CompareHandle } from "./compare";
+import { useLeaveGuard } from "./leave-guard";
+import "../tasks/tasks.css";
 import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } from "./player";
 import { SharePanel } from "./share-panel";
 import { useReviewWriter } from "./writer";
 
-type Props = { view: ReviewView; author: string; initialShareOpen?: boolean; embedded?: boolean };
+type Props = { view: ReviewView; author: string; userId?: string | null; initialShareOpen?: boolean; embedded?: boolean };
 
-export function ReviewWorkspace({ view, author, initialShareOpen = false, embedded = false }: Props) {
+/** "3 Oct 2026, 20:41" — fixed locale so the server and browser render the same text. */
+const stamp = (iso: string | null) => iso
+  ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso))
+  : null;
+
+const shortDate = (iso: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(iso));
+
+export function ReviewWorkspace({ view, author, userId = null, initialShareOpen = false, embedded = false }: Props) {
   const router = useRouter();
   const reduced = useReducedMotion();
   const player = useRef<PlayerHandle>(null);
+  const compare = useRef<CompareHandle>(null);
   const writer = useReviewWriter(view, author);
+  // Notes on the comparison cut must resolve and react against that cut's own version.
+  const comparisonView = useMemo<ReviewView>(
+    () => view.comparison ? { ...view, version: view.comparison.version, target: view.comparison.version.target } : view,
+    [view],
+  );
+  const compareWriter = useReviewWriter(comparisonView, author);
   const local = useLocalReview(view.version?.id ?? null);
 
   const [panel, setPanel] = useState<"comments" | "fields">("comments");
@@ -32,19 +50,55 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false, embedd
   const [pending, setPending] = useState<AnnotationElement | null>(null);
   const [shareOpen, setShareOpen] = useState(initialShareOpen);
   const [revisionOpen, setRevisionOpen] = useState(false);
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [clientPreview, setClientPreview] = useState(false);
+  const [composer, setComposer] = useState<ComposerState>({ text: false, recording: false });
+  const [revisionDirty, setRevisionDirty] = useState(false);
 
   const { asset, version } = view;
+  const mediaId = version?.id ?? null;
+
+  // A drawing made for an unsent note is part of the draft, so it is kept with it.
+  const [drawingReady, setDrawingReady] = useState(false);
+  useEffect(() => {
+    const draft = loadDraft(mediaId);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-off restore from localStorage after mount (not available during SSR)
+    setDrawingReady(true);
+    if (draft?.annotation) setPending(draft.annotation);
+  }, [mediaId]);
+  useEffect(() => {
+    if (drawingReady) patchDraft(mediaId, { annotation: pending });
+  }, [drawingReady, mediaId, pending]);
+
+  const localNotes = view.target ? 0 : local.notes.length;
+  const navWarning = unsavedWarning({ text: composer.text, annotation: Boolean(pending), recording: composer.recording, revision: revisionDirty, localNotes: 0 });
+  const unloadWarning = unsavedWarning({ text: composer.text, annotation: Boolean(pending), recording: composer.recording, revision: revisionDirty, localNotes });
+  const navigate = useCallback((href: string, top: boolean) => {
+    if (top && window.top) window.top.location.href = href;
+    else router.push(href);
+  }, [router]);
+  const leave = useLeaveGuard(navWarning, Boolean(unloadWarning), navigate);
 
   /**
    * Server notes and device-local notes render through exactly the same component. A cut
    * has one or the other, never both, but concatenating rather than branching is what
    * keeps the two paths from drifting apart.
    */
-  const notes: ReviewNote[] = useMemo(() => [...view.notes, ...local.notes], [local.notes, view.notes]);
+  const allNotes: ReviewNote[] = useMemo(() => [...view.notes, ...local.notes], [local.notes, view.notes]);
+  // "See what the client sees" applies the guest endpoints' rule on the page: no team notes,
+  // no replies in their threads, and no drawings saved with them.
+  const teamNoteIds = useMemo(() => new Set(allNotes.flatMap((note) => [
+    ...(note.visibility === "team" ? [note.id, ...note.replies.map((reply) => reply.id)] : []),
+    ...note.replies.filter((reply) => reply.visibility === "team").map((reply) => reply.id),
+  ])), [allNotes]);
+  const notes = useMemo(() => clientPreview ? clientView(allNotes) : allNotes, [allNotes, clientPreview]);
   const annotations: DrawnAnnotation[] = useMemo(() => [
-    ...view.annotations.map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms })),
+    ...view.annotations
+      .filter((item) => !clientPreview || !item.review_comment_id || !teamNoteIds.has(item.review_comment_id))
+      .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms })),
     ...local.annotations.map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms })),
-  ], [local.annotations, view.annotations]);
+  ], [clientPreview, local.annotations, teamNoteIds, view.annotations]);
+  const canWriteTeam = Boolean(view.target && userId && view.members.some((member) => member.id === userId));
 
   const sources: PlayerSource[] = useMemo(() => {
     if (!version) return [];
@@ -62,14 +116,34 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false, embedd
   const approval = view.stages.find((stage) => stage.isApproval);
   const comparing = view.comparison;
   const latest = asset?.versions[asset.versions.length - 1] ?? null;
+  const approved = Boolean(approval && version?.workflowStage?.id === approval.id);
+  const openNotes = view.notes.filter((note) => !note.resolved).length;
+  // Only the media version's own flag decides: when it is off the server refuses the
+  // download anyway, so the button would be a dead end.
+  const downloadHref = !version
+    ? null
+    : version.target
+      ? version.allowDownload
+        ? `/api/workspaces/${version.target.workspaceId}/projects/${version.target.projectId}/media-versions/${version.target.versionId}/download/`
+        : null
+      : version.assetFileId && view.workspaceId
+        ? `/api/workspaces/${view.workspaceId}/asset-files/${version.assetFileId}/download/`
+        : null;
+
+  async function approve() {
+    if (!approval) return;
+    if (await writer.moveToStage(approval.id)) setApproveOpen(false);
+  }
   const sourceFor = (item: typeof version) => {
     if (!item) return null;
     if (item.target && item.src) return item.src;
     if (item.assetFileId && view.workspaceId) return `/api/workspaces/${view.workspaceId}/asset-files/${item.assetFileId}/download/`;
     return item.src;
   };
+  const clearPending = useCallback(() => setPending(null), []);
   const reviewHref = (query: string) => `${embedded ? "/review-embed" : "/review"}?${query}`;
   const seek = (ms: number) => player.current?.seek(ms);
+  const seekCompare = (versionId: string, ms: number) => compare.current?.seek(versionId, ms);
 
   if (!asset || !version) {
     return (
@@ -103,7 +177,7 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false, embedd
           className="rv-version"
           aria-label="Version"
           value={version.id}
-          onChange={(event) => router.push(reviewHref(`media=${event.target.value}`))}
+          onChange={(event) => leave.guard(reviewHref(`media=${event.target.value}`))}
         >
           {[...asset.versions].reverse().map((item) => (
             <option key={item.id} value={item.id}>{item.label}{item.id === latest?.id ? " · Latest" : ""}</option>
@@ -111,7 +185,7 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false, embedd
         </select>
 
         {asset.versions.length > 1 && (comparing ? (
-          <button type="button" className="rv-compare-toggle is-on" onClick={() => router.push(reviewHref(`media=${version.id}`))}>
+          <button type="button" className="rv-compare-toggle is-on" onClick={() => leave.guard(reviewHref(`media=${version.id}`))}>
             <X size={13} />Exit compare
           </button>
         ) : (
@@ -119,7 +193,7 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false, embedd
             className="rv-compare-toggle"
             aria-label="Compare with another version"
             value=""
-            onChange={(event) => event.target.value && router.push(reviewHref(`media=${version.id}&compare=${event.target.value}`))}
+            onChange={(event) => event.target.value && leave.guard(reviewHref(`media=${version.id}&compare=${event.target.value}`))}
           >
             <option value="">Compare…</option>
             {asset.versions.filter((item) => item.id !== version.id).reverse().map((item) => (
@@ -128,18 +202,46 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false, embedd
           </select>
         ))}
 
-        {(version.stageName || asset.stage) && (
+        {approved ? (
+          <motion.span
+            className="rv-stage is-approved"
+            role="status"
+            initial={reduced ? false : { opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            suppressHydrationWarning
+            title={[`${version.label} approved`, version.workflowStage?.changedBy && `by ${version.workflowStage.changedBy}`, stamp(version.workflowStage?.enteredAt ?? null)].filter(Boolean).join(" ")}
+          >
+            <Check size={11} />
+            Approved
+            {version.workflowStage?.changedBy && <> · {version.workflowStage.changedBy}</>}
+            {version.workflowStage?.enteredAt && <small suppressHydrationWarning> · {shortDate(version.workflowStage.enteredAt)}</small>}
+          </motion.span>
+        ) : (version.stageName || asset.stage) && (
           <span className="rv-stage" style={asset.stage ? { borderColor: `${asset.stage.color}66`, color: asset.stage.color } : undefined}>
             {version.stageName ?? asset.stage?.name}
           </span>
         )}
 
         <div className="rv-actions">
-          <button type="button" onClick={() => setRevisionOpen(!revisionOpen)} disabled={!view.target}>
+          <button
+            type="button"
+            onClick={() => setRevisionOpen(!revisionOpen)}
+            disabled={!view.target}
+            title={!view.target
+              ? "Publish this file to a project to request changes"
+              : approved ? "Reopens this approved cut: posts your note and moves it back to Revision" : undefined}
+          >
             <RotateCcw size={14} />Request changes
           </button>
-          {approval && (
-            <button type="button" className="rv-approve" disabled={!view.target || writer.busy} onClick={() => void writer.moveToStage(approval.id)}>
+          {approval && !approved && (
+            <button
+              type="button"
+              className="rv-approve"
+              disabled={!view.target || writer.busy}
+              title={!view.target ? "Publish this file to a project to approve it" : undefined}
+              onClick={() => { writer.setError(null); setApproveOpen(true); }}
+            >
               <Check size={14} />Approve
             </button>
           )}
@@ -148,13 +250,51 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false, embedd
               <Share2 size={14} />Share
             </button>
           )}
-          {sources.length > 0 && (
-            <a className="rv-icon" href={sources[sources.length - 1].src} download aria-label="Download" title="Download">
+          {downloadHref && (
+            <a className="rv-icon" href={downloadHref} download aria-label="Download" title="Download">
               <HardDriveDownload size={14} />
             </a>
           )}
         </div>
       </header>
+
+      {approval && (
+        <ConfirmDialog
+          open={approveOpen}
+          title={`Approve ${version.label} of “${asset.name}”?`}
+          body={<>This marks <strong>{version.label}</strong> as approved and moves it to {approval.name}. To reopen it later, use Request changes.</>}
+          confirmLabel={writer.busy ? "Approving…" : `Approve ${version.label}`}
+          busy={writer.busy}
+          onConfirm={() => void approve()}
+          onCancel={() => setApproveOpen(false)}
+        >
+          {(openNotes > 0 || (latest && latest.id !== version.id) || writer.error) && (
+            <div className="rv-confirm-notes">
+              {openNotes > 0 && (
+                <p className="rv-confirm-warn" role="alert">
+                  <TriangleAlert size={14} />
+                  <span>{openNotes === 1 ? "1 note is" : `${openNotes} notes are`} still open on {version.label}. Approving won&rsquo;t resolve {openNotes === 1 ? "it" : "them"}.</span>
+                </p>
+              )}
+              {latest && latest.id !== version.id && (
+                <p className="rv-confirm-warn"><Info size={14} /><span>{latest.label} is newer than {version.label}.</span></p>
+              )}
+              {writer.error && <p className="form-error">{writer.error}</p>}
+            </div>
+          )}
+        </ConfirmDialog>
+      )}
+
+      <ConfirmDialog
+        open={Boolean(leave.pending)}
+        title="Leave with unsent work?"
+        body={navWarning ?? "You have unsent work on this cut."}
+        confirmLabel="Leave"
+        cancelLabel="Stay"
+        danger
+        onConfirm={leave.confirm}
+        onCancel={leave.cancel}
+      />
 
       {view.notice && <p className="rv-banner" role="status"><TriangleAlert size={14} /><span>{view.notice}</span></p>}
 
@@ -163,7 +303,8 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false, embedd
           <Info size={14} />
           <span>
             This file has not been published into a project as a review version, so its notes,
-            drawings and recordings are kept on this device for this session only.
+            drawings and recordings are kept on this device for this session only. You&rsquo;ll be
+            warned before reloading or closing the tab while it has notes.
           </span>
         </p>
       )}
@@ -180,12 +321,12 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false, embedd
       )}
 
       {revisionOpen && (
-        <RevisionForm writer={writer} positionMs={positionMs} onDone={() => setRevisionOpen(false)} />
+        <RevisionForm writer={writer} positionMs={positionMs} approved={approved} onDone={() => setRevisionOpen(false)} onDirtyChange={setRevisionDirty} />
       )}
 
       <div className="rv-body">
         {comparing ? (
-          <CompareView left={version} right={comparing.version} sources={sourceFor} />
+          <CompareView left={version} right={comparing.version} sources={sourceFor} handle={compare} />
         ) : (
         <Player
           handle={player}
@@ -213,33 +354,48 @@ export function ReviewWorkspace({ view, author, initialShareOpen = false, embedd
             </button>
           </div>
 
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={panel}
-              className="rv-panel-body"
-              initial={reduced ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reduced ? undefined : { opacity: 0, y: -6 }}
-              transition={{ duration: 0.16, ease: "easeOut" }}
-            >
-              {panel === "comments" ? (
-                <Comments
-                  view={view}
-                  writer={writer}
-                  notes={notes}
-                  positionMs={positionMs}
-                  focusedId={focusedId}
-                  pendingAnnotation={pending}
-                  onClearAnnotation={() => setPending(null)}
-                  onSeek={seek}
-                />
-              ) : (
+          {/* Comments stay mounted behind the Fields tab, so switching tabs never drops an
+              unsent note or an attached recording. */}
+          <div className="rv-panel-body" hidden={panel !== "comments"}>
+            <Comments
+              view={view}
+              writer={writer}
+              compareWriter={compareWriter}
+              notes={notes}
+              positionMs={positionMs}
+              focusedId={focusedId}
+              pendingAnnotation={pending}
+              onClearAnnotation={clearPending}
+              onSeek={seek}
+              onCompareSeek={seekCompare}
+              canWriteTeam={canWriteTeam}
+              clientPreview={clientPreview}
+              hiddenTeamNotes={clientPreview ? countNotes(allNotes) - countNotes(notes) : 0}
+              onClientPreview={setClientPreview}
+              onComposerChange={setComposer}
+            />
+          </div>
+          <AnimatePresence initial={false}>
+            {panel === "fields" && (
+              <motion.div
+                key="fields"
+                className="rv-panel-body"
+                initial={reduced ? false : { opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? undefined : { opacity: 0 }}
+                transition={{ duration: 0.16, ease: "easeOut" }}
+              >
                 <Fields view={view} writer={writer} meta={meta} embedded={embedded} />
-              )}
-            </motion.div>
+              </motion.div>
+            )}
           </AnimatePresence>
         </aside>
       </div>
     </div>
   );
+}
+
+/** Notes plus their replies, for the "N team notes hidden" count. */
+function countNotes(notes: ReviewNote[]): number {
+  return notes.reduce((total, note) => total + 1 + note.replies.length, 0);
 }
