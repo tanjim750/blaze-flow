@@ -195,6 +195,7 @@ from .permissions import (
 from app.services.file_processing import POSTER_VARIANT_TYPE, PREVIEW_VARIANT_TYPES
 from app.services.task_stages import is_client_review_stage, stage_for_status
 from .services.comments import can_see_team_notes, client_visible_comments
+from .services.dashboard import dashboard_role
 from .services.notifications import (
     CONFIGURABLE_KINDS,
     NotificationError,
@@ -495,8 +496,12 @@ def workspace_list_create(request):
                 status=WorkspaceMembershipStatus.ACTIVE,
             ).values_list('workspace_id', 'id')
         }
+        # Which dashboard layout fits the viewer here: owner, editor or client. Derived from
+        # what their memberships allow (services/dashboard.py), never from role names.
+        by_id = {str(workspace.id): workspace for workspace in workspaces}
         for item in data:
             item['my_membership_id'] = own.get(str(item['id']))
+            item['dashboard_role'] = dashboard_role(user=request.user, workspace=by_id[str(item['id'])])
         return Response(data)
 
     _require_verified_email(request)
