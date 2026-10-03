@@ -1,5 +1,5 @@
 import { listActivity, listMediaVersions, listProjects, listTasks, listWorkspaces } from "./api";
-import type { ApiFailure, MediaVersion, Project, Task } from "./api";
+import type { ApiFailure, MediaVersion, Project, Task, Workspace } from "./api";
 import { toDashboardRow, type ActivityEntry } from "./activity";
 import { selectWorkspace } from "./workspace";
 import { upcomingDeadlines } from "./deadlines";
@@ -81,19 +81,19 @@ export type DashboardView = DashboardReady | DashboardFailure;
 export const REVIEW_SCAN_LIMIT = 6;
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-const titleCase = (value: string) => value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+export const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+export const titleCase = (value: string) => value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
 /** `titleCase` would render TODO as "Todo"; the board calls it "To Do". */
 const TASK_STATUS_LABELS: Record<string, string> = { TODO: "To Do" };
 const statusLabel = (status: string) => TASK_STATUS_LABELS[status] ?? titleCase(status);
 
-const isOpen = (task: Task) => !["COMPLETED", "APPROVED", "CANCELLED"].includes(task.status);
+export const isOpen = (task: Task) => !["COMPLETED", "APPROVED", "CANCELLED"].includes(task.status);
 
 /** Project statuses that mean the work is over or going away. */
-const CLOSED_PROJECT_STATUSES = ["COMPLETED", "ARCHIVED", "PENDING_DELETION"];
+export const CLOSED_PROJECT_STATUSES = ["COMPLETED", "ARCHIVED", "PENDING_DELETION"];
 
 /** "Active" means the project's status is ACTIVE — not merely that the project exists. */
 export const countActiveProjects = (projects: Pick<Project, "status">[]) =>
@@ -115,7 +115,7 @@ export function bucketFor(task: Task, now: Date): Bucket {
   return "Upcoming";
 }
 
-function dueLabel(task: Task, now: Date): string {
+export function dueLabel(task: Pick<Task, "due_at">, now: Date): string {
   if (!task.due_at) return "No due date";
   const due = new Date(task.due_at);
   if (Number.isNaN(due.getTime())) return "No due date";
@@ -145,7 +145,7 @@ export function relativeAge(iso: string, now: Date = new Date()): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function stageTone(label: string): Tone {
+export function stageTone(label: string): Tone {
   const value = label.toLowerCase();
   if (value.includes("approved")) return "success";
   if (value.includes("approv")) return "accent";
@@ -358,11 +358,14 @@ export function failureView(greetingName: string, now: Date, error: ApiFailure):
  * dashboard/summary endpoint. When the workspace or project list fails there is nothing
  * honest to show, so the page renders an error state with Retry — never sample numbers.
  */
-export async function loadDashboardView(greetingName: string): Promise<DashboardView> {
+export async function loadDashboardView(greetingName: string, selected?: Workspace): Promise<DashboardView> {
   const now = new Date();
-  const workspaces = await listWorkspaces();
-  if (!workspaces.ok) return failureView(greetingName, now, workspaces.error);
-  const workspace = await selectWorkspace(workspaces.data);
+  let workspace = selected ?? null;
+  if (!workspace) {
+    const workspaces = await listWorkspaces();
+    if (!workspaces.ok) return failureView(greetingName, now, workspaces.error);
+    workspace = await selectWorkspace(workspaces.data);
+  }
   if (!workspace) return failureView(greetingName, now, { status: 404, detail: "This account has no workspace yet." });
 
   const [projectsResult, tasksResult, activityResult] = await Promise.all([

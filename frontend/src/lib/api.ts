@@ -16,7 +16,11 @@ export type Workspace = {
   id: string; name: string; slug: string; timezone: string; status: string; created_at: string;
   /** The viewer's own membership here (what task assignee ids refer to). Null via a client team; absent on older backends. */
   my_membership_id?: string | null;
+  /** Which dashboard layout fits the viewer here, derived from permissions. Absent on older backends. */
+  dashboard_role?: DashboardRole | null;
 };
+/** `owner` runs the workspace, `editor` is any other team member, `client` is in only through a client team. */
+export type DashboardRole = "owner" | "editor" | "client";
 export type WorkspaceProfile = {
   business_name: string | null; description: string | null; email: string | null;
   phone: string | null; website_url: string | null; address_line_1: string | null;
@@ -299,10 +303,14 @@ export const transitionMediaVersion = (workspaceId: string, projectId: string, m
 
 export const listNotifications = () => request<Notification[]>("/notifications/");
 
-/** The activity feed, already permission-scoped by the API. `type` is a category (tasks, comments, media, guests). */
-export const listActivity = (workspaceId: string, options: { pageSize?: number; page?: number; projectId?: string; type?: string } = {}) => {
+/**
+ * The activity feed, already permission-scoped by the API. `type` is a category (tasks, comments, media, guests).
+ * `mine` keeps only what other people did on the viewer's own tasks and cuts.
+ */
+export const listActivity = (workspaceId: string, options: { pageSize?: number; page?: number; projectId?: string; type?: string; mine?: boolean } = {}) => {
   const query = new URLSearchParams({ page: String(options.page ?? 1), page_size: String(options.pageSize ?? 30) });
   if (options.type) query.set("type", options.type);
+  if (options.mine) query.set("mine", "1");
   const base = options.projectId ? `/workspaces/${workspaceId}/projects/${options.projectId}/activity/` : `/workspaces/${workspaceId}/activity/`;
   return request<ActivityPage>(`${base}?${query.toString()}`);
 };
@@ -344,3 +352,39 @@ export const revokeGuestInvite = (workspaceId: string, projectId: string, invite
   request<void>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/${inviteId}/`, { method: "DELETE" });
 export const revokeGuestAccess = (workspaceId: string, projectId: string, accessId: string) =>
   request<void>(`/workspaces/${workspaceId}/projects/${projectId}/guest-access/${accessId}/`, { method: "DELETE" });
+
+/* Role dashboards ------------------------------------------------------------------- */
+
+export type DashboardPerson = { type: "user" | "guest"; id: string | null; name: string; initials: string; avatar_url: string | null };
+/** A cut as the dashboard routes describe it. `stage` is its workflow stage, null if it has none. */
+export type DashboardCutRef = {
+  id: string; title: string; version_number: number; file_id: string;
+  project: { id: string; name: string };
+  stage: { id: string; name: string; slug: string; entered_at: string | null } | null;
+};
+/** Why a cut is the viewer's: they uploaded it, or it is linked to a task assigned to them. */
+export type CutReason = "uploaded" | "assigned";
+export type NoteToAddress = {
+  id: string; text: string | null; start_time_ms: number | null; end_time_ms: number | null;
+  visibility: CommentVisibility; author: DashboardPerson; reply_count: number; created_at: string;
+  reasons: CutReason[]; media: DashboardCutRef;
+  /** `/review?media=<file>&comment=<id>&t=<ms>`: opens the cut at the note. */
+  href: string;
+};
+export type MyCut = DashboardCutRef & {
+  created_at: string; reasons: CutReason[]; open_notes: number; href: string;
+  poster: { url: string; width: number | null; height: number | null } | null;
+};
+export type WorkloadRow = {
+  membership_id: string; user: Omit<DashboardPerson, "type">;
+  open: number; overdue: number; due_this_week: number;
+};
+export type TeamWorkload = { results: WorkloadRow[]; unassigned: { open: number; overdue: number }; total_open: number; generated_at: string };
+
+/** Unresolved notes from other people on the viewer's cuts. Team-only notes never reach client members. */
+export const listNotesToAddress = (workspaceId: string, limit = 20) =>
+  request<{ results: NoteToAddress[]; count: number }>(`/workspaces/${workspaceId}/dashboard/notes-to-address/?limit=${limit}`);
+export const listMyCuts = (workspaceId: string, limit = 20) =>
+  request<{ results: MyCut[]; count: number }>(`/workspaces/${workspaceId}/dashboard/my-cuts/?limit=${limit}`);
+/** Open tasks per team member. Owners and admins only (403 otherwise). */
+export const getTeamWorkload = (workspaceId: string) => request<TeamWorkload>(`/workspaces/${workspaceId}/dashboard/workload/`);

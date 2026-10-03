@@ -99,6 +99,7 @@ from .guest_views import (
     project_guest_access_detail, project_guest_invite_detail, project_guest_invites,
 )
 
+from .dashboard_views import dashboard_my_cuts, dashboard_notes_to_address, dashboard_workload
 from .activity_views import (
     project_activity, project_activity_export, workspace_activity, workspace_activity_export,
 )
@@ -179,6 +180,9 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/tasks/<uuid:task_id>/attachments/<uuid:attachment_id>/', task_attachment_detail, name='api-task-attachment-detail'),
     path('workspaces/<uuid:workspace_id>/projects/', project_list_create, name='api-projects'),
     path('workspaces/<uuid:workspace_id>/activity/', workspace_activity, name='api-workspace-activity'),
+    path('workspaces/<uuid:workspace_id>/dashboard/notes-to-address/', dashboard_notes_to_address, name='api-dashboard-notes-to-address'),
+    path('workspaces/<uuid:workspace_id>/dashboard/my-cuts/', dashboard_my_cuts, name='api-dashboard-my-cuts'),
+    path('workspaces/<uuid:workspace_id>/dashboard/workload/', dashboard_workload, name='api-dashboard-workload'),
     path('workspaces/<uuid:workspace_id>/activity/export/', workspace_activity_export, name='api-workspace-activity-export'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/activity/', project_activity, name='api-project-activity'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/activity/export/', project_activity_export, name='api-project-activity-export'),

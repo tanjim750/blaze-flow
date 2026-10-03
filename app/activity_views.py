@@ -9,6 +9,7 @@ from rest_framework.response import Response
 
 from .models import Project, Workspace
 from .permissions import PROJECT_READ, WORKSPACE_MANAGE, WORKSPACE_READ, has_project_permission, has_workspace_permission
+from .services.dashboard import my_work_activity
 from .services.activity import (
     CSV_MAX_ROWS, ActivityFilterError, activity_csv, describe_rows, filter_activity, visible_activity,
 )
@@ -36,6 +37,13 @@ def _scoped(request, workspace, project=None):
     if not has_workspace_permission(user=request.user, workspace=workspace, permission_key=WORKSPACE_READ):
         raise PermissionDenied('You do not have access to this workspace.')
     rows = visible_activity(user=request.user, workspace=workspace)
+    # `mine=1`: only events on the viewer's own tasks and cuts, by other people (the
+    # editor dashboard's "Recent activity on my work").
+    mine = request.query_params.get('mine')
+    if mine not in (None, '', '0', 'false', '1', 'true'):
+        raise ValidationError({'mine': 'mine must be 1 or 0.'})
+    if mine in ('1', 'true'):
+        rows = my_work_activity(rows, user=request.user, workspace=workspace)
     try:
         return filter_activity(
             rows,

@@ -1,0 +1,64 @@
+import Link from "next/link";
+import { CheckCheck, Download, FolderKanban } from "lucide-react";
+import { DashboardPoster } from "@/components/dashboard-poster";
+import type { LayoutChoice } from "@/lib/dashboard-role";
+import type { ClientDashboard as ClientView } from "@/lib/role-dashboard-view";
+import { CounterStrip, DashboardHeading, EmptyState, InlineProblem, ReviewQueuePanel } from "./parts";
+
+function subline(view: ClientView): string {
+  const waiting = view.waiting.length;
+  if (waiting) return `${waiting} ${waiting === 1 ? "cut is" : "cuts are"} ready for your review.`;
+  return "Nothing is waiting for your review right now.";
+}
+
+/**
+ * The client layout: their projects, cuts to review, and approved work. It is built from
+ * projects and cuts only; it never loads tasks, workload or notes.
+ */
+export function ClientDashboard({ view, choice }: { view: ClientView; choice: LayoutChoice }) {
+  return <div className="home-shell role-client">
+    <DashboardHeading workspaceName={view.workspaceName} today={view.today} greetingName={view.greetingName} subline={subline(view)} choice={choice} />
+    <CounterStrip items={view.strip} label="Your work" />
+
+    <div className="dashboard-columns">
+      <ReviewQueuePanel
+        items={view.waiting.slice(0, 6)}
+        total={view.waiting.length}
+        problem={view.problems.reviews}
+        title="Waiting for your review"
+        totalLabel="to review"
+        empty={{ title: "You're all caught up", body: "When the studio sends a cut for review, it shows up here." }}
+      />
+      <section className="panel" aria-labelledby="delivered-title">
+        <div className="panel-title"><h2 id="delivered-title"><CheckCheck size={16} />Recently approved</h2><small>Delivered and signed off</small></div>
+        <div className="review-list">
+          {view.delivered.length === 0 && <EmptyState title="Nothing approved yet" body="Approved cuts and deliverables show up here." />}
+          {view.delivered.map((cut) => <div className="review-row delivered-row" key={cut.id}>
+            <DashboardPoster src={cut.poster} />
+            <Link href={cut.href} className="review-description" aria-label={`Open review: ${cut.title} ${cut.version}`}>
+              <strong>{cut.title}</strong>
+              <p><span className="review-version">{cut.version}</span><span className="home-badge success">{cut.stage}</span><span className="review-project">{cut.project} · {cut.age}</span></p>
+            </Link>
+            {cut.downloadHref
+              ? <a className="delivered-download" href={cut.downloadHref}><Download size={12} aria-hidden="true" />Download</a>
+              : <time>{cut.age}</time>}
+          </div>)}
+        </div>
+      </section>
+    </div>
+
+    <section className="section-block active-projects">
+      <div className="section-heading"><h2><FolderKanban size={16} />Your projects <span>{view.projects.length}</span></h2></div>
+      {view.problems.reviews && <InlineProblem>Some counts may be missing.</InlineProblem>}
+      {view.projects.length === 0
+        ? <div className="home-empty-state is-panel"><strong>No projects yet</strong><p>Projects the studio shares with you appear here.</p></div>
+        : <div className="home-project-grid">
+          {view.projects.map((project) => <Link href={project.href} className="home-project-card" key={project.id}>
+            <div className="home-project-meta"><span className={`home-badge ${project.tone}`}>{project.status}</span></div>
+            <h3>{project.title}</h3><p>{project.due}</p>
+            <div className="home-project-progress"><span>{project.waiting ? `${project.waiting} ${project.waiting === 1 ? "cut" : "cuts"} to review` : "Nothing to review"}</span></div>
+          </Link>)}
+        </div>}
+    </section>
+  </div>;
+}
