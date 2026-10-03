@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { MediaVersion, Notification, Project, Task } from "./api";
+import type { MediaVersion, Project, Task } from "./api";
+import type { ActivityEntry } from "./activity";
 import {
   awaitsReview, buildActivity, buildDashboardView, buildReviewQueue, countActiveProjects,
-  describeNotification, failureView, isMine, openProjects,
+  failureView, isMine, openProjects,
 } from "./dashboard-view";
 
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
@@ -26,9 +27,11 @@ const media = (id: string, stageRef: ReturnType<typeof stage> | null, poster: Me
   status: "READY", file: { id: `file-${id}`, name: "cut.mp4", mime_type: "video/mp4", size_bytes: 1 },
   current_stage: stageRef, preview_status: "READY", created_at: iso(created), poster,
 });
-const notification = (kind: string, payload: Record<string, unknown>, extra: Partial<Notification> = {}): Notification => ({
-  id: `n-${kind}`, kind, workspace_id: "ws", actor: { id: "u", email: "maya@example.com", name: "Maya Chen" },
-  entity_type: null, entity_id: null, payload, unread: true, read_at: null, created_at: iso(-2), ...extra,
+const entry = (action: string, extra: Partial<ActivityEntry> = {}): ActivityEntry => ({
+  id: `a-${action}`, created_at: iso(-2), action, category: "tasks",
+  actor: { type: "user", id: "u", name: "Maya Chen", initials: "MC", avatar_url: null },
+  verb: "", object: { type: "task", id: "t9", label: "Hero 30s", href: "/tasks?task=t9" },
+  project: { id: "p1", name: "Spring Launch" }, before: null, after: null, detail: {}, team_only: false, summary: "", ...extra,
 });
 
 const baseInput = () => ({
@@ -37,7 +40,7 @@ const baseInput = () => ({
   workspace: { id: "ws", name: "Studio", my_membership_id: "me" },
   projects: [project("p1", "ACTIVE"), project("p2", "DRAFT"), project("p3", "ARCHIVED"), project("p4", "ACTIVE")],
   tasks: [task("mine-today", "me", iso(3)), task("mine-late", "me", iso(-30)), task("theirs-today", "other", iso(2)), task("theirs-late", "other", iso(-5))],
-  notifications: [] as Notification[],
+  activity: [] as ActivityEntry[],
   scanned: [] as { project: Project; media: MediaVersion[] }[],
 });
 
@@ -111,32 +114,20 @@ describe("review queue", () => {
 });
 
 describe("recent activity", () => {
-  it("words a mention as a mention, with its excerpt and a deep link", () => {
-    const item = describeNotification(notification("REVIEW_COMMENT_MENTION", { project_id: "p1", media_version_id: "mv", excerpt: "Logo lands late" }), NOW);
-    expect(item).toMatchObject({ actor: "Maya Chen", action: "mentioned you in a review note", href: "/review?project=p1&version=mv", initials: "MC" });
-    expect(item.detail).toBe("2h ago · “Logo lands late”");
+  it("is the workspace feed, worded the same as the project timeline", () => {
+    const [row] = buildActivity([entry("task.stage.moved", { before: "Review", after: "Client Review" })], NOW);
+    expect(row).toMatchObject({ actor: "Maya Chen", action: "moved 'Hero 30s' from Review → Client Review", initials: "MC", href: "/tasks?task=t9" });
+    expect(row.detail).toBe("2 hours ago · Spring Launch");
   });
 
-  it("words a client-ready task as a hand-off, not a mention", () => {
-    const item = describeNotification(notification("TASK_CLIENT_READY", { task_id: "t9", title: "Hero 30s v2" }), NOW);
-    expect(item.action).toBe("marked “Hero 30s v2” ready for your review");
-    expect(item.action).not.toMatch(/mention/);
-    expect(item.href).toBe("/tasks?task=t9");
+  it("keeps to the latest six", () => {
+    const rows = Array.from({ length: 9 }, (_, index) => entry("task.created", { id: `a${index}` }));
+    expect(buildActivity(rows, NOW).map((row) => row.id)).toEqual(["a0", "a1", "a2", "a3", "a4", "a5"]);
   });
 
-  it("never borrows another kind's sentence for an unknown kind", () => {
-    const item = describeNotification(notification("MEDIA_VERSION_UPLOADED", {}), NOW);
-    expect(item.action).not.toMatch(/mention/);
-    expect(item.action).toContain("media version uploaded");
-    expect(item.href).toBeNull();
-  });
-
-  it("keeps to the current workspace", () => {
-    const rows = buildActivity([
-      notification("REVIEW_COMMENT_MENTION", {}, { id: "here" }),
-      notification("REVIEW_COMMENT_MENTION", {}, { id: "elsewhere", workspace_id: "other" }),
-    ], "ws", NOW);
-    expect(rows.map((row) => row.id)).toEqual(["here"]);
+  it("says when the feed failed instead of looking empty", () => {
+    const view = buildDashboardView({ ...baseInput(), activity: { status: 500, detail: "boom" } });
+    expect(view.status === "ready" && view.problems.activity).toBe("Activity could not be loaded: boom");
   });
 });
 

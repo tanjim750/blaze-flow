@@ -1,5 +1,6 @@
-import { listMediaVersions, listNotifications, listProjects, listTasks, listWorkspaces } from "./api";
-import type { ApiFailure, MediaVersion, Notification, Project, Task } from "./api";
+import { listActivity, listMediaVersions, listProjects, listTasks, listWorkspaces } from "./api";
+import type { ApiFailure, MediaVersion, Project, Task } from "./api";
+import { toDashboardRow, type ActivityEntry } from "./activity";
 import { selectWorkspace } from "./workspace";
 import { upcomingDeadlines } from "./deadlines";
 
@@ -30,7 +31,10 @@ export type ProjectCard = {
 };
 export type DeadlineItem = { id: string; day: string; date: string; title: string; project: string; priority: string; tone: Tone };
 /** One row of Recent Activity: "<actor> <action>", with the actor rendered in bold. */
-export type ActivityItem = { id: string; initials: string; tone: Tone; actor: string; action: string; detail: string; href: string | null };
+export type ActivityItem = { id: string; initials: string; avatarUrl?: string | null; tone: Tone; actor: string; action: string; detail: string; href: string | null };
+
+/** Recent Activity shows this many of the workspace feed's newest rows. */
+export const DASHBOARD_ACTIVITY_LIMIT = 6;
 
 /**
  * The "today" strip (C-D2). Task counts are the viewer's own when the API names their
@@ -163,59 +167,9 @@ export const awaitsReview = (media: Pick<MediaVersion, "current_stage">) => {
   return name.includes("review") || name.includes("approv");
 };
 
-function initialsFrom(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "?";
-  return `${parts[0].charAt(0)}${parts.length > 1 ? parts[parts.length - 1].charAt(0) : ""}`.toUpperCase();
-}
-
-const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
-const clip = (value: string, max = 80) => (value.length > max ? `${value.slice(0, max - 1)}…` : value);
-
-/**
- * Says what a notification actually is. Every row used to read "mentioned you in a review
- * comment" whatever its kind. Unknown kinds fall back to their own humanised name rather
- * than borrowing another kind's sentence.
- */
-export function describeNotification(item: Notification, now: Date = new Date()): ActivityItem {
-  const actor = item.actor?.name?.trim() || item.actor?.email || "Someone";
-  const payload = item.payload ?? {};
-  const age = relativeAge(item.created_at, now);
-  const withAge = (extra: string | null) => (extra ? `${age} · ${extra}` : age);
-  const base = { id: item.id, initials: initialsFrom(actor), tone: (item.unread ? "accent" : "neutral") as Tone, actor };
-  switch (item.kind) {
-    case "REVIEW_COMMENT_MENTION": {
-      const project = text(payload.project_id);
-      const version = text(payload.media_version_id);
-      const excerpt = text(payload.excerpt);
-      return {
-        ...base,
-        action: "mentioned you in a review note",
-        detail: withAge(excerpt ? `“${clip(excerpt)}”` : null),
-        href: project ? `/review?project=${project}${version ? `&version=${version}` : ""}` : null,
-      };
-    }
-    case "TASK_CLIENT_READY": {
-      const title = text(payload.title);
-      const task = text(payload.task_id) ?? (item.entity_type === "task" ? item.entity_id : null);
-      return {
-        ...base,
-        action: title ? `marked “${clip(title, 60)}” ready for your review` : "marked a task ready for your review",
-        detail: age,
-        href: task ? `/tasks?task=${task}` : null,
-      };
-    }
-    default:
-      return { ...base, action: `sent a notification (${titleCase(item.kind.replaceAll(".", " ")).toLowerCase()})`, detail: age, href: null };
-  }
-}
-
-/** Recent Activity, from the viewer's notifications in this workspace only. */
-export function buildActivity(notifications: Notification[], workspaceId: string, now: Date = new Date(), limit = 4): ActivityItem[] {
-  return notifications
-    .filter((item) => !item.workspace_id || item.workspace_id === workspaceId)
-    .slice(0, limit)
-    .map((item) => describeNotification(item, now));
+/** Recent Activity: the newest rows of the workspace activity feed (already permission-scoped). */
+export function buildActivity(entries: ActivityEntry[], now: Date = new Date(), limit = DASHBOARD_ACTIVITY_LIMIT): ActivityItem[] {
+  return entries.slice(0, limit).map((entry) => toDashboardRow(entry, now));
 }
 
 export function buildDashboardTasks(tasks: Task[], projectNames: Map<string, string>, membershipId: string | null, now: Date): DashboardTask[] {
@@ -274,7 +228,7 @@ export type DashboardInput = {
   projects: Project[];
   /** A failure leaves the task panels saying so rather than showing zeros. */
   tasks: Task[] | ApiFailure;
-  notifications: Notification[] | ApiFailure;
+  activity: ActivityEntry[] | ApiFailure;
   scanned: { project: Project; media: MediaVersion[] | ApiFailure }[];
 };
 
@@ -371,13 +325,13 @@ export function buildDashboardView(input: DashboardInput): DashboardReady {
     projects: projectCards,
     openProjectCount: visibleProjects.length,
     deadlines,
-    activity: failed(input.notifications) ? [] : buildActivity(input.notifications, workspace.id, now),
+    activity: failed(input.activity) ? [] : buildActivity(input.activity, now),
     problems: {
       tasks: failed(input.tasks) ? `Tasks could not be loaded: ${input.tasks.detail}` : null,
       reviews: reviewFailures
         ? `${reviewFailures} ${reviewFailures === 1 ? "project's" : "projects'"} cuts could not be loaded.`
         : null,
-      activity: failed(input.notifications) ? `Notifications could not be loaded: ${input.notifications.detail}` : null,
+      activity: failed(input.activity) ? `Activity could not be loaded: ${input.activity.detail}` : null,
     },
   };
 }
@@ -400,7 +354,7 @@ export function failureView(greetingName: string, now: Date, error: ApiFailure):
  * Loads the dashboard from the Django API.
  *
  * Everything here is derived from three workspace-wide lists (projects, tasks,
- * notifications) plus a bounded fan-out for media versions, because the backend has no
+ * activity) plus a bounded fan-out for media versions, because the backend has no
  * dashboard/summary endpoint. When the workspace or project list fails there is nothing
  * honest to show, so the page renders an error state with Retry — never sample numbers.
  */
@@ -411,10 +365,10 @@ export async function loadDashboardView(greetingName: string): Promise<Dashboard
   const workspace = await selectWorkspace(workspaces.data);
   if (!workspace) return failureView(greetingName, now, { status: 404, detail: "This account has no workspace yet." });
 
-  const [projectsResult, tasksResult, notificationsResult] = await Promise.all([
+  const [projectsResult, tasksResult, activityResult] = await Promise.all([
     listProjects(workspace.id),
     listTasks(workspace.id),
-    listNotifications(),
+    listActivity(workspace.id, { pageSize: DASHBOARD_ACTIVITY_LIMIT }),
   ]);
   if (!projectsResult.ok) return failureView(greetingName, now, projectsResult.error);
 
@@ -431,7 +385,7 @@ export async function loadDashboardView(greetingName: string): Promise<Dashboard
     workspace,
     projects: projectsResult.data,
     tasks: tasksResult.ok ? tasksResult.data : tasksResult.error,
-    notifications: notificationsResult.ok ? notificationsResult.data : notificationsResult.error,
+    activity: activityResult.ok ? activityResult.data.results : activityResult.error,
     scanned,
   });
 }

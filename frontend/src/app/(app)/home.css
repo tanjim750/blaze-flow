@@ -118,6 +118,9 @@ a.activity-row:hover p { color: var(--text); }
 .activity-avatar { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border-radius: 50%; font-size: 9px; border: 1px solid #594184; background: #2d2245; color: #d8c3ff; }
 .activity-avatar.warning { border-color: #6b521c; background: #3e3012; color: #ffd463; }
 .activity-avatar.success { border-color: #266650; background: #193b30; color: #71e6b5; }
+.activity-avatar.blue { border-color: #2c4f75; background: #15283d; color: #8fc4ff; }
+.activity-avatar { overflow: hidden; }
+.activity-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .activity-row p { font-size: 12px; line-height: 1.5; margin: 0 0 3px; color: #b3aabd; }
 .activity-row strong { font-weight: 600; color: #e9e1ef; }
 .activity-row small { color: var(--hs-subtle); font-size: 11px; }
