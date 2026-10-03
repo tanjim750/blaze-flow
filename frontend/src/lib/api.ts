@@ -27,7 +27,18 @@ export type ClientTeam = { id: string; name: string; description: string | null;
 export type ClientTeamMember = { id: string; user: CurrentUser; title: string | null; status: string; joined_at: string; removed_at: string | null };
 export type ClientTeamInvite = { id: string; invite_type: "EMAIL" | "LINK"; recipient_email: string | null; label: string | null; max_uses: number | null; use_count: number; expires_at: string; revoked_at: string | null; created_at: string; token?: string };
 export type NotificationPreference = { email_mentions_enabled: boolean };
-export type Project = { id: string; workspace_id: string; client_team_id: string | null; name: string; description: string | null; status: string; priority: string; start_at: string | null; due_at: string | null; created_at: string; updated_at: string };
+/** GET/PATCH /notification-preferences/ with a workspace: the email switch plus per-kind in-app switches. */
+export type NotificationSettings = NotificationPreference & {
+  workspace_id: string | null;
+  in_app: Record<string, boolean> | null;
+  kinds: { kind: string; label: string; description: string }[];
+};
+export type Project = { id: string; workspace_id: string; client_team_id: string | null; name: string; description: string | null; status: string; priority: string; start_at: string | null; due_at: string | null; created_at: string; updated_at: string;
+  /** Brief & Specs. Every key is present (null when unset); absent on older backends. */
+  deliverable_specs?: { aspect_ratio: string | null; target_length_seconds: number | null; platform: string | null; resolution: string | null; notes: string | null };
+  /** Whether the viewer may edit this project. Only the detail route fills it in; null elsewhere. */
+  viewer_can_edit?: boolean | null;
+};
 export type ProjectFolder = { id: string; workspace_id: string; client_team_id: string | null; project_id: string | null; parent_folder_id: string | null; name: string; created_at: string };
 export type MediaFile = { id: string; name: string; mime_type: string; size_bytes: number };
 export type ProjectFile = { id: string; workspace_id: string; client_team_id: string | null; project_id: string | null; folder_id: string | null; task_stage_id: string | null; file: MediaFile & { checksum_sha256: string; status: string; duration_ms: number | null }; added_by: { id: string; name: string; email: string } | null; poster: { width: number | null; height: number | null } | null; comment_count: number;
@@ -165,6 +176,7 @@ export const listClientTeamInvites = (workspaceId: string, clientTeamId: string)
 export const createClientTeamInvite = (workspaceId: string, clientTeamId: string, payload: { invite_type: "EMAIL" | "LINK"; recipient_email?: string; label?: string; max_uses?: number; expires_in_days: number }) => request<ClientTeamInvite>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/`, jsonBody(payload));
 export const revokeClientTeamInvite = (workspaceId: string, clientTeamId: string, inviteId: string) => request<void>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/${inviteId}/`, { method: "DELETE" });
 export const listProjects = (workspaceId: string) => request<Project[]>(`/workspaces/${workspaceId}/projects/`);
+export const getProject = (workspaceId: string, projectId: string) => request<Project>(`/workspaces/${workspaceId}/projects/${projectId}/`);
 export const listFolders = (workspaceId: string, projectId: string) => request<ProjectFolder[]>(`/workspaces/${workspaceId}/projects/${projectId}/folders/`);
 export const listProjectFiles = (workspaceId: string, projectId: string) => request<ProjectFile[]>(`/workspaces/${workspaceId}/projects/${projectId}/files/`);
 export const listAssetFolders = (workspaceId: string) => request<ProjectFolder[]>(`/workspaces/${workspaceId}/asset-folders/`);
@@ -196,6 +208,9 @@ export const updateClientTeam = (workspaceId: string, clientTeamId: string, payl
   request<ClientTeam>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/`, { ...jsonBody(payload), method: "PATCH" });
 export const archiveClientTeam = (workspaceId: string, clientTeamId: string) => request<void>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/`, { method: "DELETE" });
 export const getNotificationPreferences = () => request<NotificationPreference>("/notification-preferences/");
+export const getNotificationSettings = (workspaceId: string) => request<NotificationSettings>(`/notification-preferences/?workspace=${encodeURIComponent(workspaceId)}`);
+export const updateNotificationSettings = (payload: { workspace_id: string; in_app?: Record<string, boolean>; email_mentions_enabled?: boolean }) =>
+  request<NotificationSettings>("/notification-preferences/", { ...jsonBody(payload), method: "PATCH" });
 export const updateNotificationPreferences = (payload: NotificationPreference) => request<NotificationPreference>("/notification-preferences/", { ...jsonBody(payload), method: "PATCH" });
 
 export const createProject = (workspaceId: string, payload: { name: string; client_team_id?: string; description?: string; priority?: string; due_at?: string }) =>
