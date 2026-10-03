@@ -41,6 +41,7 @@ from .comments import (
 from .media import (
     MediaUploadSerializer,
     MediaVersionSerializer,
+    media_poster_variant,
     StageHistorySerializer,
     WorkflowStageSerializer,
     WorkflowTransitionSerializer,
@@ -105,6 +106,7 @@ __all__ = [
     'RevisionRequestSerializer',
     'MediaUploadSerializer',
     'MediaVersionSerializer',
+    'media_poster_variant',
     'NotificationSerializer',
     'NotificationPreferenceSerializer',
     'ReviewAttachmentSerializer',
