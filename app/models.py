@@ -162,6 +162,14 @@ class AuditActorType(models.TextChoices):
 class NotificationKind(models.TextChoices):
     REVIEW_COMMENT_MENTION = 'REVIEW_COMMENT_MENTION'
     TASK_CLIENT_READY = 'TASK_CLIENT_READY'
+    # Someone commented on a cut you uploaded or are assigned to (through a task).
+    REVIEW_COMMENT_NEW = 'REVIEW_COMMENT_NEW'
+    REVIEW_COMMENT_REPLY = 'REVIEW_COMMENT_REPLY'
+    # A new version of a file you commented on or are assigned to.
+    MEDIA_VERSION_NEW = 'MEDIA_VERSION_NEW'
+    TASK_ASSIGNED = 'TASK_ASSIGNED'
+    MEDIA_APPROVED = 'MEDIA_APPROVED'
+    MEDIA_CHANGES_REQUESTED = 'MEDIA_CHANGES_REQUESTED'
 
 
 class OutboxEventStatus(models.TextChoices):
@@ -608,6 +616,9 @@ class Project(models.Model):
     due_at = models.DateTimeField(null=True, blank=True)
     deletion_scheduled_at = models.DateTimeField(null=True, blank=True)
     next_media_version_number = models.IntegerField(default=1)
+    # Structured deliverable specs for the Brief tab: aspect_ratio, target_length_seconds,
+    # platform, resolution and notes. Shape is enforced by DeliverableSpecsSerializer.
+    deliverable_specs = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -1487,6 +1498,32 @@ class NotificationPreference(models.Model):
 
     class Meta:
         db_table = 'notification_preferences'
+
+
+class NotificationSetting(models.Model):
+    """In-app on/off for one notification kind, for one person in one workspace.
+
+    Keyed on (user, workspace) rather than the membership row: a client-team member reaches a
+    workspace through the team's shared membership, so a membership key would make one
+    client's switch turn the kind off for their whole team. No row means the kind is on.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id', related_name='+')
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    kind = models.CharField(max_length=100, choices=NotificationKind.choices)
+    in_app_enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'notification_settings'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'workspace', 'kind'],
+                name='notification_settings_user_workspace_kind_uniq',
+            )
+        ]
 
 
 class NotificationDelivery(models.Model):

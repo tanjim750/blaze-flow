@@ -1,4 +1,4 @@
-import { loadReviewView } from "@/lib/review-view";
+import { loadReviewView, timeParam } from "@/lib/review-view";
 import { loadSession } from "@/lib/session";
 import { displayName } from "@/lib/user";
 import { ReviewWorkspace } from "./workspace";
@@ -36,6 +36,8 @@ export default async function Review({ searchParams }: PageProps<"/review">) {
       view={session.notice ? { ...view, notice: session.notice } : view}
       author={session.user ? displayName(session.user) : "You"}
       initialShareOpen={params.share === "1"}
+      initialCommentId={single("comment") ?? null}
+      initialTimeMs={timeParam(single("t"))}
     />
   );
 }

@@ -1,5 +1,5 @@
 import { ReviewWorkspace } from "@/app/(app)/review/workspace";
-import { loadReviewView } from "@/lib/review-view";
+import { loadReviewView, timeParam } from "@/lib/review-view";
 import { loadSession } from "@/lib/session";
 import { displayName } from "@/lib/user";
 import "../(app)/review/review.css";
@@ -35,6 +35,8 @@ export default async function EmbeddedReview({ searchParams }: Props) {
         view={session.notice ? { ...view, notice: session.notice } : view}
         author={session.user ? displayName(session.user) : "You"}
         initialShareOpen={single("share") === "1"}
+        initialCommentId={single("comment") ?? null}
+        initialTimeMs={timeParam(single("t"))}
         embedded
       />
     </main>

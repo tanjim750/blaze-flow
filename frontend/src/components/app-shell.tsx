@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { LinkPending } from "@/components/nav-progress";
-import { usePathname, useRouter } from "next/navigation";
-import { Bell, Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, PackageCheck, Search, Settings, SquareKanban, Users, X } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, PackageCheck, Search, Settings, SquareKanban, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
 import type { ShellUser } from "@/lib/user";
-import type { Notification, Workspace } from "@/lib/api";
-import { openUniversalReview, UniversalReviewLayout } from "@/components/universal-review";
+import type { Workspace } from "@/lib/api";
+import { UniversalReviewLayout } from "@/components/universal-review";
+import { NotificationBell } from "@/components/notifications/bell";
 
 type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { severity: string; code: string; count: number }[] };
 
@@ -44,11 +45,8 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
 }) {
   const pathname = usePathname();
   const reduceMotion = useReducedMotion();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(railCollapsed);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [health, setHealth] = useState<OperationsHealth | "restricted" | "unavailable" | null>(null);
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   // Projects lays out its own full-bleed browser, so it opts out of the standard page padding.
@@ -58,9 +56,6 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
 
   useEffect(() => {
     let active = true;
-    void fetch("/api/notifications/", { credentials: "include" }).then(async (response) => {
-      if (response.ok && active) setNotifications(await response.json() as Notification[]);
-    }).catch(() => undefined);
     if (!selectedWorkspaceId) { queueMicrotask(() => active && setHealth(null)); return () => { active = false; }; }
     void fetch(`/api/workspaces/${selectedWorkspaceId}/operations/health/`, { credentials: "include" }).then(async (response) => {
       if (!active) return;
@@ -69,9 +64,6 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
     }).catch(() => active && setHealth("unavailable"));
     return () => { active = false; };
   }, [selectedWorkspaceId]);
-
-  const visibleNotifications = notifications.filter((item) => !selectedWorkspaceId || !item.workspace_id || item.workspace_id === selectedWorkspaceId);
-  const unread = visibleNotifications.filter((item) => item.unread).length;
 
   /**
    * The width itself is animated in CSS, through a registered `--rail-w` custom property
@@ -83,21 +75,6 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
     const next = !collapsed;
     setCollapsed(next);
     document.cookie = `${RAIL_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
-  }
-
-  async function markAllRead() {
-    const response = await fetch("/api/notifications/read-all/", { method: "POST", credentials: "include", headers: { "X-CSRFToken": browserCsrfToken() } });
-    if (response.ok) setNotifications((items) => items.map((item) => ({ ...item, unread: false, read_at: new Date().toISOString() })));
-  }
-  async function openNotification(item: Notification) {
-    if (item.unread) {
-      const response = await fetch(`/api/notifications/${item.id}/read/`, { method: "POST", credentials: "include", headers: { "X-CSRFToken": browserCsrfToken() } });
-      if (response.ok) setNotifications((items) => items.map((candidate) => candidate.id === item.id ? { ...candidate, unread: false, read_at: new Date().toISOString() } : candidate));
-    }
-    setNotificationsOpen(false);
-    const href = notificationHref(item);
-    if (href.startsWith("/review?")) openUniversalReview({ href, title: notificationTitle(item) });
-    else router.push(href);
   }
 
   const shellClass = `studio-shell${collapsed ? " is-collapsed" : ""}`;
@@ -157,12 +134,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
           <div className="studio-rail-account">
             <AccountMenu user={user} />
             {user && <span className="studio-rail-who"><strong>{user.name}</strong><small>{user.email}</small></span>}
-            <div className="studio-notifications">
-              <button type="button" className="studio-icon-button" aria-label={`${unread} unread notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen(!notificationsOpen)}><Bell size={16} />{unread > 0 && <i />}</button>
-              {notificationsOpen && <div className="studio-notification-menu"><header><strong>Notifications</strong>{unread > 0 && <button type="button" onClick={() => void markAllRead()}>Mark all read</button>}</header><div>{visibleNotifications.length === 0
-                ? <p>No notifications yet.</p>
-                : visibleNotifications.slice(0, 12).map((item) => <button type="button" key={item.id} className={`studio-notification-item ${item.unread ? "unread" : ""}`} onClick={() => void openNotification(item)}><i /><span><strong>{notificationTitle(item)}</strong>{typeof item.payload?.excerpt === "string" && <em>{item.payload.excerpt}</em>}<small>{new Date(item.created_at).toLocaleString()}</small></span></button>)}</div><footer><Link href="/settings" onClick={() => setNotificationsOpen(false)}>Notification preferences</Link></footer></div>}
-            </div>
+            <div className="studio-notifications"><NotificationBell workspaceId={selectedWorkspaceId} /></div>
           </div>
         </div>
       </aside>
@@ -174,24 +146,6 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
       </div>
     </div>
   );
-}
-
-function browserCsrfToken(): string {
-  return decodeURIComponent(document.cookie.split("; ").find((item) => item.startsWith("csrftoken="))?.slice(10) ?? "");
-}
-
-function notificationTitle(notification: Notification): string {
-  const action = notification.kind.replaceAll("_", " ").replaceAll(".", " ");
-  return notification.actor?.name ? `${notification.actor.name} · ${action}` : action;
-}
-
-function notificationHref(notification: Notification): string {
-  if (notification.entity_type === "review_comment" && typeof notification.payload?.project_id === "string") {
-    const version = typeof notification.payload.media_version_id === "string" ? `&version=${notification.payload.media_version_id}` : "";
-    return `/review?project=${notification.payload.project_id}${version}`;
-  }
-  if (notification.entity_type === "media_version") return "/review";
-  return "/";
 }
 
 function healthLabel(health: OperationsHealth | "restricted" | "unavailable" | null): string {

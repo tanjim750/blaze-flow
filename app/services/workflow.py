@@ -6,6 +6,7 @@ from django.utils import timezone
 from app.models import MediaVersion, MediaVersionStageEntry, WorkflowStageStatusState
 
 from .audit import record_user_audit
+from .notifications import notify_stage_outcome
 
 
 class WorkflowTransitionError(Exception):
@@ -13,7 +14,7 @@ class WorkflowTransitionError(Exception):
 
 
 @transaction.atomic
-def transition_media_version(*, media_version, stage, stage_status, user):
+def transition_media_version(*, media_version, stage, stage_status, user, comment=None):
     locked_media = MediaVersion.objects.select_for_update().select_related('project__workspace').get(
         id=media_version.id
     )
@@ -61,4 +62,6 @@ def transition_media_version(*, media_version, stage, stage_status, user):
         entity_id=locked_media.id,
         metadata={'from_entry_id': str(current.id), 'to_entry_id': str(entry.id)},
     )
+    if current.workflow_stage_id != stage.id:
+        notify_stage_outcome(media_version=locked_media, entry=entry, stage=stage, actor=user, comment=comment)
     return entry

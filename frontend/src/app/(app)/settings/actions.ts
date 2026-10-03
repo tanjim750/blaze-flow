@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { changePassword, getCurrentUser, requestEmailVerification, updateNotificationPreferences, updateWorkspaceProfile } from "@/lib/api";
+import { changePassword, getCurrentUser, requestEmailVerification, updateNotificationPreferences, updateNotificationSettings, updateWorkspaceProfile } from "@/lib/api";
+import type { NotificationSettings } from "@/lib/api";
 import { loadWorkspaceContext } from "@/lib/workspace";
 
 export type SettingsState = { error: string | null; message: string | null };
@@ -46,4 +47,17 @@ export async function resendVerificationAction(previous: SettingsState, form: Fo
 export async function updateNotificationsAction(_previous: SettingsState, form: FormData): Promise<SettingsState> {
   const result = await updateNotificationPreferences({ email_mentions_enabled: form.get("email_mentions_enabled") === "on" });
   if (!result.ok) return fail(result.error.detail); revalidatePath("/settings"); return success("Notification preferences saved.");
+}
+
+export type NotificationSettingsResult = { ok: true; settings: NotificationSettings } | { ok: false; error: string };
+
+/** One switch at a time, saved as it is flipped. The workspace is re-read on the server. */
+export async function saveNotificationSettingAction(change: { in_app?: Record<string, boolean>; email_mentions_enabled?: boolean }): Promise<NotificationSettingsResult> {
+  const context = await loadWorkspaceContext();
+  if (!context.ok) return { ok: false, error: context.error.detail };
+  const workspace = context.data.selected;
+  if (!workspace) return { ok: false, error: "Join a workspace before changing notification settings." };
+  const result = await updateNotificationSettings({ workspace_id: workspace.id, ...change });
+  if (!result.ok) return { ok: false, error: result.error.detail };
+  return { ok: true, settings: result.data };
 }

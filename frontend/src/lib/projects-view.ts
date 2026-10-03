@@ -1,8 +1,14 @@
-import { listClientTeams, listFolders, listMediaVersions, listProjects, listWorkspaces } from "./api";
-import type { ProjectFolder } from "./api";
+import { getProject, listClientTeams, listFolders, listMediaVersions, listProjects, listWorkspaces } from "./api";
+import type { Project, ProjectFolder } from "./api";
 import { selectWorkspace } from "./workspace";
 
-export type CampaignNode = { id: string; name: string; assetCount: number; folders: FolderNode[] };
+export type CampaignNode = {
+  id: string; name: string; assetCount: number; folders: FolderNode[];
+  /** The full project, loaded for the selected campaign only (the Brief tab reads it). */
+  project?: Project | null;
+  /** Why the brief could not be loaded, when it could not. */
+  briefError?: string | null;
+};
 export type FolderNode = { id: string; name: string; parentId: string | null };
 export type ClientNode = { id: string; name: string; initial: string; assetCount: number; campaigns: CampaignNode[] };
 export type ProjectsView = {
@@ -64,18 +70,24 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
     });
   }
 
+  // `?campaign=` alone (the dashboard's project links) selects the client that owns it.
   const selectedClient =
-    clients.find((client) => client.id === params.clientId) ?? clients.find((client) => client.campaigns.length) ?? clients[0] ?? null;
+    clients.find((client) => client.id === params.clientId) ??
+    (params.campaignId ? clients.find((client) => client.campaigns.some((campaign) => campaign.id === params.campaignId)) : undefined) ??
+    clients.find((client) => client.campaigns.length) ?? clients[0] ?? null;
   const selectedCampaign =
     selectedClient?.campaigns.find((campaign) => campaign.id === params.campaignId) ?? selectedClient?.campaigns[0] ?? null;
 
   if (selectedCampaign) {
-    const [media, folders] = await Promise.all([
+    const [media, folders, detail] = await Promise.all([
       listMediaVersions(workspace.id, selectedCampaign.id),
       listFolders(workspace.id, selectedCampaign.id),
+      getProject(workspace.id, selectedCampaign.id),
     ]);
     if (media.ok) selectedCampaign.assetCount = media.data.length;
     if (folders.ok) selectedCampaign.folders = buildFolders(folders.data);
+    selectedCampaign.project = detail.ok ? detail.data : null;
+    selectedCampaign.briefError = detail.ok ? null : detail.error.detail;
   }
   if (selectedClient) {
     selectedClient.assetCount = selectedClient.campaigns.reduce((total, campaign) => total + campaign.assetCount, 0);

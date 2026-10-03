@@ -13,7 +13,9 @@
   inherits: true;
   initial-value: 256px;
 }
-.studio-shell {
+/* The tokens also go on `.ui-popover`, whose content is portalled to <body>, outside the shell. */
+.studio-shell,
+.ui-popover {
   --shell-bg: #131316;
   --shell-rail: #0e0e11;
   --shell-low: #1b1b1e;
@@ -25,6 +27,8 @@
   --shell-on: #e4e1e6;
   --shell-variant: #c9c4d8;
   --shell-outline: #938ea1;
+}
+.studio-shell {
   --rail-w: 256px;
   min-height: 100vh;
   background: var(--shell-bg);

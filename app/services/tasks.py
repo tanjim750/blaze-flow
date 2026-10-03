@@ -18,6 +18,7 @@ from app.models import (
 )
 
 from .file_processing import SCAN_TOPIC, enqueue_file_event
+from .notifications import notify_task_assigned
 from .media import _storage_backend, detect_media_type, sha256_upload
 from .review_assets import detect_attachment_type
 from .subscriptions import enforce_workspace_storage_limit
@@ -82,7 +83,7 @@ def delete_task(*, task):
     return locked
 
 
-def add_task_assignee(*, task, membership):
+def add_task_assignee(*, task, membership, actor=None):
     if membership.workspace_id != task.workspace_id:
         raise TaskError('The assignee must belong to the task workspace.')
     if TaskAssignee.objects.filter(task=task, workspace_membership=membership).exists():
@@ -95,6 +96,7 @@ def add_task_assignee(*, task, membership):
     )
     assignee.full_clean()
     assignee.save()
+    notify_task_assigned(assignee=assignee, actor=actor)
     return assignee
 
 
