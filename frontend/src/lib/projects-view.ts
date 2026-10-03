@@ -70,8 +70,11 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
     });
   }
 
+  // `?campaign=` alone (the dashboard's project links) selects the client that owns it.
   const selectedClient =
-    clients.find((client) => client.id === params.clientId) ?? clients.find((client) => client.campaigns.length) ?? clients[0] ?? null;
+    clients.find((client) => client.id === params.clientId) ??
+    (params.campaignId ? clients.find((client) => client.campaigns.some((campaign) => campaign.id === params.campaignId)) : undefined) ??
+    clients.find((client) => client.campaigns.length) ?? clients[0] ?? null;
   const selectedCampaign =
     selectedClient?.campaigns.find((campaign) => campaign.id === params.campaignId) ?? selectedClient?.campaigns[0] ?? null;
 
