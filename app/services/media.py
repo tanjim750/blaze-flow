@@ -19,6 +19,7 @@ from app.models import (
 )
 from .audit import record_user_audit
 from .file_processing import PREVIEW_TOPIC, enqueue_file_event
+from .notifications import notify_new_media_version
 from .subscriptions import enforce_workspace_storage_limit
 
 
@@ -177,6 +178,7 @@ def upload_media_version(*, project, user, upload, title, note='', priority='MED
             )
             if detected_type.startswith('video/'):
                 enqueue_file_event(file=file_record, topic=PREVIEW_TOPIC)
+            notify_new_media_version(media_version=media_version, actor=user)
             return media_version
     except Exception:
         default_storage.delete(stored_key)

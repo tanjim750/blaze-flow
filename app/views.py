@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.core.files.storage import default_storage
 from django.http import Http404, HttpResponse
@@ -6,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Count, IntegerField, JSONField, Max, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404
 from django.middleware.csrf import get_token
+from django.urls import reverse
 from django.utils import timezone
 from rest_framework.decorators import api_view, authentication_classes, throttle_classes
 from rest_framework.decorators import permission_classes
@@ -13,6 +16,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import ValidationError as ApiValidationError
 
 from .http_range import is_initial_request, ranged_file_response
 from .events import DomainEvent, dispatch
@@ -182,6 +186,7 @@ from .permissions import (
     WORKSPACE_MANAGE,
     WORKSPACE_READ,
     accessible_projects,
+    active_memberships_for_user,
     has_project_permission,
     has_workspace_permission,
     memberships_with_permission,
@@ -190,6 +195,13 @@ from .permissions import (
 from app.services.file_processing import POSTER_VARIANT_TYPE, PREVIEW_VARIANT_TYPES
 from app.services.task_stages import is_client_review_stage, stage_for_status
 from .services.comments import can_see_team_notes, client_visible_comments
+from .services.notifications import (
+    CONFIGURABLE_KINDS,
+    NotificationError,
+    in_app_settings,
+    update_in_app_settings,
+)
+from .serializers.media import MEDIA_POSTER_VARIANT_TYPES
 from .services import (
     InvitationError,
     ClientTeamError,
@@ -964,12 +976,13 @@ def project_detail(request, workspace_id, project_id):
     ):
         raise PermissionDenied('You do not have permission to access this project.')
     if request.method == 'GET':
-        return Response(ProjectSerializer(project).data)
+        can_edit = has_project_permission(user=request.user, project=project, permission_key=PROJECT_UPDATE)
+        return Response(ProjectSerializer(project, context={'viewer_can_edit': can_edit}).data)
     if request.method == 'PATCH':
         serializer = ProjectUpdateSerializer(project, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         project = update_project(project=project, **serializer.validated_data)
-        return Response(ProjectSerializer(project).data)
+        return Response(ProjectSerializer(project, context={'viewer_can_edit': True}).data)
     archive_project(project=project)
     return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -1248,7 +1261,7 @@ def asset_file_versions(request, workspace_id, file_id):
     for item in (target, source):
         _require_asset_permission(request, item, PROJECT_FILE_UPDATE)
     try:
-        version = add_file_as_version(source=source, target=target)
+        version = add_file_as_version(source=source, target=target, actor=request.user)
     except (ProjectFileError, ValidationError) as exc:
         # `full_clean` raises a field-keyed ValidationError; a caller only needs the sentence.
         detail = '; '.join(exc.messages) if isinstance(exc, ValidationError) else str(exc)
@@ -1583,7 +1596,7 @@ def task_list_create(request, workspace_id):
     )
     if assignee_id:
         membership = get_object_or_404(WorkspaceMembership, id=assignee_id, workspace=workspace)
-        add_task_assignee(task=task, membership=membership)
+        add_task_assignee(task=task, membership=membership, actor=request.user)
     return Response(TaskSerializer(task).data, status=status.HTTP_201_CREATED)
 
 
@@ -1640,7 +1653,7 @@ def task_detail(request, workspace_id, task_id):
             TaskAssignee.objects.filter(task=task).delete()
             if assignee_id:
                 membership = get_object_or_404(WorkspaceMembership, id=assignee_id, workspace=workspace)
-                add_task_assignee(task=task, membership=membership)
+                add_task_assignee(task=task, membership=membership, actor=request.user)
         return Response(TaskSerializer(task).data)
     try:
         delete_task(task=task)
@@ -1741,7 +1754,7 @@ def task_assignees(request, workspace_id, task_id):
         WorkspaceMembership, id=serializer.validated_data['membership_id'], workspace=workspace
     )
     try:
-        assignee = add_task_assignee(task=task, membership=membership)
+        assignee = add_task_assignee(task=task, membership=membership, actor=request.user)
     except TaskError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(TaskAssigneeSerializer(assignee).data, status=status.HTTP_201_CREATED)
@@ -2240,15 +2253,86 @@ def media_revision_request(request, workspace_id, project_id, media_version_id):
     )
 
 
+NOTIFICATION_PAGE_SIZE = 20
+NOTIFICATION_MAX_PAGE_SIZE = 100
+
+
+def _notification_posters(notifications):
+    """`{media_version_id: poster url}` for a page of notifications, in two queries."""
+    ids = {
+        (item.payload or {}).get('media_version_id') for item in notifications
+    } - {None}
+    if not ids:
+        return {}
+    versions = MediaVersion.objects.filter(id__in=ids).select_related('project')
+    by_file = {version.original_file_id: version for version in versions}
+    ready = set(FileVariant.objects.filter(
+        file_id__in=by_file, status=FileStatus.READY, deleted_at__isnull=True,
+        metadata__variant_type__in=MEDIA_POSTER_VARIANT_TYPES,
+    ).values_list('file_id', flat=True))
+    return {
+        str(version.id): reverse(
+            'api-media-version-poster', args=[version.project.workspace_id, version.project_id, version.id],
+        )
+        for file_id, version in by_file.items() if file_id in ready
+    }
+
+
+def _int_param(request, name, default, *, low, high):
+    raw = request.query_params.get(name)
+    if raw in (None, ''):
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise ApiValidationError({name: f'{name} must be a whole number.'})
+    if value < low or value > high:
+        raise ApiValidationError({name: f'{name} must be between {low} and {high}.'})
+    return value
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def notification_list(request):
+    """The viewer's notifications, newest first.
+
+    Without `page` this is the plain list older callers (the dashboard) read. With `page`
+    it is one page plus counts, which is what the bell polls and /notifications pages
+    through: `{results, count, unread_count, page, page_size, has_next}`. `workspace`
+    narrows both the rows and the counts to one workspace.
+    """
     notifications = Notification.objects.filter(recipient_user=request.user).select_related(
         'actor_user'
-    ).order_by('-created_at')
-    if request.query_params.get('unread', '').lower() == 'true':
+    ).order_by('-created_at', '-id')
+    workspace_id = request.query_params.get('workspace')
+    if workspace_id:
+        try:
+            workspace_id = str(uuid.UUID(workspace_id))
+        except ValueError:
+            raise ApiValidationError({'workspace': 'workspace must be a workspace id.'})
+        notifications = notifications.filter(workspace_id=workspace_id)
+    unread_only = request.query_params.get('unread', '').lower() == 'true'
+    if 'page' not in request.query_params:
+        if unread_only:
+            notifications = notifications.filter(read_at__isnull=True)
+        return Response(NotificationSerializer(notifications, many=True).data)
+
+    page = _int_param(request, 'page', 1, low=1, high=10_000)
+    page_size = _int_param(request, 'page_size', NOTIFICATION_PAGE_SIZE, low=1, high=NOTIFICATION_MAX_PAGE_SIZE)
+    unread_count = notifications.filter(read_at__isnull=True).count()
+    if unread_only:
         notifications = notifications.filter(read_at__isnull=True)
-    return Response(NotificationSerializer(notifications, many=True).data)
+    count = notifications.count()
+    offset = (page - 1) * page_size
+    rows = list(notifications[offset:offset + page_size])
+    return Response({
+        'results': NotificationSerializer(rows, many=True, context={'posters': _notification_posters(rows)}).data,
+        'count': count,
+        'unread_count': unread_count,
+        'page': page,
+        'page_size': page_size,
+        'has_next': offset + len(rows) < count,
+    })
 
 
 @api_view(['POST'])
@@ -2266,30 +2350,71 @@ def notification_read(request, notification_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def notification_read_all(request):
-    updated_count = mark_all_notifications_read(user=request.user)
+    workspace_id = request.data.get('workspace_id') if hasattr(request.data, 'get') else None
+    if workspace_id:
+        try:
+            workspace_id = uuid.UUID(str(workspace_id))
+        except ValueError:
+            return Response({'workspace_id': ['workspace_id must be a workspace id.']}, status=status.HTTP_400_BAD_REQUEST)
+    updated_count = mark_all_notifications_read(user=request.user, workspace_id=workspace_id or None)
     return Response({'updated_count': updated_count})
+
+
+def _preference_workspace(request, workspace_id):
+    """The workspace whose in-app switches are read or written: one the viewer belongs to."""
+    if not workspace_id:
+        return None
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    if not active_memberships_for_user(user=request.user, workspace=workspace).exists():
+        raise PermissionDenied('You are not a member of this workspace.')
+    return workspace
+
+
+def _preference_payload(request, preference, workspace):
+    data = dict(NotificationPreferenceSerializer(preference).data)
+    data['workspace_id'] = str(workspace.id) if workspace else None
+    data['in_app'] = in_app_settings(user=request.user, workspace=workspace) if workspace else None
+    data['kinds'] = [
+        {'kind': kind.value, 'label': label, 'description': help_text}
+        for kind, label, help_text in CONFIGURABLE_KINDS
+    ]
+    return data
 
 
 @api_view(['GET', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def notification_preferences(request):
+    """Email for mentions (per person) plus per-kind in-app switches (per person per workspace).
+
+    `?workspace=` (GET) or `workspace_id` (PATCH) picks the workspace for `in_app`.
+    """
     preference = get_notification_preference(user=request.user)
     if request.method == 'GET':
-        return Response(NotificationPreferenceSerializer(preference).data)
+        workspace = _preference_workspace(request, request.query_params.get('workspace'))
+        return Response(_preference_payload(request, preference, workspace))
+    workspace = _preference_workspace(request, request.data.get('workspace_id'))
     serializer = NotificationPreferenceSerializer(
         preference,
         data=request.data,
         partial=True,
     )
     serializer.is_valid(raise_exception=True)
-    preference = update_notification_preference(
-        user=request.user,
-        email_mentions_enabled=serializer.validated_data.get(
-            'email_mentions_enabled',
-            preference.email_mentions_enabled,
-        ),
-    )
-    return Response(NotificationPreferenceSerializer(preference).data)
+    in_app = request.data.get('in_app')
+    if in_app is not None:
+        if workspace is None:
+            return Response({'workspace_id': ['Choose the workspace these switches apply to.']}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(in_app, dict) or not all(isinstance(value, bool) for value in in_app.values()):
+            return Response({'in_app': ['Send an object of kind: true/false.']}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            update_in_app_settings(user=request.user, workspace=workspace, changes=in_app)
+        except NotificationError as exc:
+            return Response({'in_app': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+    if 'email_mentions_enabled' in serializer.validated_data:
+        preference = update_notification_preference(
+            user=request.user,
+            email_mentions_enabled=serializer.validated_data['email_mentions_enabled'],
+        )
+    return Response(_preference_payload(request, preference, workspace))
 
 
 @api_view(['POST'])

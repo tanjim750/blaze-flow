@@ -18,6 +18,7 @@ from app.models import (
 )
 
 from .file_processing import SCAN_TOPIC, enqueue_file_event
+from .notifications import notify_library_version_added
 from .media import _storage_backend, detect_media_type, sha256_upload
 from .review_assets import detect_attachment_type
 from .subscriptions import enforce_workspace_storage_limit
@@ -103,7 +104,7 @@ def move_project_folder(*, folder, workspace, client_team=None, project=None, pa
 
 
 @transaction.atomic
-def add_file_as_version(*, source, target):
+def add_file_as_version(*, source, target, actor=None):
     """Makes `source` the next version of whatever asset `target` belongs to.
 
     This is the drag-one-video-onto-another gesture. Nothing is overwritten and nothing is
@@ -161,6 +162,7 @@ def add_file_as_version(*, source, target):
 
         asset.updated_at = timezone.now()
         asset.save(update_fields=['updated_at'])
+        notify_library_version_added(project_file=source, actor=actor)
         return source
 
 

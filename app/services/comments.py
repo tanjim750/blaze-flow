@@ -19,7 +19,12 @@ from app.models import (
 from app.permissions import active_memberships_for_user
 
 from .audit import record_guest_audit, record_user_audit
-from .notifications import NotificationError, resolve_mention_users, set_comment_mentions
+from .notifications import (
+    NotificationError,
+    notify_comment_created,
+    resolve_mention_users,
+    set_comment_mentions,
+)
 from .workflow import transition_media_version
 
 
@@ -84,7 +89,7 @@ def _comment_snapshot(comment):
 @transaction.atomic
 def create_review_comment(
     *, media_version, user, text, parent_comment=None, start_time_ms=None, end_time_ms=None,
-    mentioned_user_ids=(), visibility=ReviewCommentVisibility.CLIENT,
+    mentioned_user_ids=(), visibility=ReviewCommentVisibility.CLIENT, notify_followers=True,
 ):
     if not text.strip():
         raise ReviewCommentError('Comment text cannot be empty.')
@@ -142,11 +147,15 @@ def create_review_comment(
         created_at=now,
         updated_at=now,
     )
-    set_comment_mentions(
+    mentioned_ids = set_comment_mentions(
         comment=comment,
         actor=user,
         users=mentioned_users,
         excerpt=text.strip(),
+    )
+    notify_comment_created(
+        comment=comment, actor=user, already_notified=mentioned_ids,
+        include_followers=notify_followers,
     )
     record_user_audit(
         user=user,
@@ -196,6 +205,7 @@ def create_guest_review_comment(
         content_type=ReviewCommentContentType.TEXT, text_content=text.strip(),
         sort_order=0, created_at=now, updated_at=now,
     )
+    notify_comment_created(comment=comment, actor=None, actor_name=guest_session.name or 'A guest reviewer')
     record_guest_audit(
         guest_session=guest_session, workspace=media_version.project.workspace,
         action='review.comment.created', entity_type='review_comment', entity_id=comment.id,
@@ -411,6 +421,11 @@ def request_media_revision(
     ).first()
     if stage is None:
         raise ReviewCommentError('This workspace has no active Revision stage.')
+    current = MediaVersionStageEntry.objects.filter(
+        media_version=media_version,
+        exited_at__isnull=True,
+    ).first()
+    transitioned = current is None or current.workflow_stage_id != stage.id
     comment = create_review_comment(
         media_version=media_version,
         user=user,
@@ -418,18 +433,17 @@ def request_media_revision(
         start_time_ms=start_time_ms,
         end_time_ms=end_time_ms,
         mentioned_user_ids=mentioned_user_ids,
+        # When the cut moves, the uploader hears "changes requested" with this note quoted,
+        # instead of that plus a separate "new note" for the same click.
+        notify_followers=not transitioned,
     )
-    current = MediaVersionStageEntry.objects.filter(
-        media_version=media_version,
-        exited_at__isnull=True,
-    ).first()
-    transitioned = current is None or current.workflow_stage_id != stage.id
     entry = (
         transition_media_version(
             media_version=media_version,
             stage=stage,
             stage_status=None,
             user=user,
+            comment=comment,
         )
         if transitioned
         else current
