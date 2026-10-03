@@ -133,6 +133,31 @@
 .rvp-stage video { display: block; width: 100%; height: 100%; object-fit: contain; cursor: pointer; }
 .rvp-empty { display: grid; justify-items: center; gap: 12px; padding: 24px; color: var(--muted); text-align: center; }
 .rvp-empty p { margin: 0; max-width: 320px; font-size: 12px; line-height: 1.6; }
+/* A failed source keeps its element (so Retry can reload it) but hides the black frame. */
+.rvp-stage video.is-failed { visibility: hidden; }
+.rvp-error { position: absolute; inset: 0; z-index: 6; align-content: center; background: var(--rv-canvas); }
+.rvp-error strong { color: var(--text); font-size: 13px; font-weight: 600; }
+.rvp-retry {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 12px;
+  border: 1px solid var(--rv-line); border-radius: 7px;
+  background: #17171c; color: var(--text); font-size: 12px; font-weight: 550; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.rvp-retry:hover { background: var(--primary); border-color: var(--primary); }
+.rvp-retry:focus-visible { outline: 2px solid var(--primary-2); outline-offset: 2px; }
+/* Waiting on data after a seek or a stall. Pointer-transparent so a click still toggles play. */
+.rvp-buffering {
+  position: absolute; inset: 0; z-index: 3;
+  display: grid; place-items: center; pointer-events: none;
+}
+.rvp-buffering svg {
+  padding: 10px; width: 48px; height: 48px; border-radius: 50%;
+  background: #000000a6; color: var(--primary-2);
+  animation: rvp-spin .8s linear infinite;
+}
+@keyframes rvp-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .rvp-buffering svg { animation-duration: 2.4s; } }
 .rvp-badge {
   position: absolute; left: 12px; top: 12px;
   max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -151,8 +176,13 @@
 .rvp-timeline { flex: none; padding: 14px 16px 0; background: var(--rv-chrome); }
 .rvp-scrub {
   position: relative; height: 4px; border-radius: 999px;
-  background: #2b2b33; cursor: pointer;
+  background: #2b2b33; cursor: pointer; touch-action: none;
 }
+/* A taller invisible hit area, so the 4px bar is easy to grab. */
+.rvp-scrub::before { content: ""; position: absolute; inset: -6px 0; }
+.rvp-scrub.is-dragging .rvp-head { transform: translateY(-50%) scale(1.2); }
+/* What the browser has fetched, under the played bar. */
+.rvp-buffered { position: absolute; top: 0; bottom: 0; border-radius: 999px; background: #ffffff38; pointer-events: none; }
 .rvp-played { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--primary); }
 .rvp-head {
   position: absolute; top: 50%; width: 11px; height: 11px;
@@ -199,6 +229,7 @@
 
 .rvp-clock { display: flex; align-items: baseline; gap: 5px; font: 12px var(--font-geist-mono), monospace; }
 .rvp-clock strong { font-weight: 600; }
+.rvp-clock.is-seeking strong { color: var(--muted); }
 .rvp-clock span { color: var(--muted); font-size: 11px; }
 
 .rvp-volume { gap: 5px; }

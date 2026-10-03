@@ -90,8 +90,8 @@ function ComparePane({ version, src, videoRef, follower }: {
   const seek = (ms: number) => {
     const element = videoRef.current;
     if (!element) return;
+    // The clock follows `seeked` rather than the request, so a refused jump is visible.
     element.currentTime = ms / 1000;
-    setPositionMs(ms);
     const other = follower();
     if (other) other.currentTime = ms / 1000;
   };
@@ -131,6 +131,7 @@ function ComparePane({ version, src, videoRef, follower }: {
               onClick={toggle}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
+              onSeeked={(event) => setPositionMs(event.currentTarget.currentTime * 1000)}
               onTimeUpdate={(event) => {
                 const element = event.currentTarget;
                 setPositionMs(element.currentTime * 1000);
