@@ -1,6 +1,6 @@
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.core.files.storage import default_storage
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import Http404, HttpResponse
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.db.models import Count, IntegerField, JSONField, Max, OuterRef, Q, Subquery
@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 
+from .http_range import is_initial_request, ranged_file_response
 from .events import DomainEvent, dispatch
 from .pagination import paginated_response
 from .serializers import (
@@ -1161,7 +1162,7 @@ def asset_file_detail(request, workspace_id, file_id):
     return Response(ProjectFileSerializer(item).data)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'HEAD'])
 @permission_classes([IsAuthenticated])
 def asset_file_download(request, workspace_id, file_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
@@ -1171,7 +1172,10 @@ def asset_file_download(request, workspace_id, file_id):
         return Response({'detail': 'This file is still being scanned or was rejected.'}, status=status.HTTP_409_CONFLICT)
     if not default_storage.exists(item.file.object_key):
         raise Http404('The stored file was not found.')
-    return FileResponse(default_storage.open(item.file.object_key, 'rb'), as_attachment=True, filename=item.file.original_name, content_type=item.file.mime_type)
+    return ranged_file_response(
+        request, item.file.object_key, as_attachment=True, filename=item.file.original_name,
+        content_type=item.file.mime_type, checksum=item.file.checksum,
+    )
 
 
 def _with_card_fields(queryset):
@@ -1260,7 +1264,7 @@ def asset_file_duplicate(request, workspace_id, file_id):
     return Response(ProjectFileSerializer(copy).data, status=status.HTTP_201_CREATED)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'HEAD'])
 @permission_classes([IsAuthenticated])
 def asset_file_poster(request, workspace_id, file_id):
     """Serves the still a list shows for this asset.
@@ -1279,7 +1283,7 @@ def asset_file_poster(request, workspace_id, file_id):
     ).order_by('-created_at').first()
     if variant is None or not default_storage.exists(variant.object_key):
         raise Http404('No poster has been generated for this file.')
-    return FileResponse(default_storage.open(variant.object_key, 'rb'), content_type=variant.mime_type)
+    return ranged_file_response(request, variant.object_key, content_type=variant.mime_type, checksum=variant.checksum)
 
 
 @api_view(['GET', 'POST'])
@@ -1400,7 +1404,7 @@ def project_file_detail(request, workspace_id, project_id, file_id):
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'HEAD'])
 @permission_classes([IsAuthenticated])
 def project_file_download(request, workspace_id, project_id, file_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
@@ -1413,9 +1417,10 @@ def project_file_download(request, workspace_id, project_id, file_id):
         return Response({'detail': 'This file is still being scanned or was rejected.'}, status=status.HTTP_409_CONFLICT)
     if not default_storage.exists(project_file.file.object_key):
         raise Http404('The stored file was not found.')
-    return FileResponse(
-        default_storage.open(project_file.file.object_key, 'rb'), as_attachment=True,
+    return ranged_file_response(
+        request, project_file.file.object_key, as_attachment=True,
         filename=project_file.file.original_name, content_type=project_file.file.mime_type,
+        checksum=project_file.file.checksum,
     )
 
 
@@ -1852,7 +1857,7 @@ def _media_from_route(workspace_id, project_id, media_version_id):
     return workspace, project, media_version
 
 
-@api_view(['GET'])
+@api_view(['GET', 'HEAD'])
 @permission_classes([IsAuthenticated])
 def media_version_download(request, workspace_id, project_id, media_version_id):
     workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
@@ -1863,23 +1868,26 @@ def media_version_download(request, workspace_id, project_id, media_version_id):
     file_record = media_version.original_file
     if not default_storage.exists(file_record.object_key):
         raise Http404('The stored media object was not found.')
-    record_user_audit(
-        user=request.user,
-        workspace=workspace,
-        action='media.downloaded',
-        entity_type='media_version',
-        entity_id=media_version.id,
-        metadata={'file_id': str(file_record.id)},
-    )
-    return FileResponse(
-        default_storage.open(file_record.object_key, 'rb'),
+    # A resumed or ranged download is the same download; only its first request is audited.
+    if is_initial_request(request):
+        record_user_audit(
+            user=request.user,
+            workspace=workspace,
+            action='media.downloaded',
+            entity_type='media_version',
+            entity_id=media_version.id,
+            metadata={'file_id': str(file_record.id)},
+        )
+    return ranged_file_response(
+        request, file_record.object_key,
         as_attachment=True,
         filename=file_record.original_name,
         content_type=file_record.mime_type,
+        checksum=file_record.checksum,
     )
 
 
-@api_view(['GET'])
+@api_view(['GET', 'HEAD'])
 @permission_classes([IsAuthenticated])
 def media_version_preview(request, workspace_id, project_id, media_version_id):
     workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
@@ -1893,7 +1901,10 @@ def media_version_preview(request, workspace_id, project_id, media_version_id):
     ).order_by('-created_at').first()
     if variant is None or not default_storage.exists(variant.object_key):
         raise Http404('No preview is available for this media version yet.')
-    return FileResponse(default_storage.open(variant.object_key, 'rb'), filename=variant.original_name, content_type=variant.mime_type)
+    return ranged_file_response(
+        request, variant.object_key, filename=variant.original_name,
+        content_type=variant.mime_type, checksum=variant.checksum,
+    )
 
 
 @api_view(['POST'])
@@ -2262,18 +2273,22 @@ def _attachment_from_route(workspace_id, project_id, media_version_id, comment_i
     return workspace, project, media_version, comment, content
 
 
-@api_view(['GET', 'DELETE'])
+@api_view(['GET', 'HEAD', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def review_attachment_detail(request, workspace_id, project_id, media_version_id, comment_id, content_id):
     workspace, project, media_version, comment, content = _attachment_from_route(workspace_id, project_id, media_version_id, comment_id, content_id)
-    if request.method == 'GET':
+    if request.method in ('GET', 'HEAD'):
         _require_project_permission(request, project, REVIEW_COMMENT_READ, 'You do not have permission to download this attachment.')
         if content.file.status != 'READY':
             return Response({'detail': 'This attachment is still being scanned or was rejected.'}, status=status.HTTP_409_CONFLICT)
         if not default_storage.exists(content.file.object_key):
             raise Http404('The stored attachment was not found.')
-        record_user_audit(user=request.user, workspace=workspace, action='review.attachment.downloaded', entity_type='review_comment_content', entity_id=content.id)
-        return FileResponse(default_storage.open(content.file.object_key, 'rb'), as_attachment=True, filename=content.file.original_name, content_type=content.file.mime_type)
+        if is_initial_request(request):
+            record_user_audit(user=request.user, workspace=workspace, action='review.attachment.downloaded', entity_type='review_comment_content', entity_id=content.id)
+        return ranged_file_response(
+            request, content.file.object_key, as_attachment=True, filename=content.file.original_name,
+            content_type=content.file.mime_type, checksum=content.file.checksum,
+        )
     can_manage = has_project_permission(user=request.user, project=project, permission_key=REVIEW_COMMENT_MANAGE)
     can_delete_as_author = (
         comment.author_user_id == request.user.id
@@ -2289,7 +2304,7 @@ def review_attachment_detail(request, workspace_id, project_id, media_version_id
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'HEAD'])
 @permission_classes([IsAuthenticated])
 def review_attachment_preview(request, workspace_id, project_id, media_version_id, comment_id, content_id, variant_id):
     workspace, project, media_version, comment, content = _attachment_from_route(workspace_id, project_id, media_version_id, comment_id, content_id)
@@ -2299,7 +2314,10 @@ def review_attachment_preview(request, workspace_id, project_id, media_version_i
     )
     if not default_storage.exists(variant.object_key):
         raise Http404('The stored preview was not found.')
-    return FileResponse(default_storage.open(variant.object_key, 'rb'), filename=variant.original_name, content_type=variant.mime_type)
+    return ranged_file_response(
+        request, variant.object_key, filename=variant.original_name,
+        content_type=variant.mime_type, checksum=variant.checksum,
+    )
 
 
 @api_view(['GET', 'POST'])

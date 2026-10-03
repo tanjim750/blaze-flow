@@ -1,5 +1,5 @@
 from django.core.files.storage import default_storage
-from django.http import FileResponse, Http404
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
@@ -7,6 +7,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from .http_range import ranged_file_response
 from .models import (
     Annotation, AnnotationElement, AnnotationRevision, FileStatus, FileVariant, GuestInvite, GuestInvitePermission,
     GuestReviewAccess, GuestReviewAccessPermission, MediaVersion, Project,
@@ -386,12 +387,12 @@ def guest_attachment_upload(request, project_id, media_version_id, comment_id):
     return Response(ReviewAttachmentSerializer(content).data, status=status.HTTP_201_CREATED)
 
 
-@api_view(['GET', 'DELETE'])
+@api_view(['GET', 'HEAD', 'DELETE'])
 @authentication_classes([])
 @permission_classes([AllowAny])
 def guest_attachment_download(request, project_id, content_id):
     project = get_object_or_404(Project, id=project_id)
-    permission = 'media.download' if request.method == 'GET' else 'review.attachment.delete'
+    permission = 'media.download' if request.method in ('GET', 'HEAD') else 'review.attachment.delete'
     access = _guest_access(request, project, permission)
     content = get_object_or_404(
         ReviewCommentContent.objects.select_related('file'), id=content_id,
@@ -410,10 +411,13 @@ def guest_attachment_download(request, project_id, content_id):
         return Response({'detail': 'This attachment is still being processed.'}, status=status.HTTP_409_CONFLICT)
     if not default_storage.exists(content.file.object_key):
         raise Http404('The stored attachment was not found.')
-    return FileResponse(default_storage.open(content.file.object_key, 'rb'), as_attachment=True, filename=content.file.original_name, content_type=content.file.mime_type)
+    return ranged_file_response(
+        request, content.file.object_key, as_attachment=True, filename=content.file.original_name,
+        content_type=content.file.mime_type, checksum=content.file.checksum,
+    )
 
 
-@api_view(['GET'])
+@api_view(['GET', 'HEAD'])
 @authentication_classes([])
 @permission_classes([AllowAny])
 def guest_attachment_preview(request, project_id, content_id, variant_id):
@@ -430,4 +434,7 @@ def guest_attachment_preview(request, project_id, content_id, variant_id):
     )
     if not default_storage.exists(variant.object_key):
         raise Http404('The stored preview was not found.')
-    return FileResponse(default_storage.open(variant.object_key, 'rb'), filename=variant.original_name, content_type=variant.mime_type)
+    return ranged_file_response(
+        request, variant.object_key, filename=variant.original_name,
+        content_type=variant.mime_type, checksum=variant.checksum,
+    )
