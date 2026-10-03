@@ -68,11 +68,12 @@ class MediaVersionSerializer(serializers.ModelSerializer):
 
     def get_current_stage(self, media):
         entry = media_stage_entries(media).filter(exited_at__isnull=True).select_related(
-            'workflow_stage', 'changed_by_user'
+            'workflow_stage', 'changed_by_user', 'changed_by_guest_session'
         ).first()
         if not entry or not entry.workflow_stage:
             return None
         changed_by = entry.changed_by_user
+        guest = entry.changed_by_guest_session
         return {
             'id': str(entry.workflow_stage.id),
             'name': entry.workflow_stage.name,
@@ -82,7 +83,11 @@ class MediaVersionSerializer(serializers.ModelSerializer):
             'changed_by': {
                 'id': str(changed_by.id),
                 'name': changed_by.get_full_name() or changed_by.email,
-            } if changed_by else None,
+                'type': 'user',
+            } if changed_by else {
+                # A client's decision through a review link.
+                'id': None, 'name': guest.name or 'Guest reviewer', 'type': 'guest',
+            } if guest else None,
         }
 
     def get_preview_status(self, media):

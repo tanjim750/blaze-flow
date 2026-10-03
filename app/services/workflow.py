@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from app.models import MediaVersion, MediaVersionStageEntry, WorkflowStageStatusState
 
-from .audit import record_user_audit
+from .audit import record_guest_audit, record_user_audit
 from .notifications import notify_stage_outcome
 
 
@@ -14,7 +14,17 @@ class WorkflowTransitionError(Exception):
 
 
 @transaction.atomic
-def transition_media_version(*, media_version, stage, stage_status, user, comment=None):
+def transition_media_version(
+    *, media_version, stage, stage_status, user=None, comment=None, guest_session=None,
+    notify=True, audit_metadata=None,
+):
+    """Moves a cut to another stage. ``user`` or ``guest_session`` is who did it.
+
+    A guest only ever gets here through a client decision on a review link, which sends its
+    own notifications, so that caller passes ``notify=False``.
+    """
+    if (user is None) == (guest_session is None):
+        raise WorkflowTransitionError('A workflow change needs exactly one actor.')
     locked_media = MediaVersion.objects.select_for_update().select_related('project__workspace').get(
         id=media_version.id
     )
@@ -52,20 +62,23 @@ def transition_media_version(*, media_version, stage, stage_status, user, commen
         },
         entered_at=now,
         changed_by_user=user,
+        changed_by_guest_session=guest_session,
         created_at=now,
     )
-    record_user_audit(
-        user=user,
-        workspace=locked_media.project.workspace,
-        action='media.workflow.transitioned',
-        entity_type='media_version',
-        entity_id=locked_media.id,
-        metadata={
-            'from_entry_id': str(current.id), 'to_entry_id': str(entry.id),
-            'from_stage': {'name': current.workflow_stage.name, 'slug': current.workflow_stage.slug},
-            'to_stage': {'name': stage.name, 'slug': stage.slug},
-        },
+    metadata = {
+        'from_entry_id': str(current.id), 'to_entry_id': str(entry.id),
+        'from_stage': {'name': current.workflow_stage.name, 'slug': current.workflow_stage.slug} if current.workflow_stage else None,
+        'to_stage': {'name': stage.name, 'slug': stage.slug},
+        **(audit_metadata or {}),
+    }
+    audit = dict(
+        workspace=locked_media.project.workspace, action='media.workflow.transitioned',
+        entity_type='media_version', entity_id=locked_media.id, metadata=metadata,
     )
-    if current.workflow_stage_id != stage.id:
+    if guest_session is not None:
+        record_guest_audit(guest_session=guest_session, **audit)
+    else:
+        record_user_audit(user=user, **audit)
+    if notify and current.workflow_stage_id != stage.id:
         notify_stage_outcome(media_version=locked_media, entry=entry, stage=stage, actor=user, comment=comment)
     return entry

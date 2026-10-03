@@ -20,7 +20,10 @@ GUEST_ALLOWED_PERMISSIONS = frozenset({
     'review.attachment.create', 'review.attachment.delete',
     'annotation.read', 'annotation.create',
     'annotation.edit', 'annotation.delete',
+    # "Allow decisions": approve or request changes on the cut the guest is viewing.
+    'review.decision.create',
 })
+GUEST_DECISION_PERMISSION = 'review.decision.create'
 
 
 class GuestAccessError(Exception):
@@ -203,5 +206,47 @@ def revoke_guest_review_access(*, access, membership, user):
             'guest_invite_id': str(locked.guest_invite_id), 'label': locked.guest_invite.label,
             'guest_name': locked.guest_session.name,
         },
+    )
+    return locked
+
+
+def invite_allows_decisions(invite):
+    return GuestInvitePermission.objects.filter(
+        guest_invite=invite, permission_key=GUEST_DECISION_PERMISSION,
+    ).exists()
+
+
+@transaction.atomic
+def set_invite_allow_decisions(*, invite, allow, user):
+    """Turns "Allow decisions" on or off for a link and everyone already using it.
+
+    Unlike the other permissions, which are fixed when a link is made, this one can be
+    changed afterwards: links made before decisions existed start without it, and an owner
+    may want to stop a link from approving without revoking it for commenting.
+    """
+    locked = GuestInvite.objects.select_for_update().select_related('project__workspace').get(id=invite.id)
+    if locked.revoked_at is not None:
+        raise GuestAccessError('This link is revoked, so it cannot be changed.')
+    now = timezone.now()
+    accesses = list(GuestReviewAccess.objects.filter(guest_invite=locked, revoked_at__isnull=True))
+    if allow:
+        GuestInvitePermission.objects.get_or_create(
+            guest_invite=locked, permission_key=GUEST_DECISION_PERMISSION, defaults={'created_at': now},
+        )
+        for access in accesses:
+            GuestReviewAccessPermission.objects.get_or_create(
+                guest_review_access=access, permission_key=GUEST_DECISION_PERMISSION, defaults={'created_at': now},
+            )
+    else:
+        GuestInvitePermission.objects.filter(guest_invite=locked, permission_key=GUEST_DECISION_PERMISSION).delete()
+        GuestReviewAccessPermission.objects.filter(
+            guest_review_access__guest_invite=locked, permission_key=GUEST_DECISION_PERMISSION,
+        ).delete()
+    locked.updated_at = now
+    locked.save(update_fields=['updated_at'])
+    record_user_audit(
+        user=user, workspace=locked.project.workspace, action='guest.invite.updated',
+        entity_type='guest_invite', entity_id=locked.id, project=locked.project_id, team_only=False,
+        metadata={'guest_invite_id': str(locked.id), 'label': locked.label, 'allow_decisions': bool(allow)},
     )
     return locked

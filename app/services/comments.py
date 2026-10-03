@@ -176,7 +176,7 @@ def create_review_comment(
 @transaction.atomic
 def create_guest_review_comment(
     *, media_version, guest_session, text, parent_comment=None,
-    start_time_ms=None, end_time_ms=None,
+    start_time_ms=None, end_time_ms=None, notify_followers=True,
 ):
     if not text.strip():
         raise ReviewCommentError('Comment text cannot be empty.')
@@ -205,7 +205,12 @@ def create_guest_review_comment(
         content_type=ReviewCommentContentType.TEXT, text_content=text.strip(),
         sort_order=0, created_at=now, updated_at=now,
     )
-    notify_comment_created(comment=comment, actor=None, actor_name=guest_session.name or 'A guest reviewer')
+    # A change request from a review link notifies as "changes requested" with this note
+    # quoted, so it skips the separate "new note on your cut" (replies still notify).
+    notify_comment_created(
+        comment=comment, actor=None, actor_name=guest_session.name or 'A guest reviewer',
+        include_followers=notify_followers,
+    )
     record_guest_audit(
         guest_session=guest_session, workspace=media_version.project.workspace,
         action='review.comment.created', entity_type='review_comment', entity_id=comment.id,
