@@ -1,7 +1,19 @@
+from django.urls import reverse
 from rest_framework import serializers
 
-from app.models import FileVariant, MediaVersion, MediaVersionStageEntry, OutboxEvent, PriorityLevel, WorkflowStageStatus
-from app.services.file_processing import PREVIEW_VARIANT_TYPES
+from app.models import FileStatus, FileVariant, MediaVersion, MediaVersionStageEntry, OutboxEvent, PriorityLevel, WorkflowStageStatus
+from app.services.file_processing import POSTER_VARIANT_TYPE, PREVIEW_VARIANT_TYPES
+
+# The stills a list may show for a cut: the frame pulled from a video, or an image's own
+# thumbnail. Shared with the poster route so the URL is only ever offered when it resolves.
+MEDIA_POSTER_VARIANT_TYPES = (POSTER_VARIANT_TYPE, 'IMAGE_THUMBNAIL')
+
+
+def media_poster_variant(media):
+    return FileVariant.objects.filter(
+        file_id=media.original_file_id, status=FileStatus.READY, deleted_at__isnull=True,
+        metadata__variant_type__in=MEDIA_POSTER_VARIANT_TYPES,
+    ).order_by('-created_at').first()
 
 
 class MediaUploadSerializer(serializers.Serializer):
@@ -17,13 +29,33 @@ class MediaVersionSerializer(serializers.ModelSerializer):
     file = serializers.SerializerMethodField()
     current_stage = serializers.SerializerMethodField()
     preview_status = serializers.SerializerMethodField()
+    poster = serializers.SerializerMethodField()
 
     class Meta:
         model = MediaVersion
         fields = (
             'id', 'project_id', 'version_number', 'title', 'note', 'priority',
-            'allow_download', 'status', 'file', 'current_stage', 'preview_status', 'created_at',
+            'allow_download', 'status', 'file', 'current_stage', 'preview_status', 'poster', 'created_at',
         )
+
+    def get_poster(self, media):
+        """The still a list shows for this cut, or None until one has been generated.
+
+        `url` is the permission-checked poster route; `width`/`height` are the frame's own
+        size so a list can letterbox it instead of cropping it.
+        """
+        variant = media_poster_variant(media)
+        if variant is None:
+            return None
+        metadata = variant.metadata or {}
+        return {
+            'url': reverse(
+                'api-media-version-poster',
+                args=[media.project.workspace_id, media.project_id, media.id],
+            ),
+            'width': metadata.get('width') or None,
+            'height': metadata.get('height') or None,
+        }
 
     def get_file(self, media):
         file_record = media.original_file

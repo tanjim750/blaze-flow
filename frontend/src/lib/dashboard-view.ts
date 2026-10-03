@@ -1,5 +1,5 @@
 import { listMediaVersions, listNotifications, listProjects, listTasks, listWorkspaces } from "./api";
-import type { MediaVersion, Notification, Task } from "./api";
+import type { ApiFailure, MediaVersion, Notification, Project, Task } from "./api";
 import { selectWorkspace } from "./workspace";
 import { upcomingDeadlines } from "./deadlines";
 
@@ -9,6 +9,8 @@ export type Tone = "neutral" | "warning" | "danger" | "success" | "accent" | "bl
 export type DashboardTask = {
   id: string; name: string; project: string; priority: string;
   time: string; status: string; tone: Tone; bucket: Bucket;
+  /** Assigned to the viewer's own workspace membership. */
+  mine: boolean;
 };
 export type AttentionItem = {
   id: string; eyebrow: string; client: string; title: string;
@@ -17,6 +19,8 @@ export type AttentionItem = {
 export type ReviewQueueItem = {
   id: string; title: string; version: string; project: string;
   stage: string; age: string; tone: Tone; href: string;
+  /** Same-origin, permission-checked poster route; null until the worker has made one. */
+  poster: string | null;
   /** Sort key only — the rendered form is `age`. */
   createdAt: string;
 };
@@ -25,26 +29,52 @@ export type ProjectCard = {
   date: string; tasks: string; percent: number; href: string;
 };
 export type DeadlineItem = { id: string; day: string; date: string; title: string; project: string; priority: string; tone: Tone };
-export type ActivityItem = { id: string; initials: string; tone: Tone; text: string; detail: string };
+/** One row of Recent Activity: "<actor> <action>", with the actor rendered in bold. */
+export type ActivityItem = { id: string; initials: string; tone: Tone; actor: string; action: string; detail: string; href: string | null };
 
-export type DashboardView = {
+/**
+ * The "today" strip (C-D2). Task counts are the viewer's own when the API names their
+ * membership, otherwise the workspace's; `null` means the task list could not be loaded,
+ * which the strip shows as a dash rather than a zero.
+ */
+export type TodayCounts = {
+  activeProjects: number;
+  awaitingReview: number;
+  dueToday: number | null;
+  overdue: number | null;
+  taskScope: "mine" | "workspace";
+};
+
+export type DashboardReady = {
+  status: "ready";
   greetingName: string;
   workspaceName: string;
   today: string;
-  activeProjectCount: number;
-  stats: { activeProjects: number; dueToday: number; overdue: number; awaitingReview: number };
+  counts: TodayCounts;
   attention: AttentionItem[];
+  /** Every open task; the panel filters to `mine` by default. */
   tasks: DashboardTask[];
+  /** The viewer's membership id, used for the "all my tasks" link. Null when unknown. */
+  membershipId: string | null;
   reviewQueue: ReviewQueueItem[];
+  /** How many cuts await review in the projects scanned (the queue itself is capped). */
+  reviewTotal: number;
   projects: ProjectCard[];
+  /** Projects in the workspace that are not finished, archived or being deleted. */
+  openProjectCount: number;
   deadlines: DeadlineItem[];
   activity: ActivityItem[];
-  /** Non-null when the API could not supply the page and demo content is shown instead. */
-  notice: string | null;
+  /** Per-panel failures. A panel with a problem shows it instead of pretending to be empty. */
+  problems: { tasks: string | null; reviews: string | null; activity: string | null };
 };
 
+/** The page could not be built. Never accompanied by numbers: there are none to trust. */
+export type DashboardFailure = { status: "error"; greetingName: string; today: string; title: string; detail: string };
+
+export type DashboardView = DashboardReady | DashboardFailure;
+
 /** Projects fanned out for media versions. Caps the request count on a large workspace. */
-const REVIEW_SCAN_LIMIT = 6;
+export const REVIEW_SCAN_LIMIT = 6;
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -58,7 +88,21 @@ const statusLabel = (status: string) => TASK_STATUS_LABELS[status] ?? titleCase(
 
 const isOpen = (task: Task) => !["COMPLETED", "APPROVED", "CANCELLED"].includes(task.status);
 
-function bucketFor(task: Task, now: Date): Bucket {
+/** Project statuses that mean the work is over or going away. */
+const CLOSED_PROJECT_STATUSES = ["COMPLETED", "ARCHIVED", "PENDING_DELETION"];
+
+/** "Active" means the project's status is ACTIVE — not merely that the project exists. */
+export const countActiveProjects = (projects: Pick<Project, "status">[]) =>
+  projects.filter((project) => project.status === "ACTIVE").length;
+
+export const isMine = (task: Pick<Task, "assignees">, membershipId: string | null) =>
+  !!membershipId && task.assignees.some((person) => person.id === membershipId);
+
+export function todayLabel(now: Date): string {
+  return `${DAYS[now.getDay()]}, ${MONTHS[now.getMonth()]} ${now.getDate()}`;
+}
+
+export function bucketFor(task: Task, now: Date): Bucket {
   if (!task.due_at) return "Upcoming";
   const due = new Date(task.due_at).getTime();
   if (Number.isNaN(due)) return "Upcoming";
@@ -86,10 +130,10 @@ function taskTone(task: Task, bucket: Bucket): Tone {
   return "neutral";
 }
 
-function relativeAge(iso: string): string {
+export function relativeAge(iso: string, now: Date = new Date()): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
-  const minutes = Math.floor((Date.now() - then) / 60000);
+  const minutes = Math.floor((now.getTime() - then) / 60000);
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
@@ -99,16 +143,24 @@ function relativeAge(iso: string): string {
 
 function stageTone(label: string): Tone {
   const value = label.toLowerCase();
-  if (value.includes("approv")) return "success";
+  if (value.includes("approved")) return "success";
+  if (value.includes("approv")) return "accent";
   if (value.includes("revision")) return "warning";
   if (value.includes("review")) return "blue";
   return "neutral";
 }
 
-/** A cut counts as awaiting review when its workflow stage says review or approval. */
-const awaitsReview = (media: MediaVersion) => {
-  const stage = media.current_stage?.name.toLowerCase() ?? "";
-  return stage.includes("review") || stage.includes("approv");
+/**
+ * A cut awaits review while its workflow stage is a review or approval step. "Approved" is
+ * where review ends, so it no longer counts (it used to, because "approved" contains "approv").
+ */
+export const awaitsReview = (media: Pick<MediaVersion, "current_stage">) => {
+  const stage = media.current_stage;
+  if (!stage) return false;
+  const slug = stage.slug?.toLowerCase() ?? "";
+  const name = stage.name.toLowerCase();
+  if (slug === "approved" || name === "approved") return false;
+  return name.includes("review") || name.includes("approv");
 };
 
 function initialsFrom(name: string): string {
@@ -117,72 +169,57 @@ function initialsFrom(name: string): string {
   return `${parts[0].charAt(0)}${parts.length > 1 ? parts[parts.length - 1].charAt(0) : ""}`.toUpperCase();
 }
 
-const describe = (status: number, detail: string) =>
-  process.env.NODE_ENV === "production"
-    ? detail
-    : status === 0
-    ? `${detail} Showing demo content until the API is running.`
-    : `The API returned ${status}: ${detail}. Showing demo content.`;
+const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
+const clip = (value: string, max = 80) => (value.length > max ? `${value.slice(0, max - 1)}…` : value);
 
 /**
- * Loads the dashboard from the Django API.
- *
- * Everything here is derived from three workspace-wide lists (projects, tasks,
- * notifications) plus a bounded fan-out for media versions, because the backend has no
- * dashboard/summary endpoint. Panels the API genuinely cannot answer — per-cut comment
- * counts, durations, render state — are left out rather than faked.
+ * Says what a notification actually is. Every row used to read "mentioned you in a review
+ * comment" whatever its kind. Unknown kinds fall back to their own humanised name rather
+ * than borrowing another kind's sentence.
  */
-export async function loadDashboardView(greetingName: string): Promise<DashboardView> {
-  const now = new Date();
-  const today = `${DAYS[now.getDay()]}, ${MONTHS[now.getMonth()]} ${now.getDate()}`;
-
-  const workspaces = await listWorkspaces();
-  if (!workspaces.ok) return demoView(greetingName, today, describe(workspaces.error.status, workspaces.error.detail));
-  const workspace = await selectWorkspace(workspaces.data);
-  if (!workspace) return demoView(greetingName, today, "This account has no workspace yet.");
-
-  const [projectsResult, tasksResult, notificationsResult] = await Promise.all([
-    listProjects(workspace.id),
-    listTasks(workspace.id),
-    listNotifications(),
-  ]);
-  if (!projectsResult.ok) return demoView(greetingName, today, describe(projectsResult.error.status, projectsResult.error.detail));
-
-  const projects = projectsResult.data;
-  const projectNames = new Map(projects.map((project) => [project.id, project.name]));
-  // A task list failure is not fatal: the projects half of the page is still worth showing.
-  const tasks = tasksResult.ok ? tasksResult.data : [];
-
-  const reviewQueue: ReviewQueueItem[] = [];
-  let awaitingReview = 0;
-  const scanned = await Promise.all(
-    projects.slice(0, REVIEW_SCAN_LIMIT).map(async (project) => ({
-      project,
-      media: await listMediaVersions(workspace.id, project.id),
-    })),
-  );
-  for (const { project, media } of scanned) {
-    if (!media.ok) continue;
-    for (const item of [...media.data].reverse()) {
-      const stage = item.current_stage?.name ?? titleCase(item.status);
-      if (awaitsReview(item)) awaitingReview += 1;
-      reviewQueue.push({
-        id: item.id,
-        title: item.title,
-        version: `V${item.version_number} · ${stage}`,
-        project: project.name,
-        stage,
-        age: relativeAge(item.created_at),
-        tone: stageTone(stage),
-        href: `/review?media=${item.file.id}`,
-        createdAt: item.created_at,
-      });
+export function describeNotification(item: Notification, now: Date = new Date()): ActivityItem {
+  const actor = item.actor?.name?.trim() || item.actor?.email || "Someone";
+  const payload = item.payload ?? {};
+  const age = relativeAge(item.created_at, now);
+  const withAge = (extra: string | null) => (extra ? `${age} · ${extra}` : age);
+  const base = { id: item.id, initials: initialsFrom(actor), tone: (item.unread ? "accent" : "neutral") as Tone, actor };
+  switch (item.kind) {
+    case "REVIEW_COMMENT_MENTION": {
+      const project = text(payload.project_id);
+      const version = text(payload.media_version_id);
+      const excerpt = text(payload.excerpt);
+      return {
+        ...base,
+        action: "mentioned you in a review note",
+        detail: withAge(excerpt ? `“${clip(excerpt)}”` : null),
+        href: project ? `/review?project=${project}${version ? `&version=${version}` : ""}` : null,
+      };
     }
+    case "TASK_CLIENT_READY": {
+      const title = text(payload.title);
+      const task = text(payload.task_id) ?? (item.entity_type === "task" ? item.entity_id : null);
+      return {
+        ...base,
+        action: title ? `marked “${clip(title, 60)}” ready for your review` : "marked a task ready for your review",
+        detail: age,
+        href: task ? `/tasks?task=${task}` : null,
+      };
+    }
+    default:
+      return { ...base, action: `sent a notification (${titleCase(item.kind.replaceAll(".", " ")).toLowerCase()})`, detail: age, href: null };
   }
-  // Newest cut first, across every project scanned.
-  reviewQueue.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
 
-  const dashboardTasks: DashboardTask[] = tasks.filter(isOpen).map((task) => {
+/** Recent Activity, from the viewer's notifications in this workspace only. */
+export function buildActivity(notifications: Notification[], workspaceId: string, now: Date = new Date(), limit = 4): ActivityItem[] {
+  return notifications
+    .filter((item) => !item.workspace_id || item.workspace_id === workspaceId)
+    .slice(0, limit)
+    .map((item) => describeNotification(item, now));
+}
+
+export function buildDashboardTasks(tasks: Task[], projectNames: Map<string, string>, membershipId: string | null, now: Date): DashboardTask[] {
+  return tasks.filter(isOpen).map((task) => {
     const bucket = bucketFor(task, now);
     return {
       id: task.id,
@@ -193,24 +230,88 @@ export async function loadDashboardView(greetingName: string): Promise<Dashboard
       status: bucket === "Overdue" ? "Overdue" : statusLabel(task.status),
       tone: taskTone(task, bucket),
       bucket,
+      mine: isMine(task, membershipId),
     };
   });
+}
 
+/** Cuts awaiting review across the scanned projects, newest first, with their posters. */
+export function buildReviewQueue(scanned: { project: Pick<Project, "name">; media: MediaVersion[] }[], now: Date = new Date()): ReviewQueueItem[] {
+  const queue: ReviewQueueItem[] = [];
+  for (const { project, media } of scanned) {
+    for (const item of media) {
+      if (!awaitsReview(item)) continue;
+      const stage = item.current_stage?.name ?? titleCase(item.status);
+      queue.push({
+        id: item.id,
+        title: item.title,
+        version: `V${item.version_number}`,
+        project: project.name,
+        stage,
+        age: relativeAge(item.created_at, now),
+        tone: stageTone(stage),
+        href: `/review?media=${item.file.id}`,
+        poster: item.poster?.url ?? null,
+        createdAt: item.created_at,
+      });
+    }
+  }
+  return queue.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Not-closed projects, ACTIVE ones first, then by due date (undated last). */
+export function openProjects(projects: Project[]): Project[] {
+  const due = (project: Project) => (project.due_at ? new Date(project.due_at).getTime() : Number.POSITIVE_INFINITY);
+  return projects
+    .filter((project) => !CLOSED_PROJECT_STATUSES.includes(project.status))
+    .sort((a, b) => Number(b.status === "ACTIVE") - Number(a.status === "ACTIVE") || due(a) - due(b));
+}
+
+export type DashboardInput = {
+  greetingName: string;
+  now: Date;
+  workspace: { id: string; name: string; my_membership_id?: string | null };
+  projects: Project[];
+  /** A failure leaves the task panels saying so rather than showing zeros. */
+  tasks: Task[] | ApiFailure;
+  notifications: Notification[] | ApiFailure;
+  scanned: { project: Project; media: MediaVersion[] | ApiFailure }[];
+};
+
+const failed = <T,>(value: T[] | ApiFailure): value is ApiFailure => !Array.isArray(value);
+
+/** Everything the dashboard shows, derived from what the API returned. Pure, so it is unit-tested. */
+export function buildDashboardView(input: DashboardInput): DashboardReady {
+  const { now, workspace, projects } = input;
+  const membershipId = input.workspace.my_membership_id ?? null;
+  const projectNames = new Map(projects.map((project) => [project.id, project.name]));
+  const tasks = failed(input.tasks) ? [] : input.tasks;
+  const dashboardTasks = buildDashboardTasks(tasks, projectNames, membershipId, now);
+
+  const scannedOk = input.scanned.filter((entry): entry is { project: Project; media: MediaVersion[] } => !failed(entry.media));
+  const reviewQueue = buildReviewQueue(scannedOk, now);
+  const reviewFailures = input.scanned.length - scannedOk.length;
+
+  // The strip counts the viewer's own tasks when we know who they are in this workspace.
+  const scoped = membershipId ? dashboardTasks.filter((task) => task.mine) : dashboardTasks;
   const overdue = dashboardTasks.filter((task) => task.bucket === "Overdue");
   const dueToday = dashboardTasks.filter((task) => task.bucket === "Today");
+  const tasksFailed = failed(input.tasks);
 
+  const visibleProjects = openProjects(projects);
   // Tasks per project drive the completion bar; cancelled tasks are excluded from both sides.
-  const projectCards: ProjectCard[] = projects.map((project) => {
+  const projectCards: ProjectCard[] = visibleProjects.slice(0, 4).map((project) => {
     const own = tasks.filter((task) => task.project_id === project.id && task.status !== "CANCELLED");
     const done = own.filter((task) => ["COMPLETED", "APPROVED"].includes(task.status)).length;
+    const due = project.due_at ? new Date(project.due_at) : null;
     return {
       id: project.id,
       title: project.name,
       status: titleCase(project.status),
-      tone: stageTone(project.status),
+      tone: project.status === "ACTIVE" ? "accent" : project.status === "ON_HOLD" ? "warning" : "neutral",
       priority: titleCase(project.priority),
-      date: project.due_at ? `${MONTHS[new Date(project.due_at).getMonth()]} ${new Date(project.due_at).getDate()}` : "No due date",
-      tasks: own.length ? `${done}/${own.length}` : "0/0",
+      date: due && !Number.isNaN(due.getTime()) ? `${MONTHS[due.getMonth()]} ${due.getDate()}` : "No due date",
+      tasks: `${done}/${own.length}`,
       percent: own.length ? Math.round((done / own.length) * 100) : 0,
       href: `/projects?campaign=${project.id}`,
     };
@@ -235,101 +336,102 @@ export async function loadDashboardView(greetingName: string): Promise<Dashboard
   const attention: AttentionItem[] = [
     ...overdue.slice(0, 2).map((task): AttentionItem => ({
       id: task.id, eyebrow: `Overdue · ${task.time}`, client: task.project, title: task.name,
-      detail: `${task.priority} priority task is past its due date.`, action: "Open Task",
-      footer: task.time, tone: "danger", href: "/projects?view=tasks", icon: "clock",
+      detail: `${task.priority} priority task is past its due date.`, action: "Open task",
+      footer: task.time, tone: "danger", href: `/tasks?task=${task.id}`, icon: "clock",
     })),
-    ...reviewQueue.filter((item) => item.tone === "blue").slice(0, 1).map((item): AttentionItem => ({
-      id: item.id, eyebrow: item.stage, client: item.project, title: item.title,
-      detail: "This cut is sitting in review and waiting on feedback.", action: "Review Feedback",
+    ...reviewQueue.slice(0, 1).map((item): AttentionItem => ({
+      id: item.id, eyebrow: item.stage, client: item.project, title: `${item.title} · ${item.version}`,
+      detail: "This cut is waiting on feedback.", action: "Open review",
       footer: item.age, tone: "accent", href: item.href, icon: "message",
     })),
     ...dueToday.slice(0, 1).map((task): AttentionItem => ({
       id: task.id, eyebrow: "Due today", client: task.project, title: task.name,
-      detail: `${task.priority} priority task is due today.`, action: "Open Project",
-      footer: task.time, tone: "warning", href: "/projects?view=tasks", icon: "checks",
+      detail: `${task.priority} priority task is due today.`, action: "Open task",
+      footer: task.time, tone: "warning", href: `/tasks?task=${task.id}`, icon: "checks",
     })),
   ].slice(0, 3);
 
-  const activity: ActivityItem[] = (notificationsResult.ok ? notificationsResult.data : []).slice(0, 4).map((item: Notification) => {
-    const actor = item.actor?.name?.trim() || item.actor?.email || "Someone";
-    return {
-      id: item.id,
-      initials: initialsFrom(actor),
-      tone: item.unread ? "accent" : "neutral",
-      text: `${actor} mentioned you in a review comment`,
-      detail: relativeAge(item.created_at),
-    };
-  });
-
   return {
-    greetingName,
+    status: "ready",
+    greetingName: input.greetingName,
     workspaceName: workspace.name,
-    today,
-    activeProjectCount: projects.length,
-    stats: {
-      activeProjects: projects.length,
-      dueToday: dueToday.length,
-      overdue: overdue.length,
-      awaitingReview,
+    today: todayLabel(now),
+    counts: {
+      activeProjects: countActiveProjects(projects),
+      awaitingReview: reviewQueue.length,
+      dueToday: tasksFailed ? null : scoped.filter((task) => task.bucket === "Today").length,
+      overdue: tasksFailed ? null : scoped.filter((task) => task.bucket === "Overdue").length,
+      taskScope: membershipId ? "mine" : "workspace",
     },
     attention,
     tasks: dashboardTasks,
+    membershipId,
     reviewQueue: reviewQueue.slice(0, 4),
-    projects: projectCards.slice(0, 4),
+    reviewTotal: reviewQueue.length,
+    projects: projectCards,
+    openProjectCount: visibleProjects.length,
     deadlines,
-    activity,
-    notice: tasksResult.ok ? null : `Tasks unavailable: ${tasksResult.error.detail}`,
+    activity: failed(input.notifications) ? [] : buildActivity(input.notifications, workspace.id, now),
+    problems: {
+      tasks: failed(input.tasks) ? `Tasks could not be loaded: ${input.tasks.detail}` : null,
+      reviews: reviewFailures
+        ? `${reviewFailures} ${reviewFailures === 1 ? "project's" : "projects'"} cuts could not be loaded.`
+        : null,
+      activity: failed(input.notifications) ? `Notifications could not be loaded: ${input.notifications.detail}` : null,
+    },
   };
 }
 
-/** Content from the Stitch reference, used only when the API cannot answer. */
-function demoView(greetingName: string, today: string, notice: string): DashboardView {
-  if (process.env.NODE_ENV === "production") {
-    return {
-      greetingName, workspaceName: "Blaze Flow", today, activeProjectCount: 0,
-      stats: { activeProjects: 0, dueToday: 0, overdue: 0, awaitingReview: 0 },
-      attention: [], tasks: [], reviewQueue: [], projects: [], deadlines: [], activity: [], notice,
-    };
-  }
+/** What the error state says. Honest about the cause; never paired with numbers. */
+export function failureView(greetingName: string, now: Date, error: ApiFailure): DashboardFailure {
+  const unreachable = error.status === 0;
   return {
+    status: "error",
     greetingName,
-    workspaceName: "Blaze Flow Studio",
-    today,
-    activeProjectCount: 4,
-    stats: { activeProjects: 12, dueToday: 5, overdue: 3, awaitingReview: 8 },
-    attention: [
-      { id: "a1", eyebrow: "Overdue · due yesterday", client: "Blaze Media", title: "Homepage Animation", detail: "Deliver 60fps Lottie SVG asset and test mobile fallback.", action: "Open Task", footer: "24h delay", tone: "danger", href: "/projects?view=tasks", icon: "clock" },
-      { id: "a2", eyebrow: "Revision requested", client: "Summer Campaign", title: "Summer Campaign Film", detail: "4 unresolved comments on opening hook and music drop.", action: "Review Feedback", footer: "4 comments", tone: "accent", href: "/review", icon: "message" },
-      { id: "a3", eyebrow: "Due tomorrow", client: "Brand Launch", title: "Brand Launch", detail: "2 open tasks: packaging 3D render & vector logo exports.", action: "Open Project", footer: "2 tasks pending", tone: "warning", href: "/projects", icon: "checks" },
-    ],
-    tasks: [
-      { id: "t1", name: "Refine opening animation", project: "Summer Campaign", priority: "High", time: "Today, 10:00 AM", status: "In Progress", tone: "warning", bucket: "Today" },
-      { id: "t2", name: "Export final social cutdowns", project: "Product Launch", priority: "Medium", time: "Today, 2:00 PM", status: "To Do", tone: "neutral", bucket: "Today" },
-      { id: "t3", name: "Update brand presentation", project: "Studio Rebrand", priority: "High", time: "Today, 4:00 PM", status: "In Progress", tone: "warning", bucket: "Today" },
-      { id: "t4", name: "Brand Launch 3D Assets Delivery", project: "Brand Launch", priority: "High", time: "Tomorrow, 12:00 PM", status: "To Do", tone: "neutral", bucket: "Upcoming" },
-      { id: "t5", name: "Homepage Animation", project: "Blaze Media", priority: "High", time: "Due yesterday", status: "Overdue", tone: "danger", bucket: "Overdue" },
-    ],
-    reviewQueue: [
-      { id: "r1", title: "Summer Campaign Film", version: "V3 · In review", project: "Summer Campaign", stage: "In review", age: "2h ago", tone: "blue", href: "/review", createdAt: "2024-10-24T08:00:00Z" },
-      { id: "r2", title: "Product Teaser", version: "V2 · Revision", project: "Product Launch", stage: "Revision", age: "4h ago", tone: "warning", href: "/review", createdAt: "2024-10-24T06:00:00Z" },
-      { id: "r3", title: "Brand Hero Visual", version: "V1 · Approval", project: "Studio Rebrand", stage: "Approval", age: "1h ago", tone: "success", href: "/review", createdAt: "2024-10-24T09:00:00Z" },
-    ],
-    projects: [
-      { id: "p1", title: "Aurora Fall Campaign", status: "In review", tone: "blue", priority: "High", date: "Nov 02", tasks: "8/12", percent: 66, href: "/projects" },
-      { id: "p2", title: "Summer Campaign", status: "Revisions", tone: "warning", priority: "High", date: "Oct 28", tasks: "10/14", percent: 71, href: "/projects" },
-      { id: "p3", title: "Atlas Product Launch", status: "In progress", tone: "neutral", priority: "Medium", date: "Nov 15", tasks: "4/11", percent: 36, href: "/projects" },
-      { id: "p4", title: "Studio Rebrand", status: "Planning", tone: "neutral", priority: "Medium", date: "Dec 01", tasks: "3/9", percent: 33, href: "/projects" },
-    ],
-    deadlines: [
-      { id: "d1", day: "Today", date: "24", title: "Final Color Pass & ACES Rec.709 Lut Conform", project: "Northwind Brand Film · 5:00 PM", priority: "Critical", tone: "danger" },
-      { id: "d2", day: "Fri", date: "25", title: "Brand Launch 3D Assets Delivery", project: "Brand Launch · 12:00 PM", priority: "Normal", tone: "neutral" },
-      { id: "d3", day: "Mon", date: "28", title: "Summer Campaign Film Client Master Delivery", project: "Summer Campaign · 6:00 PM", priority: "Priority", tone: "warning" },
-    ],
-    activity: [
-      { id: "v1", initials: "AR", tone: "accent", text: "Alex uploaded V3 of Summer Campaign Film", detail: "2h ago · ProRes 422 (2.4 GB)" },
-      { id: "v2", initials: "CL", tone: "warning", text: "Client requested changes on Product Teaser", detail: "4h ago · 5 notes pinned to markers" },
-      { id: "v3", initials: "MC", tone: "success", text: "Marcus approved color pass on Aurora Athletics Hero", detail: "6h ago · Ready for final export" },
-    ],
-    notice,
+    today: todayLabel(now),
+    title: unreachable ? "Can't reach Blaze Flow right now" : "The dashboard couldn't load",
+    detail: unreachable
+      ? "The server didn't answer. Check your connection and try again."
+      : `The server answered ${error.status}: ${error.detail}`,
   };
+}
+
+/**
+ * Loads the dashboard from the Django API.
+ *
+ * Everything here is derived from three workspace-wide lists (projects, tasks,
+ * notifications) plus a bounded fan-out for media versions, because the backend has no
+ * dashboard/summary endpoint. When the workspace or project list fails there is nothing
+ * honest to show, so the page renders an error state with Retry — never sample numbers.
+ */
+export async function loadDashboardView(greetingName: string): Promise<DashboardView> {
+  const now = new Date();
+  const workspaces = await listWorkspaces();
+  if (!workspaces.ok) return failureView(greetingName, now, workspaces.error);
+  const workspace = await selectWorkspace(workspaces.data);
+  if (!workspace) return failureView(greetingName, now, { status: 404, detail: "This account has no workspace yet." });
+
+  const [projectsResult, tasksResult, notificationsResult] = await Promise.all([
+    listProjects(workspace.id),
+    listTasks(workspace.id),
+    listNotifications(),
+  ]);
+  if (!projectsResult.ok) return failureView(greetingName, now, projectsResult.error);
+
+  // Scan the projects most likely to have cuts in review first.
+  const scanTargets = openProjects(projectsResult.data).slice(0, REVIEW_SCAN_LIMIT);
+  const scanned = await Promise.all(scanTargets.map(async (project) => {
+    const media = await listMediaVersions(workspace.id, project.id);
+    return { project, media: media.ok ? media.data : media.error };
+  }));
+
+  return buildDashboardView({
+    greetingName,
+    now,
+    workspace,
+    projects: projectsResult.data,
+    tasks: tasksResult.ok ? tasksResult.data : tasksResult.error,
+    notifications: notificationsResult.ok ? notificationsResult.data : notificationsResult.error,
+    scanned,
+  });
 }

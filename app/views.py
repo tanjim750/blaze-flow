@@ -43,6 +43,7 @@ from .serializers import (
     MessageSerializer,
     MediaUploadSerializer,
     MediaVersionSerializer,
+    media_poster_variant,
     NotificationSerializer,
     NotificationPreferenceSerializer,
     ReviewCommentCreateSerializer,
@@ -146,6 +147,8 @@ from .models import (
     WorkflowStageStatusState,
     Workspace,
     WorkspaceMembership,
+    WorkspaceMembershipStatus,
+    WorkspacePrincipalType,
     WorkspaceProfile,
 )
 from .permissions import (
@@ -467,7 +470,21 @@ def workspace_list_create(request):
             permission_key=WORKSPACE_READ,
         )
         workspaces = Workspace.objects.filter(id__in=workspace_ids).distinct().order_by('name')
-        return Response(WorkspaceSerializer(workspaces, many=True).data)
+        data = WorkspaceSerializer(workspaces, many=True).data
+        # The viewer's own membership in each workspace. Task assignees are memberships, so
+        # this is what lets the dashboard show "My tasks" rather than everyone's. Null where
+        # the viewer reaches a workspace only through a client team.
+        own = {
+            str(workspace_id): str(membership_id) for workspace_id, membership_id in WorkspaceMembership.objects.filter(
+                workspace_id__in=[item['id'] for item in data],
+                user=request.user,
+                principal_type=WorkspacePrincipalType.USER,
+                status=WorkspaceMembershipStatus.ACTIVE,
+            ).values_list('workspace_id', 'id')
+        }
+        for item in data:
+            item['my_membership_id'] = own.get(str(item['id']))
+        return Response(data)
 
     _require_verified_email(request)
     serializer = WorkspaceCreateSerializer(data=request.data)
@@ -1799,7 +1816,7 @@ def media_version_list_create(request, workspace_id, project_id):
         raise PermissionDenied('You do not have permission to access media in this project.')
     if request.method == 'GET':
         media_versions = MediaVersion.objects.filter(project=project).select_related(
-            'original_file'
+            'original_file', 'project'
         ).order_by('version_number')
         return Response(MediaVersionSerializer(media_versions, many=True).data)
 
@@ -1906,6 +1923,24 @@ def media_version_preview(request, workspace_id, project_id, media_version_id):
         request, variant.object_key, filename=variant.original_name,
         content_type=variant.mime_type, checksum=variant.checksum,
     )
+
+
+@api_view(['GET', 'HEAD'])
+@permission_classes([IsAuthenticated])
+def media_version_poster(request, workspace_id, project_id, media_version_id):
+    """Serves the still a list shows for a cut: a video's poster frame or an image's thumbnail.
+
+    Inline, like the asset poster route, and gated on the same media read permission as the
+    preview. 404s until the worker has produced one, which is when the serializer stops
+    offering the URL.
+    """
+    workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
+    if not has_project_permission(user=request.user, project=project, permission_key=MEDIA_READ):
+        raise PermissionDenied('You do not have permission to view this media version.')
+    variant = media_poster_variant(media_version)
+    if variant is None or not default_storage.exists(variant.object_key):
+        raise Http404('No poster has been generated for this media version yet.')
+    return ranged_file_response(request, variant.object_key, content_type=variant.mime_type, checksum=variant.checksum)
 
 
 @api_view(['POST'])

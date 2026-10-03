@@ -11,7 +11,11 @@ import { describeErrorBody } from "./errors";
  */
 const API_ORIGIN = process.env.BLAZEFLOW_API_URL ?? "http://127.0.0.1:8000";
 
-export type Workspace = { id: string; name: string; slug: string; timezone: string; status: string; created_at: string };
+export type Workspace = {
+  id: string; name: string; slug: string; timezone: string; status: string; created_at: string;
+  /** The viewer's own membership here (what task assignee ids refer to). Null via a client team; absent on older backends. */
+  my_membership_id?: string | null;
+};
 export type WorkspaceProfile = {
   business_name: string | null; description: string | null; email: string | null;
   phone: string | null; website_url: string | null; address_line_1: string | null;
@@ -43,6 +47,8 @@ export type MediaVersion = {
   /** `entered_at` / `changed_by` say who moved the cut into this stage, and when. */
   current_stage: (WorkflowStageRef & { entered_at?: string | null; changed_by?: { id: string; name: string } | null }) | null;
   preview_status: string; created_at: string;
+  /** A video's poster frame or an image's thumbnail, once generated. Absent on older backends. */
+  poster?: { url: string; width: number | null; height: number | null } | null;
 };
 
 export type CurrentUser = {
