@@ -7,6 +7,7 @@ from app.models import (
     ReviewCommentReaction,
     ReviewCommentRevision,
     ReviewReactionEmoji,
+    ReviewCommentVisibility,
     FileVariant,
 )
 
@@ -25,6 +26,10 @@ class ReviewCommentCreateSerializer(serializers.Serializer):
     parent_comment_id = serializers.UUIDField(required=False, allow_null=True)
     start_time_ms = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     end_time_ms = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    # Ignored on guest routes: a guest note is always client-visible.
+    visibility = serializers.ChoiceField(
+        choices=ReviewCommentVisibility.choices, default=ReviewCommentVisibility.CLIENT,
+    )
 
     def validate(self, attrs):
         start = attrs.get('start_time_ms')
@@ -80,7 +85,7 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
         model = ReviewComment
         fields = (
             'id', 'parent_comment_id', 'author', 'text', 'start_time_ms', 'end_time_ms',
-            'resolved', 'resolved_by_user_id', 'resolved_at', 'mentions', 'attachments', 'reactions', 'revision_count',
+            'resolved', 'resolved_by_user_id', 'resolved_at', 'visibility', 'mentions', 'attachments', 'reactions', 'revision_count',
             'created_at', 'updated_at',
         )
 

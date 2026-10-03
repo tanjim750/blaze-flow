@@ -26,8 +26,8 @@ from .services.annotations import (
     update_guest_annotation,
 )
 from .services.comments import (
-    ReviewCommentError, create_guest_review_comment, delete_guest_review_comment,
-    edit_guest_review_comment,
+    ReviewCommentError, client_visible_comments, create_guest_review_comment,
+    delete_guest_review_comment, edit_guest_review_comment,
 )
 from .services.guest_access import (
     GUEST_ALLOWED_PERMISSIONS, GuestAccessError, authenticate_guest_access,
@@ -59,6 +59,22 @@ class GuestExchangeSerializer(serializers.Serializer):
 
 class GuestReviewCommentEditSerializer(serializers.Serializer):
     text = serializers.CharField(max_length=10000)
+
+
+def _guest_comments(media):
+    """Every comment lookup on a guest route goes through here, so team notes never surface.
+
+    Team-only notes (and replies in their threads) 404 rather than 403 for a guest: the
+    guest should not learn that a hidden note exists.
+    """
+    return client_visible_comments(ReviewComment.objects.filter(media_version=media))
+
+
+def _guest_annotations(media):
+    # A drawing saved with a team note is part of that note.
+    return Annotation.objects.filter(media_version=media, deleted_at__isnull=True).exclude(
+        review_comment__visibility='team',
+    ).exclude(review_comment__parent_comment__visibility='team')
 
 
 def _guest_access(request, project, permission):
@@ -201,7 +217,7 @@ def guest_comments(request, project_id, media_version_id):
     permission = 'review.comment.read' if request.method == 'GET' else 'review.comment.create'
     access = _guest_access(request, project, permission)
     if request.method == 'GET':
-        comments = ReviewComment.objects.filter(media_version=media, deleted_at__isnull=True).select_related('author_user', 'author_guest_session').order_by('created_at')
+        comments = _guest_comments(media).filter(deleted_at__isnull=True).select_related('author_user', 'author_guest_session').order_by('created_at')
         return paginated_response(
             request=request, queryset=comments,
             serializer_class=ReviewCommentSerializer,
@@ -210,8 +226,9 @@ def guest_comments(request, project_id, media_version_id):
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data.copy()
     data.pop('mentioned_user_ids', None)
+    data.pop('visibility', None)
     parent_id = data.pop('parent_comment_id', None)
-    parent = get_object_or_404(ReviewComment, id=parent_id, media_version=media, deleted_at__isnull=True) if parent_id else None
+    parent = get_object_or_404(_guest_comments(media), id=parent_id, deleted_at__isnull=True) if parent_id else None
     try:
         comment = create_guest_review_comment(media_version=media, guest_session=access.guest_session, parent_comment=parent, **data)
     except ReviewCommentError as exc:
@@ -227,7 +244,7 @@ def guest_comment_detail(request, project_id, media_version_id, comment_id):
     media = get_object_or_404(MediaVersion, id=media_version_id, project=project, status='ACTIVE')
     permission = 'review.comment.edit' if request.method == 'PATCH' else 'review.comment.delete'
     access = _guest_access(request, project, permission)
-    comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media, deleted_at__isnull=True)
+    comment = get_object_or_404(_guest_comments(media), id=comment_id, deleted_at__isnull=True)
     if comment.author_guest_session_id != access.guest_session_id:
         raise PermissionDenied('Guests can change only their own comments.')
     try:
@@ -252,7 +269,7 @@ def guest_comment_revisions(request, project_id, media_version_id, comment_id):
     project = get_object_or_404(Project, id=project_id)
     media = get_object_or_404(MediaVersion, id=media_version_id, project=project, status='ACTIVE')
     _guest_access(request, project, 'review.comment.read')
-    comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media)
+    comment = get_object_or_404(_guest_comments(media), id=comment_id)
     revisions = ReviewCommentRevision.objects.filter(review_comment=comment).order_by('created_at')
     return Response(ReviewCommentRevisionSerializer(revisions, many=True).data)
 
@@ -266,9 +283,7 @@ def guest_comment_reactions(request, project_id, media_version_id, comment_id):
         MediaVersion, id=media_version_id, project=project, status='ACTIVE'
     )
     access = _guest_access(request, project, 'review.reaction.create')
-    comment = get_object_or_404(
-        ReviewComment, id=comment_id, media_version=media, deleted_at__isnull=True
-    )
+    comment = get_object_or_404(_guest_comments(media), id=comment_id, deleted_at__isnull=True)
     serializer = ReviewReactionWriteSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     try:
@@ -301,7 +316,7 @@ def guest_annotations(request, project_id, media_version_id):
     permission = 'annotation.read' if request.method == 'GET' else 'annotation.create'
     access = _guest_access(request, project, permission)
     if request.method == 'GET':
-        items = Annotation.objects.filter(media_version=media, deleted_at__isnull=True).order_by('created_at')
+        items = _guest_annotations(media).order_by('created_at')
         return paginated_response(
             request=request, queryset=items, serializer_class=AnnotationSerializer,
         )
@@ -309,7 +324,7 @@ def guest_annotations(request, project_id, media_version_id):
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data.copy()
     comment_id = data.pop('review_comment_id', None)
-    comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media, deleted_at__isnull=True) if comment_id else None
+    comment = get_object_or_404(_guest_comments(media), id=comment_id, deleted_at__isnull=True) if comment_id else None
     try:
         item = create_guest_annotation(media_version=media, guest_session=access.guest_session, review_comment=comment, **data)
     except AnnotationError as exc:
@@ -325,7 +340,7 @@ def guest_annotation_detail(request, project_id, media_version_id, annotation_id
     media = get_object_or_404(MediaVersion, id=media_version_id, project=project, status='ACTIVE')
     permission = 'annotation.edit' if request.method == 'PATCH' else 'annotation.delete'
     access = _guest_access(request, project, permission)
-    annotation = get_object_or_404(Annotation, id=annotation_id, media_version=media, deleted_at__isnull=True)
+    annotation = get_object_or_404(_guest_annotations(media), id=annotation_id)
     if annotation.author_guest_session_id != access.guest_session_id:
         raise PermissionDenied('Guests can change only their own annotations.')
     if request.method == 'DELETE':
@@ -342,7 +357,7 @@ def guest_annotation_detail(request, project_id, media_version_id, annotation_id
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data.copy()
     comment_id = data.pop('review_comment_id', annotation.review_comment_id)
-    comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media, deleted_at__isnull=True) if comment_id else None
+    comment = get_object_or_404(_guest_comments(media), id=comment_id, deleted_at__isnull=True) if comment_id else None
     try:
         annotation = update_guest_annotation(
             annotation=annotation, guest_session=access.guest_session,
@@ -360,7 +375,11 @@ def guest_annotation_revisions(request, project_id, media_version_id, annotation
     project = get_object_or_404(Project, id=project_id)
     media = get_object_or_404(MediaVersion, id=media_version_id, project=project, status='ACTIVE')
     _guest_access(request, project, 'annotation.read')
-    annotation = get_object_or_404(Annotation, id=annotation_id, media_version=media)
+    annotation = get_object_or_404(
+        Annotation.objects.filter(media_version=media).exclude(review_comment__visibility='team')
+        .exclude(review_comment__parent_comment__visibility='team'),
+        id=annotation_id,
+    )
     revisions = AnnotationRevision.objects.filter(annotation=annotation).order_by('created_at')
     return Response(AnnotationRevisionSerializer(revisions, many=True).data)
 
@@ -372,7 +391,7 @@ def guest_attachment_upload(request, project_id, media_version_id, comment_id):
     project = get_object_or_404(Project, id=project_id)
     media = get_object_or_404(MediaVersion, id=media_version_id, project=project, status='ACTIVE')
     access = _guest_access(request, project, 'review.attachment.create')
-    comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media, deleted_at__isnull=True)
+    comment = get_object_or_404(_guest_comments(media), id=comment_id, deleted_at__isnull=True)
     if comment.author_guest_session_id != access.guest_session_id:
         raise PermissionDenied('Guests can attach files only to their own comments.')
     serializer = ReviewAttachmentUploadSerializer(data=request.data)
@@ -398,6 +417,7 @@ def guest_attachment_download(request, project_id, content_id):
         ReviewCommentContent.objects.select_related('file'), id=content_id,
         review_comment__media_version__project=project, file__isnull=False,
         file__deleted_at__isnull=True, deleted_at__isnull=True,
+        review_comment__in=client_visible_comments(ReviewComment.objects.all()),
     )
     if request.method == 'DELETE':
         if content.review_comment.author_guest_session_id != access.guest_session_id:
@@ -427,6 +447,7 @@ def guest_attachment_preview(request, project_id, content_id, variant_id):
         ReviewCommentContent.objects.select_related('file'), id=content_id,
         review_comment__media_version__project=project, file__status=FileStatus.READY,
         file__deleted_at__isnull=True, deleted_at__isnull=True,
+        review_comment__in=client_visible_comments(ReviewComment.objects.all()),
     )
     variant = get_object_or_404(
         FileVariant, id=variant_id, file=content.file, status=FileStatus.READY,

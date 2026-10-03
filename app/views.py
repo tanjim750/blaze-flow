@@ -186,6 +186,7 @@ from .permissions import (
 )
 from app.services.file_processing import POSTER_VARIANT_TYPE, PREVIEW_VARIANT_TYPES
 from app.services.task_stages import is_client_review_stage, stage_for_status
+from .services.comments import can_see_team_notes, client_visible_comments
 from .services import (
     InvitationError,
     ClientTeamError,
@@ -2007,7 +2008,7 @@ def review_comment_list_create(request, workspace_id, project_id, media_version_
         'You do not have permission to access comments for this media version.',
     )
     if request.method == 'GET':
-        comments = ReviewComment.objects.filter(
+        comments = _comments_visible_to(request.user, workspace).filter(
             media_version=media_version,
             deleted_at__isnull=True,
         ).select_related('author_user').order_by('created_at')
@@ -2023,7 +2024,7 @@ def review_comment_list_create(request, workspace_id, project_id, media_version_
     parent_comment = None
     if parent_comment_id:
         parent_comment = get_object_or_404(
-            ReviewComment,
+            _comments_visible_to(request.user, workspace),
             id=parent_comment_id,
             media_version=media_version,
             deleted_at__isnull=True,
@@ -2040,12 +2041,20 @@ def review_comment_list_create(request, workspace_id, project_id, media_version_
     return Response(ReviewCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
 
 
-def _comment_from_route(workspace_id, project_id, media_version_id, comment_id):
+def _comments_visible_to(user, workspace):
+    """Comments this signed-in user may see: client-team members never see team notes."""
+    queryset = ReviewComment.objects.all()
+    if can_see_team_notes(user=user, workspace=workspace):
+        return queryset
+    return client_visible_comments(queryset)
+
+
+def _comment_from_route(workspace_id, project_id, media_version_id, comment_id, *, user):
     workspace, project, media_version = _media_from_route(
         workspace_id, project_id, media_version_id
     )
     comment = get_object_or_404(
-        ReviewComment.objects.select_related('author_user', 'media_version__project__workspace'),
+        _comments_visible_to(user, workspace).select_related('author_user', 'media_version__project__workspace'),
         id=comment_id,
         media_version=media_version,
         deleted_at__isnull=True,
@@ -2057,7 +2066,7 @@ def _comment_from_route(workspace_id, project_id, media_version_id, comment_id):
 @permission_classes([IsAuthenticated])
 def review_comment_detail(request, workspace_id, project_id, media_version_id, comment_id):
     workspace, project, media_version, comment = _comment_from_route(
-        workspace_id, project_id, media_version_id, comment_id
+        workspace_id, project_id, media_version_id, comment_id, user=request.user,
     )
     if request.method == 'PATCH':
         _require_project_permission(
@@ -2097,7 +2106,7 @@ def review_comment_detail(request, workspace_id, project_id, media_version_id, c
 @permission_classes([IsAuthenticated])
 def review_comment_resolution(request, workspace_id, project_id, media_version_id, comment_id):
     workspace, project, media_version, comment = _comment_from_route(
-        workspace_id, project_id, media_version_id, comment_id
+        workspace_id, project_id, media_version_id, comment_id, user=request.user,
     )
     _require_project_permission(
         request,
@@ -2122,7 +2131,7 @@ def review_comment_resolution(request, workspace_id, project_id, media_version_i
 @permission_classes([IsAuthenticated])
 def review_comment_revisions(request, workspace_id, project_id, media_version_id, comment_id):
     workspace, project, media_version, comment = _comment_from_route(
-        workspace_id, project_id, media_version_id, comment_id
+        workspace_id, project_id, media_version_id, comment_id, user=request.user,
     )
     _require_project_permission(
         request,
@@ -2138,7 +2147,7 @@ def review_comment_revisions(request, workspace_id, project_id, media_version_id
 @permission_classes([IsAuthenticated])
 def review_comment_reactions(request, workspace_id, project_id, media_version_id, comment_id):
     workspace, project, media_version, comment = _comment_from_route(
-        workspace_id, project_id, media_version_id, comment_id
+        workspace_id, project_id, media_version_id, comment_id, user=request.user,
     )
     _require_project_permission(
         request,
@@ -2251,7 +2260,7 @@ def notification_preferences(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def review_attachment_upload(request, workspace_id, project_id, media_version_id, comment_id):
-    workspace, project, media_version, comment = _comment_from_route(workspace_id, project_id, media_version_id, comment_id)
+    workspace, project, media_version, comment = _comment_from_route(workspace_id, project_id, media_version_id, comment_id, user=request.user)
     _require_project_permission(request, project, REVIEW_COMMENT_CREATE, 'You do not have permission to attach review files.')
     if comment.author_user_id != request.user.id:
         raise PermissionDenied('Only the comment author can add attachments.')
@@ -2264,8 +2273,8 @@ def review_attachment_upload(request, workspace_id, project_id, media_version_id
     return Response(ReviewAttachmentSerializer(content).data, status=status.HTTP_201_CREATED)
 
 
-def _attachment_from_route(workspace_id, project_id, media_version_id, comment_id, content_id):
-    workspace, project, media_version, comment = _comment_from_route(workspace_id, project_id, media_version_id, comment_id)
+def _attachment_from_route(workspace_id, project_id, media_version_id, comment_id, content_id, *, user):
+    workspace, project, media_version, comment = _comment_from_route(workspace_id, project_id, media_version_id, comment_id, user=user)
     content = get_object_or_404(
         ReviewCommentContent.objects.select_related('file'), id=content_id,
         review_comment=comment, file__isnull=False, deleted_at__isnull=True,
@@ -2276,7 +2285,7 @@ def _attachment_from_route(workspace_id, project_id, media_version_id, comment_i
 @api_view(['GET', 'HEAD', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def review_attachment_detail(request, workspace_id, project_id, media_version_id, comment_id, content_id):
-    workspace, project, media_version, comment, content = _attachment_from_route(workspace_id, project_id, media_version_id, comment_id, content_id)
+    workspace, project, media_version, comment, content = _attachment_from_route(workspace_id, project_id, media_version_id, comment_id, content_id, user=request.user)
     if request.method in ('GET', 'HEAD'):
         _require_project_permission(request, project, REVIEW_COMMENT_READ, 'You do not have permission to download this attachment.')
         if content.file.status != 'READY':
@@ -2307,7 +2316,7 @@ def review_attachment_detail(request, workspace_id, project_id, media_version_id
 @api_view(['GET', 'HEAD'])
 @permission_classes([IsAuthenticated])
 def review_attachment_preview(request, workspace_id, project_id, media_version_id, comment_id, content_id, variant_id):
-    workspace, project, media_version, comment, content = _attachment_from_route(workspace_id, project_id, media_version_id, comment_id, content_id)
+    workspace, project, media_version, comment, content = _attachment_from_route(workspace_id, project_id, media_version_id, comment_id, content_id, user=request.user)
     _require_project_permission(request, project, REVIEW_COMMENT_READ, 'You do not have permission to view this attachment preview.')
     variant = get_object_or_404(
         FileVariant, id=variant_id, file=content.file, status='READY', deleted_at__isnull=True,
@@ -2327,7 +2336,7 @@ def annotation_list_create(request, workspace_id, project_id, media_version_id):
     permission_key = ANNOTATION_READ if request.method == 'GET' else ANNOTATION_CREATE
     _require_project_permission(request, project, permission_key, 'You do not have permission to access annotations.')
     if request.method == 'GET':
-        items = Annotation.objects.filter(media_version=media_version, deleted_at__isnull=True).order_by('created_at')
+        items = _annotations_visible_to(request.user, workspace, media_version).order_by('created_at')
         return paginated_response(
             request=request, queryset=items, serializer_class=AnnotationSerializer,
         )
@@ -2335,7 +2344,7 @@ def annotation_list_create(request, workspace_id, project_id, media_version_id):
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data.copy()
     comment_id = data.pop('review_comment_id', None)
-    comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media_version, deleted_at__isnull=True) if comment_id else None
+    comment = get_object_or_404(_comments_visible_to(request.user, workspace), id=comment_id, media_version=media_version, deleted_at__isnull=True) if comment_id else None
     try:
         item = create_annotation(media_version=media_version, user=request.user, review_comment=comment, **data)
     except AnnotationError as exc:
@@ -2343,16 +2352,26 @@ def annotation_list_create(request, workspace_id, project_id, media_version_id):
     return Response(AnnotationSerializer(item).data, status=status.HTTP_201_CREATED)
 
 
-def _annotation_from_route(workspace_id, project_id, media_version_id, annotation_id):
+def _annotations_visible_to(user, workspace, media_version):
+    items = Annotation.objects.filter(media_version=media_version, deleted_at__isnull=True)
+    if can_see_team_notes(user=user, workspace=workspace):
+        return items
+    # A drawing saved with a team note belongs to that note.
+    return items.exclude(review_comment__visibility='team').exclude(
+        review_comment__parent_comment__visibility='team'
+    )
+
+
+def _annotation_from_route(workspace_id, project_id, media_version_id, annotation_id, *, user):
     workspace, project, media_version = _media_from_route(workspace_id, project_id, media_version_id)
-    annotation = get_object_or_404(Annotation, id=annotation_id, media_version=media_version, deleted_at__isnull=True)
+    annotation = get_object_or_404(_annotations_visible_to(user, workspace, media_version), id=annotation_id)
     return workspace, project, media_version, annotation
 
 
 @api_view(['PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def annotation_detail(request, workspace_id, project_id, media_version_id, annotation_id):
-    workspace, project, media_version, annotation = _annotation_from_route(workspace_id, project_id, media_version_id, annotation_id)
+    workspace, project, media_version, annotation = _annotation_from_route(workspace_id, project_id, media_version_id, annotation_id, user=request.user)
     if request.method == 'PATCH':
         _require_project_permission(request, project, ANNOTATION_CREATE, 'You do not have permission to edit annotations.')
         if annotation.author_user_id != request.user.id:
@@ -2370,7 +2389,7 @@ def annotation_detail(request, workspace_id, project_id, media_version_id, annot
         comment_id = data.pop('review_comment_id', annotation.review_comment_id)
         data['start_time_ms'] = data.get('start_time_ms', annotation.start_time_ms)
         data['end_time_ms'] = data.get('end_time_ms', annotation.end_time_ms)
-        comment = get_object_or_404(ReviewComment, id=comment_id, media_version=media_version, deleted_at__isnull=True) if comment_id else None
+        comment = get_object_or_404(_comments_visible_to(request.user, workspace), id=comment_id, media_version=media_version, deleted_at__isnull=True) if comment_id else None
         item = update_annotation(annotation=annotation, user=request.user, review_comment=comment, **data)
         return Response(AnnotationSerializer(item).data)
     _require_project_permission(request, project, ANNOTATION_MANAGE, 'You do not have permission to delete annotations.')
@@ -2381,7 +2400,7 @@ def annotation_detail(request, workspace_id, project_id, media_version_id, annot
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def annotation_revisions(request, workspace_id, project_id, media_version_id, annotation_id):
-    workspace, project, media_version, annotation = _annotation_from_route(workspace_id, project_id, media_version_id, annotation_id)
+    workspace, project, media_version, annotation = _annotation_from_route(workspace_id, project_id, media_version_id, annotation_id, user=request.user)
     _require_project_permission(request, project, ANNOTATION_READ, 'You do not have permission to read annotation revisions.')
     revisions = AnnotationRevision.objects.filter(annotation=annotation).order_by('created_at')
     return Response(AnnotationRevisionSerializer(revisions, many=True).data)
