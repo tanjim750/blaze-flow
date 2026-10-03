@@ -2,13 +2,18 @@
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from "react";
 import {
-  ChevronFirst, ChevronLast, Circle, Crosshair, Film, Gauge, Maximize2, MonitorPlay,
-  MoveUpRight, Pause, PencilLine, Play, Square, Trash2, Type, Volume2, VolumeX,
+  ChevronFirst, ChevronLast, Circle, Crosshair, Film, Gauge, Loader2, Maximize2, MonitorPlay,
+  MoveUpRight, Pause, PencilLine, Play, RotateCw, Square, Trash2, Type, Volume2, VolumeX,
 } from "lucide-react";
+import { toast } from "sonner";
 import type { AnnotationElement } from "@/lib/api";
 import type { ReviewNote } from "@/lib/review-notes";
 import { timecode } from "@/lib/timecode";
 import { playerShouldIgnoreKey } from "./player-keys";
+import {
+  BUFFERING_DELAY_MS, bufferedSpans, canSeekTo, clampSeekMs, describePlaybackError,
+  positionFromPointer, sameSpans, seekLanded, type BufferedSpan,
+} from "./player-state";
 
 export type DrawTool = "POINT" | "RECTANGLE" | "ELLIPSE" | "ARROW" | "PATH" | "TEXT";
 export type PlayerHandle = { seek: (ms: number) => void; position: () => number };
@@ -53,24 +58,62 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [speed, setSpeed] = useState(1);
-  const [failed, setFailed] = useState(false);
+  /** The `MediaError` code once playback has failed, or null while it is healthy. */
+  const [errorCode, setErrorCode] = useState<number | null>(null);
+  const failed = errorCode !== null;
+  /** Where a seek was sent, shown on the playhead until the element confirms with `seeked`. */
+  const [seekTarget, setSeekTarget] = useState<number | null>(null);
+  const [buffering, setBuffering] = useState(false);
+  const [buffered, setBuffered] = useState<BufferedSpan[]>([]);
+  /** While the scrubber is being dragged, the position under the pointer. */
+  const [dragMs, setDragMs] = useState<number | null>(null);
   const [shape, setShape] = useState<{ width: number; height: number } | null>(null);
   const [tool, setTool] = useState<DrawTool | null>(null);
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [path, setPath] = useState<{ x: number; y: number }[]>([]);
   const fps = useRef(DEFAULT_FPS);
+  // A seek requested before the metadata arrived, applied as soon as it does.
+  const queuedSeek = useRef<number | null>(null);
+  // The seek in flight, compared against where the element actually lands.
+  const inFlight = useRef<number | null>(null);
+  const bufferingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Read through a ref so a parent passing a fresh callback doesn't re-run the media effect.
+  const onTimeRef = useRef(onTime);
+  useEffect(() => { onTimeRef.current = onTime; }, [onTime]);
 
   const source = sources.find((item) => item.id === sourceId) ?? sources[0] ?? null;
 
+  /**
+   * Sends the element to `ms` and lets the element say where it ended up.
+   *
+   * This used to set `positionMs` straight away, so the clock and playhead showed the
+   * requested time even when the browser refused the jump — then `timeupdate` snapped them
+   * back. Now the requested time is only a provisional target for the playhead; the clock,
+   * `onTime` and everything downstream move on `seeked`, from `currentTime` itself.
+   */
   const seek = useCallback((ms: number) => {
     const element = video.current;
-    const clamped = Math.max(0, durationMs ? Math.min(ms, durationMs) : ms);
-    if (element) element.currentTime = clamped / 1000;
-    setPositionMs(clamped);
-    onTime(clamped);
-  }, [durationMs, onTime]);
+    const known = element && Number.isFinite(element.duration) && element.duration > 0 ? element.duration * 1000 : durationMs;
+    const target = clampSeekMs(ms, known);
+    if (!element || element.readyState < 1) {
+      queuedSeek.current = target;
+      setSeekTarget(target);
+      return;
+    }
+    if (!canSeekTo(element.seekable, target / 1000)) {
+      // Without range support the browser can only seek within what it has fetched.
+      toast("Seeking unavailable, loading the full cut…", { description: `Couldn't jump to ${timecode(target)} yet. Try again once more of the cut has loaded.` });
+      return;
+    }
+    inFlight.current = target;
+    setSeekTarget(target);
+    element.currentTime = target / 1000;
+  }, [durationMs]);
 
-  useImperativeHandle(handle, () => ({ seek, position: () => positionMs }), [seek, positionMs]);
+  useImperativeHandle(handle, () => ({
+    seek,
+    position: () => (video.current ? video.current.currentTime * 1000 : positionMs),
+  }), [seek, positionMs]);
 
   const toggle = useCallback(() => {
     const element = video.current;
@@ -93,24 +136,79 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
   useEffect(() => {
     const element = video.current;
     if (!element) return;
-    setFailed(false);
+    setErrorCode(null);
     setShape(null);
+    setBuffered([]);
+    const report = (ms: number) => { setPositionMs(ms); onTimeRef.current(ms); };
     const sync = () => {
       if (!Number.isFinite(element.duration) || !element.duration) return;
       setDurationMs(element.duration * 1000);
       if (element.videoWidth && element.videoHeight) setShape({ width: element.videoWidth, height: element.videoHeight });
       onMeta({ durationMs: element.duration * 1000, width: element.videoWidth, height: element.videoHeight });
+      onProgress();
+      const queued = queuedSeek.current;
+      if (queued !== null) {
+        queuedSeek.current = null;
+        inFlight.current = queued;
+        element.currentTime = clampSeekMs(queued, element.duration * 1000) / 1000;
+      }
     };
-    const fail = () => setFailed(true);
+    const fail = () => {
+      clearBuffering();
+      setSeekTarget(null);
+      setErrorCode(element.error?.code ?? 0);
+    };
+    // The spinner waits a beat, so a seek inside the buffer never flashes it.
+    const startBuffering = () => {
+      if (bufferingTimer.current) return;
+      bufferingTimer.current = setTimeout(() => setBuffering(true), BUFFERING_DELAY_MS);
+    };
+    const clearBuffering = () => {
+      if (bufferingTimer.current) clearTimeout(bufferingTimer.current);
+      bufferingTimer.current = null;
+      setBuffering(false);
+    };
+    const onSeeked = () => {
+      const target = inFlight.current;
+      inFlight.current = null;
+      setSeekTarget(null);
+      report(element.currentTime * 1000);
+      if (!element.seeking) clearBuffering();
+      if (target !== null && !seekLanded(target, element.currentTime)) {
+        toast("Couldn't jump to that point", { description: `The player stopped at ${timecode(element.currentTime * 1000)} instead of ${timecode(target)}.` });
+      }
+    };
+    const onReady = () => { if (!element.seeking) clearBuffering(); };
+    const onProgress = () => {
+      const next = bufferedSpans(element.buffered, element.duration * 1000);
+      setBuffered((current) => (sameSpans(current, next) ? current : next));
+    };
+    const onTimeUpdate = () => { if (!element.seeking) report(element.currentTime * 1000); };
+
     if (element.error) fail();
     else if (element.readyState >= 1) sync();
-    element.addEventListener("loadedmetadata", sync);
-    element.addEventListener("error", fail);
+    const listeners: [string, () => void][] = [
+      ["loadedmetadata", sync], ["durationchange", sync], ["error", fail],
+      ["seeking", startBuffering], ["waiting", startBuffering], ["seeked", onSeeked],
+      ["canplay", onReady], ["playing", onReady], ["progress", onProgress],
+      ["timeupdate", onTimeUpdate], ["timeupdate", onProgress],
+    ];
+    for (const [name, listener] of listeners) element.addEventListener(name, listener);
     return () => {
-      element.removeEventListener("loadedmetadata", sync);
-      element.removeEventListener("error", fail);
+      for (const [name, listener] of listeners) element.removeEventListener(name, listener);
+      if (bufferingTimer.current) clearTimeout(bufferingTimer.current);
+      bufferingTimer.current = null;
     };
   }, [onMeta, source?.src]);
+
+  /** Reloads a failed source and puts the playhead back where it was. */
+  const retry = useCallback(() => {
+    const element = video.current;
+    if (!element) return;
+    queuedSeek.current = positionMs > 0 ? positionMs : null;
+    setErrorCode(null);
+    element.load();
+  }, [positionMs]);
 
   /**
    * Measures the real frame duration rather than assuming one.
@@ -169,14 +267,32 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
     return () => window.removeEventListener("keydown", onKey);
   }, [step, toggle]);
 
-  const scrub = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!durationMs) return;
+  // Scrubbing: the playhead follows the pointer while it is held, and the one real seek
+  // happens on release, so a drag does not queue dozens of competing range requests.
+  const pointerMs = (event: React.PointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
-    seek(((event.clientX - bounds.left) / bounds.width) * durationMs);
+    return positionFromPointer(event.clientX, bounds.left, bounds.width, durationMs);
+  };
+  const scrubStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!durationMs || failed || event.button !== 0) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setDragMs(pointerMs(event));
+  };
+  const scrubMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (dragMs !== null) setDragMs(pointerMs(event));
+  };
+  const scrubEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (dragMs === null) return;
+    const target = pointerMs(event);
+    setDragMs(null);
+    seek(target);
   };
 
   const markers = notes.filter((note) => note.startMs !== null);
-  const progress = durationMs ? (positionMs / durationMs) * 100 : 0;
+  // The playhead shows a drag or a seek in flight; the clock only ever shows the real time.
+  const headMs = dragMs ?? seekTarget ?? positionMs;
+  const progress = durationMs ? Math.min(100, (headMs / durationMs) * 100) : 0;
+  const problem = failed ? describePlaybackError(errorCode) : null;
   // Only annotations pinned near the playhead, so the frame shows its own notes.
   const visible = annotations.filter((item) => item.startMs === null || Math.abs(item.startMs - positionMs) < 2000);
 
@@ -200,20 +316,39 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
           * made against.
           */}
         <div className={shape ? "rvp-frame" : "rvp-frame is-unsized"} style={shape ? { aspectRatio: `${shape.width} / ${shape.height}` } : undefined}>
-        {source && !failed ? (
+        {source ? (
           <video
             ref={video}
             src={source.src}
             playsInline
+            className={failed ? "is-failed" : undefined}
             onClick={toggle}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
-            onTimeUpdate={(event) => { const ms = event.currentTarget.currentTime * 1000; setPositionMs(ms); onTime(ms); }}
           />
         ) : (
           <div className="rvp-empty">
             <Film size={28} />
-            <p>{failed ? "The review proxy for this cut is still being generated. Refresh in a moment." : "This cut has no preview available yet."}</p>
+            <p>This cut has no preview available yet.</p>
+          </div>
+        )}
+        {/* The element stays mounted when it fails, so Retry can reload it in place. */}
+        {problem && (
+          <div className="rvp-empty rvp-error" role="alert">
+            <Film size={28} />
+            <strong>{problem.title}</strong>
+            <p>{problem.detail}</p>
+            {problem.retryable && (
+              <button type="button" className="rvp-retry" onClick={retry}>
+                <RotateCw size={14} /> Retry
+              </button>
+            )}
+          </div>
+        )}
+        {buffering && !failed && (
+          <div className="rvp-buffering" role="status" aria-live="polite">
+            <Loader2 size={28} aria-hidden="true" />
+            <span className="sr-only">Loading…</span>
           </div>
         )}
 
@@ -260,7 +395,17 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
       </div>
 
       <div className="rvp-timeline">
-        <div className="rvp-scrub" onClick={scrub} role="presentation">
+        <div
+          className={`rvp-scrub ${dragMs !== null ? "is-dragging" : ""}`}
+          role="presentation"
+          onPointerDown={scrubStart}
+          onPointerMove={scrubMove}
+          onPointerUp={scrubEnd}
+          onPointerCancel={() => setDragMs(null)}
+        >
+          {buffered.map((span) => (
+            <span key={`${span.start}-${span.end}`} className="rvp-buffered" style={{ left: `${span.start}%`, width: `${span.end - span.start}%` }} />
+          ))}
           <span className="rvp-played" style={{ width: `${progress}%` }} />
           <span className="rvp-head" style={{ left: `${progress}%` }} />
           {markers.map((note) => (
@@ -271,6 +416,7 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
               style={{ left: durationMs ? `${(note.startMs! / durationMs) * 100}%` : "0%" }}
               title={`${note.timecode} — ${note.author}`}
               aria-label={`Jump to ${note.timecode} by ${note.author}`}
+              onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => { event.stopPropagation(); seek(note.startMs!); onFocusNote(note.id); }}
             >
               <i>{note.initials}</i>
@@ -288,7 +434,7 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
           <button type="button" onClick={() => step(1)} aria-label="Next frame" title="Next frame (→)"><ChevronLast /></button>
         </div>
 
-        <div className="rvp-clock">
+        <div className={`rvp-clock ${seekTarget !== null ? "is-seeking" : ""}`} aria-live="off">
           <strong>{timecode(positionMs)}</strong>
           <span>/ {timecode(durationMs)}</span>
         </div>

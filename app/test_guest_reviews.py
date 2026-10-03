@@ -241,6 +241,38 @@ class GuestReviewApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertTrue(AuditLog.objects.filter(action='review.attachment.uploaded', actor_type='GUEST').exists())
         self.assertTrue(AuditLog.objects.filter(action='review.attachment.deleted', actor_type='GUEST').exists())
 
+    def test_guest_attachment_download_supports_ranges_and_head_never_deletes(self):
+        headers = self.issue_access([
+            'media.read', 'media.download', 'review.comment.read',
+            'review.comment.create', 'review.attachment.create', 'review.attachment.delete',
+        ])
+        comment = self.client.post(reverse('api-guest-comments', args=[self.project_id, self.media_id]), {'text': 'ref'}, format='json', **headers)
+        body = b'%PDF-1.7\n' + b'x' * 500
+        uploaded = self.client.post(
+            reverse('api-guest-attachment-upload', args=[self.project_id, self.media_id, comment.json()['id']]),
+            {'file': SimpleUploadedFile('guest.pdf', body, content_type='application/pdf')},
+            format='multipart', **headers,
+        )
+        self.assertEqual(uploaded.status_code, 201)
+        process_outbox_events()
+        process_outbox_events()
+        url = reverse('api-guest-attachment', args=[self.project_id, uploaded.json()['id']])
+
+        ranged = self.client.get(url, HTTP_RANGE='bytes=0-8', **headers)
+        self.assertEqual(ranged.status_code, 206)
+        self.assertEqual(b''.join(ranged.streaming_content), b'%PDF-1.7\n')
+        self.assertEqual(ranged['Content-Range'], f'bytes 0-8/{len(body)}')
+        self.assertEqual(self.client.get(url, HTTP_RANGE='bytes=9999-', **headers).status_code, 416)
+
+        # HEAD is routed through the same view as DELETE; it must never be mistaken for one.
+        head = self.client.head(url, **headers)
+        self.assertEqual(head.status_code, 200)
+        self.assertEqual(head['Accept-Ranges'], 'bytes')
+        self.assertIsNone(ReviewCommentContent.objects.get(id=uploaded.json()['id']).deleted_at)
+
+        # Without the access key the permission check refuses before any bytes are read.
+        self.assertIn(self.client.get(url, HTTP_RANGE='bytes=0-8').status_code, (401, 403))
+
     def test_guest_comment_list_uses_bounded_pagination(self):
         headers = self.issue_access(['review.comment.read', 'review.comment.create'])
         url = reverse('api-guest-comments', args=[self.project_id, self.media_id])
