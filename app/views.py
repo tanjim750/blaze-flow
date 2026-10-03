@@ -202,6 +202,7 @@ from .services.notifications import (
     update_in_app_settings,
 )
 from .serializers.media import MEDIA_POSTER_VARIANT_TYPES
+from .services.tasks import record_task_stage_move
 from .services import (
     InvitationError,
     ClientTeamError,
@@ -1520,7 +1521,11 @@ def task_stage_detail(request, workspace_id, stage_id):
         if stage.is_done and not replacement.is_done:
             replacement.is_done = True
             replacement.save(update_fields=['is_done', 'updated_at'])
-        tasks.update(task_stage=replacement, status=TaskStatus.APPROVED if replacement.is_done else TaskStatus.TODO, updated_at=timezone.now())
+        moved_at = timezone.now()
+        # A bulk move is still a move: each task's stage history gets the row it needs.
+        for moved in tasks.select_related('workspace'):
+            record_task_stage_move(task=moved, actor=request.user, from_stage=stage, to_stage=replacement, reason='stage_deleted', at=moved_at)
+        tasks.update(task_stage=replacement, status=TaskStatus.APPROVED if replacement.is_done else TaskStatus.TODO, updated_at=moved_at)
         staged_files.update(task_stage=replacement, updated_at=timezone.now())
     stage.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
@@ -1592,6 +1597,7 @@ def task_list_create(request, workspace_id):
         client_team=client_team,
         task_stage=task_stage,
         created_by_membership=creating_membership,
+        actor=request.user,
         **data,
     )
     if assignee_id:
@@ -1647,13 +1653,19 @@ def task_detail(request, workspace_id, task_id):
         task_stage = get_object_or_404(TaskStage, id=task_stage_id, workspace=workspace) if task_stage_id else None
         if task_stage and stage_was_supplied:
             data['status'] = TaskStatus.APPROVED if task_stage.is_done else TaskStatus.TODO
-        task = update_task(task=task, project=project, client_team=client_team, task_stage=task_stage, **data)
+        task = update_task(task=task, project=project, client_team=client_team, task_stage=task_stage, actor=request.user, **data)
         _run_stage_entry_effects(request, workspace, task, previous_stage_id)
         if assignee_id is not ...:
-            TaskAssignee.objects.filter(task=task).delete()
-            if assignee_id:
-                membership = get_object_or_404(WorkspaceMembership, id=assignee_id, workspace=workspace)
-                add_task_assignee(task=task, membership=membership, actor=request.user)
+            current = list(TaskAssignee.objects.filter(task=task).select_related('workspace_membership__user', 'workspace_membership__client_team', 'task__workspace'))
+            # Re-sending the same single assignee is not a change, so it is not re-assigned
+            # (and not re-notified or re-audited).
+            unchanged = assignee_id and len(current) == 1 and str(current[0].workspace_membership_id) == str(assignee_id)
+            if not unchanged:
+                membership = get_object_or_404(WorkspaceMembership, id=assignee_id, workspace=workspace) if assignee_id else None
+                for row in current:
+                    remove_task_assignee(assignee=row, actor=request.user)
+                if membership:
+                    add_task_assignee(task=task, membership=membership, actor=request.user)
         return Response(TaskSerializer(task).data)
     try:
         delete_task(task=task)
@@ -1717,7 +1729,7 @@ def task_move(request, workspace_id, task_id):
         position = serializer.validated_data.get('position')
         position = len(column) if position is None else max(0, min(position, len(column)))
         if stage.id != previous_stage_id:
-            task = update_task(task=task, task_stage=stage)
+            task = update_task(task=task, task_stage=stage, actor=request.user)
         column.insert(position, task)
         changed = []
         for index, row in enumerate(column):
@@ -1767,7 +1779,7 @@ def task_assignee_detail(request, workspace_id, task_id, assignee_id):
     task = get_object_or_404(Task, id=task_id, workspace=workspace, deleted_at__isnull=True)
     _require_task_permission(request, workspace, task, TASK_UPDATE)
     assignee = get_object_or_404(TaskAssignee, id=assignee_id, task=task)
-    remove_task_assignee(assignee=assignee)
+    remove_task_assignee(assignee=assignee, actor=request.user)
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 

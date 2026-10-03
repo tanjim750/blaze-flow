@@ -32,8 +32,9 @@ from .services.comments import (
 from .services.guest_access import (
     GUEST_ALLOWED_PERMISSIONS, GuestAccessError, authenticate_guest_access,
     create_guest_invite, exchange_guest_invite, revoke_guest_invite,
-    revoke_guest_review_access, rotate_guest_access_key,
+    record_guest_view, revoke_guest_review_access, rotate_guest_access_key,
 )
+from .services.activity import guest_link_status
 from .services.review_assets import (
     ReviewAttachmentError, delete_guest_review_attachment, upload_review_attachment,
 )
@@ -88,7 +89,7 @@ def _guest_access(request, project, permission):
         raise PermissionDenied(str(exc)) from exc
 
 
-def _invite_data(invite):
+def _invite_data(invite, activity=None):
     accesses = GuestReviewAccess.objects.filter(guest_invite=invite).select_related(
         'guest_session'
     ).order_by('created_at')
@@ -104,6 +105,9 @@ def _invite_data(invite):
             'last_accessed_at': access.last_accessed_at, 'revoked_at': access.revoked_at,
             'created_at': access.created_at,
         } for access in accesses],
+        # Built from guest events: when the link was last opened, on which cut, and whether
+        # that cut has a decision yet. Only the list route fills it in.
+        'activity': activity,
     }
 
 
@@ -119,12 +123,13 @@ def project_guest_invites(request, workspace_id, project_id):
     project = get_object_or_404(Project.objects.select_related('workspace'), id=project_id, workspace_id=workspace_id)
     membership = _guest_manager(request, project)
     if request.method == 'GET':
-        invites = GuestInvite.objects.filter(project=project).order_by('-created_at')
-        return Response([_invite_data(invite) for invite in invites])
+        invites = list(GuestInvite.objects.filter(project=project).order_by('-created_at'))
+        statuses = guest_link_status(project=project, invites=invites)
+        return Response([_invite_data(invite, statuses.get(str(invite.id))) for invite in invites])
     serializer = GuestInviteCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     try:
-        invite, token = create_guest_invite(project=project, membership=membership, **serializer.validated_data)
+        invite, token = create_guest_invite(project=project, membership=membership, actor=request.user, **serializer.validated_data)
     except GuestAccessError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     data = _invite_data(invite)
@@ -217,6 +222,7 @@ def guest_comments(request, project_id, media_version_id):
     permission = 'review.comment.read' if request.method == 'GET' else 'review.comment.create'
     access = _guest_access(request, project, permission)
     if request.method == 'GET':
+        record_guest_view(access=access, media_version=media)
         comments = _guest_comments(media).filter(deleted_at__isnull=True).select_related('author_user', 'author_guest_session').order_by('created_at')
         return paginated_response(
             request=request, queryset=comments,
@@ -316,6 +322,7 @@ def guest_annotations(request, project_id, media_version_id):
     permission = 'annotation.read' if request.method == 'GET' else 'annotation.create'
     access = _guest_access(request, project, permission)
     if request.method == 'GET':
+        record_guest_view(access=access, media_version=media)
         items = _guest_annotations(media).order_by('created_at')
         return paginated_response(
             request=request, queryset=items, serializer_class=AnnotationSerializer,

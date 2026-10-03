@@ -99,6 +99,10 @@ from .guest_views import (
     project_guest_access_detail, project_guest_invite_detail, project_guest_invites,
 )
 
+from .activity_views import (
+    project_activity, project_activity_export, workspace_activity, workspace_activity_export,
+)
+
 urlpatterns = [
     path('health/', health_check, name='api-health'),
     path('auth/register/', register, name='api-register'),
@@ -174,6 +178,10 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/tasks/<uuid:task_id>/attachments/', task_attachments, name='api-task-attachments'),
     path('workspaces/<uuid:workspace_id>/tasks/<uuid:task_id>/attachments/<uuid:attachment_id>/', task_attachment_detail, name='api-task-attachment-detail'),
     path('workspaces/<uuid:workspace_id>/projects/', project_list_create, name='api-projects'),
+    path('workspaces/<uuid:workspace_id>/activity/', workspace_activity, name='api-workspace-activity'),
+    path('workspaces/<uuid:workspace_id>/activity/export/', workspace_activity_export, name='api-workspace-activity-export'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/activity/', project_activity, name='api-project-activity'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/activity/export/', project_activity_export, name='api-project-activity-export'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/', project_detail, name='api-project-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/guest-invites/', project_guest_invites, name='api-project-guest-invites'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/guest-invites/<uuid:invite_id>/', project_guest_invite_detail, name='api-project-guest-invite-detail'),
