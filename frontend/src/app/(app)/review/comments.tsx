@@ -1,24 +1,39 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AtSign, CheckCheck, CornerDownRight, MessageSquareText, Paperclip, RotateCcw, Send, SmilePlus, Trash2, X } from "lucide-react";
+import { AtSign, CheckCheck, CornerDownRight, Eye, Lock, MessageSquareText, Paperclip, RotateCcw, Send, SmilePlus, Trash2, Users, X } from "lucide-react";
 import type { ReviewNote } from "@/lib/review-notes";
-import { recordingOf } from "@/lib/review-notes";
+import { clientView, recordingOf } from "@/lib/review-notes";
 import type { Mentionable, ReviewView } from "@/lib/review-view";
 import { timecode } from "@/lib/timecode";
-import type { AnnotationElement } from "@/lib/api";
+import type { AnnotationElement, CommentVisibility } from "@/lib/api";
+import { clearDraft, loadDraft, patchDraft } from "@/lib/review-drafts";
 import { Recorder } from "./recorder";
 import type { RecordedClip, ReviewWriter } from "./writer";
+
+/** What the composer holds that is not yet posted, reported up for the leave guard. */
+export type ComposerState = { text: boolean; recording: boolean };
 
 type Props = {
   view: ReviewView;
   writer: ReviewWriter;
+  /** Writes against the comparison cut, so its notes resolve and react on the right version. */
+  compareWriter: ReviewWriter;
   notes: ReviewNote[];
   positionMs: number;
   focusedId: string | null;
   pendingAnnotation: AnnotationElement | null;
   onClearAnnotation: () => void;
   onSeek: (ms: number) => void;
+  /** Seeks the compare pane showing `versionId`, since the single player is not mounted. */
+  onCompareSeek: (versionId: string, ms: number) => void;
+  /** Whether this user may write team-only notes: workspace teammates, not client members. */
+  canWriteTeam: boolean;
+  /** "See what the client sees": team notes are already filtered out of `notes`. */
+  clientPreview: boolean;
+  hiddenTeamNotes: number;
+  onClientPreview: (on: boolean) => void;
+  onComposerChange: (state: ComposerState) => void;
 };
 
 /**
@@ -27,13 +42,19 @@ type Props = {
  * Two lists under two headings rather than one merged feed: the reason to compare is to see
  * what was said about which cut, and a single list would destroy exactly that.
  */
-function CompareFeeds({ view, writer, onSeek }: { view: ReviewView; writer: ReviewWriter; onSeek: (ms: number) => void }) {
+function CompareFeeds({ view, writer, compareWriter, clientPreview, onSeek }: {
+  view: ReviewView; writer: ReviewWriter; compareWriter: ReviewWriter; clientPreview: boolean;
+  onSeek: (versionId: string, ms: number) => void;
+}) {
   const comparison = view.comparison!;
   const current = view.version!;
   const [showing, setShowing] = useState<Record<string, boolean>>({ [current.id]: true, [comparison.version.id]: true });
+  const visible = (notes: ReviewNote[]) => clientPreview ? clientView(notes) : notes;
+  // Each side resolves and reacts through a writer bound to its own cut; the current
+  // writer would address the other version's notes on the wrong media version.
   const sides = [
-    { version: current, notes: view.notes },
-    { version: comparison.version, notes: comparison.notes },
+    { version: current, notes: visible(view.notes), writer },
+    { version: comparison.version, notes: visible(comparison.notes), writer: compareWriter },
   ];
 
   return (
@@ -54,13 +75,17 @@ function CompareFeeds({ view, writer, onSeek }: { view: ReviewView; writer: Revi
         ))}
       </div>
       <div className="rvc-feed">
-        {sides.map(({ version, notes }) => (showing[version.id] ?? true) && (
+        {sides.map(({ version, notes, writer: sideWriter }) => (showing[version.id] ?? true) && (
           <section key={version.id} className="rvc-side">
             <h3>{version.label}</h3>
             {notes.length === 0
               ? <p className="rvc-empty">No comments on {version.label}.</p>
               : notes.map((note) => (
-                  <Note key={note.id} note={note} view={view} writer={writer} focused={false} onSeek={onSeek} onReply={() => undefined} />
+                  // No Reply while comparing: there is no composer here to reply with.
+                  <Note
+                    key={note.id} note={note} view={view} target={version.target} writer={sideWriter} focused={false}
+                    onSeek={(ms) => onSeek(version.id, ms)}
+                  />
                 ))}
           </section>
         ))}
@@ -69,7 +94,10 @@ function CompareFeeds({ view, writer, onSeek }: { view: ReviewView; writer: Revi
   );
 }
 
-export function Comments({ view, writer, notes, positionMs, focusedId, pendingAnnotation, onClearAnnotation, onSeek }: Props) {
+export function Comments({
+  view, writer, compareWriter, notes, positionMs, focusedId, pendingAnnotation, onClearAnnotation, onSeek, onCompareSeek,
+  canWriteTeam, clientPreview, hiddenTeamNotes, onClientPreview, onComposerChange,
+}: Props) {
   const [replyTo, setReplyTo] = useState<ReviewNote | null>(null);
   const [showResolved, setShowResolved] = useState(false);
   const feed = useRef<HTMLDivElement>(null);
@@ -90,10 +118,39 @@ export function Comments({ view, writer, notes, positionMs, focusedId, pendingAn
   // Comparing is a reading mode: two labelled feeds, and no composer, because a note
   // written here would have to guess which cut it was about. Branching after the hooks
   // above so this component calls the same ones on every render.
-  if (view.comparison) return <CompareFeeds view={view} writer={writer} onSeek={onSeek} />;
+  const previewToggle = view.target && canWriteTeam && (
+    <button
+      type="button"
+      className={`rvc-preview ${clientPreview ? "is-on" : ""}`}
+      aria-pressed={clientPreview}
+      onClick={() => onClientPreview(!clientPreview)}
+      title="Show only the notes a client or guest reviewer can see"
+    >
+      <Eye size={12} />{clientPreview ? "Client view on" : "See what the client sees"}
+    </button>
+  );
+
+  if (view.comparison) {
+    return (
+      <>
+        {previewToggle && <div className="rvc-preview-bar">{previewToggle}</div>}
+        <CompareFeeds view={view} writer={writer} compareWriter={compareWriter} clientPreview={clientPreview} onSeek={onCompareSeek} />
+      </>
+    );
+  }
 
   return (
     <div className="rvc">
+      {previewToggle && (
+        <div className="rvc-preview-bar">
+          {previewToggle}
+          {clientPreview && (
+            <span role="status">
+              {hiddenTeamNotes ? `${hiddenTeamNotes} team ${hiddenTeamNotes === 1 ? "note" : "notes"} hidden` : "No team notes on this cut"}
+            </span>
+          )}
+        </div>
+      )}
       <header className="rvc-head">
         <h2><MessageSquareText size={15} />Comments</h2>
         <div>
@@ -117,47 +174,69 @@ export function Comments({ view, writer, notes, positionMs, focusedId, pendingAn
             key={note.id}
             note={note}
             view={view}
+            target={view.target}
             writer={writer}
             focused={note.id === focusedId}
             onSeek={onSeek}
-            onReply={setReplyTo}
+            onReply={clientPreview ? undefined : setReplyTo}
           />
         ))}
       </div>
 
-      <Composer
-        view={view}
-        writer={writer}
-        positionMs={positionMs}
-        replyTo={replyTo}
-        onCancelReply={() => setReplyTo(null)}
-        pendingAnnotation={pendingAnnotation}
-        onClearAnnotation={onClearAnnotation}
-      />
+      {clientPreview ? (
+        <p className="rvc-preview-note">
+          You&rsquo;re seeing this cut as a client would. Turn off the client view to comment.
+        </p>
+      ) : (
+        <Composer
+          view={view}
+          writer={writer}
+          positionMs={positionMs}
+          replyTo={replyTo}
+          onReplyTo={setReplyTo}
+          notes={notes}
+          canWriteTeam={canWriteTeam}
+          onCancelReply={() => setReplyTo(null)}
+          pendingAnnotation={pendingAnnotation}
+          onClearAnnotation={onClearAnnotation}
+          onChange={onComposerChange}
+        />
+      )}
     </div>
   );
 }
 
-function attachmentBase(view: ReviewView, noteId: string): string | null {
-  if (!view.target) return null;
-  const { workspaceId, projectId, versionId } = view.target;
+function attachmentBase(target: ReviewView["target"], noteId: string): string | null {
+  if (!target) return null;
+  const { workspaceId, projectId, versionId } = target;
   return `/api/workspaces/${workspaceId}/projects/${projectId}/media-versions/${versionId}/comments/${noteId}/attachments`;
 }
 
-function Note({ note, view, writer, focused, onSeek, onReply }: {
-  note: ReviewNote; view: ReviewView; writer: ReviewWriter; focused: boolean;
-  onSeek: (ms: number) => void; onReply: (note: ReviewNote) => void;
+function TeamBadge() {
+  return (
+    <em className="rvc-team" title="Team only: guests and client members never see this note.">
+      <Lock size={9} />Team only
+    </em>
+  );
+}
+
+function Note({ note, target, writer, focused, onSeek, onReply }: {
+  note: ReviewNote; view: ReviewView; target: ReviewView["target"]; writer: ReviewWriter; focused: boolean;
+  onSeek: (ms: number) => void;
+  /** Omitted where there is no composer to reply with, so no dead Reply button is drawn. */
+  onReply?: (note: ReviewNote) => void;
 }) {
-  const base = attachmentBase(view, note.id);
+  const base = attachmentBase(target, note.id);
   const recording = note.recording ?? (base ? recordingOf(note, (id) => `${base}/${id}/`) : null);
   const files = note.attachments.filter((item) => !recording || !item.mimeType.startsWith(recording.mimeType.split("/")[0]));
 
   return (
-    <article className={`rvc-note ${note.resolved ? "is-resolved" : ""} ${focused ? "is-focused" : ""}`} data-note={note.id}>
+    <article className={`rvc-note ${note.resolved ? "is-resolved" : ""} ${focused ? "is-focused" : ""} ${note.visibility === "team" ? "is-team" : ""}`} data-note={note.id}>
       <div className="rvc-meta">
         <span className="rvc-avatar">{note.initials}</span>
         <strong>{note.author}</strong>
         <small>{note.age}</small>
+        {note.visibility === "team" && <TeamBadge />}
         {note.local && <em title="Kept on this device: this cut has no project review record yet.">Local</em>}
       </div>
 
@@ -194,14 +273,14 @@ function Note({ note, view, writer, focused, onSeek, onReply }: {
         <div className="rvc-reply" key={reply.id}>
           <CornerDownRight size={12} />
           <div>
-            <div className="rvc-meta"><strong>{reply.author}</strong><small>{reply.age}</small></div>
+            <div className="rvc-meta"><strong>{reply.author}</strong><small>{reply.age}</small>{reply.visibility === "team" && note.visibility !== "team" && <TeamBadge />}</div>
             <p className="rvc-body"><Mentioned text={reply.text} mentions={reply.mentions} /></p>
           </div>
         </div>
       ))}
 
       <div className="rvc-actions">
-        <button type="button" onClick={() => onReply(note)}>Reply</button>
+        {onReply && <button type="button" onClick={() => onReply(note)}>Reply</button>}
         <button type="button" onClick={() => writer.react(note, "👍")} aria-label="React with thumbs up"><SmilePlus size={12} /></button>
         <button
           type="button"
@@ -249,21 +328,61 @@ function Mentioned({ text, mentions }: { text: string; mentions: { id: string; n
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-function Composer({ view, writer, positionMs, replyTo, onCancelReply, pendingAnnotation, onClearAnnotation }: {
+function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWriteTeam, onCancelReply, pendingAnnotation, onClearAnnotation, onChange: report }: {
   view: ReviewView; writer: ReviewWriter; positionMs: number; replyTo: ReviewNote | null;
+  onReplyTo: (note: ReviewNote) => void; notes: ReviewNote[]; canWriteTeam: boolean;
   onCancelReply: () => void; pendingAnnotation: AnnotationElement | null; onClearAnnotation: () => void;
+  onChange: (state: ComposerState) => void;
 }) {
+  const mediaId = view.version?.id ?? null;
   const [text, setText] = useState("");
   const [pinned, setPinned] = useState(true);
   const [mentions, setMentions] = useState<Mentionable[]>([]);
   const [clip, setClip] = useState<RecordedClip | null>(null);
   const [query, setQuery] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<CommentVisibility>("client");
+  // `ready` holds saving off until the stored draft has been read back, so the empty first
+  // render cannot overwrite it. `restoredAt` drives the "Draft restored" chip.
+  const [ready, setReady] = useState(false);
+  const [restoredAt, setRestoredAt] = useState<string | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
 
   // The position is captured when composing starts, so a note does not drift as the video
   // keeps playing while it is being typed.
   const [anchor, setAnchor] = useState<number | null>(null);
   const startMs = replyTo ? null : pinned ? anchor ?? positionMs : null;
+  // A reply in a team thread is team-only whatever the toggle says; the API enforces the same.
+  const teamThread = replyTo?.visibility === "team";
+  const effectiveVisibility: CommentVisibility = !view.target ? "client" : teamThread ? "team" : canWriteTeam ? visibility : "client";
+
+  // Reads the stored draft once, after hydration: `localStorage` does not exist on the
+  // server, so reading it during render would make the first client render disagree.
+  const findNote = useRef((id: string) => notes.find((note) => note.id === id) ?? null);
+  useEffect(() => { findNote.current = (id: string) => notes.find((note) => note.id === id) ?? null; }, [notes]);
+  const restoreReply = useRef(onReplyTo);
+  useEffect(() => { restoreReply.current = onReplyTo; }, [onReplyTo]);
+  useEffect(() => {
+    const draft = loadDraft(mediaId);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-off restore from localStorage after mount (not available during SSR)
+    setReady(true);
+    if (!draft || !draft.text.trim()) return;
+    setText(draft.text);
+    setPinned(draft.pinned);
+    setAnchor(draft.anchorMs);
+    setMentions(draft.mentions);
+    setVisibility(draft.visibility);
+    setRestoredAt(draft.savedAt);
+    const parent = draft.replyToId ? findNote.current(draft.replyToId) : null;
+    if (parent) restoreReply.current(parent);
+  }, [mediaId]);
+
+  useEffect(() => {
+    if (!ready) return;
+    patchDraft(mediaId, { text, pinned, anchorMs: anchor, replyToId: replyTo?.id ?? null, visibility, mentions });
+  }, [anchor, mediaId, mentions, pinned, ready, replyTo?.id, text, visibility]);
+
+  const hasText = Boolean(text.trim());
+  useEffect(() => { report({ text: hasText, recording: Boolean(clip) }); }, [clip, hasText, report]);
 
   const candidates = query === null
     ? []
@@ -286,6 +405,14 @@ function Composer({ view, writer, positionMs, replyTo, onCancelReply, pendingAnn
     field.current?.focus();
   }
 
+  function reset() {
+    if (clip) URL.revokeObjectURL(clip.url);
+    setText(""); setMentions([]); setClip(null); setAnchor(null); setQuery(null); setRestoredAt(null);
+    onClearAnnotation();
+    onCancelReply();
+    clearDraft(mediaId);
+  }
+
   async function submit() {
     // Only mentions still written in the note are sent, so deleting the text un-notifies.
     const active = mentions.filter((member) => text.includes(`@${member.name}`));
@@ -296,21 +423,27 @@ function Composer({ view, writer, positionMs, replyTo, onCancelReply, pendingAnn
       mentions: active,
       recording: clip,
       annotation: pendingAnnotation,
+      visibility: effectiveVisibility,
     });
     if (!posted) return;
-    if (clip) URL.revokeObjectURL(clip.url);
-    setText(""); setMentions([]); setClip(null); setAnchor(null); setQuery(null);
-    onClearAnnotation();
-    onCancelReply();
+    reset();
   }
 
   const disabled = view.target ? !view.canComment : !view.version;
+  const team = effectiveVisibility === "team";
 
   return (
     <form
-      className="rvc-composer"
+      className={`rvc-composer ${team ? "is-team" : ""}`}
       onSubmit={(event) => { event.preventDefault(); void submit(); }}
     >
+      {restoredAt && hasText && (
+        <div className="rvc-chip is-restored" role="status">
+          <span>Draft restored from {new Date(restoredAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
+          <button type="button" onClick={reset} aria-label="Discard draft" title="Discard draft"><Trash2 size={12} /></button>
+        </div>
+      )}
+
       {replyTo && (
         <div className="rvc-replying">
           <span>Replying to {replyTo.author}</span>
@@ -344,12 +477,29 @@ function Composer({ view, writer, positionMs, replyTo, onCancelReply, pendingAnn
         </ul>
       )}
 
+      {view.target && canWriteTeam && !disabled && (
+        teamThread ? (
+          <p className="rvc-visibility-locked"><Lock size={11} />Team thread: your reply stays team-only</p>
+        ) : (
+          <div className="rvc-visibility" role="radiogroup" aria-label="Who can see this comment">
+            <button type="button" role="radio" aria-checked={!team} className={!team ? "is-on" : ""} onClick={() => setVisibility("client")}>
+              <Users size={12} />Client can see
+            </button>
+            <button type="button" role="radio" aria-checked={team} className={team ? "is-on is-team" : ""} onClick={() => setVisibility("team")}>
+              <Lock size={12} />Team only
+            </button>
+          </div>
+        )
+      )}
+
       <textarea
         ref={field}
         value={text}
         disabled={disabled}
         aria-label="Comment"
-        placeholder={disabled ? "Comments are unavailable for this cut." : `Leave a comment${startMs !== null ? ` at ${timecode(startMs)}` : ""}… use @ to mention`}
+        placeholder={disabled
+          ? "Comments are unavailable for this cut."
+          : `${team ? "Team-only note" : "Leave a comment"}${startMs !== null ? ` at ${timecode(startMs)}` : ""}… use @ to mention`}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit(); } }}
       />
@@ -369,7 +519,7 @@ function Composer({ view, writer, positionMs, replyTo, onCancelReply, pendingAnn
               {pinned ? `Pinned to ${timecode(startMs ?? positionMs)}` : "Not pinned to a time"}
             </label>
           )}
-        <button type="submit" disabled={disabled || writer.busy} aria-label="Send comment">
+        <button type="submit" disabled={disabled || writer.busy} aria-label={team ? "Send team-only comment" : "Send comment"}>
           <Send size={14} />
         </button>
       </div>
@@ -377,8 +527,13 @@ function Composer({ view, writer, positionMs, replyTo, onCancelReply, pendingAnn
   );
 }
 
-export function RevisionForm({ writer, positionMs, onDone }: { writer: ReviewWriter; positionMs: number; onDone: () => void }) {
+export function RevisionForm({ writer, positionMs, approved = false, onDone, onDirtyChange }: {
+  writer: ReviewWriter; positionMs: number; approved?: boolean; onDone: () => void; onDirtyChange?: (dirty: boolean) => void;
+}) {
   const [text, setText] = useState("");
+  const dirty = Boolean(text.trim());
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   return (
     <form
       className="rvc-revision"
@@ -388,6 +543,7 @@ export function RevisionForm({ writer, positionMs, onDone }: { writer: ReviewWri
       }}
     >
       <label htmlFor="rv-revision">What needs to change?</label>
+      {approved && <p className="rvc-revision-note">This cut is approved. Requesting changes reopens it and moves it back to Revision.</p>}
       <textarea
         id="rv-revision"
         value={text}

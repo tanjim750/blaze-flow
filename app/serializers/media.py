@@ -36,14 +36,21 @@ class MediaVersionSerializer(serializers.ModelSerializer):
 
     def get_current_stage(self, media):
         entry = media_stage_entries(media).filter(exited_at__isnull=True).select_related(
-            'workflow_stage'
+            'workflow_stage', 'changed_by_user'
         ).first()
         if not entry or not entry.workflow_stage:
             return None
+        changed_by = entry.changed_by_user
         return {
             'id': str(entry.workflow_stage.id),
             'name': entry.workflow_stage.name,
             'slug': entry.workflow_stage.slug,
+            # Who moved the cut here and when: the review page shows "Approved by … · date".
+            'entered_at': entry.entered_at,
+            'changed_by': {
+                'id': str(changed_by.id),
+                'name': changed_by.get_full_name() or changed_by.email,
+            } if changed_by else None,
         }
 
     def get_preview_status(self, media):

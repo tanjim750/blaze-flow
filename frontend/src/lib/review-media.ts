@@ -52,7 +52,22 @@ export type ReviewVersion = {
   assetFileId: string | null;
   /** Who uploaded this cut, when the API knows. */
   uploadedBy: string | null;
+  /**
+   * The media version's own `allow_download` flag. Null for a library-only file, which has
+   * no such flag: it is the workspace's own asset and its download route is always open.
+   */
+  allowDownload: boolean | null;
+  /** The workflow stage the media version sits in, with who moved it there and when. */
+  workflowStage: WorkflowPosition | null;
 };
+
+export type WorkflowPosition = { id: string; slug: string; name: string; enteredAt: string | null; changedBy: string | null };
+
+function workflowPosition(media: MediaVersion): WorkflowPosition | null {
+  const stage = media.current_stage;
+  if (!stage) return null;
+  return { id: stage.id, slug: stage.slug, name: stage.name, enteredAt: stage.entered_at ?? null, changedBy: stage.changed_by?.name ?? null };
+}
 
 /** A version line: one creative asset, its history, and the context it belongs to. */
 export type ReviewAsset = {
@@ -183,6 +198,8 @@ export function buildCatalogue(input: CatalogueInput): ReviewAsset[] {
       uploadedBy: item.added_by?.name ?? null,
       target: null,
       assetFileId: item.id,
+      allowDownload: null,
+      workflowStage: null,
     };
     push(groups, key, version);
     byFileId.set(item.file.id, version);
@@ -201,6 +218,8 @@ export function buildCatalogue(input: CatalogueInput): ReviewAsset[] {
         known.target = target;
         known.src = previewSrc(target);
         known.stageName = media.current_stage?.name ?? known.stageName;
+        known.allowDownload = media.allow_download;
+        known.workflowStage = workflowPosition(media);
         continue;
       }
       const key = `media:${projectId}:${versionKey(media.title || media.file.name)}`;
@@ -217,6 +236,8 @@ export function buildCatalogue(input: CatalogueInput): ReviewAsset[] {
         uploadedBy: null,
         target,
         assetFileId: null,
+        allowDownload: media.allow_download,
+        workflowStage: workflowPosition(media),
       });
       if (!context.has(key)) {
         context.set(key, { projectId, folderId: null, name: media.title || media.file.name, row: null as unknown as ProjectFile });

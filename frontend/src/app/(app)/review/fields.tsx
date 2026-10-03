@@ -35,7 +35,7 @@ export function Fields({ view, writer, meta, embedded = false }: {
     ["Duration", meta ? timecode(meta.durationMs) : <em>Reading from the file…</em>],
     ["Resolution", meta && meta.width ? `${meta.width} × ${meta.height}` : <em>Reading from the file…</em>],
     ["Uploaded", new Date(version.createdAt).toLocaleString()],
-    ["Uploaded by", <em key="by">Not returned by the API</em>],
+    ["Uploaded by", version.uploadedBy ?? <em key="by">Not returned by the API</em>],
   ];
 
   return (

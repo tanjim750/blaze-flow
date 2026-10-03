@@ -219,6 +219,20 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
         )
         self.assertEqual(duplicate.status_code, 400)
 
+    def test_current_stage_says_who_moved_the_cut_and_when(self):
+        media_id = self.upload(title='Approve me').json()['id']
+        approved = WorkflowStage.objects.get(workspace=self.workspace, slug='approved')
+        self.client.post(
+            reverse('api-media-version-workflow', args=[self.workspace.id, self.project.id, media_id]),
+            {'workflow_stage_id': str(approved.id)}, format='json',
+        )
+        listed = self.client.get(reverse('api-media-versions', args=[self.workspace.id, self.project.id])).json()
+        stage = next(item for item in listed if item['id'] == media_id)['current_stage']
+        self.assertEqual(stage['slug'], 'approved')
+        self.assertEqual(stage['changed_by']['id'], str(self.owner.id))
+        self.assertTrue(stage['changed_by']['name'])
+        self.assertIsNotNone(stage['entered_at'])
+
     def test_workspace_workflow_stages_are_discoverable_in_order(self):
         response = self.client.get(
             reverse('api-workflow-stages', args=[self.workspace.id])

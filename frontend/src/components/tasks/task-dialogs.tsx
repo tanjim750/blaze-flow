@@ -1,6 +1,6 @@
 "use client";
 /** Modal dialogs for the Tasks board: confirmations, New task and Customize stages. */
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { Task, TaskStage, TaskWorkflowSettings } from "@/lib/api";
 import type { TasksView } from "@/lib/tasks-view";
@@ -13,19 +13,27 @@ import { StagePill } from "./stage-ui";
 export const memberName = (member: TasksView["members"][number]) => member.user ? `${member.user.first_name} ${member.user.last_name}`.trim() || member.user.email : member.client_team?.name ?? "Member";
 export const errorText = (error: unknown) => error instanceof Error ? error.message : "Something went wrong.";
 
-/** A yes/no question. Replaces every `confirm()` the old board used. */
-export function ConfirmDialog({ open, title, body, confirmLabel, danger = false, onConfirm, onCancel }: {
-  open: boolean; title: string; body: string; confirmLabel: string; danger?: boolean; onConfirm: () => void; onCancel: () => void;
+/**
+ * A yes/no question. Replaces every `confirm()` the old board used.
+ *
+ * `children` renders between the question and the buttons (a warning, a summary); `busy`
+ * keeps the dialog open and the buttons disabled while the confirmed action runs, so a
+ * double click cannot fire it twice. `cancelLabel` lets "Stay" read better than "Cancel".
+ */
+export function ConfirmDialog({ open, title, body, confirmLabel, cancelLabel = "Cancel", danger = false, busy = false, children, onConfirm, onCancel }: {
+  open: boolean; title: string; body: ReactNode; confirmLabel: string; cancelLabel?: string; danger?: boolean; busy?: boolean;
+  children?: ReactNode; onConfirm: () => void; onCancel: () => void;
 }) {
   const confirmRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (open) requestAnimationFrame(() => confirmRef.current?.focus()); }, [open]);
-  return <Dialog open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
+  return <Dialog open={open} onOpenChange={(next) => { if (!next && !busy) onCancel(); }}>
     {open && <DialogContent className="tb-dialog tb-dialog-confirm">
       <DialogTitle>{title}</DialogTitle>
       <DialogDescription>{body}</DialogDescription>
+      {children}
       <footer className="tb-dialog-foot">
-        <button type="button" className="tb-button" onClick={onCancel}>Cancel</button>
-        <button ref={confirmRef} type="button" className={`tb-button ${danger ? "is-danger" : "is-primary"}`} onClick={onConfirm}>{confirmLabel}</button>
+        <button type="button" className="tb-button" onClick={onCancel} disabled={busy}>{cancelLabel}</button>
+        <button ref={confirmRef} type="button" className={`tb-button ${danger ? "is-danger" : "is-primary"}`} onClick={onConfirm} disabled={busy}>{confirmLabel}</button>
       </footer>
     </DialogContent>}
   </Dialog>;

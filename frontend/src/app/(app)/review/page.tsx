@@ -29,6 +29,10 @@ export default async function Review({ searchParams }: PageProps<"/review">) {
 
   return (
     <ReviewWorkspace
+      // A fresh workspace per cut: composer text, a pending drawing and player state
+      // belong to the version they were made on, never to the next one opened.
+      key={view.version?.id ?? "none"}
+      userId={session.user?.id ?? null}
       view={session.notice ? { ...view, notice: session.notice } : view}
       author={session.user ? displayName(session.user) : "You"}
       initialShareOpen={params.share === "1"}

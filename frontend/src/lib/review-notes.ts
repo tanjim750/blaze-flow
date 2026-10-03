@@ -1,4 +1,4 @@
-import type { ReviewComment } from "./api";
+import type { CommentVisibility, ReviewComment } from "./api";
 import { timecode } from "./timecode";
 
 /**
@@ -29,6 +29,8 @@ export type ReviewNote = {
   attachments: { id: string; name: string; status: string; mimeType: string }[];
   mentions: { id: string; name: string }[];
   replies: ReviewNote[];
+  /** `team` notes are internal to the workspace; guests never receive them. */
+  visibility?: CommentVisibility;
   /** Set on notes held on the device because their media has no project review record. */
   local?: boolean;
   /** A voice or screen recording carried by this note, resolved from its attachment. */
@@ -80,6 +82,7 @@ export function toNote(comment: ReviewComment): ReviewNote {
     attachments: comment.attachments?.map((item) => ({ id: item.id, name: item.file.name, status: item.file.status, mimeType: item.file.mime_type })) ?? [],
     mentions: comment.mentions?.map((item) => ({ id: item.id, name: item.name })) ?? [],
     replies: [],
+    visibility: comment.visibility === "team" ? "team" : "client",
   };
 }
 
@@ -100,4 +103,15 @@ export function nestNotes(comments: ReviewComment[]): ReviewNote[] {
     else roots.push(note);
   }
   return roots;
+}
+
+/**
+ * What a client would see of these notes: no team notes, and no replies inside one. The
+ * server already enforces this on every guest route; this is the same rule for the
+ * "See what the client sees" preview so the two cannot disagree.
+ */
+export function clientView(notes: ReviewNote[]): ReviewNote[] {
+  return notes
+    .filter((note) => note.visibility !== "team")
+    .map((note) => ({ ...note, replies: note.replies.filter((reply) => reply.visibility !== "team") }));
 }

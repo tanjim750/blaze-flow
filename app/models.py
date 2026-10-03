@@ -82,6 +82,12 @@ class ReviewCommentContentType(models.TextChoices):
     FILE = 'FILE'
 
 
+class ReviewCommentVisibility(models.TextChoices):
+    # Team notes are internal: never returned to guests or client-team members.
+    TEAM = 'team'
+    CLIENT = 'client'
+
+
 class ReviewReactionEmoji(models.TextChoices):
     THUMBS_UP = '👍', 'Thumbs up'
     HEART = '❤️', 'Heart'
@@ -763,6 +769,7 @@ class ReviewComment(models.Model):
     resolved = models.BooleanField(default=False)
     resolved_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='resolved_by_user_id', null=True, blank=True, related_name='+')
     resolved_at = models.DateTimeField(null=True, blank=True)
+    visibility = models.CharField(max_length=10, choices=ReviewCommentVisibility.choices, default=ReviewCommentVisibility.CLIENT)
     deleted_at = models.DateTimeField(null=True, blank=True)
     deleted_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='deleted_by_user_id', null=True, blank=True, related_name='+')
     deleted_by_guest_session = models.ForeignKey(GuestSession, on_delete=models.DO_NOTHING, db_column='deleted_by_guest_session_id', null=True, blank=True, related_name='+')
@@ -787,6 +794,7 @@ class ReviewComment(models.Model):
             models.Index(fields=['author_guest_session']),
             models.Index(fields=['resolved']),
             models.Index(fields=['deleted_at']),
+            models.Index(fields=['media_version', 'visibility'], name='review_comments_visibility_idx'),
         ]
 
 

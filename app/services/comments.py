@@ -10,9 +10,13 @@ from app.models import (
     ReviewCommentContentType,
     ReviewCommentMention,
     ReviewCommentRevision,
+    ReviewCommentVisibility,
     WorkflowStage,
+    WorkspacePrincipalType,
     WorkflowStageStatusState,
 )
+
+from app.permissions import active_memberships_for_user
 
 from .audit import record_guest_audit, record_user_audit
 from .notifications import NotificationError, resolve_mention_users, set_comment_mentions
@@ -21,6 +25,34 @@ from .workflow import transition_media_version
 
 class ReviewCommentError(Exception):
     pass
+
+
+def client_visible_comments(queryset, *, prefix=''):
+    """Narrows a comment queryset to what a client may see.
+
+    Team notes are excluded, and so is anything replying to one: a reply is created with
+    its parent's visibility, but filtering on the parent too means a row written before that
+    rule (or by hand) still cannot leak a team thread to a client.
+    """
+    team = ReviewCommentVisibility.TEAM
+    return queryset.exclude(**{f'{prefix}visibility': team}).exclude(
+        **{f'{prefix}parent_comment__visibility': team}
+    )
+
+
+def can_see_team_notes(*, user, workspace):
+    """Workspace users see team notes; people who are in only through a client team do not."""
+    return active_memberships_for_user(user=user, workspace=workspace).filter(
+        principal_type=WorkspacePrincipalType.USER,
+    ).exists()
+
+
+def _reply_visibility(parent_comment, visibility):
+    # A reply in a team thread is always team: a client-visible reply would quote a note the
+    # client is not allowed to read.
+    if parent_comment is not None and parent_comment.visibility == ReviewCommentVisibility.TEAM:
+        return ReviewCommentVisibility.TEAM
+    return visibility
 
 
 def _comment_snapshot(comment):
@@ -52,7 +84,7 @@ def _comment_snapshot(comment):
 @transaction.atomic
 def create_review_comment(
     *, media_version, user, text, parent_comment=None, start_time_ms=None, end_time_ms=None,
-    mentioned_user_ids=()
+    mentioned_user_ids=(), visibility=ReviewCommentVisibility.CLIENT,
 ):
     if not text.strip():
         raise ReviewCommentError('Comment text cannot be empty.')
@@ -65,6 +97,13 @@ def create_review_comment(
         raise ReviewCommentError('end_time_ms requires start_time_ms.')
     if start_time_ms is not None and end_time_ms is not None and end_time_ms < start_time_ms:
         raise ReviewCommentError('end_time_ms must be greater than or equal to start_time_ms.')
+    if visibility not in ReviewCommentVisibility.values:
+        raise ReviewCommentError('Choose team or client visibility.')
+    visibility = _reply_visibility(parent_comment, visibility)
+    if visibility == ReviewCommentVisibility.TEAM and not can_see_team_notes(
+        user=user, workspace=media_version.project.workspace,
+    ):
+        raise ReviewCommentError('Only workspace teammates can write team-only notes.')
     try:
         mentioned_users = resolve_mention_users(
             project=media_version.project,
@@ -73,6 +112,12 @@ def create_review_comment(
         )
     except NotificationError as exc:
         raise ReviewCommentError(str(exc)) from exc
+    if visibility == ReviewCommentVisibility.TEAM and any(
+        not can_see_team_notes(user=mentioned, workspace=media_version.project.workspace)
+        for mentioned in mentioned_users
+    ):
+        # A mention notification carries an excerpt, which would leak the note.
+        raise ReviewCommentError('Team-only notes can mention teammates only, not client members.')
 
     now = timezone.now()
     comment = ReviewComment(
@@ -82,6 +127,7 @@ def create_review_comment(
         author_user=user,
         start_time_ms=start_time_ms,
         end_time_ms=end_time_ms,
+        visibility=visibility,
         created_at=now,
         updated_at=now,
     )
@@ -112,6 +158,7 @@ def create_review_comment(
             'media_version_id': str(media_version.id),
             'parent_comment_id': str(parent_comment.id) if parent_comment else None,
             'mentioned_user_count': len(mentioned_users),
+            'visibility': visibility,
         },
     )
     return comment
@@ -126,6 +173,9 @@ def create_guest_review_comment(
         raise ReviewCommentError('Comment text cannot be empty.')
     if parent_comment is not None:
         if parent_comment.media_version_id != media_version.id or parent_comment.deleted_at is not None:
+            raise ReviewCommentError('Select an active parent comment from this media version.')
+        if parent_comment.visibility == ReviewCommentVisibility.TEAM:
+            # The view already 404s on a team parent; this keeps the service safe on its own.
             raise ReviewCommentError('Select an active parent comment from this media version.')
         if start_time_ms is not None or end_time_ms is not None:
             raise ReviewCommentError('Replies inherit timing from their parent comment.')

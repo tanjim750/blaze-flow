@@ -91,6 +91,7 @@ export function addLocalNote(mediaId: string, input: LocalNoteInput): ReviewNote
     attachments: [],
     mentions: input.mentions ?? [],
     replies: [],
+    visibility: "client",
     local: true,
     recording: input.recording ?? null,
   };
