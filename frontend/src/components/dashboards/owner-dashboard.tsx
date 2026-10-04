@@ -3,6 +3,7 @@ import { BarChart3, ClipboardCheck, HeartPulse } from "lucide-react";
 import { DashboardPoster } from "@/components/dashboard-poster";
 import type { LayoutChoice } from "@/lib/dashboard-role";
 import type { OwnerDashboard as OwnerView } from "@/lib/role-dashboard-view";
+import { OwnerMoneyStrip } from "./money-panels";
 import { ActivityPanel, Avatar, CounterStrip, DashboardHeading, EmptyState, FooterLink, InlineProblem, ReviewQueuePanel } from "./parts";
 
 function subline(view: OwnerView): string {
@@ -20,6 +21,7 @@ export function OwnerDashboard({ view, choice }: { view: OwnerView; choice: Layo
   return <div className="home-shell role-owner">
     <DashboardHeading workspaceName={view.workspaceName} today={view.today} greetingName={view.greetingName} subline={subline(view)} choice={choice} />
     <CounterStrip items={view.strip} />
+    {view.money && view.money.length > 0 && <OwnerMoneyStrip cards={view.money} />}
 
     <div className="dashboard-columns">
       <section className="panel" aria-labelledby="approvals-title">

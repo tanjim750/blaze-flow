@@ -14,6 +14,7 @@ import { dueState, formatDueLong, PRIORITIES, type BoardStage } from "@/lib/task
 import { toDateTimeLocal } from "@/lib/task-dates";
 import { StagePill } from "./stage-ui";
 import { memberName } from "./task-dialogs";
+import { TaskMoney } from "./task-money";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -112,6 +113,9 @@ function SheetBody({ task, stage, stages, view, locked, attachments, loadingAtta
         <textarea className="tb-input" rows={5} value={description} disabled={locked} placeholder="Brief, notes, links…"
           onChange={(event) => { setDescription(event.target.value); schedule(title, event.target.value); }} onBlur={() => flushText()} />
       </label>
+
+      {/* Re-keyed on stage and assignee so approval (which freezes pay) and reassignment refetch it. */}
+      <TaskMoney key={`${task.task_stage_id}:${task.assignees.map((item) => item.id).join(",")}`} workspaceId={view.workspaceId} taskId={task.id} />
 
       <section className="tb-attachments" aria-labelledby="tb-attachments-title">
         <header><h3 id="tb-attachments-title"><Paperclip aria-hidden="true" />Attachments</h3><span className="tb-count">{attachments?.length ?? 0}</span><span className="tb-spacer" />

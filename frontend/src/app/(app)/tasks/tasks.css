@@ -359,3 +359,20 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 .tb-link-prompt strong { display: block; font-size: 13px; }
 .tb-link-prompt p { margin: 4px 0 10px; color: var(--tb-muted, #9a9aa5); font-size: 12px; line-height: 1.5; }
 .tb-link-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Task sheet Money block (billing demo, components/tasks/task-money.tsx). */
+.tb-money { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--tb-border); border-radius: 10px; background: color-mix(in oklab, var(--tb-brand, #8b6cff) 5%, transparent); }
+.tb-money header { display: flex; align-items: center; gap: 8px; }
+.tb-money h3 { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; font-weight: 600; }
+.tb-money h3 svg { width: 16px; height: 16px; color: var(--tb-muted-fg); }
+.tb-money .tb-props { grid-template-columns: 120px 1fr; }
+.tb-money-demo { padding: 1px 6px; border: 1px dashed var(--tb-border-strong); border-radius: 5px; color: var(--tb-muted-fg); font: 10px var(--font-geist-mono), monospace; }
+.tb-money .is-error { color: var(--destructive, #ff9ba3); }
+.tb-money-input { display: flex; align-items: center; gap: 6px; flex: 1; }
+.tb-money-input > span { color: var(--tb-subtle-fg); font: 11px var(--font-geist-mono), monospace; }
+.tb-money-input input { font-family: var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; }
+.tb-money-value { font: 600 13px var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; }
+.tb-money-pay { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tb-money-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border: 1px solid var(--tb-border-strong); border-radius: 999px; color: var(--tb-muted-fg); font-size: 11px; white-space: nowrap; }
+.tb-money-chip svg { width: 11px; height: 11px; }
+.tb-money-chip.is-earned { color: #7de9bd; border-color: #2d6550; background: #183e31; }
