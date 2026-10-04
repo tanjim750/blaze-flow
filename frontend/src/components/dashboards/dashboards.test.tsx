@@ -1,5 +1,7 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 import { chooseLayout } from "@/lib/dashboard-role";
 import type { ClientDashboard as ClientView, EditorDashboard as EditorView } from "@/lib/role-dashboard-view";
 import { ClientDashboard } from "./client-dashboard";
@@ -50,6 +52,30 @@ describe("client dashboard", () => {
     expect(screen.queryByRole("navigation", { name: "View dashboard as" })).not.toBeInTheDocument();
     expect(screen.queryByText(/tasks?\b/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/workload|team only|notes to address/i)).not.toBeInTheDocument();
+  });
+
+  it("is the client portal: a send-files area per project and recent activity", () => {
+    render(<ClientDashboard view={{
+      ...clientView,
+      problems: { reviews: null, activity: null },
+      activity: [{ id: "a1", initials: "AM", avatarUrl: null, tone: "success", actor: "Alex Morgan", action: "uploaded 'Hero 30s' V2", detail: "1 hour ago · Spring Launch", href: "/review?project=p1" }],
+      portal: {
+        workspaceId: "w1", maxBytes: 2 * 1024 ** 3, accept: ["video/*"],
+        projects: [{ id: "p1", name: "Spring Launch", status: "ACTIVE" }, { id: "p2", name: "Holiday Teaser", status: "DRAFT" }],
+        recent: [{ id: "u1", project_id: "p1", project_file_id: "f1", folder_id: "d1", file_name: "brand-guide.pdf", mime_type: "application/pdf", size_bytes: 48 * 1024, kind: "document", status: "READY", removed: false, uploader_name: "Sam", uploader_email: "sam@client.example", via: "portal", upload_link_label: null, batch_id: "b1", created_at: "2026-10-03T10:00:00Z" }],
+      },
+    }} choice={chooseLayout(client, "owner")} />);
+    expect(screen.getByRole("heading", { name: "Send files to the studio" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "For project" })).toHaveValue("p1");
+    expect(screen.getByText("brand-guide.pdf")).toBeInTheDocument();
+    expect(screen.getByText(/48 KB · Spring Launch/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Recent activity" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Alex Morgan uploaded 'Hero 30s' V2/ })).toHaveAttribute("href", "/review?project=p1");
+  });
+
+  it("leaves the send-files area out when the client cannot send anywhere", () => {
+    render(<ClientDashboard view={clientView} choice={chooseLayout(client, "owner")} />);
+    expect(screen.queryByRole("heading", { name: "Send files to the studio" })).not.toBeInTheDocument();
   });
 
   it("labels an owner's preview and offers the way back", () => {

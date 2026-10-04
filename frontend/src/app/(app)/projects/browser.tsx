@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
   Activity, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
-  FolderOpen, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Wallet, X,
+  FolderInput, FolderOpen, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Wallet, X,
 } from "lucide-react";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
@@ -14,6 +14,7 @@ import { AssetLibrary } from "@/components/asset-library";
 import { ProjectBrief } from "@/components/project-brief";
 import { ProjectPricing } from "@/components/money/project-pricing";
 import { ActivityFeed } from "@/components/activity/activity-feed";
+import { UploadLinksPanel } from "@/components/client-uploads/upload-links-panel";
 import "@/components/project-brief.css";
 import { LinkPending } from "@/components/nav-progress";
 import { TasksBoard } from "@/app/(app)/tasks/board";
@@ -82,12 +83,14 @@ function InlineCreate({ action, hidden, placeholder, label, onClose, nested = fa
     </form>
   );
 }
-const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log", "Pricing"] as const;
+const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log", "Client uploads", "Pricing"] as const;
+/** "Client uploads" also answers to `?tab=client-uploads` (what notifications and the feed link to). */
+const tabSlug = (value: string) => value.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
 
 export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initialQuery = "" }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string; initialQuery?: string }) {
   const router = useRouter();
   const [tab, setTab] = useState<(typeof TABS)[number]>(
-    () => TABS.find((value) => value.toLowerCase() === initialTab?.toLowerCase()) ?? "Files",
+    () => TABS.find((value) => value.toLowerCase() === initialTab?.toLowerCase() || (initialTab ? tabSlug(value) === tabSlug(initialTab) : false)) ?? "Files",
   );
   const [expanded, setExpanded] = useState<string[]>(view.selectedClient ? [view.selectedClient.id] : []);
   const [uploading, setUploading] = useState(false);
@@ -137,6 +140,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
                   {value === "Files" && <FolderOpen size={14} />}
                   {value === "Brief & Specs" && <FileText size={14} />}
                   {value === "Activity Log" && <Activity size={14} />}
+                  {value === "Client uploads" && <FolderInput size={14} />}
                   {value === "Pricing" && <Wallet size={14} />}
                   <span>{value}</span>
                 </button>
@@ -156,6 +160,8 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
         ) : tab === "Activity Log" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (
           // Keyed on the project so a campaign switch starts a fresh timeline and filter.
           <ActivityFeed key={view.selectedCampaign.id} workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} />
+        ) : tab === "Client uploads" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (
+          <UploadLinksPanel key={view.selectedCampaign.id} workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} />
         ) : tab === "Pricing" && view.canSeeBilling && view.selectedCampaign && view.workspaceId ? (
           <ProjectPricing key={view.selectedCampaign.id} workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} />
         ) : tab === "Brief & Specs" && view.selectedCampaign?.briefError ? (
@@ -198,11 +204,13 @@ function ComingSoon({ tab, hasCampaign, briefFolder, onOpenFiles }: { tab: (type
     <div className="pb-soon" role="status">
       <Icon size={24} strokeWidth={1.75} aria-hidden="true" />
       {brief && <span className="pb-soon-tag">Coming soon</span>}
-      <h2>{brief ? "Brief & specs" : "Activity log"}</h2>
+      <h2>{brief ? "Brief & specs" : tab === "Client uploads" ? "Client uploads" : "Activity log"}</h2>
       <p>
         {brief
           ? `A place for the brief, deliverable specs and due dates is on the way. Until then, keep brief documents in ${briefFolder ? `the “${briefFolder}” folder` : "this campaign’s Files"}.`
-          : "This is sample content, so there is no history to show. Real campaigns list uploads, reviews, approvals, task moves and client link visits here."}
+          : tab === "Client uploads"
+            ? "This is sample content. On a real campaign you can create upload links here so clients can send files without an account."
+            : "This is sample content, so there is no history to show. Real campaigns list uploads, reviews, approvals, task moves and client link visits here."}
       </p>
       {brief && <button type="button" className="pb-soon-link" onClick={onOpenFiles}><FolderOpen size={14} />Open Files</button>}
     </div>

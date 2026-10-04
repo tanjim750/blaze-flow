@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { AtSign, Check, CheckCheck, CircleCheckBig, FilePlus2, ListTodo, MessageSquareText, Reply, RotateCcw, Bell } from "lucide-react";
+import { AtSign, Check, CheckCheck, CircleCheckBig, FilePlus2, FolderInput, ListTodo, MessageSquareText, Reply, RotateCcw, Bell } from "lucide-react";
 import { sentence, timeLabel, type DescribedNotification, type NotificationTone } from "@/lib/notifications";
 
 const TONE_ICON: Record<NotificationTone, typeof Bell> = {
   comment: MessageSquareText, reply: Reply, mention: AtSign, version: FilePlus2,
-  approved: CircleCheckBig, changes: RotateCcw, task: ListTodo, other: Bell,
+  approved: CircleCheckBig, changes: RotateCcw, task: ListTodo, upload: FolderInput, other: Bell,
 };
 
 /** The actor's avatar, or their initials on the accent plate, with the kind as a small badge. */

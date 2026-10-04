@@ -7,7 +7,7 @@
  * permission-scoped by the API.
  */
 import {
-  getTeamWorkload, listActivity, listAssetFiles, listClientTeams, listMediaVersions, listMyCuts,
+  getClientPortalData, getTeamWorkload, listActivity, listAssetFiles, listClientTeams, listMediaVersions, listMyCuts,
   listNotesToAddress, listProjects, listTaskStages, listTasks,
 } from "./api";
 import type {
@@ -21,6 +21,7 @@ import {
 } from "./dashboard-view";
 import type { ActivityItem, DashboardFailure, DashboardReady, ReviewQueueItem, Tone } from "./dashboard-view";
 import type { ActivityEntry } from "./activity";
+import type { ClientPortal } from "./client-uploads";
 import { timecode } from "./timecode";
 import { getMoneySummary, getMyEarnings, getMyInvoices } from "./billing-api";
 import { buildClientInvoices, buildEarnings, buildOwnerMoneyCards } from "./money-view";
@@ -356,9 +357,13 @@ export type ClientDashboard = Base & {
   projects: ClientProject[];
   waiting: ReviewQueueItem[];
   delivered: DeliveredCut[];
-  problems: { reviews: string | null };
+  problems: { reviews: string | null; activity?: string | null };
   /** Billing demo: the client's sent invoices; absent when there are none. */
   invoices?: ReturnType<typeof buildClientInvoices>;
+  /** Recent activity the client may see (their projects' uploads, notes and approvals). */
+  activity?: ActivityItem[];
+  /** The portal's "send files" area; absent when the client cannot send to any project. */
+  portal?: { workspaceId: string; projects: ClientPortal["projects"]; recent: ClientPortal["recent_uploads"]; maxBytes: number; accept: string[] };
 };
 
 export type RoleDashboard = OwnerDashboard | EditorDashboard | ClientDashboard;
@@ -454,7 +459,15 @@ export type ClientInput = {
   greetingName: string; now: Date; workspace: Pick<Workspace, "name">;
   projects: Project[];
   scanned: { project: Project; media: MediaVersion[] | ApiFailure }[];
+  /** Optional so older callers (and tests) keep working without the activity panel. */
+  activity?: ActivityEntry[] | ApiFailure;
 };
+
+/** The portal upload area, or undefined when there is nowhere this client may send files. */
+export function buildClientPortal(workspaceId: string, portal: ClientPortal | ApiFailure | null): ClientDashboard["portal"] {
+  if (!portal || failed(portal) || portal.projects.length === 0) return undefined;
+  return { workspaceId, projects: portal.projects, recent: portal.recent_uploads.slice(0, 6), maxBytes: portal.max_file_bytes, accept: portal.accept };
+}
 
 export function buildClientDashboard(input: ClientInput): ClientDashboard {
   const { now } = input;
@@ -480,7 +493,9 @@ export function buildClientDashboard(input: ClientInput): ClientDashboard {
     delivered,
     problems: {
       reviews: failures ? `${failures} ${failures === 1 ? "project's" : "projects'"} cuts could not be loaded.` : null,
+      ...(input.activity !== undefined ? { activity: problem("Activity", input.activity) } : {}),
     },
+    ...(input.activity !== undefined ? { activity: failed(input.activity) ? [] : buildActivity(input.activity, now) } : {}),
   };
 }
 
@@ -546,13 +561,20 @@ export async function loadEditorDashboard(greetingName: string, workspace: Works
 
 export async function loadClientDashboard(greetingName: string, workspace: Workspace): Promise<ClientDashboard | DashboardFailure> {
   const now = new Date();
-  const [projects, invoices] = await Promise.all([listProjects(workspace.id), getMyInvoices(workspace.id)]);
+  const [projects, invoices, activity, portal] = await Promise.all([
+    listProjects(workspace.id), getMyInvoices(workspace.id),
+    listActivity(workspace.id, { pageSize: DASHBOARD_ACTIVITY_LIMIT }), getClientPortalData(workspace.id),
+  ]);
   if (!projects.ok) return failureView(greetingName, now, projects.error);
   const targets = openProjects(projects.data).slice(0, CLIENT_SCAN_LIMIT);
   const scanned = await Promise.all(targets.map(async (project) => {
     const media = await listMediaVersions(workspace.id, project.id);
     return { project, media: media.ok ? media.data : media.error };
   }));
-  const dashboard = buildClientDashboard({ greetingName, now, workspace, projects: projects.data, scanned });
-  return invoices.ok && invoices.data.results.length > 0 ? { ...dashboard, invoices: buildClientInvoices(invoices.data, now) } : dashboard;
+  const dashboard = buildClientDashboard({
+    greetingName, now, workspace, projects: projects.data, scanned, activity: activity.ok ? activity.data.results : activity.error,
+  });
+  const withPortal = { ...dashboard, portal: buildClientPortal(workspace.id, settle(portal)) };
+  // Invoices come from the billing demo's own permission check: a client sees only what was sent to them.
+  return invoices.ok && invoices.data.results.length > 0 ? { ...withPortal, invoices: buildClientInvoices(invoices.data, now) } : withPortal;
 }

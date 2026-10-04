@@ -161,3 +161,24 @@ describe("client decisions in the feed", () => {
     expect(toDashboardRow(changes, NOW).tone).toBe("warning");
   });
 });
+
+describe("client files in the feed", () => {
+  const received = (extra: Partial<ActivityEntry> = {}) => entry("client_upload.received", {
+    category: "uploads", actor: { type: "client", id: null, name: "Rachel Kim", initials: "RK", avatar_url: null },
+    object: { type: "project_file", id: "f1", label: "take1.mov", href: "/files?folder=d1" },
+    detail: { via: "link", link_label: "Send us your footage" }, ...extra,
+  });
+
+  it("names the sender, the file and the link it came through", () => {
+    expect(text(received())).toBe("Rachel Kim sent 'take1.mov' via Send us your footage");
+    expect(text(received({ detail: { via: "portal", link_label: null } }))).toBe("Rachel Kim sent 'take1.mov' from the client portal");
+  });
+
+  it("words link management and tints a client sender like a guest", () => {
+    expect(text(entry("upload_link.created", { category: "uploads", object: { type: "upload_link", id: "l1", label: "Brand files", href: null } })))
+      .toBe("Maya created upload link 'Brand files'");
+    expect(text(entry("upload_link.revoked", { category: "uploads", object: { type: "upload_link", id: "l1", label: "Brand files", href: null } })))
+      .toBe("Maya turned off upload link 'Brand files'");
+    expect(toDashboardRow(received(), NOW).tone).toBe("blue");
+  });
+});

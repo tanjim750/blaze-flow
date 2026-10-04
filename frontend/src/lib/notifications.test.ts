@@ -33,6 +33,22 @@ describe("describeNotification", () => {
     for (const [kind, expected] of cases) expect(sentence(describeNotification(item({ kind })))).toBe(expected);
   });
 
+  it("words a client drop as one row with the count, project and route", () => {
+    const many = describeNotification(item({
+      kind: "CLIENT_UPLOAD_RECEIVED", actor: null, entity_type: "client_upload_batch", snippet: null, link: "/files?folder=f1",
+      payload: { actor_name: "Rachel Kim", file_count: 3, file_names: ["a.mov", "b.pdf", "c.png"], project_name: "Spring Launch", upload_link_label: "Send us your footage" },
+    }));
+    expect(sentence(many)).toBe("Rachel Kim sent 3 files to Spring Launch");
+    expect(many.tone).toBe("upload");
+    expect(many.snippet).toBe("a.mov, b.pdf, c.png");
+    expect(many.href).toBe("/files?folder=f1");
+    const one = describeNotification(item({
+      kind: "CLIENT_UPLOAD_RECEIVED", snippet: null, payload: { file_count: 1, file_names: ["brand-guide.pdf"], project_name: "Spring Launch" },
+    }));
+    expect(sentence(one)).toBe("Maya Chen sent “brand-guide.pdf” to Spring Launch");
+    expect(one.snippet).toBeNull();
+  });
+
   it("names tasks in quotes and links to them", () => {
     const row = describeNotification(item({ kind: "TASK_ASSIGNED", entity_type: "task_assignee", payload: { title: "Cut the 15s version", task_id: "t9" }, link: null }));
     expect(sentence(row)).toBe("Maya Chen assigned you “Cut the 15s version”");

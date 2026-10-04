@@ -187,6 +187,8 @@ export const removeClientTeamMember = (workspaceId: string, clientTeamId: string
 export const listClientTeamInvites = (workspaceId: string, clientTeamId: string) => request<ClientTeamInvite[]>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/`);
 export const createClientTeamInvite = (workspaceId: string, clientTeamId: string, payload: { invite_type: "EMAIL" | "LINK"; recipient_email?: string; label?: string; max_uses?: number; expires_in_days: number }) => request<ClientTeamInvite>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/`, jsonBody(payload));
 export const revokeClientTeamInvite = (workspaceId: string, clientTeamId: string, inviteId: string) => request<void>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/${inviteId}/`, { method: "DELETE" });
+/** The client portal's upload area: projects this viewer may send files to, and what they sent. */
+export const getClientPortalData = (workspaceId: string) => request<import("./client-uploads").ClientPortal>(`/workspaces/${workspaceId}/client-portal/`);
 export const listProjects = (workspaceId: string) => request<Project[]>(`/workspaces/${workspaceId}/projects/`);
 export const getProject = (workspaceId: string, projectId: string) => request<Project>(`/workspaces/${workspaceId}/projects/${projectId}/`);
 export const listFolders = (workspaceId: string, projectId: string) => request<ProjectFolder[]>(`/workspaces/${workspaceId}/projects/${projectId}/folders/`);

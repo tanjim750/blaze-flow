@@ -29,6 +29,8 @@
 .af-kind.is-tasks { background: #2a2a3a; color: #c9c4d6; }
 .af-kind.is-media { background: #1f3a33; color: #83e8bf; }
 .af-kind.is-guests { background: #17324d; color: #8fc4ff; }
+.af-avatar.is-client { border-color: #6b5420; background: #2e2410; color: #ffd27a; }
+.af-kind.is-uploads { background: #3d2f12; color: #ffd27a; }
 
 .af-body { display: grid; flex: 1; gap: 4px; min-width: 0; }
 .af-line { margin: 0; color: var(--shell-variant); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }

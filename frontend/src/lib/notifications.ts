@@ -27,7 +27,7 @@ export type NotificationPage = {
   page: number; page_size: number; has_next: boolean;
 };
 
-export type NotificationTone = "comment" | "reply" | "mention" | "version" | "approved" | "changes" | "task" | "other";
+export type NotificationTone = "comment" | "reply" | "mention" | "version" | "approved" | "changes" | "task" | "upload" | "other";
 
 /** One rendered row: "<actor> <verb> <subject>", plus the quoted snippet. */
 export type DescribedNotification = {
@@ -120,6 +120,18 @@ export function describeNotification(item: NotificationItem): DescribedNotificat
       return { ...base, tone: "changes", verb: payload.client_decision === true ? "requested changes as the client on" : "requested changes on", subject: cut ?? "your cut" };
     case "TASK_ASSIGNED":
       return { ...base, tone: "task", verb: "assigned you", subject: title ? `“${clip(title, 60)}”` : "a task" };
+    case "CLIENT_UPLOAD_RECEIVED": {
+      // One row per drop: "Rachel Kim sent 3 files to Spring Launch" (or the one file's name).
+      const count = num(payload.file_count) ?? 1;
+      const names = Array.isArray(payload.file_names) ? payload.file_names.filter((name): name is string => typeof name === "string") : [];
+      const project = text(payload.project_name);
+      const what = count === 1 && names[0] ? `“${clip(names[0], 48)}”` : `${count} files`;
+      return {
+        ...base, tone: "upload", verb: "sent", subject: project ? `${what} to ${project}` : what,
+        // The row quotes the snippet, so it carries the file names (the newest five).
+        snippet: count > 1 && names.length ? clip(names.join(", "), 120) : null,
+      };
+    }
     case "TASK_CLIENT_READY":
       return { ...base, tone: "task", verb: "marked ready for your review:", subject: title ? `“${clip(title, 60)}”` : "a task" };
     default: {
