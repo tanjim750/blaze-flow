@@ -1209,10 +1209,31 @@ def asset_file_download(request, workspace_id, file_id):
         return Response({'detail': 'This file is still being scanned or was rejected.'}, status=status.HTTP_409_CONFLICT)
     if not default_storage.exists(item.file.object_key):
         raise Http404('The stored file was not found.')
-    return ranged_file_response(
-        request, item.file.object_key, as_attachment=True, filename=item.file.original_name,
-        content_type=item.file.mime_type, checksum=item.file.checksum,
+    inline = _inline_allowed(request, item.file.mime_type)
+    response = ranged_file_response(
+        request, item.file.object_key, as_attachment=not inline,
+        filename=item.file.original_name, content_type=item.file.mime_type, checksum=item.file.checksum,
     )
+    if inline:
+        # The review page shows a PDF in a frame on the same origin; every other page and
+        # origin is still refused (the middleware's default is DENY).
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+    return response
+
+
+# Types the review page may show in place (``?inline=1``): media, raster images and PDF. Never
+# HTML, SVG or anything else a browser would run as a document on this origin, so those still
+# download whatever the query string says.
+INLINE_MIME_TYPES = frozenset({
+    'application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif',
+})
+
+
+def _inline_allowed(request, mime_type):
+    if request.query_params.get('inline') != '1':
+        return False
+    mime = (mime_type or '').split(';', 1)[0].strip().lower()
+    return mime in INLINE_MIME_TYPES or mime.startswith('video/') or mime.startswith('audio/')
 
 
 def _with_card_fields(queryset):
