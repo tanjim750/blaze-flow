@@ -51,6 +51,8 @@ CONFIGURABLE_KINDS = (
     (NotificationKind.CLIENT_UPLOAD_RECEIVED, 'Files from clients', 'A client sends files through an upload link or the client portal.'),
     (NotificationKind.PROJECT_REQUEST_NEW, 'Project requests', 'A client asks for a new project from the portal.'),
     (NotificationKind.PROJECT_REQUEST_DECIDED, 'Request answers', 'The studio accepts or declines a project you asked for.'),
+    (NotificationKind.PROJECT_MESSAGE_NEW, 'Project messages', 'New messages in a project thread you follow. Bursts arrive as one entry.'),
+    (NotificationKind.PROJECT_MESSAGE_MENTION, 'Message mentions', 'Someone @mentions you in a project thread.'),
 )
 
 SNIPPET_LENGTH = 240

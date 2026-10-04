@@ -4,6 +4,7 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.functions import Lower
+from django.utils import timezone
 
 from .managers import UserManager
 
@@ -176,6 +177,10 @@ class NotificationKind(models.TextChoices):
     PROJECT_REQUEST_NEW = 'PROJECT_REQUEST_NEW'
     # The studio accepted or declined a project request (to the client who sent it).
     PROJECT_REQUEST_DECIDED = 'PROJECT_REQUEST_DECIDED'
+    # New messages in a project thread you follow (one row per thread, counted up).
+    PROJECT_MESSAGE_NEW = 'PROJECT_MESSAGE_NEW'
+    # Someone @mentioned you in a project message.
+    PROJECT_MESSAGE_MENTION = 'PROJECT_MESSAGE_MENTION'
 
 
 class OutboxEventStatus(models.TextChoices):
@@ -1990,3 +1995,70 @@ class ProjectRequest(models.Model):
             models.Index(fields=['workspace', 'status', 'created_at']),
             models.Index(fields=['client_team', 'created_at']),
         ]
+
+
+class MessageChannel(models.TextChoices):
+    # Seen by the team and by the project's client contacts.
+    CLIENT = 'client', 'With client'
+    # Team only: never returned to anyone who is in the workspace only through a client team.
+    TEAM = 'team', 'Team only'
+
+
+class ProjectMessage(models.Model):
+    """One message in a project's thread. A project has two channels (see MessageChannel)."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, db_column='project_id', related_name='messages')
+    channel = models.CharField(max_length=10, choices=MessageChannel.choices)
+    author_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='author_user_id', null=True, blank=True, related_name='+')
+    # Copied in so the thread still reads right after the account is gone.
+    author_name = models.CharField(max_length=150)
+    author_is_client = models.BooleanField(default=False)
+    body = models.TextField(blank=True, default='')
+    # A reply quotes one earlier message of the same channel.
+    reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, db_column='reply_to_id', null=True, blank=True, related_name='+')
+    # User ids (strings) mentioned in the body, validated against who can read the channel.
+    mentions = models.JSONField(default=list, blank=True)
+    edited_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'project_messages'
+        indexes = [models.Index(fields=['project', 'channel', 'created_at'])]
+
+
+class ProjectMessageAttachment(models.Model):
+    """A file uploaded into a message, or a link to an existing project file or cut.
+
+    Uploads are stored as their own ``File`` (scanned like review attachments) and never
+    appear in the project's file tree, so a team-only attachment cannot surface in Files.
+    An upload exists before its message (``message`` null) until the message claims it.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, db_column='project_id', related_name='+')
+    message = models.ForeignKey(ProjectMessage, on_delete=models.CASCADE, db_column='message_id', null=True, blank=True, related_name='attachments')
+    kind = models.CharField(max_length=10, choices=(('upload', 'Upload'), ('file', 'Project file'), ('cut', 'Cut')))
+    file = models.ForeignKey(File, on_delete=models.SET_NULL, db_column='file_id', null=True, blank=True, related_name='+')
+    project_file = models.ForeignKey(ProjectFile, on_delete=models.SET_NULL, db_column='project_file_id', null=True, blank=True, related_name='+')
+    media_version = models.ForeignKey(MediaVersion, on_delete=models.SET_NULL, db_column='media_version_id', null=True, blank=True, related_name='+')
+    uploaded_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='uploaded_by_user_id', null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'project_message_attachments'
+        indexes = [models.Index(fields=['message']), models.Index(fields=['project', 'created_at'])]
+
+
+class ProjectMessageRead(models.Model):
+    """How far one person has read one channel of one project."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id', related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, db_column='project_id', related_name='+')
+    channel = models.CharField(max_length=10, choices=MessageChannel.choices)
+    last_read_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'project_message_reads'
+        constraints = [models.UniqueConstraint(fields=['user', 'project', 'channel'], name='project_message_reads_uniq')]
