@@ -27,7 +27,7 @@ def revoke_billing_keys(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('app', '0034_audit_log_project_scope'),
+        ('app', '0035_review_decisions'),
     ]
 
     operations = [
