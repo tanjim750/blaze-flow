@@ -804,7 +804,15 @@ class ReviewComment(models.Model):
                     | models.Q(author_user__isnull=True, author_guest_session__isnull=False)
                 ),
                 name='review_comments_exactly_one_author',
-            )
+            ),
+            # A timed window never runs backwards and never has an end without a start.
+            # The serializers already refuse both; this keeps imports and scripts honest too,
+            # since the review player trusts [start, end] when deciding what to draw.
+            models.CheckConstraint(
+                check=models.Q(end_time_ms__isnull=True)
+                | models.Q(start_time_ms__isnull=False, end_time_ms__gte=models.F('start_time_ms')),
+                name='review_comments_end_after_start',
+            ),
         ]
         indexes = [
             models.Index(fields=['media_version']),
@@ -936,7 +944,15 @@ class Annotation(models.Model):
                     | models.Q(author_user__isnull=True, author_guest_session__isnull=False)
                 ),
                 name='annotations_exactly_one_author',
-            )
+            ),
+            # A timed window never runs backwards and never has an end without a start.
+            # The serializers already refuse both; this keeps imports and scripts honest too,
+            # since the review player trusts [start, end] when deciding what to draw.
+            models.CheckConstraint(
+                check=models.Q(end_time_ms__isnull=True)
+                | models.Q(start_time_ms__isnull=False, end_time_ms__gte=models.F('start_time_ms')),
+                name='annotations_end_after_start',
+            ),
         ]
         indexes = [
             models.Index(fields=['media_version']),

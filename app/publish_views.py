@@ -33,19 +33,41 @@ class PublishReplySerializer(serializers.Serializer):
     mentioned_user_ids = mention_user_ids_field(required=False, default=list)
 
 
+def _check_window(attrs, start_key, end_key, label):
+    start, end = attrs.get(start_key), attrs.get(end_key)
+    if end is not None and start is None:
+        raise serializers.ValidationError(f'{label} needs a start time.')
+    if start is not None and end is not None and end < start:
+        raise serializers.ValidationError(f'{label} cannot end before it starts.')
+
+
 class PublishNoteSerializer(serializers.Serializer):
     key = serializers.CharField(max_length=100)
     text = serializers.CharField(max_length=10000)
     start_time_ms = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    # A range note's out point. Only set when the reviewer marked an in/out range.
+    end_time_ms = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    # How long the note's drawing stays on screen: shown from start_time_ms to here.
+    annotation_end_time_ms = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     resolved = serializers.BooleanField(required=False, default=False)
     mentioned_user_ids = mention_user_ids_field(required=False, default=list)
     elements = AnnotationElementInputSerializer(many=True, required=False, default=list)
     replies = PublishReplySerializer(many=True, required=False, default=list)
 
+    def validate(self, attrs):
+        _check_window(attrs, 'start_time_ms', 'end_time_ms', 'A range note')
+        _check_window(attrs, 'start_time_ms', 'annotation_end_time_ms', 'A drawing')
+        return attrs
+
 
 class PublishDrawingSerializer(serializers.Serializer):
     start_time_ms = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    end_time_ms = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     elements = AnnotationElementInputSerializer(many=True, allow_empty=False)
+
+    def validate(self, attrs):
+        _check_window(attrs, 'start_time_ms', 'end_time_ms', 'A drawing')
+        return attrs
 
 
 class PublishSerializer(serializers.Serializer):
