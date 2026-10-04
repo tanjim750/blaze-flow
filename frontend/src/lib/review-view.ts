@@ -1,5 +1,6 @@
-import { listAnnotations, listGuestInvites, listReviewComments, listTaskAttachments, listTasks, listWorkflowStages, listWorkspaceMembers } from "./api";
-import type { Annotation, GuestInvite, TaskStage } from "./api";
+import { listAnnotations, listGuestInvites, listMediaDecisions, listReviewComments, listTaskAttachments, listTasks, listWorkflowStages, listWorkspaceMembers } from "./api";
+import type { Annotation, DashboardRole, GuestInvite, TaskStage } from "./api";
+import { NO_DECISIONS, type DecisionViewer, type ReviewDecision } from "./review-decisions";
 import { nestNotes, type ReviewNote } from "./review-notes";
 import { normalizeSpecs, specChips, type DeliverableSpecs } from "./project-brief";
 import { approvalStageId } from "./review-stages";
@@ -38,6 +39,12 @@ export type ReviewView = {
   guestInvites: GuestInvite[];
   canManageGuests: boolean;
   canComment: boolean;
+  /** "client" when the viewer is in the workspace only through a client team. */
+  role: DashboardRole | null;
+  /** Client decisions recorded on the cut on screen, newest first (the proof of delivery). */
+  decisions: ReviewDecision[];
+  /** Which decision buttons the viewer may use; nothing until the API says so. */
+  decisionViewer: DecisionViewer;
   /**
    * The second cut, when the page is comparing two. Its notes are loaded separately and
    * kept separately: the whole point of comparing is seeing which feedback belongs to
@@ -53,6 +60,7 @@ const EMPTY: ReviewView = {
   workspaceId: null, asset: null, version: null, target: null, notes: [], annotations: [],
   stages: [], taskStages: [], linkedTasks: [], members: [], guestInvites: [],
   canManageGuests: false, canComment: false, comparison: null, specs: null, notice: null,
+  role: null, decisions: [], decisionViewer: NO_DECISIONS,
 };
 
 /**
@@ -65,6 +73,7 @@ const EMPTY: ReviewView = {
 export async function loadReviewView(params: { mediaId?: string; projectId?: string; versionId?: string; compareId?: string }): Promise<ReviewView> {
   const catalogue = await loadMediaCatalogue();
   if (!catalogue.workspaceId) return { ...EMPTY, notice: catalogue.notice };
+  const client = catalogue.role === "client";
 
   const found =
     locate(catalogue.assets, params.mediaId)
@@ -74,6 +83,7 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
   const base: ReviewView = {
     ...EMPTY,
     workspaceId: catalogue.workspaceId,
+    role: catalogue.role,
     taskStages: catalogue.stages,
     notice: params.mediaId && !locate(catalogue.assets, params.mediaId)
       ? "That media is not in this workspace, so the most recent cut is shown instead."
@@ -92,7 +102,8 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
     asset,
     version,
     target: version.target,
-    linkedTasks: await linkedTasks(catalogue.workspaceId, asset.projectId, version.id),
+    // Tasks are the studio's internal board: a client-team member cannot read them.
+    linkedTasks: client ? [] : await linkedTasks(catalogue.workspaceId, asset.projectId, version.id),
     members: members.ok
       ? members.data.flatMap((row) => row.user ? [{ id: row.user.id, name: `${row.user.first_name} ${row.user.last_name}`.trim() || row.user.email, email: row.user.email }] : [])
       : [],
@@ -111,10 +122,12 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
   if (!version.target) return withComparison;
 
   const { workspaceId, projectId, versionId } = version.target;
-  const [comments, annotations, guestInvites] = await Promise.all([
+  const [comments, annotations, guestInvites, decisions] = await Promise.all([
     listReviewComments(workspaceId, projectId, versionId),
     listAnnotations(workspaceId, projectId, versionId),
-    listGuestInvites(workspaceId, projectId),
+    // Sharing links out is a studio job; clients are never offered the share panel.
+    client ? null : listGuestInvites(workspaceId, projectId),
+    listMediaDecisions(workspaceId, projectId, versionId),
   ]);
 
   return {
@@ -124,9 +137,15 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
     // A 403 on the comment list means read access without comment rights.
     canComment: comments.ok,
     // A 403 here means review access without permission to share the project out.
-    guestInvites: guestInvites.ok ? guestInvites.data : [],
-    canManageGuests: guestInvites.ok,
-    notice: comments.ok ? view.notice : `Comments unavailable: ${comments.error.detail}`,
+    guestInvites: guestInvites?.ok ? guestInvites.data : [],
+    canManageGuests: Boolean(guestInvites?.ok),
+    decisions: decisions.ok ? decisions.data.results : [],
+    // If the decisions call itself fails, team members keep the buttons they always had
+    // (the server still checks); client members get none.
+    decisionViewer: decisions.ok ? decisions.data.viewer
+      : client ? { ...NO_DECISIONS, kind: "client" } : { ...NO_DECISIONS, can_transition: true, can_request_changes: true },
+    // A 403 on comments is "read access without comment rights", not an error worth a banner.
+    notice: comments.ok || comments.error.status === 403 ? view.notice : `Comments unavailable: ${comments.error.detail}`,
   };
 }
 

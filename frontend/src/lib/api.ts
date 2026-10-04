@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { describeErrorBody } from "./errors";
 import type { ActivityPage, GuestLinkActivity } from "./activity";
+import type { DecisionKind, DecisionViewer, ReviewDecision } from "./review-decisions";
 
 /**
  * Server-side client for the Blaze Flow Django API.
@@ -61,7 +62,7 @@ export type MediaVersion = {
   id: string; project_id: string; version_number: number; title: string; note: string | null;
   priority: string; allow_download: boolean; status: string; file: MediaFile;
   /** `entered_at` / `changed_by` say who moved the cut into this stage, and when. */
-  current_stage: (WorkflowStageRef & { entered_at?: string | null; changed_by?: { id: string; name: string } | null }) | null;
+  current_stage: (WorkflowStageRef & { entered_at?: string | null; changed_by?: { id: string | null; name: string; type?: "user" | "guest" } | null }) | null;
   preview_status: string; created_at: string;
   /** A video's poster frame or an image's thumbnail, once generated. Absent on older backends. */
   poster?: { url: string; width: number | null; height: number | null } | null;
@@ -327,6 +328,8 @@ export const GUEST_PERMISSIONS = [
   "review.comment.edit", "review.comment.delete", "review.reaction.create",
   "review.attachment.create", "review.attachment.delete",
   "annotation.read", "annotation.create", "annotation.edit", "annotation.delete",
+  // "Allow decisions": approve or request changes on the cut being viewed.
+  "review.decision.create",
 ] as const;
 export type GuestPermission = (typeof GUEST_PERMISSIONS)[number];
 export type GuestAccess = {
@@ -336,6 +339,8 @@ export type GuestAccess = {
 };
 export type GuestInvite = {
   id: string; project_id: string; label: string; permissions: GuestPermission[];
+  /** Whether guests on this link may approve or request changes. Absent on older backends. */
+  allow_decisions?: boolean;
   expires_at: string; revoked_at: string | null; created_at: string;
   accesses: GuestAccess[];
   /** Built from guest events: last opened, on which cut, and that cut's decision. List route only. */
@@ -348,6 +353,15 @@ export const listGuestInvites = (workspaceId: string, projectId: string) =>
   request<GuestInvite[]>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/`);
 export const createGuestInvite = (workspaceId: string, projectId: string, payload: { label?: string; permissions: GuestPermission[]; expires_in_hours: number }) =>
   request<GuestInvite & { token: string }>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/`, jsonBody(payload));
+/** Turns "Allow decisions" on or off for a link and everyone already using it. */
+export const updateGuestInvite = (workspaceId: string, projectId: string, inviteId: string, payload: { allow_decisions: boolean }) =>
+  request<GuestInvite>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/${inviteId}/`, { ...jsonBody(payload), method: "PATCH" });
+/** Client decisions recorded on one cut, and which review-bar buttons the viewer may use. */
+export const listMediaDecisions = (workspaceId: string, projectId: string, mediaVersionId: string) =>
+  request<{ results: ReviewDecision[]; viewer: DecisionViewer }>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/decisions/`);
+/** A client-team member's Approve / Request changes. Team members use the workflow routes. */
+export const createMediaDecision = (workspaceId: string, projectId: string, mediaVersionId: string, payload: { decision: DecisionKind; message?: string; start_time_ms?: number }) =>
+  request<ReviewDecision>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/decisions/`, jsonBody(payload));
 export const revokeGuestInvite = (workspaceId: string, projectId: string, inviteId: string) =>
   request<void>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/${inviteId}/`, { method: "DELETE" });
 export const revokeGuestAccess = (workspaceId: string, projectId: string, accessId: string) =>

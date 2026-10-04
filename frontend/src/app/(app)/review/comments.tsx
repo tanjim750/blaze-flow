@@ -527,8 +527,11 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
   );
 }
 
-export function RevisionForm({ writer, positionMs, approved = false, onDone, onDirtyChange }: {
-  writer: ReviewWriter; positionMs: number; approved?: boolean; onDone: () => void; onDirtyChange?: (dirty: boolean) => void;
+export function RevisionForm({ writer, positionMs, approved = false, asClient = false, versionLabel, onDone, onDirtyChange }: {
+  writer: ReviewWriter; positionMs: number; approved?: boolean;
+  /** A client-team member: recorded as a client decision on this exact version. */
+  asClient?: boolean; versionLabel?: string;
+  onDone: () => void; onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [text, setText] = useState("");
   const dirty = Boolean(text.trim());
@@ -539,11 +542,15 @@ export function RevisionForm({ writer, positionMs, approved = false, onDone, onD
       className="rvc-revision"
       onSubmit={async (event) => {
         event.preventDefault();
-        if (await writer.requestChanges(text, positionMs)) onDone();
+        const sent = asClient
+          ? await writer.decideAsClient("changes_requested", text, positionMs)
+          : await writer.requestChanges(text, positionMs);
+        if (sent) onDone();
       }}
     >
       <label htmlFor="rv-revision">What needs to change?</label>
       {approved && <p className="rvc-revision-note">This cut is approved. Requesting changes reopens it and moves it back to Revision.</p>}
+      {asClient && <p className="rvc-revision-note">Your message is posted as a note on {versionLabel ?? "this version"} and the team is notified.</p>}
       <textarea
         id="rv-revision"
         value={text}

@@ -9,9 +9,10 @@ import { addLocalAnnotation, addLocalNote, removeLocalAnnotation, removeLocalNot
 import { updateAssetFile } from "@/lib/asset-api-client";
 import {
   addAnnotationAction, deleteAnnotationAction, postNoteAction, reactToCommentAction,
-  recolorAnnotationAction, requestRevisionAction, setNoteResolvedAction, transitionStageAction,
+  clientDecisionAction, recolorAnnotationAction, requestRevisionAction, setNoteResolvedAction, transitionStageAction,
   updateAnnotationElementsAction, type ActionState,
 } from "./actions";
+import type { DecisionKind } from "@/lib/review-decisions";
 
 /**
  * Every write the review page makes, in one place.
@@ -176,6 +177,12 @@ export function useReviewWriter(view: ReviewView, author: string) {
     return run(() => requestRevisionAction(target.workspaceId, target.projectId, target.versionId, text, startMs));
   }, [run, target]);
 
+  /** A client-team member's Approve / Request changes, recorded as a client decision. */
+  const decideAsClient = useCallback((decision: DecisionKind, message = "", startMs: number | null = null) => {
+    if (!target) { setError("This cut has no project review record, so it cannot be decided on yet."); return Promise.resolve(false); }
+    return run(() => clientDecisionAction(target.workspaceId, target.projectId, target.versionId, decision, message, startMs));
+  }, [run, target]);
+
   /**
    * Moves the file's task stage, which is the status the board and the Files list both
    * read. Review and the board therefore share one state rather than each keeping its own.
@@ -186,7 +193,7 @@ export function useReviewWriter(view: ReviewView, author: string) {
     return run(async () => { await updateAssetFile(view.workspaceId!, assetFileId, { task_stage_id: stageId }); });
   }, [run, view.version?.assetFileId, view.workspaceId]);
 
-  return { error, setError, busy, compose, setResolved, react, removeNote, draw, eraseAnnotation, moveAnnotation, recolorAnnotation, moveToStage, requestChanges, setTaskStage };
+  return { error, setError, busy, compose, setResolved, react, removeNote, draw, eraseAnnotation, moveAnnotation, recolorAnnotation, moveToStage, requestChanges, decideAsClient, setTaskStage };
 }
 
 export type ReviewWriter = ReturnType<typeof useReviewWriter>;

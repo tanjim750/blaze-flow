@@ -231,7 +231,9 @@ class GuestAuditTests(ActivityBase, TestCase):
         approved = WorkflowStage.objects.get(workspace=self.workspace, slug='approved')
         self.client.post(reverse('api-media-version-workflow', args=[self.workspace.id, self.project_id, media['id']]), {'workflow_stage_id': str(approved.id)}, format='json')
         status = self.client.get(reverse('api-project-guest-invites', args=[self.workspace.id, self.project_id])).json()[0]['activity']
-        self.assertEqual(status['decision'], 'approved')
+        # A team approval is not the client's decision: the link line only reports what a
+        # reviewer decided through the link (see test_guest_decisions for that path).
+        self.assertIsNone(status['decision'])
 
 
     def test_links_opened_before_auditing_fall_back_to_the_access_clock(self):

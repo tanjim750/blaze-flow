@@ -26,6 +26,10 @@ MEDIA_CREATE = 'media.create'
 MEDIA_READ = 'media.read'
 MEDIA_DOWNLOAD = 'media.download'
 MEDIA_TRANSITION = 'media.transition'
+# Approve or request changes on one exact cut as the client. Narrower than media.transition
+# (which can move a cut to any stage): it is what a client reviewer role grants, and it is
+# the same key a review link carries when "Allow decisions" is on.
+REVIEW_DECISION_CREATE = 'review.decision.create'
 REVIEW_COMMENT_READ = 'review.comment.read'
 REVIEW_COMMENT_CREATE = 'review.comment.create'
 REVIEW_COMMENT_MANAGE = 'review.comment.manage'
@@ -101,7 +105,9 @@ MEMBER_PERMISSION_KEYS = (
     PROJECT_FILE_UPDATE,
 )
 
-ALL_PERMISSION_KEYS = frozenset(OWNER_PERMISSION_KEYS)
+# review.decision.create is grantable to custom (client) roles. The system Owner and Member
+# roles do not need it: media.transition already lets them approve and request changes.
+ALL_PERMISSION_KEYS = frozenset(OWNER_PERMISSION_KEYS) | {REVIEW_DECISION_CREATE}
 
 
 def active_memberships_for_user(*, user, workspace):

@@ -148,3 +148,15 @@ describe("formatting", () => {
     expect(all[2].read_at).toBe("2026-10-01T00:00:00Z");
   });
 });
+
+describe("client decisions", () => {
+  it("say it was the client's sign-off, naming the guest", () => {
+    const guest = item({
+      kind: "MEDIA_APPROVED", actor: null, entity_type: "review_decision",
+      payload: { media_title: "Spring Launch Hero", version_number: 3, client_decision: true, actor_name: "Rachel Kim" },
+    });
+    expect(sentence(describeNotification(guest))).toBe("Rachel Kim approved as the client: Spring Launch Hero · V3");
+    const changes = item({ kind: "MEDIA_CHANGES_REQUESTED", payload: { media_title: "Spring Launch Hero", version_number: 2, client_decision: true } });
+    expect(sentence(describeNotification(changes))).toBe("Maya Chen requested changes as the client on Spring Launch Hero · V2");
+  });
+});

@@ -22,7 +22,7 @@ from django.db.models import Max, Q
 
 from app.models import (
     AuditActorType, AuditLog, GuestInvite, GuestReviewAccess, MediaVersion, MediaVersionStageEntry, NotificationKind, Project,
-    ReviewComment, ReviewCommentContent, ReviewCommentContentType, Task,
+    ReviewComment, ReviewCommentContent, ReviewCommentContentType, ReviewDecision, Task,
 )
 from app.permissions import (
     MEDIA_READ, REVIEW_COMMENT_MANAGE, REVIEW_COMMENT_READ, TASK_READ,
@@ -37,10 +37,13 @@ CATEGORIES = {
         'task.created', 'task.assigned', 'task.unassigned', 'task.stage.moved', 'task.due_date.changed',
     ),
     'comments': ('review.comment.created', 'review.comment.resolved', 'review.comment.reopened'),
-    'media': ('media.uploaded', 'media.workflow.transitioned', 'media.revision.requested'),
+    'media': (
+        'media.uploaded', 'media.workflow.transitioned', 'media.revision.requested',
+        'review.decision.approved', 'review.decision.changes_requested',
+    ),
     'guests': (
         'guest.invite.created', 'guest.link.opened', 'guest.media.viewed',
-        'guest.invite.revoked', 'guest.access.revoked',
+        'guest.invite.revoked', 'guest.access.revoked', 'guest.invite.updated',
     ),
 }
 CATEGORY_PERMISSIONS = {
@@ -72,6 +75,11 @@ def visible_activity(*, user, workspace):
     if sees_team and has_workspace_permission(user=user, workspace=workspace, permission_key=TASK_READ):
         allowed |= Q(action__in=CATEGORIES['tasks'], project__isnull=True)
     rows = AuditLog.objects.filter(workspace=workspace).filter(allowed)
+    # A client decision is one row ("Rachel Kim approved 'Hero' V2 as the client"); the stage
+    # move it caused is part of it, not a second event.
+    rows = rows.exclude(
+        action__in=('media.workflow.transitioned', 'review.comment.created'), metadata__has_key='review_decision_id',
+    )
     if not sees_team:
         rows = rows.filter(team_only=False)
     return rows.select_related('actor_user', 'actor_guest_session').order_by('-created_at', '-id')
@@ -272,6 +280,29 @@ def describe(row, lookups):
         }[action]
         item['verb'] = verb
         summary = f"{actor} {verb} '{title}'" + (f' V{number}' if number else '')
+    elif action.startswith('review.decision.'):
+        media = lookups.media.get(row.entity_id)
+        title, number = _cut_label(media, meta)
+        comment_id = meta.get('review_comment_id')
+        obj = {'type': 'media_version', 'id': row.entity_id, 'label': title,
+               'href': _review_href(media.project_id, media.id, comment_id) if media and media.status == 'ACTIVE' else None}
+        decision = meta.get('decision')
+        item['detail'] = {
+            'version_number': number, 'decision': decision, 'client_decision': True,
+            'open_notes_count': meta.get('open_notes_count'),
+            'excerpt': _clip(lookups.excerpts.get(comment_id)) if comment_id and lookups.excerpts.get(comment_id) else None,
+            'guest_name': meta.get('reviewer_name'),
+        }
+        stage = (meta.get('stage') or {}).get('name')
+        if meta.get('workflow_transitioned'):
+            item['after'] = stage
+        suffix = f' V{number}' if number else ''
+        if decision == 'approved':
+            item['verb'] = 'approved'
+            summary = f"{actor} approved '{title}'{suffix} as the client"
+        else:
+            item['verb'] = 'requested changes on'
+            summary = f"{actor} requested changes on '{title}'{suffix} as the client"
     elif action.startswith('media.'):
         media = lookups.media.get(row.entity_id)
         title, number = _cut_label(media, meta)
@@ -320,6 +351,11 @@ def describe(row, lookups):
             if media and media.status == 'ACTIVE':
                 obj = {'type': 'media_version', 'id': str(media.id), 'label': title, 'href': _review_href(media.project_id, media.id)}
             summary = f"{actor} opened review link · {title} V{number} · {DECISION_LABELS[decision]}"
+        elif action == 'guest.invite.updated':
+            allow = bool(meta.get('allow_decisions'))
+            item.update(verb='allowed decisions on review link' if allow else 'turned off decisions on review link')
+            item['detail']['allow_decisions'] = allow
+            summary = f"{actor} {item['verb']} '{label}'"
         elif action == 'guest.invite.revoked':
             item['verb'] = 'revoked review link'
             summary = f"{actor} revoked review link '{label}'"
@@ -379,7 +415,6 @@ def guest_link_status(*, project, invites):
     rows = AuditLog.objects.filter(
         project=project, action__in=('guest.link.opened', 'guest.media.viewed'),
     ).order_by('-created_at')[:1000]
-    viewed = {}
     for row in rows:
         meta = row.metadata or {}
         key = meta.get('guest_invite_id')
@@ -392,18 +427,23 @@ def guest_link_status(*, project, invites):
         if row.action == 'guest.media.viewed' and entry['last_media_version_id'] is None:
             entry['last_media_version_id'] = meta.get('media_version_id')
             entry['last_version_number'] = meta.get('version_number')
-            viewed[key] = meta.get('media_version_id')
     # Links redeemed before guest visits were audited still have the access row's own clock.
     unseen = [key for key, entry in status.items() if entry['last_opened_at'] is None]
     if unseen:
         for row in GuestReviewAccess.objects.filter(guest_invite_id__in=unseen, last_accessed_at__isnull=False).values('guest_invite_id').annotate(last=Max('last_accessed_at')):
             status[str(row['guest_invite_id'])]['last_opened_at'] = row['last']
-    if viewed:
-        current = {
-            str(e.media_version_id): e for e in MediaVersionStageEntry.objects.filter(
-                media_version_id__in=[v for v in viewed.values() if v], exited_at__isnull=True,
-            ).select_related('workflow_stage')
-        }
-        for key, media_id in viewed.items():
-            status[key]['decision'] = _version_decision(current.get(media_id))
+    # The real decision: the latest one a reviewer made through this link, and on which cut.
+    # A team approval of the same cut is not the client's decision, so it is not shown here.
+    for record in ReviewDecision.objects.filter(guest_invite_id__in=wanted).select_related('media_version').order_by('created_at'):
+        entry = status[str(record.guest_invite_id)]
+        entry.update(
+            decision=record.decision, decision_version_number=record.media_version.version_number,
+            decision_media_version_id=str(record.media_version_id), decided_at=record.created_at,
+            decided_by=record.reviewer_name,
+        )
+    for entry in status.values():
+        entry.setdefault('decision_version_number', None)
+        entry.setdefault('decision_media_version_id', None)
+        entry.setdefault('decided_at', None)
+        entry.setdefault('decided_by', None)
     return status

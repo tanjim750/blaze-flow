@@ -17,7 +17,7 @@ const PAGE_SIZE = 20;
 function kindIcon(entry: ActivityEntry) {
   const props = { size: 9, strokeWidth: 2.5 };
   if (entry.detail.decision === "approved" && entry.category === "media") return <CircleCheckBig {...props} />;
-  if (entry.action === "media.revision.requested") return <RotateCcw {...props} />;
+  if (entry.action === "media.revision.requested" || entry.action === "review.decision.changes_requested") return <RotateCcw {...props} />;
   switch (entry.category) {
     case "tasks": return <ListTodo {...props} />;
     case "comments": return <MessageSquareText {...props} />;

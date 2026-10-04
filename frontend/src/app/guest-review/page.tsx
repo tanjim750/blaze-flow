@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
+import { AppToaster } from "@/components/app-toaster";
 import { GuestReviewer } from "./reviewer";
+// The guest page reuses the team review player and the shared confirm dialog.
+import "../(app)/review/review.css";
+import "../(app)/tasks/tasks.css";
 import "./guest.css";
 
 export const metadata: Metadata = {
@@ -19,5 +23,11 @@ export const metadata: Metadata = {
 export default async function GuestReview({ searchParams }: PageProps<"/guest-review">) {
   const params = await searchParams;
   const token = typeof params.token === "string" ? params.token : "";
-  return <GuestReviewer token={token} />;
+  return (
+    <>
+      <GuestReviewer token={token} />
+      {/* Outside the signed-in layout, so this is the page's only toaster (player notices). */}
+      <AppToaster />
+    </>
+  );
 }

@@ -1,5 +1,6 @@
 import { describeErrorBody } from "./errors";
 import type { Annotation, ReviewComment } from "./api";
+import type { DecisionKind, ReviewDecision } from "./review-decisions";
 
 /**
  * Browser-side client for the public guest-review endpoints.
@@ -16,10 +17,23 @@ import type { Annotation, ReviewComment } from "./api";
 export type GuestResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 export type GuestSession = { token: string; projectId: string; guestSessionId: string; accessKey: string; name: string };
-export type GuestMediaVersion = { id: string; title: string; version_number: number };
+export type GuestMediaVersion = {
+  id: string; title: string; version_number: number;
+  /** Open notes the client can see on this cut; the approve dialog warns with it. */
+  open_notes?: number;
+  /** The newest client decision on exactly this cut, if any (`mine` when it was this guest's). */
+  decision?: ReviewDecision | null;
+};
+export type GuestViewer = { name: string; can_decide: boolean; can_comment: boolean; expires_at: string | null };
 export type GuestReview = {
   project: { id: string; name: string; description: string | null };
+  viewer?: GuestViewer;
   media_versions: GuestMediaVersion[];
+};
+/** A short-lived signed source for the guest player (a `<video>` cannot send headers). */
+export type GuestPlayback = {
+  url: string; poster_url: string | null; mime_type: string | null; expires_at: string;
+  duration_ms: number | null; width: number | null; height: number | null;
 };
 
 const STORAGE_PREFIX = "blazeflow_guest:";
@@ -173,3 +187,16 @@ export async function downloadGuestAttachment(projectId: string, contentId: stri
   URL.revokeObjectURL(url);
   return url;
 }
+
+/** Where this cut plays from: a signed, time-limited URL for this guest and this cut only. */
+export const getGuestPlayback = (projectId: string, versionId: string, key: string) =>
+  guestRequest<GuestPlayback>(`/guest/reviews/${projectId}/media-versions/${versionId}/playback/`, key);
+
+/**
+ * Approve or Request changes on exactly this cut. A change request carries the message,
+ * which the team receives as a client-visible note pinned to `start_time_ms`.
+ */
+export const createGuestDecision = (
+  projectId: string, versionId: string, key: string,
+  payload: { decision: DecisionKind; message?: string; start_time_ms?: number },
+) => guestRequest<ReviewDecision>(`/guest/reviews/${projectId}/media-versions/${versionId}/decision/`, key, jsonInit("POST", payload));

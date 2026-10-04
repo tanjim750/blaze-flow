@@ -40,6 +40,22 @@ export const GUEST_PRESETS = {
 
 export type GuestPreset = keyof typeof GUEST_PRESETS;
 
+/** The permission a link carries when "Allow decisions" is on. */
+export const DECISION_PERMISSION: GuestPermission = "review.decision.create";
+
+/**
+ * What a new link may do: the preset's keys, plus decisions when the box is ticked.
+ * Decisions are on by default for new links; the box is how an owner opts out.
+ */
+export function invitePermissions(preset: GuestPreset, allowDecisions: boolean): GuestPermission[] {
+  const keys: GuestPermission[] = [...GUEST_PRESETS[preset].permissions];
+  return allowDecisions ? [...keys, DECISION_PERMISSION] : keys;
+}
+
+/** Whether a link allows decisions, for API rows from before the flag existed too. */
+export const allowsDecisions = (invite: { allow_decisions?: boolean; permissions: string[] }) =>
+  invite.allow_decisions ?? invite.permissions.includes(DECISION_PERMISSION);
+
 /** Carries the one-time token back to the dialog, because the API never returns it again. */
 export type GuestInviteState = { error: string | null; token: string | null };
 export const emptyGuestInviteState: GuestInviteState = { error: null, token: null };

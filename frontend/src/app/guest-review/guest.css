@@ -16,7 +16,7 @@
 .gr-form button{height:44px;border:0;border-radius:9px;background:var(--primary);color:#fff;font-weight:650;cursor:pointer}
 .gr-form button:disabled{opacity:.6;cursor:not-allowed}
 
-.gr-shell{min-height:100vh;display:grid;grid-template-rows:auto auto 1fr}
+.gr-shell{height:100vh;display:grid;grid-template-rows:auto auto minmax(0,1fr);overflow:hidden;--rv-canvas:#08080a;--rv-chrome:#0f0f12;--rv-line:#26262c;--rv-marker:#ffcf5a}
 .gr-topbar{display:flex;align-items:center;gap:20px;padding:14px 22px;border-bottom:1px solid var(--border);background:var(--surface)}
 .gr-project{flex:1;min-width:0;display:grid}
 .gr-project strong{font-size:14px}
@@ -27,9 +27,9 @@
 .gr-error{display:flex;align-items:center;gap:8px;margin:0;padding:11px 22px;background:#3a1c24;border-bottom:1px solid #6b2a38;color:#ffc2cc;font-size:12px}
 
 .gr-body{display:grid;grid-template-columns:minmax(0,1fr) 400px;min-height:0}
-.gr-viewer{display:grid;grid-template-rows:auto 1fr;background:#08080b;min-width:0}
-.gr-versions{display:flex;gap:6px;padding:12px 16px;border-bottom:1px solid var(--border)}
-.gr-versions button{padding:6px 12px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--muted);font:600 11px var(--font-geist-mono);cursor:pointer}
+.gr-viewer{display:grid;grid-template-rows:auto minmax(0,1fr);background:#08080b;min-width:0;min-height:0}
+.gr-versions{display:flex;gap:6px}
+.gr-versions button{display:flex;align-items:center;gap:4px;padding:6px 12px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--muted);font:600 11px var(--font-geist-mono);cursor:pointer}
 .gr-versions button.selected{background:#292143;border-color:#55418f;color:#fff}
 
 .gr-stage{display:grid;place-items:center;align-content:center;gap:9px;padding:40px;text-align:center;background:radial-gradient(circle,#252334,#08080b 68%);color:var(--muted)}
@@ -83,3 +83,34 @@
   .gr-notes{border-left:0;border-top:1px solid var(--border)}
   .gr-topbar{flex-wrap:wrap;gap:10px}
 }
+
+/* Player and client decisions --------------------------------------------- */
+.gr-viewer-bar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--rv-chrome);min-height:52px}
+.gr-player.rv{height:auto;min-height:0;display:flex;flex-direction:column;background:var(--rv-canvas)}
+.gr-player.rv>*{flex:1;min-height:0}
+.gr-decision{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-left:auto;position:relative}
+.gr-decision-state{display:flex;align-items:center;gap:6px;margin:0 6px 0 0;font-size:12px;font-weight:600}
+.gr-decision-state.is-approved{color:var(--success,#71e6b5)}
+.gr-decision-state.is-changes_requested{color:var(--warning,#f1c55b)}
+.gr-decide{display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:12px;font-weight:600;cursor:pointer}
+.gr-decide:hover:not(:disabled){background:var(--hover)}
+.gr-decide.is-approve{background:var(--primary);border-color:var(--primary);color:#fff}
+.gr-decide:disabled{opacity:.6;cursor:not-allowed}
+.gr-request{position:absolute;top:calc(100% + 8px);right:0;z-index:30;width:min(380px,90vw);display:grid;gap:8px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:11px;box-shadow:0 18px 40px #0009}
+.gr-request label{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:600}
+.gr-request label small{color:var(--muted);font:500 11px var(--font-geist-mono)}
+.gr-request textarea{padding:9px;border:1px solid var(--border);border-radius:8px;background:#0c0c10;color:var(--text);resize:vertical;outline:0;font-size:12px}
+.gr-request textarea:focus{border-color:var(--primary)}
+.gr-request-problem{margin:0;color:var(--danger);font-size:11px}
+.gr-request>div{display:flex;justify-content:flex-end;gap:6px}
+.gr-request button{padding:7px 11px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);font-size:12px;cursor:pointer}
+.gr-request button:last-child{background:var(--primary);border-color:var(--primary);color:#fff}
+.gr-request button:disabled{opacity:.6;cursor:not-allowed}
+.gr-timecode{padding:0;border:0;background:none;color:#cfc4ff;font:inherit;font-family:var(--font-geist-mono);cursor:pointer}
+.gr-timecode:hover{text-decoration:underline}
+/* The error row is conditional; pin rows so the body always fills the viewport. */
+.gr-shell>.gr-topbar{grid-row:1}
+.gr-shell>.gr-error{grid-row:2}
+.gr-shell>.gr-body{grid-row:3;min-height:0}
+.gr-versions{flex-wrap:wrap}
+.gr-version-title{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-geist-sans,inherit);font-weight:500;margin-right:2px}
