@@ -5,9 +5,11 @@
  * so selection, focus, drag and the keyboard behave identically.
  *
  * The outer element is a focusable `role="row"` inside its section's `role="grid"`. Only the
- * focused item is in the tab order (roving tabindex, managed by the parent). A plain click
- * opens (a file in review, a folder in place); the checkbox, Cmd/Ctrl-click and Shift-click
- * select. From the keyboard, Enter opens, Space selects and Shift+F10 opens the actions menu.
+ * focused item is in the tab order (roving tabindex, managed by the parent). A click selects
+ * (and shows the details panel); a double-click opens — a file in review, a folder in place.
+ * A tap on a touch screen opens. The checkbox, Cmd/Ctrl-click and Shift-click build a
+ * multi-selection. From the keyboard, Enter opens, Space selects and Shift+F10 opens the
+ * actions menu. See `onPointerSelect` in asset-library.tsx for the full rule.
  */
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Clapperboard, Eye, FolderOpen, GitBranch, Layers, MessageSquareText, TriangleAlert } from "lucide-react";

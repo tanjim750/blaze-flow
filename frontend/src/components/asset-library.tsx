@@ -137,6 +137,16 @@ function useWidth(ref: React.RefObject<HTMLElement | null>) {
   }, [ref]);
   return width;
 }
+/**
+ * Whether a click came from a finger. `pointerType` is on the click event itself in every
+ * current browser; the media query covers the ones that still send a plain MouseEvent.
+ */
+function isTouchClick(event: ReactMouseEvent): boolean {
+  const pointerType = (event.nativeEvent as PointerEvent).pointerType;
+  if (pointerType) return pointerType === "touch";
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+}
+
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const MIN_MAIN = 480;
 const VIEW_MODES = ["grid", "list"] as const;
@@ -429,16 +439,27 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
     if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") { event.preventDefault(); setMenuFor(id); }
   };
   /**
-   * A plain click opens: a file in review, a folder in place — like Frame.io, and what
-   * people expect from a media library. Selection stays one modifier away: the checkbox
-   * (on hover), Cmd/Ctrl-click to toggle, Shift-click for a range, Space from the keyboard.
-   * The details panel follows the selection and is also one click away in the ⋯ menu.
+   * Click behaviour — one rule for files and folders, in Files and in a project's Files tab:
+   *
+   * - Mouse, pen, keyboard: a single click selects the item and shows it in the details
+   *   panel (when the panel docks beside the grid; below that width it stays one click away
+   *   in the toolbar and the ⋯ menu, so a sheet never covers the grid mid-double-click).
+   *   Double-click or Enter opens: a file in review, a folder in place. That is the
+   *   Finder / Figma file-browser convention, and it means folders behave like files rather
+   *   than being the one thing a single click opens. The hover "Open" chip on a tile and the
+   *   panel's "Open in review" button stay as one-click ways in.
+   * - Touch: a tap opens, because a phone or tablet has no hover chip and no double-click.
+   *   Selecting there is the checkbox or a long press (which opens the actions menu).
+   *
+   * Cmd/Ctrl-click toggles and Shift-click extends the selection, as before. The folder tree
+   * and the breadcrumbs are navigation, so a single click there still opens.
    */
   const onPointerSelect = (event: ReactMouseEvent, entity: LibraryFile | LibraryFolder) => {
     if ((event.target as HTMLElement).closest("input, button, a, [role=menu]")) return;
     const selectMode = event.shiftKey ? "range" : event.metaKey || event.ctrlKey ? "toggle" : "replace";
-    if (selectMode === "replace" && !renaming) { setFocusedId(entity.id); openEntity(entity); return; }
+    if (selectMode === "replace" && !renaming && isTouchClick(event)) { setFocusedId(entity.id); openEntity(entity); return; }
     select(entity.id, selectMode);
+    if (selectMode === "replace" && inspectorDocked && inspectorPref !== "open") setInspectorPref("open");
   };
 
   // Page-level shortcuts: N new folder, U upload, / search, ] details panel.

@@ -41,7 +41,7 @@ const row = (name: RegExp) => screen.getByRole("row", { name });
 const selectedNames = () => screen.getAllByRole("row").filter((item) => item.getAttribute("aria-selected") === "true").map((item) => item.getAttribute("aria-label")?.split(",")[0]);
 
 describe("Files panel interactions", () => {
-  it("selects with Cmd+click or the checkbox, extends with Shift+click; a plain click opens", () => {
+  it("selects with a click, Cmd+click or the checkbox, and extends with Shift+click", () => {
     render(<AssetLibrary view={view} />);
     // Sort by name so the visible order is alpha, bravo, charlie.
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
@@ -61,20 +61,50 @@ describe("Files panel interactions", () => {
     expect(screen.queryByText(/\d selected$/)).not.toBeInTheDocument();
   });
 
-  it("opens a file in review with one plain click, and only once on a double-click", () => {
+  it("selects on a single click and opens in review on a double-click or Enter, once", () => {
     replaceLibrary({ deletedIds: [], folders: [], files: [file("a", "alpha.mp4", { fileId: "file-a", preview: "/poster-a.jpg" }), file("p", "brief.pdf", { fileId: "file-p", kind: "document", mimeType: "application/pdf" })] });
     const opened: string[] = [];
     const listener = (event: Event) => opened.push((event as CustomEvent<{ href: string }>).detail.href);
     window.addEventListener("blazeflow:open-review", listener);
     render(<AssetLibrary view={view} />);
+    // A single click only selects, and the details panel shows the file.
     fireEvent.click(row(/^alpha\.mp4/));
+    expect(opened).toEqual([]);
+    expect(selectedNames()).toEqual(["alpha.mp4"]);
+    expect(within(screen.getByRole("complementary", { name: "Video" })).getByText("alpha.mp4")).toBeInTheDocument();
+    // A double-click (two clicks, then dblclick) opens exactly once.
     fireEvent.click(row(/^alpha\.mp4/));
     fireEvent.doubleClick(row(/^alpha\.mp4/));
-    // PDFs (and images) open in review too.
+    // PDFs (and images) open in review too, from the keyboard.
     fireEvent.keyDown(row(/^brief\.pdf/), { key: "Enter" });
+    // The hover chip is still a one-click way in.
+    fireEvent.click(within(row(/^alpha\.mp4/)).getByRole("button", { name: "Open in review: alpha.mp4" }));
     window.removeEventListener("blazeflow:open-review", listener);
-    expect(opened).toEqual(["/review?media=file-a", "/review?media=file-p"]);
-    expect(selectedNames()).toEqual([]);
+    expect(opened).toEqual(["/review?media=file-a", "/review?media=file-p", "/review?media=file-a"]);
+  });
+
+  it("selects a folder on a single click and opens it on a double-click", () => {
+    render(<AssetLibrary view={view} />);
+    fireEvent.click(row(/^Selects, folder/));
+    expect(selectedNames()).toEqual(["Selects"]);
+    expect(screen.getByRole("row", { name: /^alpha\.mp4/ })).toBeInTheDocument();
+    fireEvent.doubleClick(row(/^Selects, folder/));
+    expect(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByRole("button", { name: "Selects" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("row", { name: /^delta\.mp4/ })).toBeInTheDocument();
+  });
+
+  it("opens on a tap, because touch has no hover chip or double-click", () => {
+    replaceLibrary({ deletedIds: [], folders: [], files: [file("a", "alpha.mp4", { fileId: "file-a", preview: "/poster-a.jpg" })] });
+    const opened: string[] = [];
+    const listener = (event: Event) => opened.push((event as CustomEvent<{ href: string }>).detail.href);
+    window.addEventListener("blazeflow:open-review", listener);
+    render(<AssetLibrary view={view} />);
+    // jsdom has no PointerEvent; a click carrying pointerType is what browsers dispatch.
+    const tap = new MouseEvent("click", { bubbles: true, cancelable: true });
+    Object.defineProperty(tap, "pointerType", { value: "touch" });
+    fireEvent(row(/^alpha\.mp4/), tap);
+    window.removeEventListener("blazeflow:open-review", listener);
+    expect(opened).toEqual(["/review?media=file-a"]);
   });
 
   it("moves focus with the arrow keys, selects with Space and clears with Escape", () => {
