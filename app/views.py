@@ -116,6 +116,7 @@ from .throttles import (
     EmailVerificationThrottle, LoginThrottle, PasswordResetThrottle, RegistrationThrottle,
 )
 from .models import (
+    ClientUpload,
     MediaVersion,
     FileVariant,
     File,
@@ -1248,6 +1249,12 @@ def _with_card_fields(queryset):
     subqueries so that rendering a board costs one round trip rather than three per card.
     """
     return queryset.annotate(
+        client_uploader_name_annotation=Subquery(
+            ClientUpload.objects.filter(project_file_id=OuterRef('id')).values('uploader_name')[:1],
+        ),
+        client_uploader_email_annotation=Subquery(
+            ClientUpload.objects.filter(project_file_id=OuterRef('id')).values('uploader_email')[:1],
+        ),
         poster_metadata_annotation=Subquery(
             FileVariant.objects.filter(
                 file_id=OuterRef('file_id'), status=FileStatus.READY, deleted_at__isnull=True,

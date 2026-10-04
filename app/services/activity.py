@@ -25,7 +25,7 @@ from app.models import (
     ReviewComment, ReviewCommentContent, ReviewCommentContentType, ReviewDecision, Task,
 )
 from app.permissions import (
-    MEDIA_READ, REVIEW_COMMENT_MANAGE, REVIEW_COMMENT_READ, TASK_READ,
+    MEDIA_READ, PROJECT_FILE_READ, PROJECT_READ, REVIEW_COMMENT_MANAGE, REVIEW_COMMENT_READ, TASK_READ,
     accessible_projects, has_workspace_permission,
 )
 
@@ -45,9 +45,13 @@ CATEGORIES = {
         'guest.invite.created', 'guest.link.opened', 'guest.media.viewed',
         'guest.invite.revoked', 'guest.access.revoked', 'guest.invite.updated',
     ),
+    # Files a client sent in. Link management rows are written team-only, so clients see
+    # their own uploads here but never the links.
+    'uploads': ('client_upload.received', 'upload_link.created', 'upload_link.revoked'),
 }
 CATEGORY_PERMISSIONS = {
     'tasks': TASK_READ, 'comments': REVIEW_COMMENT_READ, 'media': MEDIA_READ, 'guests': REVIEW_COMMENT_MANAGE,
+    'uploads': PROJECT_READ,
 }
 CATEGORY_OF = {action: category for category, actions in CATEGORIES.items() for action in actions}
 FEED_ACTIONS = tuple(CATEGORY_OF)
@@ -124,6 +128,10 @@ def _actor(row):
         name = row.actor_guest_session.name or 'A guest reviewer'
         return {'type': 'guest', 'id': None, 'name': name, 'initials': _initials(name), 'avatar_url': None}
     user = row.actor_user
+    if user is None and row.action == 'client_upload.received':
+        # Sent through a public upload link: the sender typed their name, there is no account.
+        name = (row.metadata or {}).get('uploader_name') or 'A client'
+        return {'type': 'client', 'id': None, 'name': name, 'initials': _initials(name), 'avatar_url': None}
     if user is None:
         return {'type': 'system', 'id': None, 'name': 'Blaze Flow', 'initials': 'BF', 'avatar_url': None}
     name = user.get_full_name() or user.email
@@ -199,6 +207,8 @@ class _Lookups:
         }
         invite_ids = keys(ids.get('guest_invite', ())) | keys(m.get('guest_invite_id') for m in meta)
         self.invites = {str(i.id): i for i in GuestInvite.objects.filter(id__in=invite_ids)}
+        # Projects whose Files the viewer can open; a client-upload row links there only then.
+        self.file_projects = set()
 
     def comment_visible(self, comment):
         if comment is None:
@@ -362,6 +372,21 @@ def describe(row, lookups):
         else:
             item.update(verb='revoked guest access for', before=guest)
             summary = f"{actor} revoked {guest or 'a guest'}'s access to '{label}'"
+    elif action == 'client_upload.received':
+        name = meta.get('file_name') or 'a file'
+        folder = meta.get('folder_id')
+        href = f"/files?{urlencode({'folder': folder})}" if folder and str(row.project_id) in lookups.file_projects else None
+        obj = {'type': 'project_file', 'id': row.entity_id, 'label': name, 'href': href}
+        label = meta.get('label')
+        item['verb'] = 'sent'
+        item['detail'] = {'via': meta.get('via'), 'link_label': label}
+        summary = f"{actor} sent '{name}'" + (f" through upload link '{label}'" if label else ' from the client portal')
+    elif action.startswith('upload_link.'):
+        label = meta.get('label') or 'Untitled link'
+        href = f"/projects?{urlencode({'campaign': str(row.project_id), 'tab': 'client-uploads'})}" if row.project_id else None
+        obj = {'type': 'upload_link', 'id': row.entity_id, 'label': label, 'href': href}
+        item['verb'] = 'created upload link' if action == 'upload_link.created' else 'turned off upload link'
+        summary = f"{actor} {item['verb']} '{label}'"
     else:  # pragma: no cover - FEED_ACTIONS is closed
         summary = f'{actor} {action}'
     item['object'] = obj
@@ -373,6 +398,10 @@ def describe_rows(rows, *, user, workspace):
     rows = list(rows)
     sees_team = can_see_team_notes(user=user, workspace=workspace)
     lookups = _Lookups(rows, sees_team=sees_team)
+    if any(row.action == 'client_upload.received' for row in rows):
+        lookups.file_projects = {
+            str(pid) for pid in accessible_projects(user=user, workspace=workspace, permission_key=PROJECT_FILE_READ).values_list('id', flat=True)
+        }
     out = []
     for row in rows:
         # Belt and braces: a note made team-only after the event was written still stays hidden.

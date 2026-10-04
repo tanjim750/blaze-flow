@@ -100,6 +100,9 @@ class ProjectFileSerializer(serializers.ModelSerializer):
     def get_added_by(self, project_file):
         """Who uploaded it. Recorded all along, but never returned, so every card that
         wanted to name an uploader had to say "Workspace member"."""
+        client = _client_sender(project_file)
+        if client is not None:
+            return client
         membership = project_file.added_by_workspace_membership
         user = getattr(membership, 'user', None)
         if user is None:
@@ -143,3 +146,19 @@ class AssetFileUpdateSerializer(serializers.Serializer):
     project_id = serializers.UUIDField(required=False, allow_null=True)
     folder_id = serializers.UUIDField(required=False, allow_null=True)
     task_stage_id = serializers.UUIDField(required=False, allow_null=True)
+
+
+def _client_sender(project_file):
+    """A file a client sent in names the client (who typed their name on the upload page),
+    not the team member whose link it came through. ``_with_card_fields`` annotates this so
+    a board does not query per card; a lone file falls back to one lookup."""
+    if hasattr(project_file, 'client_uploader_name_annotation'):
+        name = project_file.client_uploader_name_annotation
+        email = project_file.client_uploader_email_annotation
+    else:
+        from app.models import ClientUpload
+        row = ClientUpload.objects.filter(project_file_id=project_file.id).values('uploader_name', 'uploader_email').first()
+        name, email = (row['uploader_name'], row['uploader_email']) if row else (None, None)
+    if not name:
+        return None
+    return {'id': None, 'name': name, 'email': email, 'client': True}
