@@ -5,6 +5,9 @@ import type { TasksView } from "@/lib/tasks-view";
 import { UniversalReviewLayout } from "@/components/universal-review";
 import { TasksBoard } from "./board";
 
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh: vi.fn(), back: vi.fn() }) }));
+
 const view = {
   workspaceId: "workspace",
   notice: null,
@@ -40,6 +43,7 @@ const card = (title: string) => screen.getByText(title).closest("article")!;
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  push.mockReset();
 });
 
 describe("TasksBoard", () => {
@@ -72,10 +76,48 @@ describe("TasksBoard", () => {
     expect(within(file).getByText("2")).toBeInTheDocument();
   });
 
-  it("opens a staged video in the adjacent review workspace", () => {
+  it("opens a staged video on the full review page, remembering the board as the way back", () => {
+    window.history.replaceState(null, "", "/tasks?q=daily");
     render(<UniversalReviewLayout pathname="/tasks"><TasksBoard view={{ ...view, files: [stagedFile] }} /></UniversalReviewLayout>);
     fireEvent.click(screen.getByRole("button", { name: "Open review for daily life.mov" }));
-    expect(screen.getByTitle("Review daily life.mov")).toHaveAttribute("src", "/review-embed?media=source-file");
+    expect(push).toHaveBeenCalledWith("/review?media=source-file&from=%2Ftasks%3Fq%3Ddaily");
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("opens a task with a linked cut in review, with the task beside the player", () => {
+    const linked = { ...view, files: [stagedFile], tasks: [{ ...view.tasks[0], attachment_file_ids: ["source-file"] }] };
+    render(<UniversalReviewLayout pathname="/tasks"><TasksBoard view={linked} /></UniversalReviewLayout>);
+    const target = card("Edit Summer Campaign V3");
+    expect(target).toHaveAttribute("data-opens", "review");
+    fireEvent.click(within(target).getByText("Edit Summer Campaign V3"));
+    expect(push).toHaveBeenCalledWith("/review?media=source-file&task=task&from=%2F");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps the detail sheet one click away with the card's Details button", async () => {
+    mockFetch(() => []);
+    const linked = { ...view, files: [stagedFile], tasks: [{ ...view.tasks[0], attachment_file_ids: ["source-file"] }] };
+    render(<UniversalReviewLayout pathname="/tasks"><TasksBoard view={linked} /></UniversalReviewLayout>);
+    fireEvent.click(screen.getByRole("button", { name: "Details for Edit Summer Campaign V3" }));
+    expect(await screen.findByRole("dialog", { name: "Edit Summer Campaign V3" })).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("opens a list row the same way as its card", () => {
+    const linked = { ...view, files: [stagedFile], tasks: [{ ...view.tasks[0], attachment_file_ids: ["source-file"] }] };
+    render(<UniversalReviewLayout pathname="/tasks"><TasksBoard view={linked} /></UniversalReviewLayout>);
+    fireEvent.click(screen.getByRole("button", { name: "List" }));
+    fireEvent.click(within(screen.getByRole("row", { name: "Edit Summer Campaign V3, Revisions" })).getByText("Edit Summer Campaign V3"));
+    expect(push).toHaveBeenCalledWith("/review?media=source-file&task=task&from=%2F");
+  });
+
+  it("asks for a cut when a task without one is opened", async () => {
+    mockFetch(() => []);
+    render(<TasksBoard view={view} />);
+    fireEvent.click(card("Edit Summer Campaign V3"));
+    const sheet = await screen.findByRole("dialog", { name: "Edit Summer Campaign V3" });
+    expect(await within(sheet).findByText("Link a cut to review this task")).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Upload a file" })).toBeInTheDocument();
   });
 
   it("quick-adds a task into the column it was opened from", async () => {
@@ -138,7 +180,7 @@ describe("TasksBoard", () => {
     fireEvent.click(card("Edit Summer Campaign V3"));
     const sheet = await screen.findByRole("dialog", { name: "Edit Summer Campaign V3" });
     expect(within(sheet).getByRole("textbox", { name: "Task title" })).toHaveValue("Edit Summer Campaign V3");
-    expect(await within(sheet).findByRole("button", { name: "Open review for daily life.mov" })).toBeInTheDocument();
+    expect(await within(sheet).findByRole("button", { name: "Open in review: daily life.mov" })).toBeInTheDocument();
     expect(fetchMock.mock.calls[0][0]).toBe("/api/workspaces/workspace/tasks/task/attachments/");
   });
 

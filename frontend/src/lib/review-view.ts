@@ -1,5 +1,5 @@
-import { listAnnotations, listGuestInvites, listMediaDecisions, listReviewComments, listTaskAttachments, listTasks, listWorkflowStages, listWorkspaceMembers } from "./api";
-import type { Annotation, DashboardRole, GuestInvite, TaskStage } from "./api";
+import { getTask, listAnnotations, listGuestInvites, listMediaDecisions, listReviewComments, listTaskAttachments, listTasks, listWorkflowStages, listWorkspaceMembers } from "./api";
+import type { Annotation, DashboardRole, GuestInvite, Project, Task, TaskStage } from "./api";
 import { NO_DECISIONS, type DecisionViewer, type ReviewDecision } from "./review-decisions";
 import { nestNotes, type ReviewNote } from "./review-notes";
 import { normalizeSpecs, specChips, type DeliverableSpecs } from "./project-brief";
@@ -13,6 +13,21 @@ export type { ReviewAsset, ReviewTarget, ReviewVersion } from "./review-media";
 /** A task this media is attached to. Real: `TaskAttachment.file` is the same `File` row. */
 export type LinkedTask = { id: string; title: string; stageName: string | null };
 export type Mentionable = { id: string; name: string; email: string };
+
+/**
+ * The task a review was opened from (`?task=`), shown in a panel beside the player so the
+ * work and the cut are on one screen. Studio members only: tasks are the internal board.
+ */
+export type ReviewTaskContext = {
+  task: Task;
+  /** Files linked to the task that this page can open, in attach order, for switching cuts. */
+  linkedFiles: { fileId: string; title: string; label: string }[];
+  /** Whether the cut on screen is one of the task's linked files. */
+  onScreenIsLinked: boolean;
+  /** The task's client (its own, else its project's): Client Review needs one. */
+  clientId: string | null;
+  projectName: string | null;
+};
 
 export type ReviewView = {
   workspaceId: string | null;
@@ -54,13 +69,18 @@ export type ReviewView = {
   /** The project's deliverable specs, when it has any, for the header's mismatch chip. */
   specs: DeliverableSpecs | null;
   notice: string | null;
+  /** The task context panel, when the review was opened from a task. */
+  task: ReviewTaskContext | null;
 };
+
+/** Shown instead of a review when `?media=` names a file this viewer cannot open. */
+export const MISSING_MEDIA = "This file isn't available to you. It may have been deleted, or it hasn't been shared with you.";
 
 const EMPTY: ReviewView = {
   workspaceId: null, asset: null, version: null, target: null, notes: [], annotations: [],
   stages: [], taskStages: [], linkedTasks: [], members: [], guestInvites: [],
   canManageGuests: false, canComment: false, comparison: null, specs: null, notice: null,
-  role: null, decisions: [], decisionViewer: NO_DECISIONS,
+  role: null, decisions: [], decisionViewer: NO_DECISIONS, task: null,
 };
 
 /**
@@ -70,31 +90,33 @@ const EMPTY: ReviewView = {
  * `review-media.ts`. `?project=` and `?version=` are still honoured so that links made
  * before this feature, and the ones the dashboard still builds, keep working.
  */
-export async function loadReviewView(params: { mediaId?: string; projectId?: string; versionId?: string; compareId?: string }): Promise<ReviewView> {
+export async function loadReviewView(params: { mediaId?: string; projectId?: string; versionId?: string; compareId?: string; taskId?: string }): Promise<ReviewView> {
   const catalogue = await loadMediaCatalogue();
   if (!catalogue.workspaceId) return { ...EMPTY, notice: catalogue.notice };
   const client = catalogue.role === "client";
 
-  const found =
-    locate(catalogue.assets, params.mediaId)
-    ?? locateByTarget(catalogue.assets, params.projectId, params.versionId)
-    ?? defaultSelection(catalogue.assets);
+  // A link that names a file opens that file or nothing. Falling back to "the most recent
+  // cut" made a dead or forbidden link look like it worked while showing something else.
+  const named = params.mediaId ? locate(catalogue.assets, params.mediaId) : null;
+  const found = params.mediaId
+    ? named
+    : locateByTarget(catalogue.assets, params.projectId, params.versionId) ?? defaultSelection(catalogue.assets);
 
   const base: ReviewView = {
     ...EMPTY,
     workspaceId: catalogue.workspaceId,
     role: catalogue.role,
     taskStages: catalogue.stages,
-    notice: params.mediaId && !locate(catalogue.assets, params.mediaId)
-      ? "That media is not in this workspace, so the most recent cut is shown instead."
-      : catalogue.notice,
+    notice: params.mediaId && !named ? MISSING_MEDIA : catalogue.notice,
   };
   if (!found) return base;
 
   const { asset, version } = found;
-  const [stages, members] = await Promise.all([
+  const [stages, members, taskContext] = await Promise.all([
     listWorkflowStages(catalogue.workspaceId),
     listWorkspaceMembers(catalogue.workspaceId),
+    // Tasks are the studio's internal board; a client-team member never gets the panel.
+    params.taskId && !client ? loadTaskContext(catalogue.workspaceId, params.taskId, catalogue.assets, catalogue.projects, version.id) : null,
   ]);
 
   const view: ReviewView = {
@@ -109,6 +131,7 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
       : [],
     stages: stages.ok ? withApproval(stages.data) : [],
     specs: projectSpecs(catalogue.projects.find((project) => project.id === asset.projectId)?.deliverable_specs),
+    task: taskContext,
   };
 
   const comparison = params.compareId
@@ -147,6 +170,25 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
     // A 403 on comments is "read access without comment rights", not an error worth a banner.
     notice: comments.ok || comments.error.status === 403 ? view.notice : `Comments unavailable: ${comments.error.detail}`,
   };
+}
+
+/** The `?task=` panel: the task itself and which of its files can be opened here. */
+async function loadTaskContext(workspaceId: string, taskId: string, assets: ReviewAsset[], projects: Project[], onScreenId: string): Promise<ReviewTaskContext | null> {
+  if (!/^[0-9a-fA-F-]{32,36}$/.test(taskId)) return null;
+  const task = await getTask(workspaceId, taskId);
+  if (!task.ok) return null;
+  return taskContextFrom(task.data, assets, onScreenId, projects);
+}
+
+/** Exported for tests: resolves the task's linked file ids against what this viewer can open. */
+export function taskContextFrom(task: Task, assets: ReviewAsset[], onScreenId: string, projects: Pick<Project, "id" | "name" | "client_team_id">[] = []): ReviewTaskContext {
+  const project = task.project_id ? projects.find((item) => item.id === task.project_id) ?? null : null;
+  const ids = task.attachment_file_ids ?? [];
+  const linkedFiles = ids.flatMap((fileId) => {
+    const found = locate(assets, fileId);
+    return found ? [{ fileId, title: found.version.title, label: found.version.label }] : [];
+  });
+  return { task, linkedFiles, onScreenIsLinked: ids.includes(onScreenId), clientId: task.client_team_id ?? project?.client_team_id ?? null, projectName: project?.name ?? null };
 }
 
 /** Marks exactly one stage — the one Approve moves the cut into — as the approval target. */

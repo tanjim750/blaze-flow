@@ -186,7 +186,7 @@ export function AssetInspector({ selectedFiles, selectedFolders, scope, stages, 
         </Section>
         <Section title="Actions">
           <div className="fx-insp-actions">
-            <button type="button" className="fx-btn" onClick={() => actions.open(file)} disabled={working}>{canReview ? <Clapperboard /> : <Eye />}{canReview ? "Open review" : "Preview"}</button>
+            <button type="button" className="fx-btn is-primary" onClick={() => actions.open(file)} disabled={working}>{canReview ? <Clapperboard /> : <Eye />}{canReview ? "Open in review" : "Preview"}</button>
             {file.url && <button type="button" className="fx-btn" onClick={() => actions.download(file)}><Download />Download</button>}
             <button type="button" className="fx-btn" onClick={() => actions.rename(file)}><Pencil />Rename</button>
             <button type="button" className="fx-btn" onClick={() => actions.move(file)}><Move />Move / assign</button>

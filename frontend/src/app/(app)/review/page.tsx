@@ -2,6 +2,7 @@ import { loadReviewView, timeParam } from "@/lib/review-view";
 import { loadSession } from "@/lib/session";
 import { displayName } from "@/lib/user";
 import { ReviewWorkspace } from "./workspace";
+import { safeReturnPath } from "@/lib/open-in-review";
 import "./review.css";
 
 /**
@@ -25,19 +26,21 @@ export default async function Review({ searchParams }: PageProps<"/review">) {
     // `?compare=` is in the URL rather than component state so both cuts' notes can be
     // loaded on the server, and so a comparison can be linked to.
     compareId: single("compare"),
+    taskId: single("task"),
   });
 
   return (
     <ReviewWorkspace
       // A fresh workspace per cut: composer text, a pending drawing and player state
       // belong to the version they were made on, never to the next one opened.
-      key={view.version?.id ?? "none"}
+      key={`${view.version?.id ?? "none"}:${single("task") ?? ""}`}
       userId={session.user?.id ?? null}
       view={session.notice ? { ...view, notice: session.notice } : view}
       author={session.user ? displayName(session.user) : "You"}
       initialShareOpen={params.share === "1"}
       initialCommentId={single("comment") ?? null}
       initialTimeMs={timeParam(single("t"))}
+      returnTo={safeReturnPath(single("from"))}
     />
   );
 }

@@ -5,9 +5,9 @@
  * so selection, focus, drag and the keyboard behave identically.
  *
  * The outer element is a focusable `role="row"` inside its section's `role="grid"`. Only the
- * focused item is in the tab order (roving tabindex, managed by the parent). The checkbox,
- * the open chip and the ⋯ trigger are for the pointer: from the keyboard, Space selects,
- * Enter opens and Shift+F10 opens the actions menu.
+ * focused item is in the tab order (roving tabindex, managed by the parent). A plain click
+ * opens (a file in review, a folder in place); the checkbox, Cmd/Ctrl-click and Shift-click
+ * select. From the keyboard, Enter opens, Space selects and Shift+F10 opens the actions menu.
  */
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Clapperboard, Eye, FolderOpen, GitBranch, Layers, MessageSquareText, TriangleAlert } from "lucide-react";
@@ -90,8 +90,8 @@ export function FileItem({ file, stage, relation, reviewable, common }: {
   const status = working ? (file.status === "DUPLICATING" ? "Copying…" : file.status === "PENDING" ? "Checking file…" : "Generating preview…") : null;
   const label = [file.name, KIND_NAME[file.kind], formatSize(file.size), stage?.name, status].filter(Boolean).join(", ");
   const openChip = !working && (
-    <button type="button" className="fx-open-chip" tabIndex={-1} onClick={(event) => { event.stopPropagation(); common.onOpen(); }} aria-label={`${reviewable ? "Open review for" : "Preview"} ${file.name}`}>
-      {reviewable ? <Clapperboard /> : <Eye />}{reviewable ? "Review" : "Preview"}
+    <button type="button" className="fx-open-chip" tabIndex={-1} onClick={(event) => { event.stopPropagation(); common.onOpen(); }} aria-label={`${reviewable ? "Open in review:" : "Preview"} ${file.name}`}>
+      {reviewable ? <Clapperboard /> : <Eye />}{reviewable ? "Open" : "Preview"}
     </button>
   );
   const frame = (

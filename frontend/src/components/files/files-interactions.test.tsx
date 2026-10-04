@@ -41,14 +41,14 @@ const row = (name: RegExp) => screen.getByRole("row", { name });
 const selectedNames = () => screen.getAllByRole("row").filter((item) => item.getAttribute("aria-selected") === "true").map((item) => item.getAttribute("aria-label")?.split(",")[0]);
 
 describe("Files panel interactions", () => {
-  it("selects with click, extends with Shift+click and toggles with Cmd+click", () => {
+  it("selects with Cmd+click or the checkbox, extends with Shift+click; a plain click opens", () => {
     render(<AssetLibrary view={view} />);
     // Sort by name so the visible order is alpha, bravo, charlie.
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
     fireEvent.change(screen.getByLabelText("Filter by sort"), { target: { value: "name" } });
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
 
-    fireEvent.click(row(/^alpha\.mp4/));
+    fireEvent.click(row(/^alpha\.mp4/), { metaKey: true });
     expect(selectedNames()).toEqual(["alpha.mp4"]);
     fireEvent.click(row(/^charlie\.mp4/), { shiftKey: true });
     expect(selectedNames()).toEqual(["alpha.mp4", "bravo.mp4", "charlie.mp4"]);
@@ -56,9 +56,25 @@ describe("Files panel interactions", () => {
     expect(screen.getByText("3 selected")).toBeInTheDocument();
     fireEvent.click(row(/^bravo\.mp4/), { metaKey: true });
     expect(selectedNames()).toEqual(["alpha.mp4", "charlie.mp4"]);
-    fireEvent.click(row(/^bravo\.mp4/));
-    expect(selectedNames()).toEqual(["bravo.mp4"]);
+    fireEvent.click(within(row(/^charlie\.mp4/)).getByRole("checkbox", { name: "Select charlie.mp4" }));
+    expect(selectedNames()).toEqual(["alpha.mp4"]);
     expect(screen.queryByText(/\d selected$/)).not.toBeInTheDocument();
+  });
+
+  it("opens a file in review with one plain click, and only once on a double-click", () => {
+    replaceLibrary({ deletedIds: [], folders: [], files: [file("a", "alpha.mp4", { fileId: "file-a", preview: "/poster-a.jpg" }), file("p", "brief.pdf", { fileId: "file-p", kind: "document", mimeType: "application/pdf" })] });
+    const opened: string[] = [];
+    const listener = (event: Event) => opened.push((event as CustomEvent<{ href: string }>).detail.href);
+    window.addEventListener("blazeflow:open-review", listener);
+    render(<AssetLibrary view={view} />);
+    fireEvent.click(row(/^alpha\.mp4/));
+    fireEvent.click(row(/^alpha\.mp4/));
+    fireEvent.doubleClick(row(/^alpha\.mp4/));
+    // PDFs (and images) open in review too.
+    fireEvent.keyDown(row(/^brief\.pdf/), { key: "Enter" });
+    window.removeEventListener("blazeflow:open-review", listener);
+    expect(opened).toEqual(["/review?media=file-a", "/review?media=file-p"]);
+    expect(selectedNames()).toEqual([]);
   });
 
   it("moves focus with the arrow keys, selects with Space and clears with Escape", () => {
@@ -92,7 +108,7 @@ describe("Files panel interactions", () => {
     expect(within(summary).getByText("All files")).toBeInTheDocument();
     expect(within(summary).getByText(/3 files · 1 folder/)).toBeInTheDocument();
 
-    fireEvent.click(row(/^alpha\.mp4/));
+    fireEvent.click(row(/^alpha\.mp4/), { metaKey: true });
     const details = screen.getByRole("complementary", { name: "Video" });
     expect(within(details).getByText("alpha.mp4")).toBeInTheDocument();
     expect(within(details).getByText("1080 × 1920 · 9:16")).toBeInTheDocument();

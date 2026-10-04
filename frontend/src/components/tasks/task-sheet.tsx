@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import NextImage from "next/image";
-import { AudioLines, Clapperboard, File as FileIcon, Image as ImageIcon, Link2, Lock, Paperclip, Play, Search, Trash2, X } from "lucide-react";
+import { AudioLines, Clapperboard, File as FileIcon, Image as ImageIcon, Link2, Lock, Paperclip, Play, Search, Trash2, Upload, X } from "lucide-react";
 import type { ProjectFile, Task, TaskAttachment } from "@/lib/api";
 import type { TasksView } from "@/lib/tasks-view";
 import { dueState, formatDueLong, PRIORITIES, type BoardStage } from "@/lib/task-board";
@@ -18,28 +18,32 @@ import { TaskMoney } from "./task-money";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
-export function TaskSheet({ task, stage, stages, view, locked, attachments, loadingAttachments, fileBySourceId, onClose, onPatch, onMove, onReopen, onDelete, onReview, onAttach }: {
+export function TaskSheet({ task, stage, stages, view, locked, attachments, loadingAttachments, fileBySourceId, onClose, onPatch, onMove, onReopen, onDelete, onReview, onAttach, onUpload }: {
   task: Task | null; stage: BoardStage | null; stages: BoardStage[]; view: TasksView; locked: boolean;
   attachments: TaskAttachment[] | undefined; loadingAttachments: boolean; fileBySourceId: Map<string, ProjectFile>;
   onClose: () => void; onPatch: (payload: Record<string, unknown>) => Promise<boolean>; onMove: (stageId: string) => void; onReopen: () => void;
-  onDelete: () => void; onReview: (file: ProjectFile) => void; onAttach: (file: ProjectFile) => Promise<boolean>;
+  onDelete: () => void; onReview: (fileId: string, title: string) => void; onAttach: (file: ProjectFile) => Promise<boolean>;
+  /** Uploads a new file into the task's project and links it. */
+  onUpload?: (file: File) => Promise<boolean>;
 }) {
   return <DialogPrimitive.Root open={Boolean(task)} onOpenChange={(open) => { if (!open) onClose(); }}>
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="tb-sheet-overlay" />
       <DialogPrimitive.Content className="tb-sheet" aria-describedby={undefined} onOpenAutoFocus={(event) => event.preventDefault()}>
-        {task && stage ? <SheetBody key={task.id} task={task} stage={stage} stages={stages} view={view} locked={locked} attachments={attachments} loadingAttachments={loadingAttachments} fileBySourceId={fileBySourceId} onClose={onClose} onPatch={onPatch} onMove={onMove} onReopen={onReopen} onDelete={onDelete} onReview={onReview} onAttach={onAttach} />
+        {task && stage ? <SheetBody key={task.id} task={task} stage={stage} stages={stages} view={view} locked={locked} attachments={attachments} loadingAttachments={loadingAttachments} fileBySourceId={fileBySourceId} onClose={onClose} onPatch={onPatch} onMove={onMove} onReopen={onReopen} onDelete={onDelete} onReview={onReview} onAttach={onAttach} onUpload={onUpload} />
           : <DialogPrimitive.Title className="tb-sr">Task</DialogPrimitive.Title>}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   </DialogPrimitive.Root>;
 }
 
-function SheetBody({ task, stage, stages, view, locked, attachments, loadingAttachments, fileBySourceId, onPatch, onMove, onReopen, onDelete, onReview, onAttach }: Parameters<typeof TaskSheet>[0] & { task: Task; stage: BoardStage }) {
+function SheetBody({ task, stage, stages, view, locked, attachments, loadingAttachments, fileBySourceId, onPatch, onMove, onReopen, onDelete, onReview, onAttach, onUpload }: Parameters<typeof TaskSheet>[0] & { task: Task; stage: BoardStage }) {
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
   const [save, setSave] = useState<SaveState>("idle");
   const [picking, setPicking] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const uploadInput = useRef<HTMLInputElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { closeRef.current?.focus(); }, []);
@@ -122,16 +126,35 @@ function SheetBody({ task, stage, stages, view, locked, attachments, loadingAtta
           : attachments?.length ? <ul className="tb-attachment-list">{attachments.map((attachment) => {
             const file = fileBySourceId.get(attachment.file.id);
             const kind = attachment.file.mime_type.split("/")[0];
-            const playable = Boolean(file) && (kind === "video" || kind === "audio" || kind === "image");
+            // Every attachment opens in review: the page resolves project cuts as well as
+            // library files, and shows images, PDFs and other files in its viewer.
+            const playable = kind === "video" || kind === "audio" || kind === "image";
             const poster = file?.poster ? `/api/workspaces/${file.workspace_id}/asset-files/${file.id}/poster/` : null;
             return <li key={attachment.id}>
-              <button type="button" disabled={!playable} onClick={() => file && onReview(file)} aria-label={playable ? `Open review for ${attachment.file.name}` : attachment.file.name}>
+              <button type="button" onClick={() => onReview(attachment.file.id, attachment.file.name)} aria-label={`Open in review: ${attachment.file.name}`}>
                 <span className="tb-attachment-thumb">{poster ? <NextImage src={poster} alt="" width={96} height={54} unoptimized /> : <KindIcon kind={kind} />}{playable && <i><Play aria-hidden="true" /></i>}</span>
                 <span className="tb-attachment-copy"><strong>{attachment.file.name}</strong><small>{[file?.version_number ? `V${file.version_number}` : null, kind, formatBytes(attachment.file.size_bytes)].filter(Boolean).join(" · ")}</small></span>
               </button>
             </li>;
           })}</ul>
-          : <p className="tb-muted">No cut attached yet. Attach one from the library so reviewers can open it from the card.</p>}
+          : <div className="tb-link-prompt" role="note">
+              <Clapperboard aria-hidden="true" />
+              <div>
+                <strong>Link a cut to review this task</strong>
+                <p>Once a file is linked, clicking this task opens it in review with the task beside the player.</p>
+                {!locked && <div className="tb-link-actions">
+                  <button type="button" className="tb-button is-sm is-primary" onClick={() => setPicking(true)}><Link2 aria-hidden="true" />Attach from library</button>
+                  {onUpload && <>
+                    <button type="button" className="tb-button is-sm" disabled={uploading} onClick={() => uploadInput.current?.click()}><Upload aria-hidden="true" />{uploading ? "Uploading…" : "Upload a file"}</button>
+                    <input ref={uploadInput} type="file" hidden aria-label="Upload a file to link" onChange={async (event) => {
+                      const chosen = event.target.files?.[0]; event.target.value = "";
+                      if (!chosen) return;
+                      setUploading(true); await onUpload(chosen); setUploading(false);
+                    }} />
+                  </>}
+                </div>}
+              </div>
+            </div>}
       </section>
     </div>
     <footer className="tb-sheet-foot">
