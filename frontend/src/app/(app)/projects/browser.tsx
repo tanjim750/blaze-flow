@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
   Activity, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
-  FolderOpen, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, X,
+  FolderOpen, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Wallet, X,
 } from "lucide-react";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
 import { AssetLibrary } from "@/components/asset-library";
 import { ProjectBrief } from "@/components/project-brief";
+import { ProjectPricing } from "@/components/money/project-pricing";
 import { ActivityFeed } from "@/components/activity/activity-feed";
 import "@/components/project-brief.css";
 import { LinkPending } from "@/components/nav-progress";
@@ -81,7 +82,7 @@ function InlineCreate({ action, hidden, placeholder, label, onClose, nested = fa
     </form>
   );
 }
-const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log"] as const;
+const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log", "Pricing"] as const;
 
 export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initialQuery = "" }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string; initialQuery?: string }) {
   const router = useRouter();
@@ -131,11 +132,12 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
 
           <div className="pb-tabs-row">
             <div className="pb-tabs" role="tablist">
-              {TABS.map((value) => (
+              {TABS.filter((value) => value !== "Pricing" || view.canSeeBilling).map((value) => (
                 <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? "selected" : ""} onClick={() => setTab(value)}>
                   {value === "Files" && <FolderOpen size={14} />}
                   {value === "Brief & Specs" && <FileText size={14} />}
                   {value === "Activity Log" && <Activity size={14} />}
+                  {value === "Pricing" && <Wallet size={14} />}
                   <span>{value}</span>
                 </button>
               ))}
@@ -154,6 +156,8 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
         ) : tab === "Activity Log" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (
           // Keyed on the project so a campaign switch starts a fresh timeline and filter.
           <ActivityFeed key={view.selectedCampaign.id} workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} />
+        ) : tab === "Pricing" && view.canSeeBilling && view.selectedCampaign && view.workspaceId ? (
+          <ProjectPricing key={view.selectedCampaign.id} workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} />
         ) : tab === "Brief & Specs" && view.selectedCampaign?.briefError ? (
           <div className="pb-soon" role="alert">
             <TriangleAlert size={24} strokeWidth={1.75} aria-hidden="true" />

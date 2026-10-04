@@ -4,6 +4,7 @@ import { DashboardPoster } from "@/components/dashboard-poster";
 import type { LayoutChoice } from "@/lib/dashboard-role";
 import type { ClientDashboard as ClientView } from "@/lib/role-dashboard-view";
 import { CounterStrip, DashboardHeading, EmptyState, InlineProblem, ReviewQueuePanel } from "./parts";
+import { ClientInvoicesPanel } from "./money-panels";
 
 function subline(view: ClientView): string {
   const waiting = view.waiting.length;
@@ -46,6 +47,8 @@ export function ClientDashboard({ view, choice }: { view: ClientView; choice: La
         </div>
       </section>
     </div>
+
+    {view.invoices && <ClientInvoicesPanel invoices={view.invoices} />}
 
     <section className="section-block active-projects">
       <div className="section-heading"><h2><FolderKanban size={16} />Your projects <span>{view.projects.length}</span></h2></div>

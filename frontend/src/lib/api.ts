@@ -18,6 +18,8 @@ export type Workspace = {
   my_membership_id?: string | null;
   /** Which dashboard layout fits the viewer here, derived from permissions. Absent on older backends. */
   dashboard_role?: DashboardRole | null;
+  /** What the viewer may do with money here (billing demo). Always all-false via a client team. Absent on older backends. */
+  billing?: { view: boolean; manage: boolean; rates_view: boolean };
 };
 /** `owner` runs the workspace, `editor` is any other team member, `client` is in only through a client team. */
 export type DashboardRole = "owner" | "editor" | "client";
@@ -139,7 +141,8 @@ async function authHeaders(): Promise<Record<string, string>> {
   return headers;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
+/** Exported for feature modules that keep their routes in their own file (e.g. `billing-api.ts`). */
+export async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
   let response: Response;
   try {
     response = await fetch(`${API_ORIGIN}/api${path}`, {

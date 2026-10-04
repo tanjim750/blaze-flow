@@ -289,3 +289,32 @@ a.activity-row:hover p { color: var(--text); }
   .health-row { grid-template-columns: minmax(0, 1fr) auto; }
   .health-row time { display: none; }
 }
+
+/* Billing demo panels (components/dashboards/money-panels.tsx). */
+.money-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.money-strip-card { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: #121218; color: inherit; text-decoration: none; }
+.money-strip-card:hover { border-color: #3a3846; }
+.money-strip-card span { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 12px; }
+.money-strip-card strong { font: 600 22px var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; }
+.money-strip-card small { color: var(--muted-foreground); font-size: 11px; }
+.money-strip-card.tone-danger strong { color: #ffa3af; }
+.money-strip-card.tone-warning strong { color: #ffd35c; }
+.money-strip-card.tone-success strong { color: #7de9bd; }
+.earnings-figures { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 4px 16px 0; }
+.earnings-figures div { display: grid; gap: 2px; }
+.earnings-figures strong { font: 600 19px var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; }
+.earnings-figures span { color: var(--muted-foreground); font-size: 11px; }
+.earnings-figures .is-owed strong { color: #ffd35c; }
+.earnings-track { height: 6px; margin: 12px 16px 4px; border-radius: 99px; background: #24232c; overflow: hidden; }
+.earnings-track i { display: block; height: 100%; background: linear-gradient(90deg, #6949e8, #8b6cff); }
+.earnings-lines, .client-invoice-list { display: grid; margin: 0; padding: 4px 16px 12px; list-style: none; }
+.earnings-lines li, .client-invoice-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid #23222a; color: inherit; text-decoration: none; }
+.earnings-lines li > div, .client-invoice-row > div:first-child { display: grid; flex: 1; min-width: 0; }
+.earnings-lines small, .client-invoice-row small { color: var(--muted-foreground); font-size: 11px; }
+.earnings-lines b, .client-invoice-amount b { font: 600 13px var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; }
+.client-invoice-row strong { font: 600 13px var(--font-geist-mono), monospace; }
+.client-invoice-amount { display: grid; justify-items: end; min-width: 130px; }
+.client-invoice-row:hover strong { color: #b7a3ff; }
+@media (max-width: 720px) { .earnings-figures { grid-template-columns: 1fr 1fr; } }
+.home-shell .money-strip { margin-top: 14px; }
+.home-shell .earnings-panel, .home-shell .client-invoices { margin-top: 24px; }

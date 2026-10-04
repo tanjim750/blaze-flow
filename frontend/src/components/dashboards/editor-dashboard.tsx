@@ -4,6 +4,7 @@ import { DashboardPoster } from "@/components/dashboard-poster";
 import type { LayoutChoice } from "@/lib/dashboard-role";
 import type { EditorDashboard as EditorView, EditorTask } from "@/lib/role-dashboard-view";
 import { ActivityPanel, Avatar, CounterStrip, DashboardHeading, EmptyState, FooterLink, InlineProblem } from "./parts";
+import { EarningsPanel } from "./money-panels";
 
 function subline(view: EditorView): string {
   const overdue = view.tasks.overdue.length;
@@ -68,6 +69,8 @@ export function EditorDashboard({ view, choice }: { view: EditorView; choice: La
         </div>
       </section>
     </div>
+
+    {view.earnings && <EarningsPanel earnings={view.earnings} />}
 
     <div className="dashboard-bottom">
       <section className="panel" aria-labelledby="my-cuts-title">

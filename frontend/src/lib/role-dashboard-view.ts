@@ -22,6 +22,9 @@ import {
 import type { ActivityItem, DashboardFailure, DashboardReady, ReviewQueueItem, Tone } from "./dashboard-view";
 import type { ActivityEntry } from "./activity";
 import { timecode } from "./timecode";
+import { getMoneySummary, getMyEarnings, getMyInvoices } from "./billing-api";
+import { buildClientInvoices, buildEarnings, buildOwnerMoneyCards } from "./money-view";
+import type { TotalCard } from "./money-view";
 
 const DAY_MS = 86400000;
 const failed = <T,>(value: T | ApiFailure): value is ApiFailure =>
@@ -329,6 +332,8 @@ export type OwnerDashboard = Base & {
   reviewTotal: number;
   activity: ActivityItem[];
   problems: { approvals: string | null; tasks: string | null; workload: string | null; reviews: string | null; activity: string | null };
+  /** Billing demo: present only for viewers with billing.view whose summary loaded. */
+  money?: TotalCard[];
 };
 
 export type EditorDashboard = Base & {
@@ -341,6 +346,8 @@ export type EditorDashboard = Base & {
   cuts: CutRow[];
   activity: ActivityItem[];
   problems: { tasks: string | null; notes: string | null; cuts: string | null; activity: string | null };
+  /** Billing demo: the editor's own pay; absent when they have none or it failed to load. */
+  earnings?: ReturnType<typeof buildEarnings>;
 };
 
 export type ClientDashboard = Base & {
@@ -350,6 +357,8 @@ export type ClientDashboard = Base & {
   waiting: ReviewQueueItem[];
   delivered: DeliveredCut[];
   problems: { reviews: string | null };
+  /** Billing demo: the client's sent invoices; absent when there are none. */
+  invoices?: ReturnType<typeof buildClientInvoices>;
 };
 
 export type RoleDashboard = OwnerDashboard | EditorDashboard | ClientDashboard;
@@ -493,6 +502,7 @@ export async function loadOwnerDashboard(greetingName: string, workspace: Worksp
     listClientTeams(workspace.id),
     getTeamWorkload(workspace.id),
   ]);
+  const money = workspace.billing?.view ? await getMoneySummary(workspace.id) : null;
   if (!projects.ok) return failureView(greetingName, now, projects.error);
   // The Review Queue scans the projects most likely to have cuts in review first.
   const scanned = await Promise.all(openProjects(projects.data).slice(0, REVIEW_SCAN_LIMIT).map(async (project) => {
@@ -503,7 +513,7 @@ export async function loadOwnerDashboard(greetingName: string, workspace: Worksp
     greetingName, now, workspace, projects: projects.data,
     tasks: settle(tasks), activity: activity.ok ? activity.data.results : activity.error, scanned,
   });
-  return buildOwnerDashboard({
+  const dashboard = buildOwnerDashboard({
     base, now,
     projects: projects.data,
     tasks: settle(tasks),
@@ -512,31 +522,37 @@ export async function loadOwnerDashboard(greetingName: string, workspace: Worksp
     clients: settle(clients),
     workload: settle(workload),
   });
+  return money?.ok ? { ...dashboard, money: buildOwnerMoneyCards(money.data) } : dashboard;
 }
 
 export async function loadEditorDashboard(greetingName: string, workspace: Workspace): Promise<EditorDashboard> {
-  const [projects, tasks, notes, cuts, activity] = await Promise.all([
+  const [projects, tasks, notes, cuts, activity, earnings] = await Promise.all([
     listProjects(workspace.id),
     listTasks(workspace.id),
     listNotesToAddress(workspace.id, 6),
     listMyCuts(workspace.id, 30),
     listActivity(workspace.id, { pageSize: DASHBOARD_ACTIVITY_LIMIT, mine: true }),
+    getMyEarnings(workspace.id),
   ]);
-  return buildEditorDashboard({
+  const dashboard = buildEditorDashboard({
     greetingName, now: new Date(), workspace,
     projects: settle(projects), tasks: settle(tasks), notes: settle(notes), cuts: settle(cuts),
     activity: activity.ok ? activity.data.results : activity.error,
   });
+  if (!earnings.ok) return dashboard;
+  const view = buildEarnings(earnings.data);
+  return view.empty ? dashboard : { ...dashboard, earnings: view };
 }
 
 export async function loadClientDashboard(greetingName: string, workspace: Workspace): Promise<ClientDashboard | DashboardFailure> {
   const now = new Date();
-  const projects = await listProjects(workspace.id);
+  const [projects, invoices] = await Promise.all([listProjects(workspace.id), getMyInvoices(workspace.id)]);
   if (!projects.ok) return failureView(greetingName, now, projects.error);
   const targets = openProjects(projects.data).slice(0, CLIENT_SCAN_LIMIT);
   const scanned = await Promise.all(targets.map(async (project) => {
     const media = await listMediaVersions(workspace.id, project.id);
     return { project, media: media.ok ? media.data : media.error };
   }));
-  return buildClientDashboard({ greetingName, now, workspace, projects: projects.data, scanned });
+  const dashboard = buildClientDashboard({ greetingName, now, workspace, projects: projects.data, scanned });
+  return invoices.ok && invoices.data.results.length > 0 ? { ...dashboard, invoices: buildClientInvoices(invoices.data, now) } : dashboard;
 }
