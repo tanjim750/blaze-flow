@@ -10,6 +10,7 @@ import { useLocalReview } from "@/lib/review-local";
 import { clientView, type ReviewNote } from "@/lib/review-notes";
 import type { AnnotationElement } from "@/lib/api";
 import { loadDraft, patchDraft, unsavedWarning } from "@/lib/review-drafts";
+import { DEFAULT_HOLD, displayWindow, drawingEndMs, rememberedHold, windowOpacity, type HoldChoice } from "@/lib/annotation-window";
 import { specMismatches } from "@/lib/project-brief";
 import { latestFor, openNotesWarning, proofDetail, proofLine, reviewBarActions } from "@/lib/review-decisions";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
@@ -66,7 +67,10 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
   const [clientPreview, setClientPreview] = useState(false);
-  const [composer, setComposer] = useState<ComposerState>({ text: false, recording: false });
+  const [composer, setComposer] = useState<ComposerState>({ text: false, recording: false, startMs: null });
+  // How long the drawing being composed will stay on screen. Lives beside `pending`, the
+  // drawing itself, so both are saved to and restored from the draft together.
+  const [hold, setHold] = useState<HoldChoice>(DEFAULT_HOLD);
   const [revisionDirty, setRevisionDirty] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
 
@@ -97,10 +101,11 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-off restore from localStorage after mount (not available during SSR)
     setDrawingReady(true);
     if (draft?.annotation) setPending(draft.annotation);
+    setHold(draft?.annotation && draft.hold ? draft.hold : rememberedHold());
   }, [mediaId]);
   useEffect(() => {
-    if (drawingReady) patchDraft(mediaId, { annotation: pending });
-  }, [drawingReady, mediaId, pending]);
+    if (drawingReady) patchDraft(mediaId, { annotation: pending, hold: pending ? hold : null });
+  }, [drawingReady, hold, mediaId, pending]);
 
   const localNotes = view.target ? 0 : local.notes.length;
   const navWarning = unsavedWarning({ text: composer.text, annotation: Boolean(pending), recording: composer.recording, revision: revisionDirty, localNotes: 0 });
@@ -116,7 +121,14 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
    * has one or the other, never both, but concatenating rather than branching is what
    * keeps the two paths from drifting apart.
    */
-  const allNotes: ReviewNote[] = useMemo(() => [...view.notes, ...local.notes], [local.notes, view.notes]);
+  // Each note with a drawing learns the window that drawing is shown in, for its row.
+  const allNotes: ReviewNote[] = useMemo(() => {
+    const windows = new Map<string, ReturnType<typeof displayWindow>>();
+    for (const item of [...view.annotations, ...local.annotations]) {
+      if (item.review_comment_id && !windows.has(item.review_comment_id)) windows.set(item.review_comment_id, displayWindow(item.start_time_ms, item.end_time_ms));
+    }
+    return [...view.notes, ...local.notes].map((note) => windows.has(note.id) ? { ...note, drawingWindow: windows.get(note.id) ?? null } : note);
+  }, [local.annotations, local.notes, view.annotations, view.notes]);
   // "See what the client sees" applies the guest endpoints' rule on the page: no team notes,
   // no replies in their threads, and no drawings saved with them.
   const teamNoteIds = useMemo(() => new Set(allNotes.flatMap((note) => [
@@ -138,8 +150,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const annotations: DrawnAnnotation[] = useMemo(() => [
     ...view.annotations
       .filter((item) => !clientPreview || !item.review_comment_id || !teamNoteIds.has(item.review_comment_id))
-      .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms })),
-    ...local.annotations.map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms })),
+      .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: item.end_time_ms, noteId: item.review_comment_id })),
+    ...local.annotations.map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: item.end_time_ms, noteId: item.review_comment_id })),
   ], [clientPreview, local.annotations, teamNoteIds, view.annotations]);
   // A library file with no review version yet can be published into a project from here.
   const canPublish = Boolean(!view.target && view.publish && view.workspaceId);
@@ -200,6 +212,16 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     return item.src;
   };
   const clearPending = useCallback(() => setPending(null), []);
+  // The drawing being composed, previewed on the timeline as the span it will cover.
+  const pendingWindow = useMemo(() => {
+    if (!pending || composer.startMs === null || !(surface === "video" || surface === "audio")) return null;
+    return { startMs: composer.startMs, endMs: drawingEndMs(composer.startMs, hold, meta?.durationMs ?? 0) };
+  }, [composer.startMs, hold, meta?.durationMs, pending, surface]);
+  // Notes whose drawing (or range) covers the playhead, lit in the feed as the cut plays.
+  const liveNoteIds = useMemo(() => new Set(notes.flatMap((note) => {
+    const window = note.drawingWindow ?? (note.startMs !== null && note.endMs ? displayWindow(note.startMs, note.endMs) : null);
+    return window && !window.frameOnly && windowOpacity(window, positionMs, false) > 0 ? [note.id] : [];
+  })), [notes, positionMs]);
   // Switching version or comparing keeps the task panel and the way back.
   const carry = new URLSearchParams();
   if (view.task) carry.set("task", view.task.task.id);
@@ -447,6 +469,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           notes={notes}
           annotations={annotations}
           pending={pending}
+          pendingWindow={pendingWindow}
           canDraw={view.target ? view.canComment && (view.access?.annotate ?? true) : true}
           onTime={setPositionMs}
           onMeta={setMeta}
@@ -490,6 +513,10 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
               focusedId={focusedId}
               pendingAnnotation={pending}
               onClearAnnotation={clearPending}
+              hold={hold}
+              onHold={setHold}
+              durationMs={meta?.durationMs ?? 0}
+              liveNoteIds={liveNoteIds}
               onSeek={seek}
               onCompareSeek={seekCompare}
               canWriteTeam={canWriteTeam}

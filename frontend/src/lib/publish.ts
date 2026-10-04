@@ -80,13 +80,17 @@ export function folderOptions(folders: PublishFolder[], projectId: string | null
 
 export type PublishNote = {
   key: string; text: string; start_time_ms: number | null; resolved: boolean;
+  /** The out point of an in/out range note. */
+  end_time_ms: number | null;
+  /** How long the note's drawing stays on screen (its annotation's end). */
+  annotation_end_time_ms: number | null;
   mentioned_user_ids: string[]; elements: AnnotationElement[];
   replies: { key: string; text: string; mentioned_user_ids: string[] }[];
 };
 export type PublishRecording = { key: string; url: string; mimeType: string; kind: "voice" | "screen" };
 export type PublishPayload = {
   notes: PublishNote[];
-  annotations: { start_time_ms: number | null; elements: AnnotationElement[] }[];
+  annotations: { start_time_ms: number | null; end_time_ms: number | null; elements: AnnotationElement[] }[];
   recordings: PublishRecording[];
 };
 
@@ -105,13 +109,17 @@ export function publishPayload(local: { notes: ReviewNote[]; annotations: LocalA
     const text = textFor(note);
     if (!text) return [];
     keep(note);
+    const drawings = local.annotations.filter((item) => item.review_comment_id === note.id);
+    const until = drawings.find((item) => item.end_time_ms !== null)?.end_time_ms ?? null;
     return [{
       key: note.id,
       text,
       start_time_ms: note.startMs,
+      end_time_ms: note.startMs !== null && note.endMs != null && note.endMs > note.startMs ? note.endMs : null,
+      annotation_end_time_ms: note.startMs !== null && until !== null && until >= note.startMs ? until : null,
       resolved: note.resolved,
       mentioned_user_ids: note.mentions.map((mention) => mention.id),
-      elements: local.annotations.filter((item) => item.review_comment_id === note.id).flatMap((item) => item.elements.map(element)),
+      elements: drawings.flatMap((item) => item.elements.map(element)),
       replies: note.replies.flatMap((reply) => {
         const replyText = textFor(reply);
         if (!replyText) return [];
@@ -122,7 +130,11 @@ export function publishPayload(local: { notes: ReviewNote[]; annotations: LocalA
   });
   const annotations = local.annotations
     .filter((item) => !item.review_comment_id && item.elements.length)
-    .map((item) => ({ start_time_ms: item.start_time_ms, elements: item.elements.map(element) }));
+    .map((item) => ({
+      start_time_ms: item.start_time_ms,
+      end_time_ms: item.start_time_ms !== null && item.end_time_ms !== null && item.end_time_ms >= item.start_time_ms ? item.end_time_ms : null,
+      elements: item.elements.map(element),
+    }));
   return { notes, annotations, recordings };
 }
 

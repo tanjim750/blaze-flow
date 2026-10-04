@@ -30,14 +30,30 @@ describe("publishPayload", () => {
       annotations: [drawing("d1", "n1", 1200), drawing("d2", null, 3000)],
     });
     expect(payload.notes).toEqual([
-      { key: "n1", text: "note n1", start_time_ms: 1200, resolved: false, mentioned_user_ids: ["u-maya"],
+      { key: "n1", text: "note n1", start_time_ms: 1200, end_time_ms: null, annotation_end_time_ms: null, resolved: false, mentioned_user_ids: ["u-maya"],
         elements: [{ element_type: "POINT", geometry: { x: 0.5, y: 0.5 }, style: {}, payload: {} }],
         replies: [{ key: "r1", text: "agreed", mentioned_user_ids: [] }] },
-      { key: "n2", text: "note n2", start_time_ms: null, resolved: true, mentioned_user_ids: [], elements: [], replies: [] },
+      { key: "n2", text: "note n2", start_time_ms: null, end_time_ms: null, annotation_end_time_ms: null, resolved: true, mentioned_user_ids: [], elements: [], replies: [] },
     ]);
     // Free-standing drawings travel separately; local element ids are dropped.
-    expect(payload.annotations).toEqual([{ start_time_ms: 3000, elements: [{ element_type: "POINT", geometry: { x: 0.5, y: 0.5 }, style: {}, payload: {} }] }]);
+    expect(payload.annotations).toEqual([{ start_time_ms: 3000, end_time_ms: null, elements: [{ element_type: "POINT", geometry: { x: 0.5, y: 0.5 }, style: {}, payload: {} }] }]);
     expect(carriedSummary(payload)).toBe("3 notes and 1 drawing");
+  });
+
+  it("carries how long each drawing stays on screen, and range notes' out points", () => {
+    const payload = publishPayload({
+      notes: [note("held", { startMs: 2000 }), note("range", { startMs: 3000, endMs: 9000 }), note("frame", { startMs: 4000 })],
+      annotations: [
+        { ...drawing("d1", "held", 2000), end_time_ms: 7000 },
+        { ...drawing("d2", "range", 3000), end_time_ms: 9000 },
+        { ...drawing("d3", "frame", 4000), end_time_ms: 4000 },
+        { ...drawing("d4", null, 6000), end_time_ms: 8000 },
+      ],
+    });
+    expect(payload.notes.map((item) => [item.key, item.end_time_ms, item.annotation_end_time_ms])).toEqual([
+      ["held", null, 7000], ["range", 9000, 9000], ["frame", null, 4000],
+    ]);
+    expect(payload.annotations[0]).toMatchObject({ start_time_ms: 6000, end_time_ms: 8000 });
   });
 
   it("gives a recording-only note text and queues the recording for upload", () => {

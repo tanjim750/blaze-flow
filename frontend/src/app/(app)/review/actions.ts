@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAnnotation, createGuestInvite, createMediaDecision, createReviewComment, deleteAnnotation, requestMediaRevision, revokeGuestAccess, revokeGuestInvite, setCommentReaction, setCommentResolution, transitionMediaVersion, updateAnnotation, updateGuestInvite } from "@/lib/api";
 import { changeMessageProblem, type DecisionKind } from "@/lib/review-decisions";
 import type { AnnotationElement, CommentVisibility } from "@/lib/api";
-import { startTimeField } from "@/lib/review-timing";
+import { endTimeField, startTimeField } from "@/lib/review-timing";
 import { GUEST_PRESETS, invitePermissions, type GuestInviteState, type GuestPreset } from "./guest-presets";
 
 export type ActionState = { error: string | null };
@@ -24,8 +24,9 @@ export async function addPointAnnotationAction(workspaceId: string, projectId: s
  * the drawing shares the note's visibility: a drawing on a team note is hidden from guests
  * along with the note.
  */
-export async function addAnnotationAction(workspaceId: string, projectId: string, versionId: string, element: Omit<AnnotationElement, "id">, atMs: number | null, reviewCommentId?: string): Promise<ActionState> {
-  const result = await createAnnotation(workspaceId, projectId, versionId, { ...startTimeField(atMs), ...(reviewCommentId ? { review_comment_id: reviewCommentId } : {}), elements: [element] });
+/** `untilMs` is how long the drawing stays on screen: `atMs` itself for one frame, later to hold it. */
+export async function addAnnotationAction(workspaceId: string, projectId: string, versionId: string, element: Omit<AnnotationElement, "id">, atMs: number | null, reviewCommentId?: string, untilMs: number | null = null): Promise<ActionState> {
+  const result = await createAnnotation(workspaceId, projectId, versionId, { ...startTimeField(atMs), ...endTimeField(atMs, untilMs), ...(reviewCommentId ? { review_comment_id: reviewCommentId } : {}), elements: [element] });
   if (!result.ok) return { error: result.error.detail }; revalidatePath("/review"); return ok;
 }
 
@@ -55,6 +56,8 @@ export async function postNoteAction(payload: {
   workspaceId: string; projectId: string; versionId: string;
   text: string; startMs: number | null; parentId: string | null; mentionedUserIds: string[];
   visibility?: CommentVisibility;
+  /** The out point of an in/out range note. */
+  endMs?: number | null;
 }): Promise<{ error: string | null; commentId: string | null }> {
   const text = payload.text.trim();
   if (!text) return { error: "Write a comment first.", commentId: null };
@@ -66,6 +69,7 @@ export async function postNoteAction(payload: {
     text,
     ...(payload.parentId ? { parent_comment_id: payload.parentId } : {}),
     ...(!payload.parentId ? startTimeField(payload.startMs) : {}),
+    ...(!payload.parentId && payload.endMs != null && payload.endMs > (payload.startMs ?? Infinity) ? endTimeField(payload.startMs, payload.endMs) : {}),
     ...(payload.mentionedUserIds.length ? { mentioned_user_ids: payload.mentionedUserIds } : {}),
     ...(payload.visibility ? { visibility: payload.visibility } : {}),
   });

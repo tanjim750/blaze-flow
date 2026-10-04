@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import type { AnnotationElement } from "@/lib/api";
 import type { ReviewNote } from "@/lib/review-notes";
 import { timecode } from "@/lib/timecode";
+import { displayWindow, holdLabel, rangeLabel, windowOpacity } from "@/lib/annotation-window";
 import type { ReviewSurface } from "@/lib/open-in-review";
 import { playerShouldIgnoreKey } from "./player-keys";
 import {
@@ -19,7 +20,13 @@ import {
 export type DrawTool = "POINT" | "RECTANGLE" | "ELLIPSE" | "ARROW" | "PATH" | "TEXT";
 export type PlayerHandle = { seek: (ms: number) => void; position: () => number };
 export type PlayerSource = { id: string; label: string; src: string };
-export type DrawnAnnotation = { id: string; elements: AnnotationElement[]; startMs: number | null };
+export type DrawnAnnotation = {
+  id: string; elements: AnnotationElement[]; startMs: number | null;
+  /** Where the drawing stops being shown; see `lib/annotation-window`. */
+  endMs?: number | null;
+  /** The note the drawing belongs to, so clicking it can bring that note into view. */
+  noteId?: string | null;
+};
 
 const TOOLS: { tool: DrawTool; icon: typeof Crosshair; label: string }[] = [
   { tool: "POINT", icon: Crosshair, label: "Point" },
@@ -48,6 +55,8 @@ type Props = {
   annotations: DrawnAnnotation[];
   /** Held in the composer until the note is posted, so a drawing arrives with its comment. */
   pending: AnnotationElement | null;
+  /** The span the pending drawing will cover once posted, previewed on the timeline. */
+  pendingWindow?: { startMs: number; endMs: number } | null;
   canDraw: boolean;
   onTime: (ms: number) => void;
   onMeta: (meta: { durationMs: number; width: number; height: number }) => void;
@@ -95,7 +104,7 @@ function DocumentViewer({ sources, title, surface, downloadHref }: Props & { sur
   );
 }
 
-function MediaPlayer({ handle, sources, title, notes, annotations, pending, canDraw, onTime, onMeta, onDraw, onDeleteAnnotation, onFocusNote, surface }: Props & { surface: "video" | "audio" | "image" }) {
+function MediaPlayer({ handle, sources, title, notes, annotations, pending, pendingWindow = null, canDraw, onTime, onMeta, onDraw, onDeleteAnnotation, onFocusNote, surface }: Props & { surface: "video" | "audio" | "image" }) {
   const still = surface === "image";
   const image = useRef<HTMLImageElement>(null);
   const [imageFailed, setImageFailed] = useState(false);
@@ -356,8 +365,29 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, canD
   const headMs = dragMs ?? seekTarget ?? positionMs;
   const progress = durationMs ? Math.min(100, (headMs / durationMs) * 100) : 0;
   const problem = failed ? describePlaybackError(errorCode) : null;
-  // Only annotations pinned near the playhead, so the frame shows its own notes.
-  const visible = annotations.filter((item) => item.startMs === null || Math.abs(item.startMs - positionMs) < 2000);
+  /*
+   * Each drawing is shown for its own window rather than "near the playhead": a held one for
+   * its whole span while the cut plays, fading out over the last half second, and a
+   * single-frame one only while paused on that frame. A still has no time, so everything
+   * drawn on it shows. Hidden drawings stay mounted at opacity 0, which is what lets the
+   * CSS transition fade them instead of cutting them.
+   */
+  const timedAnnotations = annotations.map((item) => {
+    const window = still ? null : displayWindow(item.startMs, item.endMs);
+    return { ...item, window, opacity: windowOpacity(window, positionMs, playing) };
+  });
+  const visible = timedAnnotations.filter((item) => item.opacity > 0);
+  // Timeline spans: each held drawing and each range note, so the reviewer can see what
+  // stays up for how long.
+  const spans = still || !durationMs ? [] : [
+    ...timedAnnotations.flatMap((item) => item.window && !item.window.frameOnly
+      ? [{ key: `a-${item.id}`, startMs: item.window.startMs, endMs: item.window.endMs, kind: "drawing" as const }] : []),
+    ...notes.flatMap((note) => note.startMs !== null && note.endMs && !annotations.some((item) => item.noteId === note.id)
+      ? [{ key: `n-${note.id}`, startMs: note.startMs, endMs: note.endMs, kind: "range" as const }] : []),
+    ...(pendingWindow && pendingWindow.endMs > pendingWindow.startMs
+      ? [{ key: "pending", startMs: pendingWindow.startMs, endMs: pendingWindow.endMs, kind: "pending" as const }] : []),
+  ];
+  const pct = (ms: number) => `${Math.max(0, Math.min(100, (ms / durationMs) * 100))}%`;
 
   return (
     <section className="rvp">
@@ -432,13 +462,26 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, canD
               <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffcf5a" />
             </marker>
           </defs>
-          {visible.flatMap((annotation) => annotation.elements.map((element, index) => (
-            <Shape
-              key={`${annotation.id}-${index}`}
-              element={element}
-              onActivate={() => annotation.startMs !== null && seek(annotation.startMs)}
-            />
-          )))}
+          {timedAnnotations.map((annotation) => (
+            <g
+              key={annotation.id}
+              className={`rvp-drawing ${annotation.opacity > 0 ? "is-shown" : ""}`}
+              style={{ opacity: annotation.opacity }}
+              data-annotation={annotation.id}
+              data-note={annotation.noteId ?? undefined}
+            >
+              {annotation.elements.map((element, index) => (
+                <Shape
+                  key={index}
+                  element={element}
+                  onActivate={() => {
+                    if (annotation.startMs !== null) seek(annotation.startMs);
+                    if (annotation.noteId) onFocusNote(annotation.noteId);
+                  }}
+                />
+              ))}
+            </g>
+          ))}
           {pending && <Shape element={pending} onActivate={() => undefined} />}
         </svg>
 
@@ -489,6 +532,15 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, canD
         >
           {buffered.map((span) => (
             <span key={`${span.start}-${span.end}`} className="rvp-buffered" style={{ left: `${span.start}%`, width: `${span.end - span.start}%` }} />
+          ))}
+          {spans.map((span) => (
+            <span
+              key={span.key}
+              className={`rvp-span is-${span.kind}`}
+              style={{ left: pct(span.startMs), width: `calc(${pct(span.endMs)} - ${pct(span.startMs)})` }}
+              title={`${span.kind === "pending" ? "New drawing" : span.kind === "range" ? "Range note" : "Drawing"} · ${rangeLabel(span.startMs, span.endMs)}`}
+              aria-hidden="true"
+            />
           ))}
           <span className="rvp-played" style={{ width: `${progress}%` }} />
           <span className="rvp-head" style={{ left: `${progress}%` }} />
@@ -579,9 +631,9 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, canD
         <ul className="rvp-annotation-list">
           {visible.map((annotation, index) => (
             <li key={annotation.id}>
-              <button type="button" onClick={() => annotation.startMs !== null && seek(annotation.startMs)}>
+              <button type="button" onClick={() => { if (annotation.startMs !== null) seek(annotation.startMs); if (annotation.noteId) onFocusNote(annotation.noteId); }}>
                 #{index + 1} {annotation.elements[0]?.element_type.toLowerCase()}
-                {annotation.startMs !== null && <span> · {timecode(annotation.startMs)}</span>}
+                {annotation.window && <span> · {annotation.window.frameOnly ? timecode(annotation.window.startMs) : rangeLabel(annotation.window.startMs, annotation.window.endMs)} ({holdLabel(annotation.window)})</span>}
               </button>
               <button type="button" onClick={() => onDeleteAnnotation(annotation.id)} aria-label="Delete annotation"><Trash2 /></button>
             </li>

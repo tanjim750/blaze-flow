@@ -2,7 +2,7 @@ import { createRef } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReviewNote } from "@/lib/review-notes";
-import { Player, type PlayerHandle } from "./player";
+import { Player, type DrawnAnnotation, type PlayerHandle } from "./player";
 
 vi.mock("sonner", () => ({ toast: vi.fn() }));
 import { toast } from "sonner";
@@ -40,6 +40,8 @@ function fakeMedia(element: HTMLVideoElement, { duration = 20, seekable = ranges
       fireEvent(element, new Event("seeked"));
     },
     fail(code: number) { state.error = { code }; fireEvent(element, new Event("error")); },
+    /** Plays to `seconds`, as the browser's `timeupdate` would report it. */
+    playTo(seconds: number) { current = seconds; fireEvent(element, new Event("timeupdate")); },
   };
 }
 
@@ -49,13 +51,13 @@ const note = (startMs: number | null): ReviewNote => ({
   reactions: [], attachments: [], mentions: [], replies: [],
 });
 
-function setup(notes: ReviewNote[] = []) {
+function setup(notes: ReviewNote[] = [], annotations: DrawnAnnotation[] = []) {
   const handle = createRef<PlayerHandle>();
   const onTime = vi.fn();
   const utils = render(
     <Player
       handle={handle} sources={[{ id: "proxy", label: "Proxy", src: "/api/preview/" }]} title="Cut"
-      notes={notes} annotations={[]} pending={null} canDraw={false}
+      notes={notes} annotations={annotations} pending={null} canDraw={false}
       onTime={onTime} onMeta={() => undefined} onDraw={() => undefined}
       onDeleteAnnotation={() => undefined} onFocusNote={() => undefined}
     />,
@@ -156,5 +158,54 @@ describe("Player errors", () => {
     const { media } = setup();
     act(() => media.fail(4));
     expect(screen.getByRole("alert")).toHaveTextContent("Preview not available");
+  });
+});
+
+const circle = (id: string, startMs: number | null, endMs: number | null): DrawnAnnotation => ({
+  id, startMs, endMs, noteId: `note-${id}`,
+  elements: [{ id: `${id}-el`, element_type: "ELLIPSE", geometry: { x: 0.2, y: 0.2, width: 0.3, height: 0.2 }, style: {}, payload: {} }],
+});
+const drawing = (container: HTMLElement, id: string) => container.querySelector<SVGGElement>(`[data-annotation="${id}"]`)!;
+
+describe("Player drawing windows", () => {
+  it("keeps a held drawing on screen through its window during playback, then hides it", () => {
+    const { container, element, media } = setup([], [circle("c", 2000, 7000)]);
+    act(() => media.loadMetadata());
+    act(() => { fireEvent(element, new Event("play")); });
+    act(() => media.playTo(1));
+    expect(drawing(container, "c")).not.toHaveClass("is-shown");
+    act(() => media.playTo(4.5));
+    expect(drawing(container, "c")).toHaveClass("is-shown");
+    expect(drawing(container, "c").style.opacity).toBe("1");
+    act(() => media.playTo(6.8));
+    expect(Number(drawing(container, "c").style.opacity)).toBeLessThan(1);
+    act(() => media.playTo(8));
+    expect(drawing(container, "c")).not.toHaveClass("is-shown");
+  });
+
+  it("shows a just-this-frame drawing only while paused on its frame", () => {
+    const { container, element, media } = setup([], [circle("f", 3000, 3000)]);
+    act(() => media.loadMetadata());
+    act(() => media.playTo(3));
+    expect(drawing(container, "f")).toHaveClass("is-shown");
+    act(() => { fireEvent(element, new Event("play")); });
+    expect(drawing(container, "f")).not.toHaveClass("is-shown");
+  });
+
+  it("gives an older drawing with no end the default five seconds", () => {
+    const { container, media } = setup([], [circle("old", 2000, null)]);
+    act(() => media.loadMetadata());
+    act(() => media.playTo(6.5));
+    expect(drawing(container, "old")).toHaveClass("is-shown");
+    act(() => media.playTo(7.5));
+    expect(drawing(container, "old")).not.toHaveClass("is-shown");
+  });
+
+  it("marks the span a held drawing covers on the timeline", () => {
+    const { container, media } = setup([], [circle("c", 2000, 7000)]);
+    act(() => media.loadMetadata());
+    const span = container.querySelector<HTMLElement>(".rvp-span.is-drawing");
+    expect(span?.style.left).toBe("10%");
+    expect(span?.title).toContain("00:02–00:07");
   });
 });

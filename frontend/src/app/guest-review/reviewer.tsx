@@ -15,6 +15,7 @@ import {
   changeMessageProblem, decisionLine, guestBarActions, MESSAGE_MAX_LENGTH, openNotesWarning,
 } from "@/lib/review-decisions";
 import { timecode } from "@/lib/timecode";
+import { rangeLabel } from "@/lib/annotation-window";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import { Player, type PlayerHandle, type PlayerSource } from "@/app/(app)/review/player";
 import {
@@ -414,7 +415,7 @@ function Note({ note, session, versionId, onSeek, onChanged, onError, depth = 0 
           <strong>{note.author}</strong>
           <small>
             {note.timecode && note.startMs !== null
-              ? <button type="button" className="gr-timecode" onClick={() => onSeek(note.startMs ?? 0)}>{note.timecode}</button>
+              ? <button type="button" className="gr-timecode" onClick={() => onSeek(note.startMs ?? 0)}>{note.endMs ? rangeLabel(note.startMs, note.endMs) : note.timecode}</button>
               : null}
             {note.timecode ? " · " : ""}{note.age}{note.resolved ? " · resolved" : ""}
           </small>

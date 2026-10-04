@@ -66,12 +66,14 @@ const id = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
 export type LocalNoteInput = {
   text: string;
   startMs: number | null;
+  /** The out point of an in/out range note. */
+  endMs?: number | null;
   author: string;
   parentId?: string | null;
   mentions?: { id: string; name: string }[];
   recording?: { url: string; mimeType: string; kind: "voice" | "screen" } | null;
   /** Drawn on the frame as the note was written; stored with it, not on the video. */
-  annotation?: { elements: AnnotationElement[] } | null;
+  annotation?: { elements: AnnotationElement[]; endMs?: number | null } | null;
 };
 
 export function addLocalNote(mediaId: string, input: LocalNoteInput): ReviewNote {
@@ -84,6 +86,7 @@ export function addLocalNote(mediaId: string, input: LocalNoteInput): ReviewNote
     initials: initialsFrom(input.author),
     timecode: input.startMs === null ? null : timecode(input.startMs),
     startMs: input.startMs,
+    endMs: input.startMs !== null && input.endMs != null && input.endMs > input.startMs ? input.endMs : null,
     text: input.text,
     age: relativeAge(now),
     resolved: false,
@@ -102,7 +105,9 @@ export function addLocalNote(mediaId: string, input: LocalNoteInput): ReviewNote
     const annotations = input.annotation
       ? [...media.annotations, {
           id: id("local-annotation"), review_comment_id: note.id, author_user_id: null,
-          start_time_ms: input.startMs, end_time_ms: null, elements: input.annotation.elements,
+          start_time_ms: input.startMs,
+          end_time_ms: input.startMs !== null && input.annotation.endMs != null && input.annotation.endMs >= input.startMs ? input.annotation.endMs : null,
+          elements: input.annotation.elements,
           revision_count: 0, created_at: now, updated_at: now,
         }]
       : media.annotations;
@@ -140,13 +145,13 @@ export function toggleLocalReaction(mediaId: string, noteId: string, emoji: stri
   }));
 }
 
-export function addLocalAnnotation(mediaId: string, elements: AnnotationElement[], startMs: number | null) {
+export function addLocalAnnotation(mediaId: string, elements: AnnotationElement[], startMs: number | null, endMs: number | null = null) {
   const now = new Date().toISOString();
   mutate(mediaId, (media) => ({
     ...media,
     annotations: [...media.annotations, {
       id: id("local-annotation"), review_comment_id: null, author_user_id: null,
-      start_time_ms: startMs, end_time_ms: null, elements,
+      start_time_ms: startMs, end_time_ms: startMs !== null && endMs !== null && endMs >= startMs ? endMs : null, elements,
       revision_count: 0, created_at: now, updated_at: now,
     }],
   }));
