@@ -16,7 +16,7 @@ const client = { dashboard_role: "client" as const, my_membership_id: null };
 const clientView: ClientView = {
   layout: "client", greetingName: "Sam", workspaceName: "Studio", today: "Sat, Oct 3",
   strip: [{ label: "Your projects", value: 1 }, { label: "Waiting for your review", value: 1 }, { label: "Approved", value: 1 }],
-  projects: [{ id: "p1", title: "Spring Launch", status: "Active", tone: "accent", due: "Due Oct 5", waiting: 1, href: "/projects?campaign=p1" }],
+  projects: [{ id: "p1", title: "Spring Launch", status: "Active", tone: "accent", due: "Due Oct 5", waiting: 1, href: "/portal/projects/p1" }],
   waiting: [{ id: "m1", title: "Hero 30s", version: "V2", project: "Spring Launch", stage: "In Review", age: "1d ago", tone: "blue", href: "/review?media=f1", poster: null, createdAt: "" }],
   delivered: [{ id: "m2", title: "Bumper 6s", version: "V3", project: "Spring Launch", stage: "Approved", age: "1d ago", poster: null, href: "/review?media=f2", downloadable: true, downloadHref: "/api/x/download/" }],
   problems: { reviews: null },
@@ -95,5 +95,32 @@ describe("editor dashboard", () => {
     expect(within(noteLink).getByText("Team only")).toBeInTheDocument();
     expect(screen.getByText("4 unresolved on your cuts")).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "View dashboard as" })).not.toBeInTheDocument();
+  });
+});
+
+describe("client dashboard: portal v2", () => {
+  it("shows the studio's brand bar, a new-project button and the client's requests; cards open the client project page", () => {
+    render(<ClientDashboard view={{
+      ...clientView,
+      branding: { studio_name: "Blackfen Studio Ltd", brand_color: "#2FCB9A", logo_url: null, portal_welcome: "Welcome back" },
+      requests: { workspaceId: "w1", items: [{
+        id: "r1", title: "Summer menu launch", status: "pending", client_team: { id: "t1", name: "Northlight" }, requester_name: "Sam",
+        deliverables: [{ kind: "ad_spot", quantity: 2 }], platform: null, aspect_ratio: null, target_length_seconds: null, brief: "Brief",
+        references: "", wanted_by: null, budget_range: null, decision_note: "", decided_at: null, decided_by_name: null, project_id: null,
+        created_at: "2026-10-01T10:00:00Z", updated_at: "2026-10-01T10:00:00Z",
+      }] },
+    }} choice={chooseLayout(client, "owner")} />);
+    expect(screen.getByText("Blackfen Studio Ltd")).toBeInTheDocument();
+    expect(screen.getByText("Welcome back")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Start a new project/ })).toHaveAttribute("href", "/portal/requests/new");
+    expect(screen.getByRole("heading", { name: "Your project requests" })).toBeInTheDocument();
+    expect(screen.getByText("2 Ad spots")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Spring Launch/ })).toHaveAttribute("href", "/portal/projects/p1");
+  });
+
+  it("has no request area when the viewer cannot send requests", () => {
+    render(<ClientDashboard view={clientView} choice={chooseLayout(client, "owner")} />);
+    expect(screen.queryByRole("link", { name: /Start a new project/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Your project requests" })).not.toBeInTheDocument();
   });
 });

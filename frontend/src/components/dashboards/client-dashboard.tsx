@@ -1,11 +1,15 @@
 import Link from "next/link";
-import { CheckCheck, Download, FolderKanban } from "lucide-react";
+import { ArrowRight, CheckCheck, Download, FolderKanban, Inbox, Plus } from "lucide-react";
 import { DashboardPoster } from "@/components/dashboard-poster";
 import type { LayoutChoice } from "@/lib/dashboard-role";
 import type { ClientDashboard as ClientView } from "@/lib/role-dashboard-view";
 import { ClientUploadPanel } from "@/components/client-uploads/client-upload-panel";
 import { ActivityPanel, CounterStrip, DashboardHeading, EmptyState, InlineProblem, ReviewQueuePanel } from "./parts";
 import { ClientInvoicesPanel } from "./money-panels";
+import { PortalBrandBar } from "@/components/portal/brand-bar";
+import { ClientRequestList } from "@/components/portal/request-list";
+import { accentStyle } from "@/lib/portal";
+import "@/components/portal/portal.css";
 
 function subline(view: ClientView): string {
   const waiting = view.waiting.length;
@@ -19,7 +23,11 @@ function subline(view: ClientView): string {
  * tasks, workload or internal notes; activity is the API's client-scoped feed.
  */
 export function ClientDashboard({ view, choice }: { view: ClientView; choice: LayoutChoice }) {
-  return <div className="home-shell role-client">
+  const pending = view.requests?.items.filter((row) => row.status === "pending").length ?? 0;
+  return <div className="home-shell role-client pt-scope" style={accentStyle(view.branding?.brand_color)}>
+    {view.branding && <PortalBrandBar branding={view.branding}>
+      {view.requests && <Link className="pt-cta" href="/portal/requests/new"><Plus />Start a new project</Link>}
+    </PortalBrandBar>}
     <DashboardHeading workspaceName={view.workspaceName} today={view.today} greetingName={view.greetingName} subline={subline(view)} choice={choice} />
     <CounterStrip items={view.strip} label="Your work" />
 
@@ -59,6 +67,12 @@ export function ClientDashboard({ view, choice }: { view: ClientView; choice: La
         emptyBody="New cuts, notes, approvals and files you send show up here."
       />}
     </div>}
+
+    {view.requests && view.requests.items.length > 0 && <section className="panel pt-home-requests" aria-labelledby="requests-title">
+      <div className="panel-title"><h2 id="requests-title"><Inbox size={16} />Your project requests</h2><small>{pending ? `${pending} with the studio` : "All answered"}</small></div>
+      <ClientRequestList workspaceId={view.requests.workspaceId} requests={view.requests.items.slice(0, 3)} compact />
+      {view.requests.items.length > 3 && <Link className="pt-back" href="/portal/requests">See all {view.requests.items.length} requests<ArrowRight size={14} /></Link>}
+    </section>}
 
     {view.invoices && <ClientInvoicesPanel invoices={view.invoices} />}
 

@@ -1,5 +1,7 @@
-import { Bell, Building2, CircleUserRound, ShieldCheck } from "lucide-react";
-import { getNotificationPreferences, getNotificationSettings, getWorkspaceProfile } from "@/lib/api";
+import { Bell, Building2, CircleUserRound, Palette, ShieldCheck } from "lucide-react";
+import { getBranding, getNotificationPreferences, getNotificationSettings, getWorkspaceProfile } from "@/lib/api";
+import { BrandingForm } from "@/components/portal/branding-form";
+import "@/components/portal/portal.css";
 import { loadSession } from "@/lib/session";
 import { displayName } from "@/lib/user";
 import { NotificationPreferencesForm, NotificationSettingsForm, PasswordForm, VerificationForm, WorkspaceProfileForm } from "./forms";
@@ -16,7 +18,9 @@ export default async function SettingsPage() {
   }
   const workspaceContext = await loadWorkspaceContext();
   const workspace = workspaceContext.ok ? workspaceContext.data.selected : null;
-  const loadedProfile = workspace ? await getWorkspaceProfile(workspace.id) : null;
+  const [loadedProfile, loadedBranding] = workspace
+    ? await Promise.all([getWorkspaceProfile(workspace.id), getBranding(workspace.id)])
+    : [null, null];
   const [loadedNotifications, loadedSettings] = await Promise.all([
     getNotificationPreferences(),
     workspace ? getNotificationSettings(workspace.id) : Promise.resolve(null),
@@ -44,6 +48,10 @@ export default async function SettingsPage() {
       <div className="settings-title"><Building2 /><div><h2>Workspace profile</h2><p>{workspace ? `Public business details for ${workspace.name}.` : "Create a workspace to add business details."}</p></div></div>
       {workspace ? <WorkspaceProfileForm profile={profile} /> : <p className="settings-muted">No workspace is available.</p>}
     </section>
+    {workspace && loadedBranding?.ok && <section className="settings-card" id="branding">
+      <div className="settings-title"><Palette /><div><h2>Client portal branding</h2><p>Your logo, colour and welcome line on the client portal and on upload pages.</p></div></div>
+      <BrandingForm workspaceId={workspace.id} initial={loadedBranding.data} canEdit={loadedBranding.data.can_edit === true} />
+    </section>}
     <section className="settings-card">
       <div className="settings-title"><ShieldCheck /><div><h2>Password & security</h2><p>Use a strong password you do not reuse elsewhere.</p></div></div>
       <PasswordForm />

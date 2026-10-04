@@ -27,7 +27,7 @@ export type NotificationPage = {
   page: number; page_size: number; has_next: boolean;
 };
 
-export type NotificationTone = "comment" | "reply" | "mention" | "version" | "approved" | "changes" | "task" | "upload" | "other";
+export type NotificationTone = "comment" | "reply" | "mention" | "version" | "approved" | "changes" | "task" | "upload" | "request" | "other";
 
 /** One rendered row: "<actor> <verb> <subject>", plus the quoted snippet. */
 export type DescribedNotification = {
@@ -130,6 +130,18 @@ export function describeNotification(item: NotificationItem): DescribedNotificat
         ...base, tone: "upload", verb: "sent", subject: project ? `${what} to ${project}` : what,
         // The row quotes the snippet, so it carries the file names (the newest five).
         snippet: count > 1 && names.length ? clip(names.join(", "), 120) : null,
+      };
+    }
+    case "PROJECT_REQUEST_NEW": {
+      // "Sam Lee asked for a new project: “Summer menu launch” (Northlight Coffee)".
+      const team = text(payload.client_team_name);
+      return { ...base, tone: "request", verb: "asked for a new project:", subject: `${title ? `“${clip(title, 60)}”` : "a new project"}${team ? ` (${team})` : ""}`, snippet: null };
+    }
+    case "PROJECT_REQUEST_DECIDED": {
+      const accepted = payload.status === "accepted";
+      return {
+        ...base, tone: "request", verb: accepted ? "accepted your project request" : "declined your project request",
+        subject: title ? `“${clip(title, 60)}”` : null, snippet: text(payload.decision_note),
       };
     }
     case "TASK_CLIENT_READY":

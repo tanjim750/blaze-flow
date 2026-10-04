@@ -8,7 +8,7 @@
  */
 import {
   getClientPortalData, getTeamWorkload, listActivity, listAssetFiles, listClientTeams, listMediaVersions, listMyCuts,
-  listNotesToAddress, listProjects, listTaskStages, listTasks,
+  listNotesToAddress, listProjectRequests, listProjects, listTaskStages, listTasks,
 } from "./api";
 import type {
   ApiFailure, ClientTeam, MediaVersion, MyCut, NoteToAddress, Project, ProjectFile, Task, TaskStage,
@@ -22,6 +22,7 @@ import {
 import type { ActivityItem, DashboardFailure, DashboardReady, ReviewQueueItem, Tone } from "./dashboard-view";
 import type { ActivityEntry } from "./activity";
 import type { ClientPortal } from "./client-uploads";
+import type { Branding, ProjectRequest } from "./portal";
 import { timecode } from "./timecode";
 import { getMoneySummary, getMyEarnings, getMyInvoices } from "./billing-api";
 import { buildClientInvoices, buildEarnings, buildOwnerMoneyCards } from "./money-view";
@@ -315,7 +316,8 @@ export function buildClientProjects(projects: Project[], waitingByProject: Map<s
     tone: project.status === "ACTIVE" ? "accent" : project.status === "ON_HOLD" ? "warning" : "neutral",
     due: project.due_at ? `Due ${shortDate(project.due_at)}` : "No due date",
     waiting: waitingByProject.get(project.id) ?? 0,
-    href: `/projects?campaign=${project.id}`,
+    // The client's own project page (progress, deliverables, sign-off record), not the team's tree.
+    href: `/portal/projects/${project.id}`,
   }));
 }
 
@@ -364,6 +366,10 @@ export type ClientDashboard = Base & {
   activity?: ActivityItem[];
   /** The portal's "send files" area; absent when the client cannot send to any project. */
   portal?: { workspaceId: string; projects: ClientPortal["projects"]; recent: ClientPortal["recent_uploads"]; maxBytes: number; accept: string[] };
+  /** The studio's portal branding (logo, colour, welcome line); absent on older backends. */
+  branding?: Branding;
+  /** The client's project requests; absent for people who cannot send one (e.g. the team previewing). */
+  requests?: { workspaceId: string; items: ProjectRequest[] };
 };
 
 export type RoleDashboard = OwnerDashboard | EditorDashboard | ClientDashboard;
@@ -561,9 +567,10 @@ export async function loadEditorDashboard(greetingName: string, workspace: Works
 
 export async function loadClientDashboard(greetingName: string, workspace: Workspace): Promise<ClientDashboard | DashboardFailure> {
   const now = new Date();
-  const [projects, invoices, activity, portal] = await Promise.all([
+  const [projects, invoices, activity, portal, requests] = await Promise.all([
     listProjects(workspace.id), getMyInvoices(workspace.id),
     listActivity(workspace.id, { pageSize: DASHBOARD_ACTIVITY_LIMIT }), getClientPortalData(workspace.id),
+    listProjectRequests(workspace.id),
   ]);
   if (!projects.ok) return failureView(greetingName, now, projects.error);
   const targets = openProjects(projects.data).slice(0, CLIENT_SCAN_LIMIT);
@@ -574,7 +581,11 @@ export async function loadClientDashboard(greetingName: string, workspace: Works
   const dashboard = buildClientDashboard({
     greetingName, now, workspace, projects: projects.data, scanned, activity: activity.ok ? activity.data.results : activity.error,
   });
-  const withPortal = { ...dashboard, portal: buildClientPortal(workspace.id, settle(portal)) };
+  const withPortal = {
+    ...dashboard, portal: buildClientPortal(workspace.id, settle(portal)),
+    branding: portal.ok ? portal.data.branding : undefined,
+    requests: requests.ok && requests.data.can_request ? { workspaceId: workspace.id, items: requests.data.requests } : undefined,
+  };
   // Invoices come from the billing demo's own permission check: a client sees only what was sent to them.
   return invoices.ok && invoices.data.results.length > 0 ? { ...withPortal, invoices: buildClientInvoices(invoices.data, now) } : withPortal;
 }
