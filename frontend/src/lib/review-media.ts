@@ -96,6 +96,8 @@ export type MediaCatalogue = {
   stages: TaskStage[];
   clients: ClientTeam[];
   projects: Project[];
+  /** Folders across the workspace's projects, for "Publish to project" (empty for clients). */
+  folders: ProjectFolder[];
   notice: string | null;
 };
 
@@ -332,7 +334,7 @@ const NO_TASK_WORKFLOW: TaskWorkflow = { stages: [], settings: { wip_warning: fa
 
 export async function loadMediaCatalogue(): Promise<MediaCatalogue> {
   const context = await loadWorkspaceContext();
-  const empty = { workspaceId: null, role: null, assets: [], stages: [], clients: [], projects: [] };
+  const empty = { workspaceId: null, role: null, assets: [], stages: [], clients: [], projects: [], folders: [] };
   if (!context.ok) return { ...empty, notice: context.error.detail };
   if (!context.data.selected) return { ...empty, notice: "This account has no workspace yet." };
 
@@ -373,6 +375,7 @@ export async function loadMediaCatalogue(): Promise<MediaCatalogue> {
     stages: workflow.ok ? workflow.data.stages : [],
     clients: clients.ok ? clients.data : [],
     projects: projects.data,
+    folders: folders.ok ? folders.data : [],
     notice: optionalFailureNotice([clients, assetFiles, folders, workflow]),
   };
 }

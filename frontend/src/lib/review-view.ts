@@ -4,6 +4,7 @@ import { NO_DECISIONS, type DecisionViewer, type ReviewDecision } from "./review
 import { nestNotes, type ReviewNote } from "./review-notes";
 import { normalizeSpecs, specChips, type DeliverableSpecs } from "./project-brief";
 import { approvalStageId } from "./review-stages";
+import { publishChoices, type PublishOptions } from "./publish";
 import { defaultSelection, loadMediaCatalogue, locate, locateByTarget, type ReviewAsset, type ReviewTarget, type ReviewVersion } from "./review-media";
 
 export type { ReviewNote } from "./review-notes";
@@ -71,6 +72,11 @@ export type ReviewView = {
   notice: string | null;
   /** The task context panel, when the review was opened from a task. */
   task: ReviewTaskContext | null;
+  /**
+   * "Publish to project" for a library file with no review version yet: the projects,
+   * folders and assets it could go to. Null for a published cut and for client members.
+   */
+  publish: PublishOptions | null;
 };
 
 /** Shown instead of a review when `?media=` names a file this viewer cannot open. */
@@ -80,7 +86,7 @@ const EMPTY: ReviewView = {
   workspaceId: null, asset: null, version: null, target: null, notes: [], annotations: [],
   stages: [], taskStages: [], linkedTasks: [], members: [], guestInvites: [],
   canManageGuests: false, canComment: false, comparison: null, specs: null, notice: null,
-  role: null, decisions: [], decisionViewer: NO_DECISIONS, task: null,
+  role: null, decisions: [], decisionViewer: NO_DECISIONS, task: null, publish: null,
 };
 
 /**
@@ -132,6 +138,9 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
     stages: stages.ok ? withApproval(stages.data) : [],
     specs: projectSpecs(catalogue.projects.find((project) => project.id === asset.projectId)?.deliverable_specs),
     task: taskContext,
+    publish: !version.target && version.assetFileId && !client
+      ? publishChoices({ asset, assetFileId: version.assetFileId, assets: catalogue.assets, projects: catalogue.projects, clients: catalogue.clients, folders: catalogue.folders })
+      : null,
   };
 
   const comparison = params.compareId

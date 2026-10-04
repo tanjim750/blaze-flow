@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { BadgeCheck, Check, ChevronLeft, HardDriveDownload, Info, MessageSquareText, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, X } from "lucide-react";
+import { BadgeCheck, Check, ChevronLeft, HardDriveDownload, Info, MessageSquareText, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, UploadCloud, X } from "lucide-react";
 import type { ReviewView } from "@/lib/review-view";
 import { useLocalReview } from "@/lib/review-local";
 import { clientView, type ReviewNote } from "@/lib/review-notes";
@@ -20,6 +20,7 @@ import { useLeaveGuard } from "./leave-guard";
 import "../tasks/tasks.css";
 import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } from "./player";
 import { SharePanel } from "./share-panel";
+import { PublishDialog } from "./publish-dialog";
 import { TaskPanel } from "./task-panel";
 import { REVIEW_FROM_KEY } from "@/components/universal-review";
 import { returnLabel, reviewSurface, safeReturnPath } from "@/lib/open-in-review";
@@ -67,6 +68,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const [clientPreview, setClientPreview] = useState(false);
   const [composer, setComposer] = useState<ComposerState>({ text: false, recording: false });
   const [revisionDirty, setRevisionDirty] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
 
   const { asset, version } = view;
   const mediaId = version?.id ?? null;
@@ -139,6 +141,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
       .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms })),
     ...local.annotations.map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms })),
   ], [clientPreview, local.annotations, teamNoteIds, view.annotations]);
+  // A library file with no review version yet can be published into a project from here.
+  const canPublish = Boolean(!view.target && view.publish && view.workspaceId);
   const canWriteTeam = Boolean(view.target && userId && view.members.some((member) => member.id === userId));
 
   const sources: PlayerSource[] = useMemo(() => {
@@ -290,6 +294,11 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
         )}
 
         <div className="rv-actions">
+          {canPublish && (
+            <button type="button" className="rv-publish-btn" onClick={() => setPublishOpen(true)} title="Make this file a review version in a project, keeping this session's notes">
+              <UploadCloud size={14} />Publish to project
+            </button>
+          )}
           {(actions.requestChanges || !view.target) && (
             <button
               type="button"
@@ -384,10 +393,25 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           <Info size={14} />
           <span>
             This file has not been published into a project as a review version, so its notes,
-            drawings and recordings are kept on this device for this session only. You&rsquo;ll be
-            warned before reloading or closing the tab while it has notes.
+            drawings and recordings are kept on this device for this session only.
+            {canPublish
+              ? <> Publish it to a project to save them as comments.</>
+              : <> You&rsquo;ll be warned before reloading or closing the tab while it has notes.</>}
           </span>
+          {canPublish && <button type="button" className="rv-banner-action" onClick={() => setPublishOpen(true)}>Publish to project</button>}
         </p>
+      )}
+
+      {canPublish && view.publish && view.workspaceId && (
+        <PublishDialog
+          open={publishOpen}
+          onClose={() => setPublishOpen(false)}
+          workspaceId={view.workspaceId}
+          mediaId={version.id}
+          fileName={version.title}
+          options={view.publish}
+          local={local}
+        />
       )}
 
       {shareOpen && view.target && (

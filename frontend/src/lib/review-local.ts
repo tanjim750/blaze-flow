@@ -158,3 +158,12 @@ export function removeLocalAnnotation(mediaId: string, annotationId: string) {
 
 /** Test seam: drops everything, so one spec cannot leak notes into the next. */
 export function resetLocalReview() { state = {}; emit(); }
+
+/** Drops one file's session notes, once they have been saved to the server (publish). */
+export function clearLocalReview(mediaId: string) {
+  if (!state[mediaId]) return;
+  const { [mediaId]: _dropped, ...rest } = state;
+  void _dropped;
+  state = rest;
+  emit();
+}
