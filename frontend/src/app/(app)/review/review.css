@@ -699,3 +699,26 @@
 .rvc-revision-note { margin: 0; color: var(--muted); font-size: 11px; }
 /* Brief & Specs mismatch: the cut's real aspect or length differs from the project's specs. */
 .rv-spec-warn { display: inline-flex; flex: none; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #f1c55b66; border-radius: 999px; background: #f1c55b14; color: #f6d78a; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: help; }
+
+/* Client decision record (proof of delivery) ------------------------------ */
+.rv-proof {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; flex: none;
+  margin: 0; padding: 8px 16px;
+  border-bottom: 1px solid #1f4a37;
+  background: #10241b; color: #9fdcbf; font-size: 12px; line-height: 1.5;
+}
+.rv-proof svg { flex: none; }
+.rv-proof strong { color: #c9f2dc; font-weight: 600; }
+.rv-proof span { color: #7fb79c; }
+.rv-proof.is-changes_requested { border-bottom-color: #5a4a1e; background: #2a2213; color: #f0d9a1; }
+.rv-proof.is-changes_requested strong { color: #f7e6bd; }
+.rv-proof.is-changes_requested span { color: #c9b27a; }
+
+/* Share panel: decisions per link */
+.rv-share-form>label.rv-share-check{grid-column:1/-1;order:5;display:flex;align-items:flex-start;gap:9px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer}
+.rv-share-form>.form-error{order:6}
+.rv-share-form label.rv-share-check input{width:15px;height:15px;margin:1px 0 0;padding:0;accent-color:var(--primary)}
+.rv-share-check small{display:block;margin-top:2px;color:var(--muted);font-size:11px;font-weight:400}
+.rv-share-row-actions{display:flex;align-items:center;gap:10px;flex:none}
+.rv-share-toggle{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px;cursor:pointer}
+.rv-share-toggle input{width:14px;height:14px;margin:0;accent-color:var(--primary)}

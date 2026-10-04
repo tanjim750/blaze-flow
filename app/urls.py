@@ -95,10 +95,11 @@ from .guest_views import (
     guest_attachment_download, guest_attachment_preview,
     guest_access_key_rotate, guest_attachment_upload, guest_comments, guest_exchange, guest_review,
     guest_comment_detail, guest_comment_revisions,
-    guest_comment_reactions,
+    guest_comment_reactions, guest_decision, guest_media_stream, guest_playback,
     project_guest_access_detail, project_guest_invite_detail, project_guest_invites,
 )
 
+from .decision_views import media_version_decisions
 from .dashboard_views import dashboard_my_cuts, dashboard_notes_to_address, dashboard_workload
 from .activity_views import (
     project_activity, project_activity_export, workspace_activity, workspace_activity_export,
@@ -128,6 +129,9 @@ urlpatterns = [
     path('guest-access/exchange/', guest_exchange, name='api-guest-exchange'),
     path('guest/reviews/<uuid:project_id>/', guest_review, name='api-guest-review'),
     path('guest/reviews/<uuid:project_id>/access-key/rotate/', guest_access_key_rotate, name='api-guest-access-key-rotate'),
+    path('guest/reviews/<uuid:project_id>/media-versions/<uuid:media_version_id>/playback/', guest_playback, name='api-guest-playback'),
+    path('guest/reviews/<uuid:project_id>/media-versions/<uuid:media_version_id>/stream/', guest_media_stream, name='api-guest-media-stream'),
+    path('guest/reviews/<uuid:project_id>/media-versions/<uuid:media_version_id>/decision/', guest_decision, name='api-guest-decision'),
     path('guest/reviews/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/', guest_comments, name='api-guest-comments'),
     path('guest/reviews/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/', guest_comment_detail, name='api-guest-comment-detail'),
     path('guest/reviews/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/revisions/', guest_comment_revisions, name='api-guest-comment-revisions'),
@@ -228,5 +232,6 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/annotations/', annotation_list_create, name='api-annotations'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/annotations/<uuid:annotation_id>/', annotation_detail, name='api-annotation-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/annotations/<uuid:annotation_id>/revisions/', annotation_revisions, name='api-annotation-revisions'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/decisions/', media_version_decisions, name='api-media-version-decisions'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/revision-requests/', media_revision_request, name='api-media-revision-request'),
 ]

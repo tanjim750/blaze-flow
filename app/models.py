@@ -736,7 +736,10 @@ class MediaVersionStageEntry(models.Model):
     snapshot = models.JSONField()
     entered_at = models.DateTimeField()
     exited_at = models.DateTimeField(null=True, blank=True)
-    changed_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='changed_by_user_id', related_name='+')
+    # Exactly one of these says who moved the cut: a signed-in user, or (for a client decision
+    # made from a review link) the guest session that made it.
+    changed_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='changed_by_user_id', null=True, blank=True, related_name='+')
+    changed_by_guest_session = models.ForeignKey(GuestSession, on_delete=models.DO_NOTHING, db_column='changed_by_guest_session_id', null=True, blank=True, related_name='+')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -1442,6 +1445,56 @@ class GuestReviewAccessPermission(models.Model):
     class Meta:
         db_table = 'guest_review_access_permissions'
         constraints = [models.UniqueConstraint(fields=['guest_review_access', 'permission_key'], name='guest_review_access_permissions_access_permission_uniq')]
+
+
+class ReviewDecisionKind(models.TextChoices):
+    APPROVED = 'approved', 'Approved'
+    CHANGES_REQUESTED = 'changes_requested', 'Changes requested'
+
+
+class ReviewDecision(models.Model):
+    """A client's decision on one exact cut: proof of who approved what, and when.
+
+    Pinned to a media version, never to a file or asset, so a newer version uploaded later
+    starts with no decision. Made either by a guest through a review link (guest columns
+    set) or by a client-team member signed in to the workspace (``decided_by_user`` set).
+    The reviewer's name and email are copied in, so the record still reads correctly after
+    the guest session or link is gone.
+    """
+    id = models.UUIDField(primary_key=True)
+    project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', related_name='+')
+    media_version = models.ForeignKey(MediaVersion, on_delete=models.DO_NOTHING, db_column='media_version_id', related_name='+')
+    decision = models.CharField(max_length=30, choices=ReviewDecisionKind.choices)
+    guest_session = models.ForeignKey(GuestSession, on_delete=models.DO_NOTHING, db_column='guest_session_id', null=True, blank=True, related_name='+')
+    guest_review_access = models.ForeignKey(GuestReviewAccess, on_delete=models.DO_NOTHING, db_column='guest_review_access_id', null=True, blank=True, related_name='+')
+    guest_invite = models.ForeignKey(GuestInvite, on_delete=models.DO_NOTHING, db_column='guest_invite_id', null=True, blank=True, related_name='+')
+    decided_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='decided_by_user_id', null=True, blank=True, related_name='+')
+    reviewer_name = models.CharField(max_length=150)
+    reviewer_email = models.CharField(max_length=255)
+    # Unresolved client-visible notes on the cut at the moment of the decision (not counting
+    # the note a change request itself adds).
+    open_notes_count = models.IntegerField(default=0)
+    message = models.TextField(null=True, blank=True)
+    review_comment = models.ForeignKey(ReviewComment, on_delete=models.DO_NOTHING, db_column='review_comment_id', null=True, blank=True, related_name='+')
+    stage_entry = models.ForeignKey(MediaVersionStageEntry, on_delete=models.DO_NOTHING, db_column='stage_entry_id', null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'review_decisions'
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(guest_session__isnull=False, decided_by_user__isnull=True)
+                    | models.Q(guest_session__isnull=True, decided_by_user__isnull=False)
+                ),
+                name='review_decisions_exactly_one_reviewer',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['media_version', 'created_at'], name='review_decisions_media_idx'),
+            models.Index(fields=['project', 'created_at'], name='review_decisions_project_idx'),
+            models.Index(fields=['guest_invite'], name='review_decisions_invite_idx'),
+        ]
 
 
 class AuditLog(models.Model):

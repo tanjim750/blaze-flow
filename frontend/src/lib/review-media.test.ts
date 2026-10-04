@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClientTeam, MediaVersion, Project, ProjectFile, ProjectFolder, TaskStage } from "./api";
-import { buildCatalogue, defaultSelection, locate, locateByTarget, mediaKind, versionKey, versionNumber } from "./review-media";
+import { buildCatalogue, defaultSelection, locate, locateByTarget, mediaKind, optionalFailureNotice, versionKey, versionNumber } from "./review-media";
 
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
 
@@ -208,5 +208,19 @@ describe("download flag and approval position", () => {
     const [asset] = build({ assetFiles: [assetFile({ id: "af1", fileId: "f9", name: "cut.mp4" })] });
     expect(asset.versions[0].allowDownload).toBeNull();
     expect(asset.versions[0].workflowStage).toBeNull();
+  });
+});
+
+describe("optionalFailureNotice", () => {
+  const ok = { ok: true as const, data: [] };
+  const fail = (status: number, detail: string) => ({ ok: false as const, error: { status, detail } });
+
+  it("stays quiet when a list is forbidden to this viewer (a client-team member)", () => {
+    expect(optionalFailureNotice([ok, fail(403, "You do not have permission to perform this action."), ok])).toBeNull();
+  });
+
+  it("still reports a real failure", () => {
+    expect(optionalFailureNotice([fail(403, "nope"), fail(500, "Server error")])).toBe("Server error");
+    expect(optionalFailureNotice([ok, ok])).toBeNull();
   });
 });

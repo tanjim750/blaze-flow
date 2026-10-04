@@ -4,8 +4,8 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import { Check, Copy, Eye, Link2, TriangleAlert, UserMinus, X } from "lucide-react";
 import type { GuestInvite } from "@/lib/api";
 import { guestLinkStatus } from "@/lib/activity";
-import { createGuestInviteAction, revokeGuestAccessAction, revokeGuestInviteAction } from "./actions";
-import { emptyGuestInviteState, GUEST_PRESETS } from "./guest-presets";
+import { createGuestInviteAction, revokeGuestAccessAction, revokeGuestInviteAction, setGuestInviteDecisionsAction } from "./actions";
+import { allowsDecisions, emptyGuestInviteState, GUEST_PRESETS } from "./guest-presets";
 
 /** Stable regardless of the viewer's locale, so the server and client markup agree. */
 const day = (iso: string) => new Date(iso).toISOString().slice(0, 10);
@@ -85,6 +85,13 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
               <span>Expires in (days)</span>
               <input name="expiresInDays" type="number" min={1} max={365} defaultValue={7} required />
             </label>
+            <label className="rv-share-check">
+              <input type="checkbox" name="allowDecisions" defaultChecked />
+              <span>
+                Allow decisions
+                <small>Reviewers can approve or request changes on the version they are viewing.</small>
+              </span>
+            </label>
             {state.error && <p className="form-error" role="alert">{state.error}</p>}
             <button className="button" disabled={creating}>{creating ? "Creating…" : "Create link"}</button>
           </form>
@@ -117,7 +124,7 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
                 <div>
                   <strong>{invite.label || "Untitled link"}</strong>
                   <small className={status.tone === "live" ? "" : "is-ended"}>
-                    {status.label} · {invite.permissions.length} permissions · {active.length} {active.length === 1 ? "reviewer" : "reviewers"}
+                    {status.label} · {allowsDecisions(invite) ? "can approve" : "comments only"} · {active.length} {active.length === 1 ? "reviewer" : "reviewers"}
                   </small>
                   {invite.activity !== undefined && (
                     // From guest events: when it was last opened, which cut, and that cut's decision.
@@ -127,16 +134,36 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
                   )}
                 </div>
                 {!invite.revoked_at && (
-                  <button
-                    type="button"
-                    disabled={revoking}
-                    onClick={() => startRevoke(async () => {
-                      const result = await revokeGuestInviteAction(workspaceId, projectId, invite.id);
-                      setRevokeError(result.error ?? "");
-                    })}
-                  >
-                    Revoke link
-                  </button>
+                  <div className="rv-share-row-actions">
+                    {canManage && status.tone === "live" && (
+                      <label className="rv-share-toggle" title="Whether reviewers on this link can approve or request changes">
+                        <input
+                          type="checkbox"
+                          checked={allowsDecisions(invite)}
+                          disabled={revoking}
+                          aria-label={`Allow decisions on ${invite.label || "this link"}`}
+                          onChange={(event) => {
+                            const allow = event.currentTarget.checked;
+                            startRevoke(async () => {
+                              const result = await setGuestInviteDecisionsAction(workspaceId, projectId, invite.id, allow);
+                              setRevokeError(result.error ?? "");
+                            });
+                          }}
+                        />
+                        <span>Decisions</span>
+                      </label>
+                    )}
+                    <button
+                      type="button"
+                      disabled={revoking}
+                      onClick={() => startRevoke(async () => {
+                        const result = await revokeGuestInviteAction(workspaceId, projectId, invite.id);
+                        setRevokeError(result.error ?? "");
+                      })}
+                    >
+                      Revoke link
+                    </button>
+                  </div>
                 )}
               </div>
               {invite.accesses.length > 0 && (

@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createAnnotation, createGuestInvite, createReviewComment, deleteAnnotation, requestMediaRevision, revokeGuestAccess, revokeGuestInvite, setCommentReaction, setCommentResolution, transitionMediaVersion, updateAnnotation } from "@/lib/api";
+import { createAnnotation, createGuestInvite, createMediaDecision, createReviewComment, deleteAnnotation, requestMediaRevision, revokeGuestAccess, revokeGuestInvite, setCommentReaction, setCommentResolution, transitionMediaVersion, updateAnnotation, updateGuestInvite } from "@/lib/api";
+import { changeMessageProblem, type DecisionKind } from "@/lib/review-decisions";
 import type { AnnotationElement, CommentVisibility } from "@/lib/api";
 import { startTimeField } from "@/lib/review-timing";
-import { GUEST_PRESETS, type GuestInviteState, type GuestPreset } from "./guest-presets";
+import { GUEST_PRESETS, invitePermissions, type GuestInviteState, type GuestPreset } from "./guest-presets";
 
 export type ActionState = { error: string | null };
 const ok: ActionState = { error: null };
@@ -131,6 +132,8 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
   const label = String(form.get("label") ?? "").trim();
   const preset = String(form.get("preset") ?? "comment") as GuestPreset;
   const days = Number(form.get("expiresInDays") ?? 7);
+  // An unticked checkbox is simply absent from the form.
+  const allowDecisions = form.get("allowDecisions") === "on";
 
   if (!workspaceId || !projectId) {
     return { error: "This review is showing demo content, so links cannot be created.", token: null };
@@ -142,7 +145,7 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
 
   const created = await createGuestInvite(workspaceId, projectId, {
     ...(label ? { label } : {}),
-    permissions: GUEST_PRESETS[preset].permissions,
+    permissions: invitePermissions(preset, allowDecisions),
     expires_in_hours: Math.round(days * 24),
   });
   if (!created.ok) return { error: created.error.detail, token: null };
@@ -163,4 +166,33 @@ export async function revokeGuestAccessAction(workspaceId: string, projectId: st
   const result = await revokeGuestAccess(workspaceId, projectId, accessId);
   if (!result.ok) return { error: result.error.detail };
   revalidatePath("/review"); return ok;
+}
+
+/** "Allow decisions" on an existing link, for everyone already using it too. */
+export async function setGuestInviteDecisionsAction(workspaceId: string, projectId: string, inviteId: string, allow: boolean): Promise<ActionState> {
+  const result = await updateGuestInvite(workspaceId, projectId, inviteId, { allow_decisions: allow });
+  if (!result.ok) return { error: result.error.detail };
+  revalidatePath("/review"); return ok;
+}
+
+/**
+ * A client-team member's Approve / Request changes on this exact cut. Recorded as a client
+ * decision (the same record a review link makes) and moves the cut like the team buttons.
+ */
+export async function clientDecisionAction(
+  workspaceId: string, projectId: string, versionId: string, decision: DecisionKind, message: string, startMs: number | null,
+): Promise<ActionState> {
+  if (!workspaceId || !projectId || !versionId) return { error: "This cut has no project review record." };
+  if (decision === "changes_requested") {
+    const problem = changeMessageProblem(message);
+    if (problem) return { error: problem };
+  }
+  const result = await createMediaDecision(workspaceId, projectId, versionId, {
+    decision,
+    ...(decision === "changes_requested" ? { message: message.trim(), ...startTimeField(startMs) } : {}),
+  });
+  if (!result.ok) return { error: result.error.detail };
+  revalidatePath("/review");
+  revalidatePath("/projects");
+  return ok;
 }

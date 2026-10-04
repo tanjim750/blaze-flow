@@ -124,6 +124,13 @@ describe("guest link status", () => {
     expect(guestLinkStatus(null, NOW)).toBe("Not opened yet");
   });
 
+  it("reports the link's real decision: what, on which version, by whom and when", () => {
+    const decided = { ...base, last_version_number: 3, decision: "approved" as const, decision_version_number: 3, decided_by: "Rachel Kim", decided_at: at(3, 10) };
+    expect(guestLinkStatus(decided, NOW)).toBe("Opened 2 days ago · V3 · approved V3 · Rachel Kim · Oct 3");
+    expect(guestLinkStatus({ ...decided, decision: "changes_requested", decision_version_number: 2 }, NOW))
+      .toBe("Opened 2 days ago · V3 · changes requested V2 · Rachel Kim · Oct 3");
+  });
+
   it("counts time ago in words", () => {
     expect(timeAgo(new Date(NOW.getTime() - 30000).toISOString(), NOW)).toBe("just now");
     expect(timeAgo(new Date(NOW.getTime() - 60000).toISOString(), NOW)).toBe("1 minute ago");
@@ -136,5 +143,21 @@ describe("dashboard rows", () => {
   it("reuse the timeline's wording", () => {
     const row = toDashboardRow(entry("task.stage.moved", { before: "Review", after: "Client Review", created_at: new Date(NOW.getTime() - 3600000).toISOString() }), NOW);
     expect(row).toMatchObject({ actor: "Maya", action: "moved 'Hero 30s' from Review → Client Review", detail: "1 hour ago · Spring Launch", href: "/tasks?task=t1", tone: "neutral" });
+  });
+});
+
+describe("client decisions in the feed", () => {
+  it("say the client decided, on which version", () => {
+    const guest = { type: "guest" as const, id: null, name: "Rachel Kim", initials: "RK", avatar_url: null };
+    const approved = entry("review.decision.approved", {
+      category: "media", actor: guest, object: { type: "media_version", id: "v3", label: "Hero 30s", href: "/review?version=v3" },
+      detail: { version_number: 3, client_decision: true, decision: "approved", open_notes_count: 0 },
+    });
+    expect(activityText(describeActivity(approved, NOW))).toContain("Rachel Kim approved");
+    expect(activityText(describeActivity(approved, NOW))).toContain("as the client");
+    expect(toDashboardRow(approved, NOW).tone).toBe("success");
+    const changes = entry("review.decision.changes_requested", { ...approved, action: "review.decision.changes_requested", detail: { ...approved.detail, decision: "changes_requested" } });
+    expect(activityText(describeActivity(changes, NOW))).toContain("requested changes on");
+    expect(toDashboardRow(changes, NOW).tone).toBe("warning");
   });
 });

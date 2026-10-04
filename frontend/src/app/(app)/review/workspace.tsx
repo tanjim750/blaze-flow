@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Check, ChevronLeft, HardDriveDownload, Info, MessageSquareText, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, X } from "lucide-react";
+import { BadgeCheck, Check, ChevronLeft, HardDriveDownload, Info, MessageSquareText, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, X } from "lucide-react";
 import type { ReviewView } from "@/lib/review-view";
 import { useLocalReview } from "@/lib/review-local";
 import { clientView, type ReviewNote } from "@/lib/review-notes";
 import type { AnnotationElement } from "@/lib/api";
 import { loadDraft, patchDraft, unsavedWarning } from "@/lib/review-drafts";
 import { specMismatches } from "@/lib/project-brief";
+import { latestFor, openNotesWarning, proofDetail, proofLine, reviewBarActions } from "@/lib/review-decisions";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import { Comments, RevisionForm, type ComposerState } from "./comments";
 import { Fields } from "./fields";
@@ -150,7 +151,19 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
         ? `/api/workspaces/${view.workspaceId}/asset-files/${version.assetFileId}/download/`
         : null;
 
+  // What the bar offers is the API's answer for this viewer: team members move the cut
+  // through the workflow, client-team members decide as the client, read-only viewers get
+  // neither. Nothing is offered that the server would refuse.
+  const actions = reviewBarActions(view.decisionViewer, { hasTarget: Boolean(view.target), approved, hasApprovalStage: Boolean(approval) });
+  // The proof of delivery: the newest client decision on exactly this version.
+  const clientDecision = latestFor(view.decisions, version?.target?.versionId);
+  const openWarning = version ? openNotesWarning(openNotes, version.label) : null;
+
   async function approve() {
+    if (actions.approve === "client") {
+      if (await writer.decideAsClient("approved")) setApproveOpen(false);
+      return;
+    }
     if (!approval) return;
     if (await writer.moveToStage(approval.id)) setApproveOpen(false);
   }
@@ -251,17 +264,19 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
         )}
 
         <div className="rv-actions">
-          <button
-            type="button"
-            onClick={() => setRevisionOpen(!revisionOpen)}
-            disabled={!view.target}
-            title={!view.target
-              ? "Publish this file to a project to request changes"
-              : approved ? "Reopens this approved cut: posts your note and moves it back to Revision" : undefined}
-          >
-            <RotateCcw size={14} />Request changes
-          </button>
-          {approval && !approved && (
+          {(actions.requestChanges || !view.target) && (
+            <button
+              type="button"
+              onClick={() => setRevisionOpen(!revisionOpen)}
+              disabled={!view.target}
+              title={!view.target
+                ? "Publish this file to a project to request changes"
+                : approved ? "Reopens this approved cut: posts your note and moves it back to Revision" : undefined}
+            >
+              <RotateCcw size={14} />Request changes
+            </button>
+          )}
+          {(actions.approve || (!view.target && approval)) && (
             <button
               type="button"
               className="rv-approve"
@@ -272,7 +287,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
               <Check size={14} />Approve
             </button>
           )}
-          {view.target && (
+          {view.target && view.role !== "client" && (
             <button type="button" onClick={() => setShareOpen(!shareOpen)} aria-pressed={shareOpen}>
               <Share2 size={14} />Share
             </button>
@@ -285,11 +300,13 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
         </div>
       </header>
 
-      {approval && (
+      {(approval || actions.approve === "client") && (
         <ConfirmDialog
           open={approveOpen}
           title={`Approve ${version.label} of “${asset.name}”?`}
-          body={<>This marks <strong>{version.label}</strong> as approved and moves it to {approval.name}. To reopen it later, use Request changes.</>}
+          body={actions.approve === "client"
+            ? <>Your approval is recorded against <strong>{version.label}</strong> only, and the team is notified. A newer version will need its own approval.</>
+            : <>This marks <strong>{version.label}</strong> as approved and moves it to {approval?.name}. To reopen it later, use Request changes.</>}
           confirmLabel={writer.busy ? "Approving…" : `Approve ${version.label}`}
           busy={writer.busy}
           onConfirm={() => void approve()}
@@ -297,10 +314,10 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
         >
           {(openNotes > 0 || (latest && latest.id !== version.id) || writer.error) && (
             <div className="rv-confirm-notes">
-              {openNotes > 0 && (
+              {openWarning && (
                 <p className="rv-confirm-warn" role="alert">
                   <TriangleAlert size={14} />
-                  <span>{openNotes === 1 ? "1 note is" : `${openNotes} notes are`} still open on {version.label}. Approving won&rsquo;t resolve {openNotes === 1 ? "it" : "them"}.</span>
+                  <span>{openWarning}</span>
                 </p>
               )}
               {latest && latest.id !== version.id && (
@@ -322,6 +339,14 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
         onConfirm={leave.confirm}
         onCancel={leave.cancel}
       />
+
+      {clientDecision && (
+        <p className={`rv-proof is-${clientDecision.decision}`} role="status" data-testid="client-decision">
+          {clientDecision.decision === "approved" ? <BadgeCheck size={15} /> : <RotateCcw size={14} />}
+          <strong suppressHydrationWarning>{proofLine(clientDecision)}</strong>
+          <span>{proofDetail(clientDecision)}</span>
+        </p>
+      )}
 
       {view.notice && <p className="rv-banner" role="status"><TriangleAlert size={14} /><span>{view.notice}</span></p>}
       {initialCommentId && view.target && !linkedNote && (
@@ -351,7 +376,11 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
       )}
 
       {revisionOpen && (
-        <RevisionForm writer={writer} positionMs={positionMs} approved={approved} onDone={() => setRevisionOpen(false)} onDirtyChange={setRevisionDirty} />
+        <RevisionForm
+          writer={writer} positionMs={positionMs} approved={approved}
+          asClient={actions.requestChanges === "client"} versionLabel={version.label}
+          onDone={() => setRevisionOpen(false)} onDirtyChange={setRevisionDirty}
+        />
       )}
 
       <div className="rv-body">

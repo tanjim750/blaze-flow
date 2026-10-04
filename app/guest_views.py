@@ -1,5 +1,10 @@
+from datetime import timedelta
+
+from django.core import signing
 from django.core.files.storage import default_storage
 from django.http import Http404
+from django.urls import reverse
+from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
@@ -11,7 +16,7 @@ from .http_range import ranged_file_response
 from .models import (
     Annotation, AnnotationElement, AnnotationRevision, FileStatus, FileVariant, GuestInvite, GuestInvitePermission,
     GuestReviewAccess, GuestReviewAccessPermission, MediaVersion, Project,
-    ReviewComment, ReviewCommentContent, ReviewCommentRevision,
+    ReviewComment, ReviewCommentContent, ReviewCommentRevision, ReviewDecisionKind,
 )
 from .permissions import REVIEW_COMMENT_MANAGE, active_memberships_for_user, has_project_permission
 from .pagination import paginated_response
@@ -30,10 +35,15 @@ from .services.comments import (
     delete_guest_review_comment, edit_guest_review_comment,
 )
 from .services.guest_access import (
-    GUEST_ALLOWED_PERMISSIONS, GuestAccessError, authenticate_guest_access,
+    GUEST_ALLOWED_PERMISSIONS, GUEST_DECISION_PERMISSION, GuestAccessError, authenticate_guest_access,
     create_guest_invite, exchange_guest_invite, revoke_guest_invite,
-    record_guest_view, revoke_guest_review_access, rotate_guest_access_key,
+    record_guest_view, revoke_guest_review_access, rotate_guest_access_key, set_invite_allow_decisions,
 )
+from .services.decisions import (
+    MESSAGE_MAX_LENGTH, ReviewDecisionError, decision_data, decisions_for, open_client_notes, record_decision,
+)
+from .serializers.media import media_poster_variant
+from .services.file_processing import PREVIEW_VARIANT_TYPES
 from .services.activity import guest_link_status
 from .services.review_assets import (
     ReviewAttachmentError, delete_guest_review_attachment, upload_review_attachment,
@@ -50,6 +60,16 @@ class GuestInviteCreateSerializer(serializers.Serializer):
         allow_empty=False,
     )
     expires_in_hours = serializers.IntegerField(min_value=1, max_value=24 * 365, default=168)
+
+
+class GuestInviteUpdateSerializer(serializers.Serializer):
+    allow_decisions = serializers.BooleanField()
+
+
+class GuestDecisionSerializer(serializers.Serializer):
+    decision = serializers.ChoiceField(choices=ReviewDecisionKind.choices)
+    message = serializers.CharField(max_length=MESSAGE_MAX_LENGTH, required=False, allow_blank=True)
+    start_time_ms = serializers.IntegerField(min_value=0, required=False, allow_null=True)
 
 
 class GuestExchangeSerializer(serializers.Serializer):
@@ -93,9 +113,12 @@ def _invite_data(invite, activity=None):
     accesses = GuestReviewAccess.objects.filter(guest_invite=invite).select_related(
         'guest_session'
     ).order_by('created_at')
+    permissions = list(GuestInvitePermission.objects.filter(guest_invite=invite).values_list('permission_key', flat=True))
     return {
         'id': str(invite.id), 'project_id': str(invite.project_id), 'label': invite.label,
-        'permissions': list(GuestInvitePermission.objects.filter(guest_invite=invite).values_list('permission_key', flat=True)),
+        'permissions': permissions,
+        # Whether a guest on this link may approve or request changes.
+        'allow_decisions': GUEST_DECISION_PERMISSION in permissions,
         'expires_at': invite.expires_at, 'revoked_at': invite.revoked_at,
         'created_at': invite.created_at,
         'accesses': [{
@@ -137,12 +160,22 @@ def project_guest_invites(request, workspace_id, project_id):
     return Response(data, status=status.HTTP_201_CREATED)
 
 
-@api_view(['DELETE'])
+@api_view(['PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def project_guest_invite_detail(request, workspace_id, project_id, invite_id):
     project = get_object_or_404(Project.objects.select_related('workspace'), id=project_id, workspace_id=workspace_id)
     membership = _guest_manager(request, project)
     invite = get_object_or_404(GuestInvite, id=invite_id, project=project)
+    if request.method == 'PATCH':
+        serializer = GuestInviteUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            invite = set_invite_allow_decisions(
+                invite=invite, allow=serializer.validated_data['allow_decisions'], user=request.user,
+            )
+        except GuestAccessError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(_invite_data(invite))
     try:
         revoke_guest_invite(invite=invite, membership=membership, user=request.user)
     except GuestAccessError as exc:
@@ -185,15 +218,137 @@ def guest_exchange(request):
 @permission_classes([AllowAny])
 def guest_review(request, project_id):
     project = get_object_or_404(Project, id=project_id)
-    _guest_access(request, project, 'media.read')
-    media = MediaVersion.objects.filter(project=project, status='ACTIVE').order_by('version_number')
+    access = _guest_access(request, project, 'media.read')
+    media = list(MediaVersion.objects.filter(project=project, status='ACTIVE').order_by('version_number'))
+    granted = set(GuestReviewAccessPermission.objects.filter(guest_review_access=access).values_list('permission_key', flat=True))
+    latest = decisions_for(media)
     return Response({
         'project': {'id': str(project.id), 'name': project.name, 'description': project.description},
+        'viewer': {
+            'name': access.guest_session.name,
+            # Decisions also need the cut to be watchable, hence media.read (checked above).
+            'can_decide': GUEST_DECISION_PERMISSION in granted,
+            'can_comment': 'review.comment.create' in granted,
+            'expires_at': access.guest_invite.expires_at,
+        },
         'media_versions': [
-            {'id': str(item.id), 'title': item.title, 'version_number': item.version_number}
+            {
+                'id': str(item.id), 'title': item.title, 'version_number': item.version_number,
+                # Only client-visible notes are counted: the approve dialog warns with this.
+                'open_notes': open_client_notes(item),
+                'decision': decision_data(
+                    latest[str(item.id)], for_guest_session_id=access.guest_session_id, include_private=False,
+                ) if str(item.id) in latest else None,
+            }
             for item in media
         ],
     })
+
+
+# A signed playback URL outlives the page that asked for it by this much. Each request
+# still re-checks that the link has not been revoked or expired since it was signed.
+PLAYBACK_MAX_AGE = timedelta(hours=4)
+_PLAYBACK_SALT = 'blazeflow.guest-playback'
+
+
+def _playback_token(access, media, kind):
+    return signing.TimestampSigner(salt=_PLAYBACK_SALT).sign(f'{access.id}:{media.id}:{kind}')
+
+
+def _playable_variant(media):
+    return FileVariant.objects.filter(
+        file=media.original_file, status=FileStatus.READY, deleted_at__isnull=True,
+        metadata__variant_type__in=PREVIEW_VARIANT_TYPES,
+    ).order_by('-created_at').first()
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def guest_playback(request, project_id, media_version_id):
+    """Where a guest's player loads the cut from.
+
+    A `<video>` element cannot send the `X-Guest-Access-Key` header, so this hands back a
+    short-lived signed URL instead (master plan A5). The URL names this access and this cut
+    only, and the stream route re-checks the link on every request.
+    """
+    project = get_object_or_404(Project, id=project_id)
+    media = get_object_or_404(MediaVersion.objects.select_related('original_file'), id=media_version_id, project=project, status='ACTIVE')
+    access = _guest_access(request, project, 'media.read')
+    variant = _playable_variant(media)
+    if variant is None or not default_storage.exists(variant.object_key):
+        return Response({'detail': 'This cut is still being prepared for playback. Try again in a minute.'}, status=status.HTTP_409_CONFLICT)
+    record_guest_view(access=access, media_version=media)
+    expires_at = timezone.now() + PLAYBACK_MAX_AGE
+    stream = reverse('api-guest-media-stream', args=[project.id, media.id])
+    poster = media_poster_variant(media)
+    file_meta = media.original_file.metadata or {}
+    variant_meta = variant.metadata or {}
+    return Response({
+        'url': f"{stream}?t={_playback_token(access, media, 'preview')}",
+        'poster_url': f"{stream}?t={_playback_token(access, media, 'poster')}" if poster else None,
+        'mime_type': variant.mime_type,
+        'expires_at': expires_at,
+        'duration_ms': variant_meta.get('duration_ms') or file_meta.get('duration_ms'),
+        'width': variant_meta.get('width') or file_meta.get('width'),
+        'height': variant_meta.get('height') or file_meta.get('height'),
+    })
+
+
+@api_view(['GET', 'HEAD'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def guest_media_stream(request, project_id, media_version_id):
+    """Serves a guest's proxy or poster with HTTP Range, authorised by the signed `?t=`."""
+    project = get_object_or_404(Project, id=project_id)
+    media = get_object_or_404(MediaVersion.objects.select_related('original_file'), id=media_version_id, project=project, status='ACTIVE')
+    try:
+        value = signing.TimestampSigner(salt=_PLAYBACK_SALT).unsign(
+            request.query_params.get('t', ''), max_age=PLAYBACK_MAX_AGE,
+        )
+        access_id, signed_media_id, kind = value.split(':')
+    except (signing.BadSignature, ValueError) as exc:
+        raise PermissionDenied('This playback link is invalid or has expired. Reload the review page.') from exc
+    if signed_media_id != str(media.id) or kind not in ('preview', 'poster'):
+        raise PermissionDenied('This playback link is for a different cut.')
+    now = timezone.now()
+    access = GuestReviewAccess.objects.select_related('guest_invite').filter(
+        id=access_id, guest_invite__project=project, revoked_at__isnull=True,
+        guest_invite__revoked_at__isnull=True,
+    ).first()
+    if access is None or (access.guest_invite.expires_at and access.guest_invite.expires_at <= now) or not (
+        GuestReviewAccessPermission.objects.filter(guest_review_access=access, permission_key='media.read').exists()
+    ):
+        raise PermissionDenied('Guest access is invalid or expired.')
+    variant = media_poster_variant(media) if kind == 'poster' else _playable_variant(media)
+    if variant is None or not default_storage.exists(variant.object_key):
+        raise Http404('No playable file is available for this cut yet.')
+    return ranged_file_response(
+        request, variant.object_key, filename=variant.original_name if kind == 'preview' else None,
+        content_type=variant.mime_type, checksum=variant.checksum,
+    )
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def guest_decision(request, project_id, media_version_id):
+    """Approve or Request changes on this exact cut, when the link allows decisions."""
+    project = get_object_or_404(Project.objects.select_related('workspace'), id=project_id)
+    media = get_object_or_404(MediaVersion, id=media_version_id, project=project, status='ACTIVE')
+    # Deciding without being able to watch makes no sense, so both are required.
+    _guest_access(request, project, 'media.read')
+    access = _guest_access(request, project, GUEST_DECISION_PERMISSION)
+    serializer = GuestDecisionSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        record, transitioned = record_decision(
+            media_version=media, guest_access=access, **serializer.validated_data,
+        )
+    except ReviewDecisionError as exc:
+        return Response({'detail': str(exc)}, status=exc.status)
+    data = decision_data(record, for_guest_session_id=access.guest_session_id, include_private=False)
+    return Response(data, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
