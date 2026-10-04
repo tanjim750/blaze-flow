@@ -58,9 +58,11 @@ def publish_library_file(*, project_file, project, user, folder=None, version_of
     """Creates the media version for a library file and saves its session notes as comments.
 
     ``notes`` are dicts: ``key`` (the client's id for the note, echoed back), ``text``,
-    ``start_time_ms``, ``resolved``, ``mentioned_user_ids``, ``elements`` (a drawing saved
-    with the note) and ``replies`` (``key``, ``text``, ``mentioned_user_ids``).
-    ``annotations`` are free-standing drawings: ``elements`` and ``start_time_ms``.
+    ``start_time_ms``, ``end_time_ms`` (a range note's out point), ``resolved``,
+    ``mentioned_user_ids``, ``elements`` (a drawing saved with the note),
+    ``annotation_end_time_ms`` (how long that drawing stays on screen) and ``replies``
+    (``key``, ``text``, ``mentioned_user_ids``).
+    ``annotations`` are free-standing drawings: ``elements``, ``start_time_ms`` and ``end_time_ms``.
 
     Returns ``(media_version, project_file, comment_ids)`` where ``comment_ids`` maps each
     note's and reply's ``key`` to the comment created for it.
@@ -129,7 +131,8 @@ def publish_library_file(*, project_file, project, user, folder=None, version_of
         for note in notes:
             comment = create_review_comment(
                 media_version=media_version, user=user, text=note['text'],
-                start_time_ms=note.get('start_time_ms'), mentioned_user_ids=note.get('mentioned_user_ids') or (),
+                start_time_ms=note.get('start_time_ms'), end_time_ms=note.get('end_time_ms'),
+                mentioned_user_ids=note.get('mentioned_user_ids') or (),
                 visibility=ReviewCommentVisibility.CLIENT, notify_followers=False,
             )
             comment_ids[note['key']] = str(comment.id)
@@ -137,6 +140,7 @@ def publish_library_file(*, project_file, project, user, folder=None, version_of
                 create_annotation(
                     media_version=media_version, user=user, elements=note['elements'],
                     review_comment=comment, start_time_ms=note.get('start_time_ms'),
+                    end_time_ms=note.get('annotation_end_time_ms'),
                 )
             for reply in note.get('replies') or ():
                 child = create_review_comment(
@@ -150,7 +154,7 @@ def publish_library_file(*, project_file, project, user, folder=None, version_of
         for drawing in annotations:
             create_annotation(
                 media_version=media_version, user=user, elements=drawing['elements'],
-                start_time_ms=drawing.get('start_time_ms'),
+                start_time_ms=drawing.get('start_time_ms'), end_time_ms=drawing.get('end_time_ms'),
             )
     except ReviewCommentError as exc:
         raise PublishError(f'A note could not be saved: {exc}') from exc

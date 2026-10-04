@@ -1,5 +1,6 @@
 import type { CommentVisibility, ReviewComment } from "./api";
 import { timecode } from "./timecode";
+import type { DisplayWindow } from "./annotation-window";
 
 /**
  * Comment shaping shared by the signed-in review workspace and the guest reviewer.
@@ -21,6 +22,13 @@ export type ReviewNote = {
   /** `mm:ss` when the note is pinned to a timecode, else null for a general note. */
   timecode: string | null;
   startMs: number | null;
+  /** The out point of an in/out range note; null for a note on a single moment. */
+  endMs?: number | null;
+  /**
+   * When the note carries a drawing, the window it stays on screen in. Filled in by the
+   * review page from the note's annotation, so the row can say "00:02–00:07".
+   */
+  drawingWindow?: DisplayWindow | null;
   text: string;
   age: string;
   resolved: boolean;
@@ -75,6 +83,7 @@ export function toNote(comment: ReviewComment): ReviewNote {
     initials: initialsFrom(name),
     timecode: comment.start_time_ms === null ? null : timecode(comment.start_time_ms),
     startMs: comment.start_time_ms,
+    endMs: comment.start_time_ms !== null && comment.end_time_ms !== null && comment.end_time_ms > comment.start_time_ms ? comment.end_time_ms : null,
     text: comment.text ?? "",
     age: relativeAge(comment.created_at),
     resolved: comment.resolved,

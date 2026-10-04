@@ -36,6 +36,13 @@ export type ComposeInput = {
   recording: RecordedClip | null;
   /** Drawn over the frame while composing; saved with the note rather than on the video. */
   annotation: AnnotationElement | null;
+  /**
+   * Where that drawing stops being shown: `startMs` itself for "just this frame", later to
+   * hold it on screen. Null leaves it to the player's default hold.
+   */
+  annotationEndMs?: number | null;
+  /** The out point of an in/out range note; null for a note on one moment. */
+  endMs?: number | null;
   /** Team notes stay inside the workspace. Ignored for device-local notes. */
   visibility?: CommentVisibility;
 };
@@ -106,11 +113,12 @@ export function useReviewWriter(view: ReviewView, author: string) {
       const note = addLocalNote(mediaId, {
         text: input.text.trim(),
         startMs: input.startMs,
+        endMs: input.endMs ?? null,
         author,
         parentId: input.parentId,
         mentions: input.mentions,
         recording: input.recording ? { url: input.recording.url, mimeType: input.recording.mimeType, kind: input.recording.kind } : null,
-        annotation: input.annotation ? { elements: [input.annotation] } : null,
+        annotation: input.annotation ? { elements: [input.annotation], endMs: input.annotationEndMs ?? null } : null,
       });
       return Boolean(note);
     }
@@ -119,6 +127,7 @@ export function useReviewWriter(view: ReviewView, author: string) {
         ...target,
         text: input.text.trim() || (input.recording?.kind === "voice" ? "Voice comment" : "Screen recording"),
         startMs: input.startMs,
+        endMs: input.parentId ? null : input.endMs ?? null,
         parentId: input.parentId,
         mentionedUserIds: input.mentions.map((mention) => mention.id),
         visibility: input.visibility,
@@ -126,7 +135,7 @@ export function useReviewWriter(view: ReviewView, author: string) {
       if (created.error || !created.commentId) return { error: created.error ?? "The comment was not created." };
       if (input.recording) await attachRecording(created.commentId, input.recording);
       if (input.annotation) {
-        const drawn = await addAnnotationAction(target.workspaceId, target.projectId, target.versionId, input.annotation, input.startMs, created.commentId);
+        const drawn = await addAnnotationAction(target.workspaceId, target.projectId, target.versionId, input.annotation, input.startMs, created.commentId, input.annotationEndMs ?? null);
         if (drawn.error) return drawn;
       }
       return undefined;

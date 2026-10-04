@@ -10,3 +10,13 @@ export function startTimeField(ms: number | null | undefined): { start_time_ms?:
   if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return {};
   return { start_time_ms: Math.round(ms) };
 }
+
+/**
+ * `end_time_ms` to send alongside a start: only when there is a start to measure from and the
+ * end does not run backwards (the API refuses both).
+ */
+export function endTimeField(startMs: number | null | undefined, endMs: number | null | undefined): { end_time_ms?: number } {
+  if (!("start_time_ms" in startTimeField(startMs))) return {};
+  if (endMs === null || endMs === undefined || !Number.isFinite(endMs) || endMs < (startMs as number)) return {};
+  return { end_time_ms: Math.round(endMs) };
+}

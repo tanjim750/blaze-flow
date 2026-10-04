@@ -798,3 +798,62 @@
 .rvc-viewonly svg { flex: none; margin-top: 2px; }
 .rvc-viewonly strong { color: var(--foreground); font-weight: 600; }
 .rv-task dt label { display: inline-flex; align-items: center; gap: inherit; }
+
+/* Drawing display windows ------------------------------------------------ */
+/* Every drawing stays mounted; its window sets its opacity, and this eases it in and out. */
+.rvp-drawing { transition: opacity .28s linear; }
+.rvp-drawing:not(.is-shown) .rvp-shape { pointer-events: none; }
+/* The span a held drawing or range note covers, as a thin strip just above the bar. */
+.rvp-span {
+  position: absolute; bottom: calc(100% + 3px); height: 3px; min-width: 3px;
+  border-radius: 2px; pointer-events: none;
+  background: color-mix(in oklch, var(--rv-marker) 55%, transparent);
+}
+.rvp-span.is-range { background: color-mix(in oklch, var(--rv-marker) 80%, transparent); }
+.rvp-span.is-pending {
+  background: repeating-linear-gradient(90deg, var(--primary-2, #a99bff) 0 6px, transparent 6px 9px);
+  height: 4px;
+}
+
+.rvc-stamp { display: inline-flex; align-items: center; gap: 4px; }
+.rvc-stamp svg { width: 10px; height: 10px; flex: none; }
+.rvc-stamp small { font: inherit; font-weight: 500; opacity: .7; }
+.rvc-stamp.is-range { background: #45361a; }
+.rvc-note.is-live { border-left-color: var(--rv-marker); }
+.rvc-note.is-live.is-focused { border-left-color: var(--primary); }
+.rvc-note.is-live .rvc-stamp { box-shadow: 0 0 0 1px color-mix(in oklch, var(--rv-marker) 60%, transparent); }
+
+.rvc-hold {
+  display: grid; gap: 7px; padding: 8px 9px;
+  border: 1px solid var(--rv-line); border-radius: 8px; background: #121217;
+}
+.rvc-hold-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.rvc-hold-label { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.rvc-hold-options { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--rv-line); border-radius: 7px; background: #0d0d11; }
+.rvc-hold-options button {
+  min-width: 36px; min-height: 26px; padding: 3px 8px; border: 0; border-radius: 5px;
+  background: none; color: var(--muted); font: 600 11px var(--font-geist-mono), monospace; cursor: pointer;
+}
+.rvc-hold-options button:hover { color: var(--text); }
+.rvc-hold-options button.is-on { background: #3a2e17; color: var(--rv-marker); }
+.rvc-hold-options button:focus-visible, .rvc-hold-range button:focus-visible, .rvc-hold-range input:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.rvc-hold-range { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--muted); font-size: 11px; }
+.rvc-hold-range b { color: var(--text); font: 600 11px var(--font-geist-mono), monospace; }
+.rvc-hold-range label { display: inline-flex; align-items: center; gap: 5px; }
+.rvc-hold-range input {
+  width: 58px; padding: 3px 6px; border: 1px solid var(--rv-line); border-radius: 5px;
+  background: #0d0d11; color: var(--text); font: 600 11px var(--font-geist-mono), monospace;
+}
+.rvc-hold-range input[aria-invalid="true"] { border-color: var(--danger); }
+.rvc-hold-range button {
+  padding: 3px 8px; border: 1px solid var(--rv-line); border-radius: 5px;
+  background: #17171c; color: var(--text); font-size: 11px; cursor: pointer;
+}
+.rvc-hold-range button:disabled { opacity: .5; cursor: default; }
+.rvc-hold-summary { color: var(--muted); font-size: 10.5px; }
+.rvc-hold-summary.is-error { color: var(--danger); }
+@media (max-width: 600px) {
+  .rvc-hold-options { display: grid; grid-template-columns: repeat(5, 1fr); width: 100%; }
+  .rvc-hold-options button { min-height: 32px; padding: 3px 0; }
+}
+@media (prefers-reduced-motion: reduce) { .rvp-drawing { transition: none; } }

@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AtSign, CheckCheck, CornerDownRight, Eye, Lock, MessageSquareText, Paperclip, RotateCcw, Send, SmilePlus, Trash2, Users, X } from "lucide-react";
+import { AtSign, CheckCheck, CornerDownRight, Eye, Lock, MessageSquareText, Paperclip, PencilLine, RotateCcw, Send, SmilePlus, Timer, Trash2, Users, X } from "lucide-react";
+import {
+  DEFAULT_HOLD, HOLD_PRESETS_MS, displayWindow, drawingEndMs, holdLabel, noteEndMs, parseTime, rangeLabel, rememberHold, validChoice, type HoldChoice,
+} from "@/lib/annotation-window";
 import type { ReviewNote } from "@/lib/review-notes";
 import { clientView, recordingOf } from "@/lib/review-notes";
 import type { Mentionable, ReviewView } from "@/lib/review-view";
@@ -11,8 +14,10 @@ import { clearDraft, loadDraft, patchDraft } from "@/lib/review-drafts";
 import { Recorder } from "./recorder";
 import type { RecordedClip, ReviewWriter } from "./writer";
 
+const noop = () => undefined;
+
 /** What the composer holds that is not yet posted, reported up for the leave guard. */
-export type ComposerState = { text: boolean; recording: boolean };
+export type ComposerState = { text: boolean; recording: boolean; startMs: number | null };
 
 type Props = {
   view: ReviewView;
@@ -24,6 +29,13 @@ type Props = {
   focusedId: string | null;
   pendingAnnotation: AnnotationElement | null;
   onClearAnnotation: () => void;
+  /** How long the pending drawing stays on screen once posted. */
+  hold?: HoldChoice;
+  onHold?: (choice: HoldChoice) => void;
+  /** The media's length, so a hold or out point never runs past the end. 0 while unknown. */
+  durationMs?: number;
+  /** Notes whose drawing or range covers the playhead right now. */
+  liveNoteIds?: Set<string>;
   onSeek: (ms: number) => void;
   /** Seeks the compare pane showing `versionId`, since the single player is not mounted. */
   onCompareSeek: (versionId: string, ms: number) => void;
@@ -97,8 +109,8 @@ function CompareFeeds({ view, writer, compareWriter, clientPreview, onSeek }: {
 }
 
 export function Comments({
-  view, writer, compareWriter, notes, positionMs, focusedId, pendingAnnotation, onClearAnnotation, onSeek, onCompareSeek,
-  canWriteTeam, clientPreview, hiddenTeamNotes, onClientPreview, onComposerChange, timed = true,
+  view, writer, compareWriter, notes, positionMs, focusedId, pendingAnnotation, onClearAnnotation, hold = DEFAULT_HOLD, onHold = noop, durationMs = 0, liveNoteIds,
+  onSeek, onCompareSeek, canWriteTeam, clientPreview, hiddenTeamNotes, onClientPreview, onComposerChange, timed = true,
 }: Props) {
   const [replyTo, setReplyTo] = useState<ReviewNote | null>(null);
   const [showResolved, setShowResolved] = useState(false);
@@ -183,6 +195,7 @@ export function Comments({
             target={view.target}
             writer={writer}
             focused={note.id === focusedId}
+            live={liveNoteIds?.has(note.id) ?? false}
             onSeek={onSeek}
             onReply={clientPreview || viewOnly ? undefined : setReplyTo}
           />
@@ -211,6 +224,9 @@ export function Comments({
           onCancelReply={() => setReplyTo(null)}
           pendingAnnotation={pendingAnnotation}
           onClearAnnotation={onClearAnnotation}
+          hold={hold}
+          onHold={onHold}
+          durationMs={durationMs}
           onChange={onComposerChange}
         />
       )}
@@ -232,8 +248,10 @@ function TeamBadge() {
   );
 }
 
-function Note({ note, view, target, writer, focused, onSeek, onReply, timed = true }: {
+function Note({ note, view, target, writer, focused, live = false, onSeek, onReply, timed = true }: {
   timed?: boolean; note: ReviewNote; view: ReviewView; target: ReviewView["target"]; writer: ReviewWriter; focused: boolean;
+  /** Its drawing or range covers the playhead: lit while the cut plays through it. */
+  live?: boolean;
   onSeek: (ms: number) => void;
   /** Omitted where there is no composer to reply with, so no dead Reply button is drawn. */
   onReply?: (note: ReviewNote) => void;
@@ -245,9 +263,17 @@ function Note({ note, view, target, writer, focused, onSeek, onReply, timed = tr
   const canReact = !access || access.react;
   const recording = note.recording ?? (base ? recordingOf(note, (id) => `${base}/${id}/`) : null);
   const files = note.attachments.filter((item) => !recording || !item.mimeType.startsWith(recording.mimeType.split("/")[0]));
+  // The span the row shows: a range note's in/out, else how long its drawing stays up.
+  const drawing = note.drawingWindow ?? null;
+  const rangeEnd = note.endMs ?? (drawing && !drawing.frameOnly ? drawing.endMs : null);
+  const stampLabel = note.startMs !== null ? rangeLabel(note.startMs, rangeEnd) : note.timecode;
+  const stampTitle = note.startMs === null ? undefined
+    : note.endMs ? `Range note ${rangeLabel(note.startMs, note.endMs)}. Click to jump to its start.`
+    : drawing ? (drawing.frameOnly ? `Drawing shows on ${stampLabel} only, while paused there` : `Drawing stays on screen ${stampLabel} (${holdLabel(drawing)})`)
+    : `Jump to ${stampLabel}`;
 
   return (
-    <article className={`rvc-note ${note.resolved ? "is-resolved" : ""} ${focused ? "is-focused" : ""} ${note.visibility === "team" ? "is-team" : ""}`} data-note={note.id}>
+    <article className={`rvc-note ${note.resolved ? "is-resolved" : ""} ${focused ? "is-focused" : ""} ${live ? "is-live" : ""} ${note.visibility === "team" ? "is-team" : ""}`} data-note={note.id}>
       <div className="rvc-meta">
         <span className="rvc-avatar">{note.initials}</span>
         <strong>{note.author}</strong>
@@ -258,8 +284,15 @@ function Note({ note, view, target, writer, focused, onSeek, onReply, timed = tr
 
       <p className="rvc-body">
         {timed && note.timecode && (
-          <button type="button" className="rvc-stamp" onClick={() => note.startMs !== null && onSeek(note.startMs)}>
-            {note.timecode}
+          <button
+            type="button"
+            className={`rvc-stamp ${rangeEnd ? "is-range" : ""}`}
+            title={stampTitle}
+            onClick={() => note.startMs !== null && onSeek(note.startMs)}
+          >
+            {drawing && <PencilLine aria-hidden="true" />}
+            {stampLabel}
+            {drawing?.frameOnly && <small>1 frame</small>}
           </button>
         )}
         <Mentioned text={note.text} mentions={note.mentions} />
@@ -344,10 +377,11 @@ function Mentioned({ text, mentions }: { text: string; mentions: { id: string; n
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWriteTeam, onCancelReply, pendingAnnotation, onClearAnnotation, onChange: report, timed = true }: {
+function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWriteTeam, onCancelReply, pendingAnnotation, onClearAnnotation, hold, onHold, durationMs, onChange: report, timed = true }: {
   timed?: boolean; view: ReviewView; writer: ReviewWriter; positionMs: number; replyTo: ReviewNote | null;
   onReplyTo: (note: ReviewNote) => void; notes: ReviewNote[]; canWriteTeam: boolean;
   onCancelReply: () => void; pendingAnnotation: AnnotationElement | null; onClearAnnotation: () => void;
+  hold: HoldChoice; onHold: (choice: HoldChoice) => void; durationMs: number;
   onChange: (state: ComposerState) => void;
 }) {
   const mediaId = view.version?.id ?? null;
@@ -398,7 +432,10 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
   }, [anchor, mediaId, mentions, pinned, ready, replyTo?.id, text, visibility]);
 
   const hasText = Boolean(text.trim());
-  useEffect(() => { report({ text: hasText, recording: Boolean(clip) }); }, [clip, hasText, report]);
+  useEffect(() => { report({ text: hasText, recording: Boolean(clip), startMs }); }, [clip, hasText, report, startMs]);
+  // A drawing on a timed, pinned note gets a display duration; a reply or unpinned note has
+  // no moment to hold from, so its drawing simply shows throughout.
+  const holdable = Boolean(pendingAnnotation && timed && startMs !== null);
 
   const candidates = query === null
     ? []
@@ -430,6 +467,10 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
   }
 
   async function submit() {
+    if (holdable && startMs !== null && !validChoice(startMs, hold)) {
+      writer.setError(`Set an out point after ${timecode(startMs)}, or pick a preset.`);
+      return;
+    }
     // Only mentions still written in the note are sent, so deleting the text un-notifies.
     const active = mentions.filter((member) => text.includes(`@${member.name}`));
     const posted = await writer.compose({
@@ -439,9 +480,12 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
       mentions: active,
       recording: clip,
       annotation: pendingAnnotation,
+      annotationEndMs: holdable && startMs !== null ? drawingEndMs(startMs, hold, durationMs) : null,
+      endMs: holdable ? noteEndMs(startMs, hold) : null,
       visibility: effectiveVisibility,
     });
     if (!posted) return;
+    rememberHold(hold);
     reset();
   }
 
@@ -472,6 +516,10 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
           <span>Drawing attached · {pendingAnnotation.element_type.toLowerCase()}</span>
           <button type="button" onClick={onClearAnnotation} aria-label="Remove drawing"><X size={12} /></button>
         </div>
+      )}
+
+      {holdable && startMs !== null && (
+        <HoldPicker startMs={startMs} positionMs={positionMs} durationMs={durationMs} value={hold} onChange={onHold} />
       )}
 
       {clip && (
@@ -542,6 +590,77 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * How long the drawing on this note stays on screen during playback.
+ *
+ * Frame.io only ever shows a drawing on its own frame, when paused or when its comment is
+ * clicked. That suits a still-frame note, so it stays an option ("Frame"), but a circle
+ * around something moving reads better if it stays up while the shot plays — hence the
+ * presets. "Range" sets an out point (typed, or taken from the playhead) and makes the note
+ * itself a range note covering the same span.
+ */
+function HoldPicker({ startMs, positionMs, durationMs, value, onChange }: {
+  startMs: number; positionMs: number; durationMs: number; value: HoldChoice; onChange: (choice: HoldChoice) => void;
+}) {
+  const [outText, setOutText] = useState<string | null>(null);
+  const endMs = drawingEndMs(startMs, value, durationMs);
+  const window = displayWindow(startMs, endMs);
+  const valid = validChoice(startMs, value);
+  const pick = (choice: HoldChoice) => { setOutText(null); onChange(choice); };
+  const startRange = () => pick({ kind: "range", endMs: positionMs > startMs + 250 ? positionMs : startMs + 5000 });
+  const commitOut = () => {
+    if (outText === null) return;
+    const parsed = parseTime(outText);
+    if (parsed !== null) onChange({ kind: "range", endMs: durationMs > 0 ? Math.min(parsed, durationMs) : parsed });
+    setOutText(null);
+  };
+  const option = (key: string, label: string, active: boolean, choose: () => void, title: string) => (
+    <button key={key} type="button" role="radio" aria-checked={active} className={active ? "is-on" : ""} onClick={choose} title={title}>{label}</button>
+  );
+
+  return (
+    <div className="rvc-hold" role="group" aria-label="How long the drawing stays on screen">
+      <div className="rvc-hold-row">
+        <span className="rvc-hold-label"><Timer size={12} aria-hidden="true" />Show drawing</span>
+        <div className="rvc-hold-options" role="radiogroup" aria-label="Drawing duration">
+          {option("frame", "Frame", value.kind === "frame", () => pick({ kind: "frame" }), "Only on this frame, while paused (like Frame.io)")}
+          {HOLD_PRESETS_MS.map((ms) => option(`h${ms}`, `${ms / 1000}s`, value.kind === "hold" && value.ms === ms, () => pick({ kind: "hold", ms }), `Stays on screen for ${ms / 1000} seconds of playback`))}
+          {option("range", "Range", value.kind === "range", startRange, "Set an out point: the drawing and the note cover that whole range")}
+        </div>
+      </div>
+      {value.kind === "range" && (
+        <div className="rvc-hold-range">
+          <span>In <b>{timecode(startMs)}</b></span>
+          <label>
+            Out
+            <input
+              type="text"
+              inputMode="decimal"
+              value={outText ?? (value.endMs / 1000).toFixed(1)}
+              aria-label="Out point in seconds"
+              aria-invalid={!valid}
+              onChange={(event) => setOutText(event.target.value)}
+              onBlur={commitOut}
+              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitOut(); } }}
+            />
+            <small>s</small>
+          </label>
+          <button type="button" onClick={() => pick({ kind: "range", endMs: positionMs })} disabled={positionMs <= startMs} title="Use the current playhead as the out point">
+            Out at playhead · {timecode(positionMs)}
+          </button>
+        </div>
+      )}
+      <small className={`rvc-hold-summary ${valid ? "" : "is-error"}`} role={valid ? undefined : "alert"}>
+        {!valid
+          ? `The out point has to come after ${timecode(startMs)}.`
+          : window?.frameOnly
+            ? `Shows on ${timecode(startMs)} only, while paused there.`
+            : `Visible ${rangeLabel(startMs, endMs)} during playback${value.kind === "range" ? " · range note" : ""}.`}
+      </small>
+    </div>
   );
 }
 

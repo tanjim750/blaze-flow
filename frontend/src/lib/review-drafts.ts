@@ -1,4 +1,5 @@
 import type { AnnotationElement, CommentVisibility } from "./api";
+import type { HoldChoice } from "./annotation-window";
 
 /**
  * Unsent review comments, kept per cut in `localStorage`.
@@ -23,6 +24,8 @@ export type ReviewDraft = {
   visibility: CommentVisibility;
   mentions: { id: string; name: string; email: string }[];
   annotation: AnnotationElement | null;
+  /** How long that drawing should stay on screen once posted. */
+  hold?: HoldChoice | null;
   savedAt: string;
 };
 
