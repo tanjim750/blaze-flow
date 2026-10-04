@@ -20,6 +20,9 @@ import { useLeaveGuard } from "./leave-guard";
 import "../tasks/tasks.css";
 import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } from "./player";
 import { SharePanel } from "./share-panel";
+import { TaskPanel } from "./task-panel";
+import { REVIEW_FROM_KEY } from "@/components/universal-review";
+import { returnLabel, reviewSurface, safeReturnPath } from "@/lib/open-in-review";
 import { useReviewWriter } from "./writer";
 
 type Props = {
@@ -28,6 +31,8 @@ type Props = {
   initialCommentId?: string | null;
   /** `?t=` in milliseconds: where to seek once the media has loaded. */
   initialTimeMs?: number | null;
+  /** `?from=`: the page (with its filters) the Back button returns to. */
+  returnTo?: string | null;
 };
 
 /** "3 Oct 2026, 20:41" — fixed locale so the server and browser render the same text. */
@@ -37,7 +42,7 @@ const stamp = (iso: string | null) => iso
 
 const shortDate = (iso: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(iso));
 
-export function ReviewWorkspace({ view, author, userId = null, initialShareOpen = false, embedded = false, initialCommentId = null, initialTimeMs = null }: Props) {
+export function ReviewWorkspace({ view, author, userId = null, initialShareOpen = false, embedded = false, initialCommentId = null, initialTimeMs = null, returnTo = null }: Props) {
   const router = useRouter();
   const reduced = useReducedMotion();
   const player = useRef<PlayerHandle>(null);
@@ -65,6 +70,23 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
 
   const { asset, version } = view;
   const mediaId = version?.id ?? null;
+  const surface = version ? reviewSurface(version.mimeType, version.title) : "video";
+
+  // Back returns to where the review was opened from — Files with its folder and search,
+  // the task board with its filters, a project, the dashboard — not a fixed page. `?from=`
+  // wins (it survives a refresh and a shared link); otherwise the shell remembered the
+  // page the last review was opened from; otherwise the file's project or Files.
+  const fallbackBack = asset?.projectId ? `/projects?campaign=${asset.projectId}` : "/files";
+  const [back, setBack] = useState(returnTo ?? fallbackBack);
+  useEffect(() => {
+    if (returnTo) return;
+    try {
+      const remembered = safeReturnPath(window.sessionStorage.getItem(REVIEW_FROM_KEY));
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sessionStorage only exists after mount
+      if (remembered) setBack(remembered);
+    } catch { /* storage blocked */ }
+  }, [returnTo]);
+  const backLabel = returnLabel(back);
 
   // A drawing made for an unsent note is part of the draft, so it is kept with it.
   const [drawingReady, setDrawingReady] = useState(false);
@@ -134,7 +156,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
 
   const approval = view.stages.find((stage) => stage.isApproval);
   // Compared against what the player measured, so it only appears once the media has loaded.
-  const mismatches = useMemo(() => specMismatches(view.specs, meta), [meta, view.specs]);
+  const mismatches = useMemo(() => specMismatches(view.specs, surface === "video" ? meta : null), [meta, surface, view.specs]);
   const comparing = view.comparison;
   const latest = asset?.versions[asset.versions.length - 1] ?? null;
   const approved = Boolean(approval && version?.workflowStage?.id === approval.id);
@@ -174,7 +196,11 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     return item.src;
   };
   const clearPending = useCallback(() => setPending(null), []);
-  const reviewHref = (query: string) => `${embedded ? "/review-embed" : "/review"}?${query}`;
+  // Switching version or comparing keeps the task panel and the way back.
+  const carry = new URLSearchParams();
+  if (view.task) carry.set("task", view.task.task.id);
+  if (returnTo) carry.set("from", returnTo);
+  const reviewHref = (query: string) => `${embedded ? "/review-embed" : "/review"}?${query}${carry.size ? `&${carry.toString()}` : ""}`;
   const seek = (ms: number) => player.current?.seek(ms);
   const seekCompare = (versionId: string, ms: number) => compare.current?.seek(versionId, ms);
 
@@ -182,7 +208,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     return (
       <div className={`rv ${embedded ? "is-embedded" : ""}`}>
         <header className="rv-top">
-          <Link href="/files" target={embedded ? "_top" : undefined} className="rv-back"><ChevronLeft size={16} />Files</Link>
+          <Link href={back} target={embedded ? "_top" : undefined} className="rv-back"><ChevronLeft size={16} />{backLabel}</Link>
           <div className="rv-crumbs"><strong>Nothing to review</strong></div>
         </header>
         <p className="rv-blank">
@@ -195,12 +221,12 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   return (
     <div className={`rv ${embedded ? "is-embedded" : ""}`}>
       <header className="rv-top">
-        <Link href={asset.projectId ? "/projects" : "/files"} target={embedded ? "_top" : undefined} className="rv-back" aria-label="Back">
-          <ChevronLeft size={16} />
+        <Link href={back} target={embedded ? "_top" : undefined} className="rv-back" aria-label={`Back to ${backLabel === "Back" ? "previous page" : backLabel}`} title={`Back to ${backLabel === "Back" ? "previous page" : backLabel}`}>
+          <ChevronLeft size={16} /><span className="rv-back-label">{backLabel}</span>
         </Link>
 
         <nav className="rv-crumbs" aria-label="Location">
-          {[asset.clientName, asset.projectName, asset.folderName].filter(Boolean).map((part) => (
+          {[asset.clientName, asset.projectName ?? "Library", asset.folderName].filter(Boolean).map((part) => (
             <span key={part}>{part}<i aria-hidden="true">/</i></span>
           ))}
           <strong title={version.title}>{version.title}</strong>
@@ -389,6 +415,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
         ) : (
         <Player
           handle={player}
+          surface={surface}
+          downloadHref={downloadHref}
           sources={sources}
           title={version.title}
           notes={notes}
@@ -404,6 +432,16 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
         )}
 
         <aside className="rv-panel">
+          {view.task && version && (
+            <TaskPanel
+              context={view.task}
+              stages={view.taskStages}
+              workspaceId={view.workspaceId}
+              mediaId={version.id}
+              returnTo={returnTo}
+              onNavigate={leave.guard}
+            />
+          )}
           <div className="rv-tabs" role="tablist">
             <button type="button" role="tab" aria-selected={panel === "comments"} onClick={() => setPanel("comments")}>
               <MessageSquareText size={14} />Comments
@@ -432,6 +470,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
               hiddenTeamNotes={clientPreview ? countNotes(allNotes) - countNotes(notes) : 0}
               onClientPreview={setClientPreview}
               onComposerChange={setComposer}
+              timed={surface === "video" || surface === "audio"}
             />
           </div>
           <AnimatePresence initial={false}>

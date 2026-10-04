@@ -27,7 +27,10 @@ export type KanbanProps = {
   contextOf: (task: Task) => string;
   fileContextOf: (file: ProjectFile) => string;
   coverOf: (task: Task) => Cover;
+  /** Opens the task: its primary linked cut in review, else the detail sheet. */
   onOpen: (task: Task) => void;
+  /** Always the detail sheet. */
+  onDetails: (task: Task) => void;
   onOpenFile: (file: ProjectFile) => void;
   onMove: (task: Task, stageId: string, index: number | null, source: "drag" | "keyboard" | "menu") => void;
   onMoveFile: (file: ProjectFile, stageId: string) => void;
@@ -221,9 +224,9 @@ function SortableTask({ task, stage, position, size, counts, stages, dropBefore,
     {...attributes} {...listeners}
     role="button" aria-roledescription="draggable task" aria-describedby={attributes["aria-describedby"]}
     aria-label={`${task.title}. ${stage.name}, ${position + 1} of ${size}.`}
-    onKeyDown={onKeyDown} onClick={onClick}
+    onKeyDown={onKeyDown} onClick={onClick} onDetails={() => props.onDetails(task)}
     menu={<CardMenu task={task} stages={stages} current={stage.id} counts={counts} open={menuOpen} onOpenChange={(open) => props.setMenuFor(open ? task.id : null)}
-      onOpenDetails={() => props.onOpen(task)} onMove={(stageId) => props.onMove(task, stageId, null, "menu")}
+      onOpenDetails={() => props.onDetails(task)} onMove={(stageId) => props.onMove(task, stageId, null, "menu")}
       onMoveEdge={(edge) => props.onMove(task, stage.id, edge === "top" ? 0 : size - 1, "menu")} canReorder={size > 1} onDelete={() => props.onDelete(task)} />}
   />;
 }

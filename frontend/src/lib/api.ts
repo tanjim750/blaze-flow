@@ -258,6 +258,7 @@ export const changePassword = (payload: { current_password: string; new_password
 export const requestEmailVerification = (email: string) =>
   request<{ detail: string }>("/auth/email-verification/request/", jsonBody({ email }));
 export const listTasks = (workspaceId: string) => request<Task[]>(`/workspaces/${workspaceId}/tasks/`);
+export const getTask = (workspaceId: string, taskId: string) => request<Task>(`/workspaces/${workspaceId}/tasks/${taskId}/`);
 export const listTaskAttachments = (workspaceId: string, taskId: string) => request<TaskAttachment[]>(`/workspaces/${workspaceId}/tasks/${taskId}/attachments/`);
 export const listTaskStages = (workspaceId: string) => request<TaskWorkflow>(`/workspaces/${workspaceId}/task-stages/`);
 export const createTask = (workspaceId: string, payload: { title: string; client_team_id?: string | null; project_id?: string | null; assignee_id?: string | null; task_stage_id?: string | null; description?: string; priority?: string; status?: string; due_at?: string | null; sort_order?: number }) =>

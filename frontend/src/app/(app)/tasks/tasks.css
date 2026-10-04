@@ -344,3 +344,18 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
   .tb-sheet[data-state=open], .tb-sheet-overlay[data-state=open], .tb-bone { animation: none; }
   .tb-card, .tb-column, .tb-button { transition: none; }
 }
+
+/* Open in review ---------------------------------------------------------
+   A card with a linked cut opens it in review; the badge says so before the click. The
+   Details button keeps the detail sheet one click away on every card and list row. */
+.tb-card-open { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px; border-radius: 6px; background: #0b0b0ecc; color: #d7c9ff; font-size: 11px; font-weight: 600; opacity: 0; transition: opacity var(--tb-fast) var(--tb-ease); pointer-events: none; }
+.tb-card-open svg { width: 12px; height: 12px; }
+.tb-card:hover .tb-card-open, .tb-card:focus-visible .tb-card-open { opacity: 1; }
+.tb-card-details { width: 26px; height: 26px; opacity: 0; transition: opacity var(--tb-fast) var(--tb-ease); }
+.tb-card:hover .tb-card-details, .tb-card:focus-within .tb-card-details, .tb-card-details:focus-visible { opacity: 1; }
+@media (hover: none) { .tb-card-open, .tb-card-details { opacity: 1; } }
+.tb-link-prompt { display: flex; gap: 12px; padding: 14px; border: 1px dashed #5b4b8a; border-radius: 10px; background: #1a1527; }
+.tb-link-prompt > svg { flex: none; width: 20px; height: 20px; margin-top: 2px; color: #b9a6ff; }
+.tb-link-prompt strong { display: block; font-size: 13px; }
+.tb-link-prompt p { margin: 4px 0 10px; color: var(--tb-muted, #9a9aa5); font-size: 12px; line-height: 1.5; }
+.tb-link-actions { display: flex; flex-wrap: wrap; gap: 8px; }

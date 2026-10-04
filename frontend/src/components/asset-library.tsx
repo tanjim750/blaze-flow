@@ -14,7 +14,7 @@
  * failure). The pure rules (filtering, grouping, selection, keyboard movement) live in
  * `lib/files-panel.ts` and the presentational pieces in `components/files/`.
  */
-import { createContext, useContext, useEffect, useId, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
@@ -26,6 +26,8 @@ import { folderTreeRows, formatSize, groupSections, isMoveKey, moveIndex, nextSe
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { openUniversalReview } from "@/components/universal-review";
+import { reviewHref as buildReviewHref } from "@/lib/open-in-review";
+import { parseFilesQuery, writeFilesQuery } from "@/lib/files-url";
 import { FileItem, FolderItem, type ItemCommon } from "@/components/files/asset-item";
 import { AssetInspector, type InspectorActions } from "@/components/files/asset-inspector";
 import { LibraryTree } from "@/components/files/library-tree";
@@ -82,14 +84,19 @@ function useAssetWrite(ownRefresh?: () => void, ownReport?: (message: string) =>
 }
 
 /**
- * Video and audio open in the review workspace rather than a preview modal. `fileId` is
- * the `File` the review is addressed by, so the link is identical to the one a project or
- * a task would produce for the same media — see `lib/review-media.ts`.
+ * Every ready file opens in the review page: video and audio in the player, images and
+ * PDFs in its viewer, anything else with a download card, always beside the comments.
+ * `fileId` is the `File` the review is addressed by, so the link is identical to the one a
+ * project or a task would produce for the same media — see `lib/open-in-review.ts`.
+ * Only the offline sample library (no `fileId`) falls back to the preview dialog.
  */
-const reviewHref = (file: LibraryFile) =>
-  (file.kind === "video" || file.kind === "audio") && file.fileId ? `/review?media=${file.fileId}` : null;
+const reviewHref = (file: LibraryFile) => file.fileId ? buildReviewHref({ mediaId: file.fileId }) : null;
 
-type Props = { view?: FilesView; projectId?: string | null; projectName?: string; clientId?: string | null; compact?: boolean };
+type Props = {
+  view?: FilesView; projectId?: string | null; projectName?: string; clientId?: string | null; compact?: boolean;
+  /** The page's query string. With `syncUrl`, folder, search, filters and sort live in the URL, so Back from review restores them. */
+  initialQuery?: string; syncUrl?: boolean;
+};
 
 /** A choice remembered in localStorage. Read after mount, so server and client render the same first frame. */
 function useStoredChoice<T extends string>(key: string, fallback: T, allowed: readonly T[]): [T, (value: T) => void] {
@@ -136,16 +143,17 @@ const VIEW_MODES = ["grid", "list"] as const;
 const DENSITIES = ["comfortable", "compact"] as const;
 const GROUPINGS = ["project", "type", "none"] as const;
 
-export function AssetLibrary({ view, projectId = null, projectName, clientId = null, compact = false }: Props) {
+export function AssetLibrary({ view, projectId = null, projectName, clientId = null, compact = false, initialQuery = "", syncUrl = false }: Props) {
+  const initial = useMemo(() => parseFilesQuery(new URLSearchParams(initialQuery)), [initialQuery]);
   const router = useRouter();
   const [writeError, setWriteError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const write = useAssetWrite(() => router.refresh(), setWriteError);
   const stored = useAssetLibrary();
-  const [folderId, setFolderIdRaw] = useState<string | null>(null); const [query, setQuery] = useState(""); const [searchEverywhere, setSearchEverywhere] = useState(false);
+  const [folderId, setFolderIdRaw] = useState<string | null>(initial.folder); const [query, setQuery] = useState(initial.q); const [searchEverywhere, setSearchEverywhere] = useState(initial.all);
   const [dialog, setDialog] = useState<"folder" | "upload" | null>(null); const [dropped, setDropped] = useState<File[]>([]);
   const [preview, setPreview] = useState<LibraryFile | null>(null);
-  const [clientFilter, setClientFilter] = useState(""); const [projectFilter, setProjectFilter] = useState(""); const [kindFilter, setKindFilter] = useState<LibraryKind | "">(""); const [stageFilter, setStageFilter] = useState(""); const [sort, setSort] = useState<SortKey>("newest");
+  const [clientFilter, setClientFilter] = useState(initial.client); const [projectFilter, setProjectFilter] = useState(initial.project); const [kindFilter, setKindFilter] = useState<LibraryKind | "">(initial.kind as LibraryKind | ""); const [stageFilter, setStageFilter] = useState(initial.stage); const [sort, setSort] = useState<SortKey>((initial.sort || "newest") as SortKey);
   const [mode, setMode] = useStoredChoice<ViewMode>("bf.files.view", "grid", VIEW_MODES);
   const [density, setDensity] = useStoredChoice<Density>("bf.files.density", "comfortable", DENSITIES);
   const [groupBy, setGroupBy] = useStoredChoice<GroupBy>(compact ? "bf.files.group.project" : "bf.files.group", compact ? "type" : "project", GROUPINGS);
@@ -303,10 +311,25 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
     setSort("newest"); setSearchEverywhere(false);
   };
 
+  // Mirrors folder, search, filters and sort into /files?…, replacing the entry so Back
+  // from review returns to exactly this view (and a refresh keeps it).
+  useEffect(() => {
+    if (!syncUrl) return;
+    const params = writeFilesQuery({ folder: folderId, q: query, all: searchEverywhere, client: clientFilter, project: projectFilter, kind: kindFilter, stage: stageFilter, sort: sort === "newest" ? "" : sort }, new URLSearchParams(window.location.search));
+    const next = `${window.location.pathname}${params.size ? `?${params.toString()}` : ""}`;
+    if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(window.history.state, "", next);
+  }, [syncUrl, folderId, query, searchEverywhere, clientFilter, projectFilter, kindFilter, stageFilter, sort]);
+
   /* ---------------------------------------------------------------- entity actions */
+  // A double-click is two clicks: the first already opened the file, so the second (and the
+  // dblclick itself) must not queue a second navigation.
+  const opening = useRef<string | null>(null);
   const openEntity = (entity: LibraryFile | LibraryFolder) => {
     if (!("kind" in entity)) { setFolderId(entity.id); return; }
     if (isProcessing(entity)) return;
+    if (opening.current === entity.id) return;
+    opening.current = entity.id;
+    window.setTimeout(() => { if (opening.current === entity.id) opening.current = null; }, 800);
     const review = reviewHref(entity);
     if (review) openUniversalReview({ href: review, title: entity.name }); else setPreview(entity);
   };
@@ -405,12 +428,17 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") { event.preventDefault(); setSelection({ selected: new Set(order), anchor: order[0] ?? null }); return; }
     if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") { event.preventDefault(); setMenuFor(id); }
   };
+  /**
+   * A plain click opens: a file in review, a folder in place — like Frame.io, and what
+   * people expect from a media library. Selection stays one modifier away: the checkbox
+   * (on hover), Cmd/Ctrl-click to toggle, Shift-click for a range, Space from the keyboard.
+   * The details panel follows the selection and is also one click away in the ⋯ menu.
+   */
   const onPointerSelect = (event: ReactMouseEvent, entity: LibraryFile | LibraryFolder) => {
     if ((event.target as HTMLElement).closest("input, button, a, [role=menu]")) return;
     const selectMode = event.shiftKey ? "range" : event.metaKey || event.ctrlKey ? "toggle" : "replace";
-    if (phone && selectMode === "replace" && !("kind" in entity)) { setFolderId(entity.id); return; }
+    if (selectMode === "replace" && !renaming) { setFocusedId(entity.id); openEntity(entity); return; }
     select(entity.id, selectMode);
-    if (phone && selectMode === "replace") setSheetOpen(true);
   };
 
   // Page-level shortcuts: N new folder, U upload, / search, ] details panel.
@@ -870,7 +898,7 @@ function ItemMenu({ entity, folders, view, open, onOpenChange, returnFocus, onOp
       <DropdownMenuTrigger className="fx-menu-trigger" tabIndex={-1} aria-label={`Actions for ${entity.name}`} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}><Ellipsis /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="fx-menu" onCloseAutoFocus={(event) => { event.preventDefault(); returnFocus(); }}>
         {!isFile && <DropdownMenuItem onSelect={onOpen}><FolderOpen />Open</DropdownMenuItem>}
-        {review && <DropdownMenuItem onSelect={onOpen}><Clapperboard />Open review</DropdownMenuItem>}
+        {review && <DropdownMenuItem onSelect={onOpen}><Clapperboard />Open in review</DropdownMenuItem>}
         {isFile && !review && <DropdownMenuItem onSelect={onOpen}><Eye />Preview</DropdownMenuItem>}
         <DropdownMenuItem onSelect={onDetails}><Info />Details</DropdownMenuItem>
         <DropdownMenuItem onSelect={onRename}><Pencil />Rename</DropdownMenuItem>

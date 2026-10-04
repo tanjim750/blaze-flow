@@ -12,8 +12,9 @@ import { toast } from "sonner";
 import { Columns3, LayoutList, Plus, Settings2, TriangleAlert, X } from "lucide-react";
 import type { ProjectFile, Task, TaskAttachment } from "@/lib/api";
 import type { TasksView } from "@/lib/tasks-view";
-import { updateAssetFile } from "@/lib/asset-api-client";
+import { updateAssetFile, uploadAssetFile } from "@/lib/asset-api-client";
 import { openUniversalReview } from "@/components/universal-review";
+import { reviewHref, taskOpenTarget, type LinkedCandidate } from "@/lib/open-in-review";
 import {
   activeFilterCount, applyMove, dueState, EMPTY_FILTERS, groupByStage, matchTask, moveGuard, parseFilters, positionOf, stageIdOf, toBoardStages, writeFilters,
   type BoardStage, type FilterContext, type MoveGuard, type TaskFilters,
@@ -213,10 +214,34 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
       return true;
     } catch (error) { toast.error("Couldn't attach the file", { description: errorText(error) }); return false; }
   }
-  function review(file: ProjectFile) {
-    setOpenTaskId(null);
-    openUniversalReview({ href: `/review?media=${file.file.id}`, title: file.file.name });
+  async function uploadAndAttach(task: Task, file: File): Promise<boolean> {
+    if (!view.workspaceId) return false;
+    try {
+      const uploaded = await uploadAssetFile(view.workspaceId, file, { client_team_id: clientOf(task), project_id: task.project_id, folder_id: null });
+      setFiles((current) => [...current, uploaded]);
+      return await attach(task, uploaded);
+    } catch (error) { toast.error(`Couldn't upload ${file.name}`, { description: errorText(error) }); return false; }
   }
+  /** A file card on the board, or an attachment in the sheet (then with its task beside it). */
+  function review(fileId: string, title: string, taskId: string | null = null) {
+    setOpenTaskId(null);
+    openUniversalReview({ href: reviewHref({ mediaId: fileId, taskId }), title });
+  }
+  const knownFile = useCallback((fileId: string): LinkedCandidate | null => {
+    const file = fileBySourceId.get(fileId);
+    return file ? { fileId, mimeType: file.file.mime_type, versionNumber: file.version_number } : null;
+  }, [fileBySourceId]);
+  /**
+   * Clicking a task opens what it is about: its primary linked cut in review, with the task
+   * panel beside the player. A task with nothing linked opens the detail sheet, which asks
+   * for a cut. The sheet is always one click away through the card's Details button and
+   * the ⋯ menu.
+   */
+  const activate = useCallback((task: Task) => {
+    const target = taskOpenTarget(task, knownFile, null);
+    if (target.kind === "review") openUniversalReview({ href: target.href, title: task.title });
+    else setOpenTaskId(task.id);
+  }, [knownFile]);
   const reopenTarget = stages.find((stage) => stage.kind === "revisions") ?? stages.find((stage) => !stage.isDone);
 
   // --- Shortcuts -----------------------------------------------------------------------
@@ -262,11 +287,11 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
     {mode === "board"
       ? <KanbanBoard
           columns={columns} filtersActive={filterCount > 0} contextOf={contextOf} fileContextOf={(file) => contextOf({ client_team_id: file.client_team_id, project_id: file.project_id })}
-          coverOf={coverOf} onOpen={(task) => setOpenTaskId(task.id)} onOpenFile={review}
+          coverOf={coverOf} onOpen={activate} onDetails={(task) => setOpenTaskId(task.id)} onOpenFile={(file) => review(file.file.id, file.file.name)}
           onMove={requestMove} onMoveFile={(file, stageId) => void moveFile(file, stageId)} onDelete={setPendingDelete}
           onCreate={quickCreate} quickAddStage={quickAddStage} setQuickAddStage={setQuickAddStage} menuFor={menuFor} setMenuFor={setMenuFor}
         />
-      : <BoardList columns={columns} contextOf={contextOf} onOpen={(task) => setOpenTaskId(task.id)} onMove={requestMove} onDelete={setPendingDelete} menuFor={menuFor} setMenuFor={setMenuFor} />}
+      : <BoardList columns={columns} contextOf={contextOf} onOpen={activate} onDetails={(task) => setOpenTaskId(task.id)} onMove={requestMove} onDelete={setPendingDelete} menuFor={menuFor} setMenuFor={setMenuFor} />}
 
     {empty && <div className="tb-empty" role="status">
       <strong>{filterCount ? "No matching tasks" : "No tasks yet"}</strong>
@@ -285,8 +310,9 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
       onMove={(stageId) => openTask && requestMove(openTask, stageId, null, "sheet")}
       onReopen={() => openTask && reopenTarget && requestMove(openTask, reopenTarget.id, null, "sheet")}
       onDelete={() => openTask && setPendingDelete(openTask)}
-      onReview={review}
+      onReview={(fileId, title) => review(fileId, title, openTask?.id ?? null)}
       onAttach={(file) => openTask ? attach(openTask, file) : Promise.resolve(false)}
+      onUpload={(file) => openTask ? uploadAndAttach(openTask, file) : Promise.resolve(false)}
     />
 
     <ConfirmDialog

@@ -115,7 +115,7 @@ describe("AssetLibrary", () => {
     expect(item.closest("[role=grid]")).toHaveAttribute("aria-label", "Summer Campaign");
     expect(within(item).getByText("Internal QA")).toBeInTheDocument();
     // Selecting it fills the inspector with the link and the stage.
-    fireEvent.click(item);
+    fireEvent.click(item, { metaKey: true });
     const inspector = screen.getByRole("complementary", { name: "Video" });
     expect(within(inspector).getByText("Linked to").nextElementSibling?.textContent).toBe("Acme / Summer Campaign");
     expect(within(inspector).getByRole("button", { name: /^Stage: Internal QA/ })).toBeInTheDocument();

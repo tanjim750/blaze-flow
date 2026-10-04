@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from "react";
 import {
-  ChevronFirst, ChevronLast, Circle, Crosshair, Film, Gauge, Loader2, Maximize2, MonitorPlay,
+  AudioLines, ChevronFirst, ChevronLast, Circle, Crosshair, Download, ExternalLink, FileText, Film, Gauge, ImageOff, Loader2, Maximize2, MonitorPlay,
   MoveUpRight, Pause, PencilLine, Play, RotateCw, Square, Trash2, Type, Volume2, VolumeX,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { AnnotationElement } from "@/lib/api";
 import type { ReviewNote } from "@/lib/review-notes";
 import { timecode } from "@/lib/timecode";
+import type { ReviewSurface } from "@/lib/open-in-review";
 import { playerShouldIgnoreKey } from "./player-keys";
 import {
   BUFFERING_DELAY_MS, bufferedSpans, canSeekTo, clampSeekMs, describePlaybackError,
@@ -34,6 +35,13 @@ const DEFAULT_FPS = 25;
 
 type Props = {
   handle: RefObject<PlayerHandle | null>;
+  /**
+   * How the file is shown. Video (and audio, through the same element) gets the full
+   * player; an image gets the frame with drawing tools but no timeline; a PDF opens in the
+   * browser's viewer; anything else gets a download card. Comments sit beside all of them.
+   */
+  surface?: ReviewSurface;
+  downloadHref?: string | null;
   sources: PlayerSource[];
   title: string;
   notes: ReviewNote[];
@@ -48,7 +56,49 @@ type Props = {
   onFocusNote: (noteId: string) => void;
 };
 
-export function Player({ handle, sources, title, notes, annotations, pending, canDraw, onTime, onMeta, onDraw, onDeleteAnnotation, onFocusNote }: Props) {
+export function Player(props: Props) {
+  const surface = props.surface ?? "video";
+  if (surface === "pdf" || surface === "download") return <DocumentViewer {...props} surface={surface} />;
+  return <MediaPlayer {...props} surface={surface} />;
+}
+
+/** `?inline=1` asks the download route to serve an image or PDF for display, not as an attachment. */
+export function inlineSrc(src: string): string {
+  if (!src.includes("/asset-files/") || !src.includes("/download/")) return src;
+  return src.includes("?") ? `${src}&inline=1` : `${src}?inline=1`;
+}
+
+/** A PDF in the browser's own viewer, or a download card for a type nothing can preview. */
+function DocumentViewer({ sources, title, surface, downloadHref }: Props & { surface: "pdf" | "download" }) {
+  const source = sources[0] ?? null;
+  return (
+    <section className="rvp is-document">
+      <div className="rvp-stage is-document">
+        {surface === "pdf" && source ? (
+          <iframe className="rvp-doc" src={inlineSrc(source.src)} title={`${title} (PDF)`} />
+        ) : (
+          <div className="rvp-empty">
+            <FileText size={28} />
+            <strong>{title}</strong>
+            <p>This file type can&rsquo;t be previewed here. Download it to open it, and keep the feedback in the comments.</p>
+            {downloadHref && <a className="rvp-retry" href={downloadHref} download><Download size={14} /> Download</a>}
+          </div>
+        )}
+      </div>
+      <div className="rvp-transport is-document">
+        <span className="rvp-doc-label"><FileText size={14} aria-hidden="true" />{surface === "pdf" ? "PDF" : "File"} · comments apply to the whole file</span>
+        <span className="rvp-spacer" />
+        {surface === "pdf" && source && <a className="rvp-doc-link" href={inlineSrc(source.src)} target="_blank" rel="noreferrer"><ExternalLink size={14} />Open in new tab</a>}
+        {downloadHref && <a className="rvp-doc-link" href={downloadHref} download><Download size={14} />Download</a>}
+      </div>
+    </section>
+  );
+}
+
+function MediaPlayer({ handle, sources, title, notes, annotations, pending, canDraw, onTime, onMeta, onDraw, onDeleteAnnotation, onFocusNote, surface }: Props & { surface: "video" | "audio" | "image" }) {
+  const still = surface === "image";
+  const image = useRef<HTMLImageElement>(null);
+  const [imageFailed, setImageFailed] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const [sourceId, setSourceId] = useState(sources[0]?.id ?? "");
@@ -68,6 +118,19 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
   /** While the scrubber is being dragged, the position under the pointer. */
   const [dragMs, setDragMs] = useState<number | null>(null);
   const [shape, setShape] = useState<{ width: number; height: number } | null>(null);
+  // A still reports its size once decoded; like the video, it may decode before hydration.
+  const onMetaRef = useRef(onMeta);
+  useEffect(() => { onMetaRef.current = onMeta; }, [onMeta]);
+  const imageLoaded = useCallback(() => {
+    const element = image.current;
+    if (!element || !element.naturalWidth) return;
+    setShape({ width: element.naturalWidth, height: element.naturalHeight });
+    onMetaRef.current({ durationMs: 0, width: element.naturalWidth, height: element.naturalHeight });
+  }, []);
+  useEffect(() => {
+    // Reads an image that finished loading before hydration attached onLoad.
+    if (still && image.current?.complete) imageLoaded();
+  }, [still, imageLoaded]);
   const [tool, setTool] = useState<DrawTool | null>(null);
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [path, setPath] = useState<{ x: number; y: number }[]>([]);
@@ -288,7 +351,7 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
     seek(target);
   };
 
-  const markers = notes.filter((note) => note.startMs !== null);
+  const markers = still ? [] : notes.filter((note) => note.startMs !== null);
   // The playhead shows a drag or a seek in flight; the clock only ever shows the real time.
   const headMs = dragMs ?? seekTarget ?? positionMs;
   const progress = durationMs ? Math.min(100, (headMs / durationMs) * 100) : 0;
@@ -316,7 +379,18 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
           * made against.
           */}
         <div className={shape ? "rvp-frame" : "rvp-frame is-unsized"} style={shape ? { aspectRatio: `${shape.width} / ${shape.height}` } : undefined}>
-        {source ? (
+        {source && still ? (
+          // eslint-disable-next-line @next/next/no-img-element -- streamed through the API with the session cookie; next/image would proxy it without one
+          <img
+            ref={image}
+            src={inlineSrc(source.src)}
+            alt={title}
+            className={imageFailed ? "rvp-still is-failed" : "rvp-still"}
+            onLoad={imageLoaded}
+            onError={() => setImageFailed(true)}
+            draggable={false}
+          />
+        ) : source ? (
           <video
             ref={video}
             src={source.src}
@@ -390,11 +464,21 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
           />
         )}
 
+        {still && imageFailed && (
+          <div className="rvp-empty rvp-error" role="alert">
+            <ImageOff size={28} />
+            <strong>Image unavailable</strong>
+            <p>The image couldn&rsquo;t be loaded. It may still be processing, or it was removed.</p>
+          </div>
+        )}
+        {surface === "audio" && !failed && (
+          <div className="rvp-audio" aria-hidden="true"><AudioLines size={40} /><span>{title}</span></div>
+        )}
         <div className="rvp-badge">{title}</div>
         </div>
       </div>
 
-      <div className="rvp-timeline">
+      {!still && <div className="rvp-timeline">
         <div
           className={`rvp-scrub ${dragMs !== null ? "is-dragging" : ""}`}
           role="presentation"
@@ -423,10 +507,11 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
             </button>
           ))}
         </div>
-      </div>
+      </div>}
 
-      <div className="rvp-transport">
-        <div className="rvp-group">
+      <div className={`rvp-transport ${still ? "is-still" : ""}`}>
+        {still && <span className="rvp-doc-label">Image{shape ? ` · ${shape.width} × ${shape.height}` : ""} · comments apply to the whole image</span>}
+        {!still && <><div className="rvp-group">
           <button type="button" onClick={() => step(-1)} aria-label="Previous frame" title="Previous frame (←)"><ChevronFirst /></button>
           <button type="button" className="rvp-play" onClick={toggle} aria-label={playing ? "Pause" : "Play"} title="Play / pause (space)" disabled={!source || failed}>
             {playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}
@@ -457,7 +542,8 @@ export function Player({ handle, sources, title, notes, annotations, pending, ca
           </select>
         </label>
 
-        {sources.length > 1 && (
+        </>}
+        {!still && sources.length > 1 && (
           <label className="rvp-select" title="Playback source">
             <MonitorPlay />
             <select value={sourceId} aria-label="Playback quality" onChange={(event) => setSourceId(event.target.value)}>

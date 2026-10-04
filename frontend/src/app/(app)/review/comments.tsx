@@ -34,6 +34,8 @@ type Props = {
   hiddenTeamNotes: number;
   onClientPreview: (on: boolean) => void;
   onComposerChange: (state: ComposerState) => void;
+  /** False for stills and documents: there is no timeline, so the copy stops talking about moments. */
+  timed?: boolean;
 };
 
 /**
@@ -96,7 +98,7 @@ function CompareFeeds({ view, writer, compareWriter, clientPreview, onSeek }: {
 
 export function Comments({
   view, writer, compareWriter, notes, positionMs, focusedId, pendingAnnotation, onClearAnnotation, onSeek, onCompareSeek,
-  canWriteTeam, clientPreview, hiddenTeamNotes, onClientPreview, onComposerChange,
+  canWriteTeam, clientPreview, hiddenTeamNotes, onClientPreview, onComposerChange, timed = true,
 }: Props) {
   const [replyTo, setReplyTo] = useState<ReviewNote | null>(null);
   const [showResolved, setShowResolved] = useState(false);
@@ -166,11 +168,12 @@ export function Comments({
       <div className="rvc-feed" ref={feed}>
         {ordered.length === 0 && (
           <p className="rvc-empty">
-            No comments on this cut yet. Scrub to a moment and leave the first note.
+            {timed ? "No comments on this cut yet. Scrub to a moment and leave the first note." : "No comments on this file yet. Leave the first note."}
           </p>
         )}
         {ordered.map((note) => (
           <Note
+            timed={timed}
             key={note.id}
             note={note}
             view={view}
@@ -189,6 +192,7 @@ export function Comments({
         </p>
       ) : (
         <Composer
+          timed={timed}
           view={view}
           writer={writer}
           positionMs={positionMs}
@@ -220,8 +224,8 @@ function TeamBadge() {
   );
 }
 
-function Note({ note, target, writer, focused, onSeek, onReply }: {
-  note: ReviewNote; view: ReviewView; target: ReviewView["target"]; writer: ReviewWriter; focused: boolean;
+function Note({ note, target, writer, focused, onSeek, onReply, timed = true }: {
+  timed?: boolean; note: ReviewNote; view: ReviewView; target: ReviewView["target"]; writer: ReviewWriter; focused: boolean;
   onSeek: (ms: number) => void;
   /** Omitted where there is no composer to reply with, so no dead Reply button is drawn. */
   onReply?: (note: ReviewNote) => void;
@@ -241,7 +245,7 @@ function Note({ note, target, writer, focused, onSeek, onReply }: {
       </div>
 
       <p className="rvc-body">
-        {note.timecode && (
+        {timed && note.timecode && (
           <button type="button" className="rvc-stamp" onClick={() => note.startMs !== null && onSeek(note.startMs)}>
             {note.timecode}
           </button>
@@ -328,8 +332,8 @@ function Mentioned({ text, mentions }: { text: string; mentions: { id: string; n
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWriteTeam, onCancelReply, pendingAnnotation, onClearAnnotation, onChange: report }: {
-  view: ReviewView; writer: ReviewWriter; positionMs: number; replyTo: ReviewNote | null;
+function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWriteTeam, onCancelReply, pendingAnnotation, onClearAnnotation, onChange: report, timed = true }: {
+  timed?: boolean; view: ReviewView; writer: ReviewWriter; positionMs: number; replyTo: ReviewNote | null;
   onReplyTo: (note: ReviewNote) => void; notes: ReviewNote[]; canWriteTeam: boolean;
   onCancelReply: () => void; pendingAnnotation: AnnotationElement | null; onClearAnnotation: () => void;
   onChange: (state: ComposerState) => void;
@@ -499,7 +503,7 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
         aria-label="Comment"
         placeholder={disabled
           ? "Comments are unavailable for this cut."
-          : `${team ? "Team-only note" : "Leave a comment"}${startMs !== null ? ` at ${timecode(startMs)}` : ""}… use @ to mention`}
+          : `${team ? "Team-only note" : "Leave a comment"}${timed && startMs !== null ? ` at ${timecode(startMs)}` : ""}… use @ to mention`}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit(); } }}
       />
@@ -511,7 +515,9 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
       {writer.error && <p className="form-error">{writer.error}</p>}
 
       <div className="rvc-send">
-        {replyTo
+        {!timed
+          ? <small>{replyTo ? "Replying in the thread" : "Comments apply to the whole file"}</small>
+          : replyTo
           ? <small>Replies inherit their parent&rsquo;s timecode</small>
           : (
             <label className="rvc-pin">

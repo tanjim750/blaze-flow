@@ -1,53 +1,60 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
-import { openUniversalReview, UniversalReviewLayout } from "./universal-review";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { openUniversalReview, REVIEW_FROM_KEY, UniversalReviewLayout } from "./universal-review";
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 afterEach(() => {
   cleanup();
-  window.localStorage.clear();
+  push.mockReset();
+  window.sessionStorage.clear();
+  window.history.replaceState(null, "", "/");
 });
 
 describe("UniversalReviewLayout", () => {
-  it("opens programmatic video requests in the shared review workspace", () => {
+  it("opens review as a full page and carries the current page as the way back", () => {
+    window.history.replaceState(null, "", "/files?folder=f1&q=hero");
     render(
       <UniversalReviewLayout pathname="/files">
         <button onClick={() => openUniversalReview({ href: "/review?media=file-1", title: "Hero cut.mov" })}>Open video</button>
       </UniversalReviewLayout>,
     );
-
     fireEvent.click(screen.getByRole("button", { name: "Open video" }));
-
-    expect(screen.getByTitle("Review Hero cut.mov")).toHaveAttribute("src", "/review-embed?media=file-1");
-    expect(screen.getByRole("link", { name: "Open full review" })).toHaveAttribute("href", "/review?media=file-1");
-    expect(screen.getByRole("slider", { name: "Resize review workspace" })).toBeInTheDocument();
+    expect(push).toHaveBeenCalledWith("/review?media=file-1&from=%2Ffiles%3Ffolder%3Df1%26q%3Dhero");
+    expect(window.sessionStorage.getItem(REVIEW_FROM_KEY)).toBe("/files?folder=f1&q=hero");
+    // No split pane or iframe any more: review is never squeezed beside the page.
+    expect(document.querySelector("iframe")).toBeNull();
   });
 
-  it("intercepts ordinary review links so server-rendered pages use the same UI", async () => {
+  it("keeps an explicit way back that the link already has", () => {
     render(
-      <UniversalReviewLayout pathname="/deliverables">
-        <a href="/review?media=file-2"><h2>Client master.mp4</h2></a>
+      <UniversalReviewLayout pathname="/tasks">
+        <button onClick={() => openUniversalReview({ href: "/review?media=f&from=%2Ftasks%3Fq%3Dx" })}>Open</button>
       </UniversalReviewLayout>,
     );
-
-    fireEvent.click(screen.getByRole("link", { name: "Client master.mp4" }));
-
-    expect(screen.getByTitle("Review Client master.mp4")).toHaveAttribute("src", "/review-embed?media=file-2");
-    fireEvent.click(screen.getByRole("button", { name: "Close review" }));
-    await waitFor(() => expect(screen.queryByTitle("Review Client master.mp4")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    expect(push).toHaveBeenCalledWith("/review?media=f&from=%2Ftasks%3Fq%3Dx");
   });
 
-  it("gets out of the way when the explicit full review route opens", async () => {
-    const rendered = render(
+  it("ignores anything that is not a review link", () => {
+    render(
       <UniversalReviewLayout pathname="/files">
-        <button onClick={() => openUniversalReview({ href: "/review?media=file-3", title: "Full cut.mov" })}>Open video</button>
+        <button onClick={() => openUniversalReview({ href: "https://evil.example/review?media=x" })}>Open</button>
       </UniversalReviewLayout>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Open video" }));
-    expect(screen.getByTitle("Review Full cut.mov")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    expect(push).not.toHaveBeenCalled();
+  });
 
-    rendered.rerender(<UniversalReviewLayout pathname="/review"><div>Full review page</div></UniversalReviewLayout>);
-
-    await waitFor(() => expect(screen.queryByTitle("Review Full cut.mov")).not.toBeInTheDocument());
-    expect(screen.getByText("Full review page")).toBeInTheDocument();
+  it("remembers where a plain review link was clicked from", () => {
+    window.history.replaceState(null, "", "/?view=editor");
+    render(
+      <UniversalReviewLayout pathname="/">
+        <a href="/review?media=file-2" onClick={(event) => event.preventDefault()}>Note</a>
+      </UniversalReviewLayout>,
+    );
+    fireEvent.click(screen.getByRole("link", { name: "Note" }));
+    expect(window.sessionStorage.getItem(REVIEW_FROM_KEY)).toBe("/?view=editor");
   });
 });

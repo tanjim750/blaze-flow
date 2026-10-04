@@ -31,9 +31,12 @@ export function coverFor(task: Task, fileBySourceId: Map<string, ProjectFile>): 
 type CardProps = HTMLAttributes<HTMLElement> & {
   task: Task; stage: BoardStage; context: string; cover: Cover; done: boolean;
   menu?: ReactNode; dragging?: boolean; overlay?: boolean; dropBefore?: boolean;
+  /** Opens the detail sheet. The card itself opens the linked cut in review when it has one. */
+  onDetails?: () => void;
 };
 
-export const TaskCardView = forwardRef<HTMLElement, CardProps>(function TaskCardView({ task, stage, context, cover, done, menu, dragging, overlay, dropBefore, className, style, ...rest }, ref) {
+export const TaskCardView = forwardRef<HTMLElement, CardProps>(function TaskCardView({ task, stage, context, cover, done, menu, dragging, overlay, dropBefore, onDetails, className, style, ...rest }, ref) {
+  const linked = Boolean(task.attachment_file_ids?.length);
   const assignee = task.assignees[0];
   const extra = task.assignees.length - 1;
   return <article
@@ -41,10 +44,13 @@ export const TaskCardView = forwardRef<HTMLElement, CardProps>(function TaskCard
     className={`tb-card ${dragging ? "is-placeholder" : ""} ${overlay ? "is-overlay" : ""} ${dropBefore ? "is-drop-before" : ""} ${done ? "is-done" : ""} ${className ?? ""}`}
     style={{ ...style, "--tb-rule": stageTone(stage).dot } as CSSProperties}
     data-task-id={task.id}
+    data-opens={linked ? "review" : "details"}
+    title={linked ? "Open in review" : "Open details"}
     {...rest}
   >
     {cover && <div className="tb-card-cover">
       <Poster src={cover.poster} kind={cover.kind} />
+      {linked && <span className="tb-card-open" aria-hidden="true"><Clapperboard />Review</span>}
       {(cover.runtime || cover.version) && <span className="tb-card-slate">{[cover.version ? `V${cover.version}` : null, cover.runtime].filter(Boolean).join(" · ")}</span>}
     </div>}
     <div className="tb-card-body">
@@ -55,7 +61,10 @@ export const TaskCardView = forwardRef<HTMLElement, CardProps>(function TaskCard
         <DueChip dueAt={task.due_at} done={done} />
         <span className="tb-spacer" />
         {cover && cover.comments > 0 && <span className="tb-notes" title={`${cover.comments} review note${cover.comments === 1 ? "" : "s"} on ${cover.name}`}><MessageSquare aria-hidden="true" />{cover.comments}<span className="tb-sr"> review notes</span></span>}
+        {linked && !cover && <span className="tb-notes" title="Opens the linked cut in review"><Clapperboard aria-hidden="true" /><span className="tb-sr">Has a linked cut</span></span>}
         <PriorityIcon priority={task.priority} />
+        {onDetails && <button type="button" className="tb-icon-button tb-card-details" data-no-dnd aria-label={`Details for ${task.title}`} title="Details"
+          onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails(); }}><PanelRightOpen aria-hidden="true" /></button>}
         {menu}
       </div>
     </div>
@@ -123,7 +132,7 @@ export function FileMenu({ file, stages, current, onMove, onOpen }: { file: Proj
       <button type="button" className="tb-icon-button tb-card-menu" aria-label={`Actions for ${file.file.name}`} data-no-dnd onPointerDown={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}><Ellipsis aria-hidden="true" /></button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" className="tb-menu" onCloseAutoFocus={(event) => event.preventDefault()}>
-      <DropdownMenuItem onSelect={onOpen}><PanelRightOpen />Open review</DropdownMenuItem>
+      <DropdownMenuItem onSelect={onOpen}><Clapperboard />Open in review</DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuLabel className="tb-menu-label">Move to</DropdownMenuLabel>
       {stages.map((stage) => <DropdownMenuItem key={stage.id} disabled={stage.id === current} onSelect={() => onMove(stage.id)}><StageIcon stage={stage} />{stage.name}{stage.id === current && <span className="tb-menu-meta">Current</span>}</DropdownMenuItem>)}
