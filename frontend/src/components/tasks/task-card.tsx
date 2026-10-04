@@ -73,7 +73,7 @@ export const TaskCardView = forwardRef<HTMLElement, CardProps>(function TaskCard
 
 export function CardMenu({ task, stages, current, counts, open, onOpenChange, onOpenDetails, onMove, onMoveEdge, onDelete, canReorder }: {
   task: Task; stages: readonly BoardStage[]; current: string; counts: Map<string, number>; open?: boolean; onOpenChange?: (open: boolean) => void;
-  onOpenDetails: () => void; onMove: (stageId: string) => void; onMoveEdge?: (edge: "top" | "bottom") => void; onDelete: () => void; canReorder?: boolean;
+  onOpenDetails: () => void; onMove?: (stageId: string) => void; onMoveEdge?: (edge: "top" | "bottom") => void; onDelete?: () => void; canReorder?: boolean;
 }) {
   return <DropdownMenu open={open} onOpenChange={onOpenChange}>
     <DropdownMenuTrigger asChild>
@@ -81,18 +81,18 @@ export function CardMenu({ task, stages, current, counts, open, onOpenChange, on
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" className="tb-menu" onCloseAutoFocus={(event) => event.preventDefault()}>
       <DropdownMenuItem onSelect={onOpenDetails}><PanelRightOpen />Open details</DropdownMenuItem>
-      <DropdownMenuSeparator />
+      {onMove && <><DropdownMenuSeparator />
       <DropdownMenuGroup aria-label="Move to stage">
         <DropdownMenuLabel className="tb-menu-label">Move to</DropdownMenuLabel>
         {stages.map((stage, index) => <DropdownMenuItem key={stage.id} disabled={stage.id === current} onSelect={() => onMove(stage.id)} aria-label={`Move to ${stage.name}${stage.id === current ? " (current stage)" : ""}`}>
           <StageIcon stage={stage} />{stage.name}<span className="tb-menu-meta">{stage.id === current ? "Current" : <><span className="tb-count">{counts.get(stage.id) ?? 0}</span><kbd>{index + 1}</kbd></>}</span>
         </DropdownMenuItem>)}
-      </DropdownMenuGroup>
+      </DropdownMenuGroup></>}
       {canReorder && onMoveEdge && <><DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => onMoveEdge("top")}><ArrowUpToLine />Move to top</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onMoveEdge("bottom")}><ArrowDownToLine />Move to bottom</DropdownMenuItem></>}
-      <DropdownMenuSeparator />
-      <DropdownMenuItem variant="destructive" onSelect={onDelete}><Trash2 />Delete task…</DropdownMenuItem>
+      {onDelete && <><DropdownMenuSeparator />
+      <DropdownMenuItem variant="destructive" onSelect={onDelete}><Trash2 />Delete task…</DropdownMenuItem></>}
     </DropdownMenuContent>
   </DropdownMenu>;
 }

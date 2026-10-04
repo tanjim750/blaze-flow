@@ -40,6 +40,10 @@ export type KanbanProps = {
   setQuickAddStage: (stageId: string | null) => void;
   menuFor: string | null;
   setMenuFor: (taskId: string | null) => void;
+  /** Read-only viewers (clients, view-only roles) get no quick add, no drag and no move/delete menu. */
+  canCreate?: boolean;
+  canMove?: boolean;
+  canDelete?: boolean;
 };
 
 const EMPTY_COPY: Record<string, string> = {
@@ -176,7 +180,7 @@ function Column({ column, isOver, dropBeforeId, activeId, ...props }: KanbanProp
       <span className="tb-count" aria-label={props.filtersActive ? `${shown} of ${total} tasks shown` : `${total} items`}>{count}</span>
       {stage.wipLimit ? <span className={`tb-wip ${wip ? `is-${wip}` : ""}`} title={`Work-in-progress limit ${stage.wipLimit}`}>{tasks.length}/{stage.wipLimit}<span className="tb-sr"> WIP</span></span> : null}
       <span className="tb-spacer" />
-      {!guarded && <button type="button" className="tb-icon-button" aria-label={`Add task to ${stage.name}`} onClick={() => props.setQuickAddStage(stage.id)}><Plus aria-hidden="true" /></button>}
+      {!guarded && props.canCreate !== false && <button type="button" className="tb-icon-button" aria-label={`Add task to ${stage.name}`} onClick={() => props.setQuickAddStage(stage.id)}><Plus aria-hidden="true" /></button>}
     </header>
     <div ref={setNodeRef} className="tb-column-body">
       <SortableContext id={stage.id} items={[...tasks.map((task) => taskKey(task.id)), ...files.map((file) => fileKey(file.id))]} strategy={verticalListSortingStrategy}>
@@ -186,24 +190,26 @@ function Column({ column, isOver, dropBeforeId, activeId, ...props }: KanbanProp
       {!shown && <p className={`tb-column-empty ${activeId ? "is-target" : ""}`}>{props.filtersActive ? "No matches" : EMPTY_COPY[stage.kind] ?? "No tasks yet"}</p>}
       {isOver && dropBeforeId === null && shown > 0 && <span className="tb-drop-line" aria-hidden="true" />}
     </div>
-    <footer className="tb-column-foot">
+    {props.canCreate !== false && <footer className="tb-column-foot">
       <QuickAdd
         stageName={stage.name} open={props.quickAddStage === stage.id}
         onOpenChange={(open) => props.setQuickAddStage(open ? stage.id : null)}
         onCreate={(title) => props.onCreate(stage.id, title)}
         disabledReason={guarded ? `Add tasks in an earlier stage, then move them to ${stage.name}.` : null}
       />
-    </footer>
+    </footer>}
   </section>;
 }
 
 function SortableTask({ task, stage, position, size, counts, stages, dropBefore, ...props }: KanbanProps & { task: Task; stage: BoardStage; position: number; size: number; counts: Map<string, number>; stages: BoardStage[]; dropBefore: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: taskKey(task.id), data: { type: "task", stageId: stage.id } });
+  const canMove = props.canMove !== false;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: taskKey(task.id), data: { type: "task", stageId: stage.id }, disabled: !canMove });
   const style: CSSProperties = { transform: CSS.Translate.toString(transform), transition };
   const menuOpen = props.menuFor === task.id;
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (!event.currentTarget.contains(event.target as Node) || event.target !== event.currentTarget) return;
     if (event.key === "Enter") { event.preventDefault(); props.onOpen(task); return; }
+    if (!canMove) return;
     if (event.key.toLowerCase() === "m" && !event.metaKey && !event.ctrlKey) { event.preventDefault(); props.setMenuFor(task.id); return; }
     const digit = Number(event.key);
     if (Number.isInteger(digit) && digit >= 1 && digit <= stages.length && !event.metaKey && !event.ctrlKey && !event.altKey) {
@@ -222,21 +228,22 @@ function SortableTask({ task, stage, position, size, counts, stages, dropBefore,
     ref={setNodeRef} style={style} task={task} stage={stage} context={props.contextOf(task)} cover={props.coverOf(task)} done={stage.isDone}
     dragging={isDragging} dropBefore={dropBefore}
     {...attributes} {...listeners}
-    role="button" aria-roledescription="draggable task" aria-describedby={attributes["aria-describedby"]}
+    role="button" aria-roledescription={canMove ? "draggable task" : "task"} aria-describedby={canMove ? attributes["aria-describedby"] : undefined}
     aria-label={`${task.title}. ${stage.name}, ${position + 1} of ${size}.`}
     onKeyDown={onKeyDown} onClick={onClick} onDetails={() => props.onDetails(task)}
-    menu={<CardMenu task={task} stages={stages} current={stage.id} counts={counts} open={menuOpen} onOpenChange={(open) => props.setMenuFor(open ? task.id : null)}
-      onOpenDetails={() => props.onDetails(task)} onMove={(stageId) => props.onMove(task, stageId, null, "menu")}
-      onMoveEdge={(edge) => props.onMove(task, stage.id, edge === "top" ? 0 : size - 1, "menu")} canReorder={size > 1} onDelete={() => props.onDelete(task)} />}
+    menu={canMove || props.canDelete !== false ? <CardMenu task={task} stages={stages} current={stage.id} counts={counts} open={menuOpen} onOpenChange={(open) => props.setMenuFor(open ? task.id : null)}
+      onOpenDetails={() => props.onDetails(task)} onMove={canMove ? (stageId) => props.onMove(task, stageId, null, "menu") : undefined}
+      onMoveEdge={(edge) => props.onMove(task, stage.id, edge === "top" ? 0 : size - 1, "menu")} canReorder={canMove && size > 1} onDelete={props.canDelete !== false ? () => props.onDelete(task) : undefined} /> : undefined}
   />;
 }
 
 function SortableFile({ file, stage, stages, ...props }: KanbanProps & { file: ProjectFile; stage: BoardStage; stages: BoardStage[] }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: fileKey(file.id), data: { type: "file", stageId: stage.id } });
+  const canMove = props.canMove !== false;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: fileKey(file.id), data: { type: "file", stageId: stage.id }, disabled: !canMove });
   return <FileCardView
     ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} file={file} stage={stage} context={props.fileContextOf(file)}
     dragging={isDragging} onOpen={() => props.onOpenFile(file)}
     {...attributes} {...listeners} aria-roledescription="draggable file" aria-label={`${file.file.name}. File in ${stage.name}.`}
-    menu={<FileMenu file={file} stages={stages} current={stage.id} onMove={(stageId) => props.onMoveFile(file, stageId)} onOpen={() => props.onOpenFile(file)} />}
+    menu={canMove ? <FileMenu file={file} stages={stages} current={stage.id} onMove={(stageId) => props.onMoveFile(file, stageId)} onOpen={() => props.onOpenFile(file)} /> : undefined}
   />;
 }

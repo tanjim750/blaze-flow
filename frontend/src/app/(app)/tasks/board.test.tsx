@@ -232,3 +232,51 @@ describe("TasksBoard", () => {
     expect(card("Approved late task").querySelector("time")).not.toHaveClass("is-overdue");
   });
 });
+
+describe("TasksBoard for read-only viewers", () => {
+  const clientAccess = { create: false, update: false, delete: false, manageStages: false, client: true };
+  const viewOnly = { create: false, update: false, delete: false, manageStages: false, client: false };
+
+  it("shows a client the board without New task, quick add, card menus or a banner", () => {
+    render(<TasksBoard view={{ ...view, access: clientAccess }} />);
+    expect(screen.queryByRole("button", { name: "New task" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Add task to/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Customize stages" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Actions for Edit Summer Campaign V3" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/permission/i)).not.toBeInTheDocument();
+    expect(screen.getByText("View only")).toBeInTheDocument();
+    expect(card("Edit Summer Campaign V3")).toHaveAttribute("aria-roledescription", "task");
+  });
+
+  it("gives a client with nothing shared a read-only empty state that points Home", () => {
+    render(<TasksBoard view={{ ...view, tasks: [], access: clientAccess }} />);
+    expect(screen.getByText("The studio runs production here")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to Home" })).toHaveAttribute("href", "/");
+  });
+
+  it("ignores the n shortcut and the number keys when the viewer cannot write", () => {
+    const fetchMock = mockFetch(() => ({}));
+    render(<TasksBoard view={{ ...view, access: viewOnly }} />);
+    fireEvent.keyDown(window, { key: "n" });
+    expect(screen.queryByRole("dialog", { name: /New task/ })).not.toBeInTheDocument();
+    fireEvent.keyDown(card("Edit Summer Campaign V3"), { key: "1" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("opens the detail sheet read-only: fields disabled, no Delete, no Reopen", async () => {
+    mockFetch(() => []);
+    render(<TasksBoard view={{ ...view, access: viewOnly }} initialQuery="task=task" />);
+    const sheet = await screen.findByRole("dialog", { name: "Edit Summer Campaign V3" });
+    expect(within(sheet).getByText(/View only\./)).toBeInTheDocument();
+    expect(within(sheet).getByRole("textbox", { name: "Task title" })).toBeDisabled();
+    expect(within(sheet).getByLabelText("Stage")).toBeDisabled();
+    expect(within(sheet).queryByRole("button", { name: "Delete task" })).not.toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Attach from library" })).not.toBeInTheDocument();
+  });
+
+  it("drops move and delete from the list view", () => {
+    render(<TasksBoard view={{ ...view, access: viewOnly }} />);
+    fireEvent.click(screen.getByRole("button", { name: "List" }));
+    expect(screen.queryByRole("button", { name: "Actions for Edit Summer Campaign V3" })).not.toBeInTheDocument();
+  });
+});

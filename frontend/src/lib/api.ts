@@ -169,6 +169,9 @@ const jsonBody = (payload: unknown): RequestInit => ({
 });
 
 export const listWorkspaces = () => request<Workspace[]>("/workspaces/");
+/** The viewer's effective permission keys here (and on one project). See lib/permissions.ts. */
+export const getWorkspacePermissions = (workspaceId: string, projectId?: string | null) =>
+  request<import("./permissions").PermissionsAnswer>(`/workspaces/${workspaceId}/permissions/${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ""}`);
 export const createWorkspace = (payload: { name: string; slug?: string; timezone: string }) =>
   request<Workspace & { membership_id: string }>("/workspaces/", jsonBody(payload));
 export const getWorkspaceProfile = (workspaceId: string) =>

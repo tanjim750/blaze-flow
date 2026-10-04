@@ -105,6 +105,8 @@ from .activity_views import (
     project_activity, project_activity_export, workspace_activity, workspace_activity_export,
 )
 from . import billing_views
+from .publish_views import asset_file_publish
+from .permission_views import workspace_permissions
 
 urlpatterns = [
     path('health/', health_check, name='api-health'),
@@ -171,12 +173,14 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/task-stages/<uuid:stage_id>/', task_stage_detail, name='api-task-stage-detail'),
     path('workspaces/<uuid:workspace_id>/asset-folders/', asset_folder_list_create, name='api-asset-folders'),
     path('workspaces/<uuid:workspace_id>/asset-folders/<uuid:folder_id>/', asset_folder_detail, name='api-asset-folder-detail'),
+    path('workspaces/<uuid:workspace_id>/permissions/', workspace_permissions, name='api-workspace-permissions'),
     path('workspaces/<uuid:workspace_id>/asset-files/', asset_file_list_create, name='api-asset-files'),
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/', asset_file_detail, name='api-asset-file-detail'),
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/download/', asset_file_download, name='api-asset-file-download'),
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/poster/', asset_file_poster, name='api-asset-file-poster'),
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/duplicate/', asset_file_duplicate, name='api-asset-file-duplicate'),
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/versions/', asset_file_versions, name='api-asset-file-versions'),
+    path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/publish/', asset_file_publish, name='api-asset-file-publish'),
     path('workspaces/<uuid:workspace_id>/tasks/<uuid:task_id>/', task_detail, name='api-task-detail'),
     path('workspaces/<uuid:workspace_id>/tasks/<uuid:task_id>/move/', task_move, name='api-task-move'),
     path('workspaces/<uuid:workspace_id>/tasks/<uuid:task_id>/assignees/', task_assignees, name='api-task-assignees'),

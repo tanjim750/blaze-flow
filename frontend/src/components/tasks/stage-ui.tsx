@@ -5,6 +5,7 @@
  */
 import type { CSSProperties } from "react";
 import { CalendarDays, CircleCheck, CircleDashed, CircleDot, Clock, Eye, RotateCcw, Signal, SignalHigh, SignalLow, SignalMedium, TriangleAlert, UserRound, Users, type LucideIcon } from "lucide-react";
+import { StagePill as SharedStagePill } from "@/components/ui/stage-pill";
 import { dueState, formatDue, formatDueLong, initials, priorityLabel, stageTone, type BoardStage, type StageKind } from "@/lib/task-board";
 
 const STAGE_ICONS: Record<StageKind, LucideIcon> = {
@@ -18,10 +19,7 @@ export function StageDot({ stage }: { stage: Pick<BoardStage, "kind" | "color"> 
 /** Icon + label in the stage tone. Custom stages keep neutral text with a coloured dot. */
 export function StagePill({ stage }: { stage: BoardStage }) {
   const { tone, dot } = stageTone(stage);
-  const Icon = STAGE_ICONS[stage.kind];
-  return <span className={`tb-pill ${tone ? "" : "is-custom"}`} style={{ "--tb-tone": tone ?? undefined, "--tb-dot": dot } as CSSProperties}>
-    {tone ? <Icon aria-hidden="true" /> : <i className="tb-stage-dot" aria-hidden="true" />}{stage.name}
-  </span>;
+  return <SharedStagePill name={stage.name} tone={tone} dot={dot} icon={tone ? STAGE_ICONS[stage.kind] : null} />;
 }
 
 export function StageIcon({ stage }: { stage: BoardStage }) {

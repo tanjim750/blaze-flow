@@ -16,7 +16,7 @@ import type { LibraryFile, LibraryFolder } from "@/lib/asset-library";
 import { isProcessing } from "@/lib/asset-library";
 import { aspectLabel, formatSize, KIND_NAME, runtime, summarize } from "@/lib/files-panel";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Kbd, KindIcon, StagePill, Thumb } from "./files-ui";
+import { Kbd, KindIcon, NoStagePill, StagePill, Thumb } from "./files-ui";
 import { formatLongDate } from "./asset-item";
 
 type Stage = { id: string; name: string; color: string };
@@ -64,7 +64,7 @@ export function AssetInspector({ selectedFiles, selectedFolders, scope, stages, 
     const summary = summarize(files, []);
     return [...summary.stages.entries()].sort((a, b) => b[1] - a[1]).map(([id, total]) => {
       const stage = stageOf(id);
-      return <li key={id ?? "none"}>{stage ? <StagePill stage={stage} /> : <span className="fx-pill is-stage">No stage</span>}<span className="fx-mono">{total}</span></li>;
+      return <li key={id ?? "none"}>{stage ? <StagePill stage={stage} /> : <NoStagePill />}<span className="fx-mono">{total}</span></li>;
     });
   };
 
@@ -157,7 +157,7 @@ export function AssetInspector({ selectedFiles, selectedFolders, scope, stages, 
           <div className="fx-insp-stage">
             <DropdownMenu>
               <DropdownMenuTrigger className="fx-stage-trigger" aria-label={`Stage: ${stage?.name ?? "No stage"}. Change stage`}>
-                {stage ? <StagePill stage={stage} variant="icon" /> : <span className="fx-pill is-stage">No stage</span>}<ChevronDown aria-hidden="true" />
+                {stage ? <StagePill stage={stage} variant="icon" /> : <NoStagePill />}<ChevronDown aria-hidden="true" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="fx-menu">
                 <DropdownMenuRadioGroup value={file.stageId ?? ""} onValueChange={(value) => actions.setStage(file, value || null)}>

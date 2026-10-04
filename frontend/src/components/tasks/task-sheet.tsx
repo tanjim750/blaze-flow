@@ -18,8 +18,10 @@ import { TaskMoney } from "./task-money";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
-export function TaskSheet({ task, stage, stages, view, locked, attachments, loadingAttachments, fileBySourceId, onClose, onPatch, onMove, onReopen, onDelete, onReview, onAttach, onUpload }: {
+export function TaskSheet({ task, stage, stages, view, locked, canEdit = true, canDelete = true, attachments, loadingAttachments, fileBySourceId, onClose, onPatch, onMove, onReopen, onDelete, onReview, onAttach, onUpload }: {
   task: Task | null; stage: BoardStage | null; stages: BoardStage[]; view: TasksView; locked: boolean;
+  /** False for clients and read-only members: every field shows but nothing can be changed. */
+  canEdit?: boolean; canDelete?: boolean;
   attachments: TaskAttachment[] | undefined; loadingAttachments: boolean; fileBySourceId: Map<string, ProjectFile>;
   onClose: () => void; onPatch: (payload: Record<string, unknown>) => Promise<boolean>; onMove: (stageId: string) => void; onReopen: () => void;
   onDelete: () => void; onReview: (fileId: string, title: string) => void; onAttach: (file: ProjectFile) => Promise<boolean>;
@@ -30,14 +32,16 @@ export function TaskSheet({ task, stage, stages, view, locked, attachments, load
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="tb-sheet-overlay" />
       <DialogPrimitive.Content className="tb-sheet" aria-describedby={undefined} onOpenAutoFocus={(event) => event.preventDefault()}>
-        {task && stage ? <SheetBody key={task.id} task={task} stage={stage} stages={stages} view={view} locked={locked} attachments={attachments} loadingAttachments={loadingAttachments} fileBySourceId={fileBySourceId} onClose={onClose} onPatch={onPatch} onMove={onMove} onReopen={onReopen} onDelete={onDelete} onReview={onReview} onAttach={onAttach} onUpload={onUpload} />
+        {task && stage ? <SheetBody key={task.id} task={task} stage={stage} stages={stages} view={view} locked={locked} canEdit={canEdit} canDelete={canDelete} attachments={attachments} loadingAttachments={loadingAttachments} fileBySourceId={fileBySourceId} onClose={onClose} onPatch={onPatch} onMove={onMove} onReopen={onReopen} onDelete={onDelete} onReview={onReview} onAttach={onAttach} onUpload={onUpload} />
           : <DialogPrimitive.Title className="tb-sr">Task</DialogPrimitive.Title>}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   </DialogPrimitive.Root>;
 }
 
-function SheetBody({ task, stage, stages, view, locked, attachments, loadingAttachments, fileBySourceId, onPatch, onMove, onReopen, onDelete, onReview, onAttach, onUpload }: Parameters<typeof TaskSheet>[0] & { task: Task; stage: BoardStage }) {
+function SheetBody({ task, stage, stages, view, locked: approvedLock, canEdit = true, canDelete = true, attachments, loadingAttachments, fileBySourceId, onPatch, onMove, onReopen, onDelete, onReview, onAttach, onUpload }: Parameters<typeof TaskSheet>[0] & { task: Task; stage: BoardStage }) {
+  // A read-only viewer sees the same fields, disabled, without the approval "Reopen" banner.
+  const locked = approvedLock || !canEdit;
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
   const [save, setSave] = useState<SaveState>("idle");
@@ -80,7 +84,8 @@ function SheetBody({ task, stage, stages, view, locked, attachments, loadingAtta
       <DialogPrimitive.Close asChild><button ref={closeRef} type="button" className="tb-icon-button" aria-label="Close task details"><X aria-hidden="true" /></button></DialogPrimitive.Close>
     </header>
     <div className="tb-sheet-scroll">
-      {locked && <div className="tb-lock" role="status"><Lock aria-hidden="true" /><span><strong>Approved.</strong> Editing is locked so final work isn&apos;t changed by accident.</span><button type="button" className="tb-button is-sm" onClick={onReopen}>Reopen</button></div>}
+      {!canEdit && <div className="tb-lock is-readonly" role="status"><Lock aria-hidden="true" /><span><strong>View only.</strong> You can see this task but not change it.</span></div>}
+      {approvedLock && canEdit && <div className="tb-lock" role="status"><Lock aria-hidden="true" /><span><strong>Approved.</strong> Editing is locked so final work isn&apos;t changed by accident.</span><button type="button" className="tb-button is-sm" onClick={onReopen}>Reopen</button></div>}
       <DialogPrimitive.Title className="tb-sr">{task.title}</DialogPrimitive.Title>
       <textarea className="tb-sheet-title" aria-label="Task title" rows={1} value={title} disabled={locked} maxLength={255}
           onChange={(event) => { setTitle(event.target.value); schedule(event.target.value, description); }}
@@ -89,7 +94,7 @@ function SheetBody({ task, stage, stages, view, locked, attachments, loadingAtta
 
       <dl className="tb-props">
         <dt><label htmlFor="tb-sheet-stage">Stage</label></dt>
-        <dd><select id="tb-sheet-stage" className="tb-input" value={stage.id} onChange={(event) => onMove(event.target.value)}>{stages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></dd>
+        <dd><select id="tb-sheet-stage" className="tb-input" disabled={!canEdit} value={stage.id} onChange={(event) => onMove(event.target.value)}>{stages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></dd>
         <dt><label htmlFor="tb-sheet-assignee">Assignee</label></dt>
         <dd><select id="tb-sheet-assignee" className="tb-input" disabled={locked} value={task.assignees[0]?.id ?? ""} onChange={(event) => void commit({ assignee_id: event.target.value || null })}>
           <option value="">Unassigned</option>
@@ -144,7 +149,7 @@ function SheetBody({ task, stage, stages, view, locked, attachments, loadingAtta
                 <p>Once a file is linked, clicking this task opens it in review with the task beside the player.</p>
                 {!locked && <div className="tb-link-actions">
                   <button type="button" className="tb-button is-sm is-primary" onClick={() => setPicking(true)}><Link2 aria-hidden="true" />Attach from library</button>
-                  {onUpload && <>
+                  {onUpload && canEdit && <>
                     <button type="button" className="tb-button is-sm" disabled={uploading} onClick={() => uploadInput.current?.click()}><Upload aria-hidden="true" />{uploading ? "Uploading…" : "Upload a file"}</button>
                     <input ref={uploadInput} type="file" hidden aria-label="Upload a file to link" onChange={async (event) => {
                       const chosen = event.target.files?.[0]; event.target.value = "";
@@ -160,7 +165,7 @@ function SheetBody({ task, stage, stages, view, locked, attachments, loadingAtta
     <footer className="tb-sheet-foot">
       <span className="tb-muted">Updated {new Date(task.updated_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
       <span className="tb-spacer" />
-      <button type="button" className="tb-button is-ghost is-danger-text" onClick={onDelete}><Trash2 aria-hidden="true" />Delete task</button>
+      {canDelete && <button type="button" className="tb-button is-ghost is-danger-text" onClick={onDelete}><Trash2 aria-hidden="true" />Delete task</button>}
     </footer>
   </>;
 }

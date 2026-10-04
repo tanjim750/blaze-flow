@@ -75,8 +75,7 @@
 .rv-actions .rv-icon { padding: 0; width: 30px; justify-content: center; }
 .rv-actions button:hover:not(:disabled), .rv-actions .rv-icon:hover { background: #23232a; }
 .rv-actions button:disabled { opacity: .45; cursor: not-allowed; }
-.rv-actions .rv-approve { background: var(--primary); border-color: var(--primary); color: #fff; }
-.rv-actions .rv-approve:hover:not(:disabled) { background: #6a4bf0; }
+/* `.rv-approve` colour: app/ui.css (one primary variant). */
 @media (max-width: 1100px) { .rv-actions button span, .rv-actions button { font-size: 0; gap: 0; padding: 0 9px; } .rv-actions button svg { font-size: 12px; } }
 
 /* Banners ----------------------------------------------------------------- */
@@ -418,10 +417,9 @@
   display: grid; place-items: center;
   width: 34px; height: 34px; flex: none;
   border: 0; border-radius: 9px;
-  background: var(--primary); color: #fff; cursor: pointer;
+  cursor: pointer; /* colour: app/ui.css */
   transition: background .15s, opacity .15s;
 }
-.rvc-send button[type="submit"]:hover:not(:disabled) { background: #6a4bf0; }
 .rvc-send button[type="submit"]:disabled { opacity: .4; cursor: not-allowed; }
 
 .rvc-revision {
@@ -783,3 +781,20 @@
 .rv-task-files button { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; height: 26px; padding: 0 8px; border: 1px solid #3a3150; border-radius: 7px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
 .rv-task-files button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
 .rv-task-files button[aria-current="true"] { border-color: #8d72ff; color: var(--text); background: #241d38; }
+
+/* Publish to project (library file → review version) ----------------------------------- */
+.rv-actions .rv-publish-btn { border-color: color-mix(in oklab, var(--primary) 55%, transparent); color: #d7c9ff; }
+.rv-actions .rv-publish-btn:hover:not(:disabled) { background: color-mix(in oklab, var(--primary) 18%, transparent); }
+.rv-banner-action { flex: none; margin-left: auto; height: 26px; padding: 0 10px; border: 1px solid #3a5577; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.rv-banner-action:hover { background: #1b2b3e; }
+.rv-publish-mode { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 0; border: 0; color: var(--tb-muted-fg, #a1a1aa); font-size: 12px; }
+.rv-publish-mode legend { width: 100%; margin-bottom: 6px; font-weight: 500; }
+.rv-publish-mode label { display: inline-flex; align-items: center; gap: 6px; color: var(--tb-fg, #fafafa); font-size: 13px; cursor: pointer; }
+.rv-publish-mode input { accent-color: var(--primary); }
+.rv-publish-carry { margin: 0; padding: 10px 12px; border: 1px solid var(--tb-border, #27272a); border-radius: 8px; color: var(--tb-muted-fg, #a1a1aa); font-size: 12px; line-height: 1.5; }
+
+/* Read-only role on a project cut: say so where the composer would be. */
+.rvc-viewonly { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 12px 14px; border-top: 1px solid var(--rv-line); color: var(--muted); font-size: 12px; line-height: 1.45; }
+.rvc-viewonly svg { flex: none; margin-top: 2px; }
+.rvc-viewonly strong { color: var(--foreground); font-weight: 600; }
+.rv-task dt label { display: inline-flex; align-items: center; gap: inherit; }

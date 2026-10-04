@@ -7,10 +7,12 @@ import { PanelRightOpen } from "lucide-react";
 import { CardMenu } from "./task-card";
 import { Avatar, DueChip, PriorityIcon, StagePill } from "./stage-ui";
 
-export function BoardList({ columns, contextOf, onOpen, onDetails, onMove, onDelete, menuFor, setMenuFor }: {
+export function BoardList({ columns, contextOf, onOpen, onDetails, onMove, onDelete, menuFor, setMenuFor, canMove = true, canDelete = true }: {
   columns: BoardColumn[]; contextOf: (task: Task) => string; onOpen: (task: Task) => void; onDetails: (task: Task) => void;
   onMove: (task: Task, stageId: string, index: number | null, source: "list") => void; onDelete: (task: Task) => void;
   menuFor: string | null; setMenuFor: (id: string | null) => void;
+  /** Read-only viewers: no Move to menu, no 1–9 shortcuts, no Delete. */
+  canMove?: boolean; canDelete?: boolean;
 }) {
   const stages = columns.map((column) => column.stage);
   const counts = new Map(columns.map((column) => [column.stage.id, column.tasks.length]));
@@ -26,6 +28,7 @@ export function BoardList({ columns, contextOf, onOpen, onDetails, onMove, onDel
         const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
           if (event.target !== event.currentTarget) return;
           if (event.key === "Enter") { event.preventDefault(); onOpen(task); }
+          if (!canMove) return;
           if (event.key.toLowerCase() === "m") { event.preventDefault(); setMenuFor(task.id); }
           const digit = Number(event.key);
           if (Number.isInteger(digit) && digit >= 1 && digit <= stages.length && !event.metaKey && !event.ctrlKey) {
@@ -41,9 +44,9 @@ export function BoardList({ columns, contextOf, onOpen, onDetails, onMove, onDel
           <span role="cell"><DueChip dueAt={task.due_at} done={column.stage.isDone} />{!task.due_at && <span className="tb-muted">—</span>}</span>
           <span role="cell" className="tb-list-actions">
             <button type="button" className="tb-icon-button" data-no-dnd aria-label={`Details for ${task.title}`} title="Details" onClick={(event) => { event.stopPropagation(); onDetails(task); }}><PanelRightOpen aria-hidden="true" /></button>
-            <CardMenu task={task} stages={stages} current={column.stage.id} counts={counts} open={menuFor === task.id} onOpenChange={(open) => setMenuFor(open ? task.id : null)}
-              onOpenDetails={() => onDetails(task)} onMove={(stageId) => onMove(task, stageId, null, "list")}
-              onMoveEdge={(edge) => onMove(task, column.stage.id, edge === "top" ? 0 : column.tasks.length - 1, "list")} canReorder={column.tasks.length > 1 && index >= 0} onDelete={() => onDelete(task)} />
+            {(canMove || canDelete) && <CardMenu task={task} stages={stages} current={column.stage.id} counts={counts} open={menuFor === task.id} onOpenChange={(open) => setMenuFor(open ? task.id : null)}
+              onOpenDetails={() => onDetails(task)} onMove={canMove ? (stageId) => onMove(task, stageId, null, "list") : undefined}
+              onMoveEdge={(edge) => onMove(task, column.stage.id, edge === "top" ? 0 : column.tasks.length - 1, "list")} canReorder={canMove && column.tasks.length > 1 && index >= 0} onDelete={canDelete ? () => onDelete(task) : undefined} />}
           </span>
         </div>;
       })}

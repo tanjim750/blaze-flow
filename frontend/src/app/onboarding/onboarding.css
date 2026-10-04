@@ -14,7 +14,7 @@
 .slug-field span { padding-left: 12px; color: var(--muted); white-space: nowrap; }
 .slug-field input { border: 0; padding-left: 5px; }
 .onboarding-form small { color: var(--muted); }
-.onboarding-primary { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; margin-top: 18px; padding: 11px 15px; border: 1px solid #9a80ff; border-radius: 9px; background: #6546ec; color: white; font-weight: 650; cursor: pointer; }
+.onboarding-primary { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; margin-top: 18px; padding: 11px 15px; border: 1px solid transparent; border-radius: 9px; font-weight: 650; cursor: pointer; }
 .onboarding-primary:disabled { opacity: .65; cursor: wait; }
 .onboarding-link { display: block; margin: 14px auto 0; border: 0; background: none; color: var(--primary-2); cursor: pointer; }
 .form-success { padding: 10px 12px; border: 1px solid #28654e; border-radius: 8px; background: #153d30; color: #8bedc7 !important; font-size: 12px; }
