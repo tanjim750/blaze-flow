@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
   Activity, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
-  FolderInput, FolderOpen, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Wallet, X,
+  FolderInput, FolderOpen, MessagesSquare, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Wallet, X,
 } from "lucide-react";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
@@ -15,6 +15,8 @@ import { ProjectBrief } from "@/components/project-brief";
 import { ProjectPricing } from "@/components/money/project-pricing";
 import { ActivityFeed } from "@/components/activity/activity-feed";
 import { UploadLinksPanel } from "@/components/client-uploads/upload-links-panel";
+import { ProjectThread } from "@/components/messages/thread";
+import { fetchUnread, unreadLabel, type Channel } from "@/lib/messages";
 import "@/components/project-brief.css";
 import { LinkPending } from "@/components/nav-progress";
 import { TasksBoard } from "@/app/(app)/tasks/board";
@@ -83,8 +85,8 @@ function InlineCreate({ action, hidden, placeholder, label, onClose, nested = fa
     </form>
   );
 }
-const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log", "Client uploads", "Pricing"] as const;
-/** "Client uploads" also answers to `?tab=client-uploads` (what notifications and the feed link to). */
+const TABS = ["Files", "Tasks", "Messages", "Brief & Specs", "Activity Log", "Client uploads", "Pricing"] as const;
+/** "Client uploads" also answers to `?tab=client-uploads`, "Messages" to `?tab=messages` (what notifications and the feed link to). */
 const tabSlug = (value: string) => value.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
 
 export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initialQuery = "" }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string; initialQuery?: string }) {
@@ -95,6 +97,24 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
   const [expanded, setExpanded] = useState<string[]>(view.selectedClient ? [view.selectedClient.id] : []);
   const [uploading, setUploading] = useState(false);
   const [railClosed, setRailClosed] = useState(false);
+  const campaignId = view.selectedCampaign?.id ?? null;
+  const [unread, setUnread] = useState<{ project: string | null; count: number }>({ project: null, count: 0 });
+  const messagesUnread = unread.project === campaignId ? unread.count : 0;
+
+  // The tab's badge: this project's unread count from the workspace summary, refreshed every
+  // half minute (the open thread reports its own count while it is on screen).
+  useEffect(() => {
+    if (!view.workspaceId || !campaignId) return;
+    let alive = true;
+    const load = () => void fetchUnread(view.workspaceId as string).then((result) => {
+      if (!alive || !result.ok) return;
+      const row = result.data.projects.find((project) => project.project_id === campaignId);
+      setUnread({ project: campaignId, count: row?.total_unread ?? 0 });
+    });
+    load();
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") load(); }, 30_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [view.workspaceId, campaignId]);
 
   return (
     <div className={railClosed ? "pb-layout is-rail-closed" : "pb-layout"}>
@@ -138,11 +158,13 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
               {TABS.filter((value) => value !== "Pricing" || view.canSeeBilling).map((value) => (
                 <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? "selected" : ""} onClick={() => setTab(value)}>
                   {value === "Files" && <FolderOpen size={14} />}
+                  {value === "Messages" && <MessagesSquare size={14} />}
                   {value === "Brief & Specs" && <FileText size={14} />}
                   {value === "Activity Log" && <Activity size={14} />}
                   {value === "Client uploads" && <FolderInput size={14} />}
                   {value === "Pricing" && <Wallet size={14} />}
                   <span>{value}</span>
+                  {value === "Messages" && messagesUnread > 0 && <b className="pb-tab-count" aria-label={`${messagesUnread} unread`}>{unreadLabel(messagesUnread)}</b>}
                 </button>
               ))}
             </div>
@@ -154,6 +176,8 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
           <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient?.id ?? null} />
         ) : tab === "Tasks" && view.selectedCampaign ? (
           <TasksBoard compact view={tasksView} projectId={view.selectedCampaign.id} />
+        ) : tab === "Messages" && view.selectedCampaign && view.workspaceId ? (
+          <MessagesTab key={view.selectedCampaign.id} workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} onUnread={(count) => setUnread({ project: campaignId, count })} />
         ) : tab === "Brief & Specs" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (
           // Keyed on the project so switching campaigns never carries one brief's unsaved text into another.
           <ProjectBrief key={view.selectedCampaign.id} workspaceId={view.workspaceId} project={view.selectedCampaign.project} />
@@ -180,6 +204,13 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
       )}
     </div>
   );
+}
+
+/** The project's thread; `?channel=team` (from a notification) opens the internal channel. */
+function MessagesTab({ workspaceId, projectId, onUnread }: { workspaceId: string; projectId: string; onUnread: (count: number) => void }) {
+  const params = useSearchParams();
+  const channel: Channel = params.get("channel") === "team" ? "team" : "client";
+  return <div className="pb-messages"><ProjectThread workspaceId={workspaceId} projectId={projectId} initialChannel={channel} onUnreadChange={onUnread} /></div>;
 }
 
 /**

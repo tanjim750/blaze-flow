@@ -339,3 +339,7 @@
 .pb-soon-tag { font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--shell-outline); }
 .pb-soon-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 6px 12px; border: 1px solid #ffffff24; border-radius: 8px; background: transparent; color: var(--shell-on); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
 .pb-soon-link:hover { background: var(--shell-high); }
+
+/* Messages tab */
+.pb-tabs button > b.pb-tab-count { font: 700 10.5px var(--font-geist-sans, inherit); min-width: 18px; text-align: center; background: #ff5c7a; color: #fff; padding: 2px 5px; border-radius: 999px; }
+.pb-messages { padding: 4px 0 8px; }

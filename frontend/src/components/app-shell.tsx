@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { LinkPending } from "@/components/nav-progress";
 import { usePathname } from "next/navigation";
-import { Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "lucide-react";
+import { Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, MessagesSquare, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
@@ -11,12 +11,15 @@ import type { ShellUser } from "@/lib/user";
 import type { Workspace } from "@/lib/api";
 import { UniversalReviewLayout } from "@/components/universal-review";
 import { NotificationBell } from "@/components/notifications/bell";
+import { fetchUnread, unreadLabel } from "@/lib/messages";
+import "@/components/messages/messages.css";
 
 type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { severity: string; code: string; count: number }[] };
 
 const primaryLinks = [
   { href: "/", label: "Home", icon: House },
   { href: "/projects", label: "Projects", icon: SquareKanban },
+  { href: "/messages", label: "Messages", icon: MessagesSquare },
   { href: "/tasks", label: "Tasks", icon: CheckCircle2 },
   { href: "/files", label: "Files", icon: FolderOpen },
   { href: "/clients", label: "Clients", icon: Building2 },
@@ -51,6 +54,8 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(railCollapsed);
   const [health, setHealth] = useState<OperationsHealth | "restricted" | "unavailable" | null>(null);
+  const [unread, setUnread] = useState<{ workspace: string | null; count: number }>({ workspace: null, count: 0 });
+  const messagesUnread = unread.workspace === selectedWorkspaceId ? unread.count : 0;
   const selected = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? workspaces[0];
   const navLinks = selected?.billing?.view ? [...primaryLinks, moneyLink] : primaryLinks;
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
@@ -69,6 +74,19 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
     }).catch(() => active && setHealth("unavailable"));
     return () => { active = false; };
   }, [selectedWorkspaceId]);
+
+  // The Messages badge: unread across every project thread this person can read. Polled
+  // (no websockets), paused while the tab is hidden, and refreshed on navigation.
+  useEffect(() => {
+    if (!selectedWorkspaceId) return;
+    let alive = true;
+    const load = () => void fetchUnread(selectedWorkspaceId).then((result) => {
+      if (alive && result.ok) setUnread({ workspace: selectedWorkspaceId, count: result.data.total_unread });
+    });
+    load();
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") load(); }, 30_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [selectedWorkspaceId, pathname]);
 
   /**
    * The width itself is animated in CSS, through a registered `--rail-w` custom property
@@ -115,7 +133,9 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
           <nav aria-label="Main navigation">
             {navLinks.map(({ href, label, icon: Icon }) => (
               <Link key={label} href={href} onClick={() => setOpen(false)} title={label} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}>
-                <Icon size={20} /><span>{label}</span><LinkPending />
+                <Icon size={20} /><span>{label}</span>
+                {href === "/messages" && messagesUnread > 0 && <b className="studio-nav-badge" aria-label={`${messagesUnread} unread messages`}>{unreadLabel(messagesUnread)}</b>}
+                <LinkPending />
               </Link>
             ))}
           </nav>

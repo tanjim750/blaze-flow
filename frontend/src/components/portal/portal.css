@@ -220,3 +220,6 @@
   .pt-record-line time{margin-left:0;width:100%}
 }
 .pt-sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.pt-messages{scroll-margin-top:16px}
+.pt-home-messages{display:grid;gap:12px;margin-top:24px;padding-bottom:16px}
+.pt-home-messages>.mt-inbox,.pt-home-messages>.mt-empty-line,.pt-home-messages>.pt-back{margin:0 16px}

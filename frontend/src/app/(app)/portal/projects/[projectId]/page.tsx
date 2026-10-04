@@ -1,12 +1,13 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowLeft, CalendarClock, CheckCircle2, CircleDot, Clapperboard, Download, Eye, FileText, Flag, History, ListChecks, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowLeft, CalendarClock, CheckCircle2, CircleDot, Clapperboard, Download, Eye, FileText, Flag, History, ListChecks, MessagesSquare, RotateCcw, Sparkles } from "lucide-react";
 import { getClientPortalData, getClientProjectOverview } from "@/lib/api";
 import { formatBytes } from "@/lib/client-uploads";
 import { CUT_STATE_LABEL, PHASE_HINT, accentStyle, dayDate, dueLabel, splitTimeline, type TimelineEvent } from "@/lib/portal";
 import { loadWorkspaceContext } from "@/lib/workspace";
 import { PortalBrandBar } from "@/components/portal/brand-bar";
 import { ClientUploadPanel } from "@/components/client-uploads/client-upload-panel";
+import { ProjectThread } from "@/components/messages/thread";
 import "@/components/portal/portal.css";
 
 /* Posters are small, permission-checked images from our own API (as on the dashboard); plain <img> on purpose. */
@@ -147,5 +148,10 @@ export default async function ClientProjectPage({ params }: PageProps<"/portal/p
         />}
       </div>
     </div>
+
+    <section className="pt-card pt-messages" id="messages" aria-labelledby="pt-messages-title">
+      <div className="pt-card-head"><h2 id="pt-messages-title"><MessagesSquare />Messages with the studio</h2><small>The team is notified when you write</small></div>
+      <ProjectThread workspaceId={workspace.id} projectId={projectId} variant="portal" />
+    </section>
   </div>;
 }

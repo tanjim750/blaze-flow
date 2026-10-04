@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, CheckCheck, Download, FolderKanban, Inbox, Plus } from "lucide-react";
+import { ArrowRight, CheckCheck, Download, FolderKanban, Inbox, MessagesSquare, Plus } from "lucide-react";
+import { MessagesInbox } from "@/components/messages/inbox";
 import { DashboardPoster } from "@/components/dashboard-poster";
 import type { LayoutChoice } from "@/lib/dashboard-role";
 import type { ClientDashboard as ClientView } from "@/lib/role-dashboard-view";
@@ -67,6 +68,12 @@ export function ClientDashboard({ view, choice }: { view: ClientView; choice: La
         emptyBody="New cuts, notes, approvals and files you send show up here."
       />}
     </div>}
+
+    {view.messages && view.messages.summary.projects.length > 0 && <section className="panel pt-home-messages" aria-labelledby="messages-title">
+      <div className="panel-title"><h2 id="messages-title"><MessagesSquare size={16} />Messages with the studio</h2><small>{view.messages.summary.total_unread ? `${view.messages.summary.total_unread} unread` : "All caught up"}</small></div>
+      <MessagesInbox workspaceId={view.messages.workspaceId} initial={view.messages.summary} limit={4} emptyText="No messages yet. Open a project to write to the studio." />
+      {view.messages.summary.projects.length > 4 && <Link className="pt-back" href="/messages">All conversations<ArrowRight size={14} /></Link>}
+    </section>}
 
     {view.requests && view.requests.items.length > 0 && <section className="panel pt-home-requests" aria-labelledby="requests-title">
       <div className="panel-title"><h2 id="requests-title"><Inbox size={16} />Your project requests</h2><small>{pending ? `${pending} with the studio` : "All answered"}</small></div>
