@@ -228,7 +228,7 @@ const KIND_TONE: Record<Exclude<TaskStageKind, "custom">, StageTone> = {
  * built-in stage keeps its colour and a `custom` stage is always neutral, exactly as on the
  * board). Older payloads without `kind` fall back to the name: To Do neutral, In Progress
  * violet, Review/QA teal, Client info, Revisions destructive, Approved success. A name the
- * table does not know returns null, so the caller falls back to the neutral `is-stage` pill
+ * table does not know returns null, so the caller falls back to the neutral (`is-custom`) stage pill
  * with the stage's own colour as a dot only, because a user's hex cannot be relied on to
  * reach 4.5:1.
  */

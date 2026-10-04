@@ -20,7 +20,7 @@
 .pp-tasks li span { flex: 1; } .pp-tasks b, .pp-invoices li > span:nth-child(3) { font: 600 12px var(--font-geist-mono), monospace; }
 .pp-invoices a { color: var(--shell-primary); font: 600 12px var(--font-geist-mono), monospace; }
 .pp-invoices small { margin-left: auto; color: var(--shell-outline); }
-.pp-shell .money-button { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 4px 10px; border: 1px solid #8b6cff; border-radius: 8px; background: linear-gradient(135deg, #8b6cff, #6949e8); color: #fff; font: 600 11px var(--font-geist-sans), sans-serif; cursor: pointer; }
+.pp-shell .money-button { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 4px 10px; border: 1px solid var(--bf-violet-400); border-radius: 8px; background: linear-gradient(135deg, var(--bf-violet-400), var(--bf-violet-600)); color: #fff; font: 600 11px var(--font-geist-sans), sans-serif; cursor: pointer; }
 .pp-shell .money-button:disabled { opacity: .5; cursor: not-allowed; }
 .pp-shell .money-badge { padding: 3px 6px; border: 1px solid #34313e; border-radius: 4px; background: #212029; color: #b7b3c8; font: 9px var(--font-geist-mono), monospace; text-transform: uppercase; }
 .pp-shell .money-badge.tone-danger { color: #ffa3af; background: #361d24; border-color: #60303e; }

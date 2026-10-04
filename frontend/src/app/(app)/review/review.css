@@ -75,8 +75,7 @@
 .rv-actions .rv-icon { padding: 0; width: 30px; justify-content: center; }
 .rv-actions button:hover:not(:disabled), .rv-actions .rv-icon:hover { background: #23232a; }
 .rv-actions button:disabled { opacity: .45; cursor: not-allowed; }
-.rv-actions .rv-approve { background: var(--primary); border-color: var(--primary); color: #fff; }
-.rv-actions .rv-approve:hover:not(:disabled) { background: #6a4bf0; }
+/* `.rv-approve` colour: app/ui.css (one primary variant). */
 @media (max-width: 1100px) { .rv-actions button span, .rv-actions button { font-size: 0; gap: 0; padding: 0 9px; } .rv-actions button svg { font-size: 12px; } }
 
 /* Banners ----------------------------------------------------------------- */
@@ -418,10 +417,9 @@
   display: grid; place-items: center;
   width: 34px; height: 34px; flex: none;
   border: 0; border-radius: 9px;
-  background: var(--primary); color: #fff; cursor: pointer;
+  cursor: pointer; /* colour: app/ui.css */
   transition: background .15s, opacity .15s;
 }
-.rvc-send button[type="submit"]:hover:not(:disabled) { background: #6a4bf0; }
 .rvc-send button[type="submit"]:disabled { opacity: .4; cursor: not-allowed; }
 
 .rvc-revision {

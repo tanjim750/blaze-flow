@@ -4,11 +4,11 @@
  * Small presentational pieces shared by the Files panel's tiles, rows, tree and inspector.
  * Styles live in `files.css` under the `.fx` scope.
  */
-import type { CSSProperties } from "react";
 import { AudioLines, CircleCheck, CircleDashed, CircleDot, Eye, File, FileImage, FileText, Film, Image as ImageIcon, RotateCcw, Tag, Users } from "lucide-react";
 import type { LibraryFile, LibraryKind } from "@/lib/asset-library";
 import type { TaskStageKind } from "@/lib/api";
 import { middleTruncate, stageTone, type StageTone } from "@/lib/files-panel";
+import { StagePill as SharedStagePill } from "@/components/ui/stage-pill";
 
 export function KindIcon({ kind, className }: { kind: LibraryKind; className?: string }) {
   const Icon = kind === "video" ? Film : kind === "audio" ? AudioLines : kind === "image" ? ImageIcon : kind === "document" ? FileText : kind === "source" ? FileImage : File;
@@ -57,21 +57,18 @@ export type StageLike = { name: string; color: string; kind?: TaskStageKind };
 const TONE_ICON: Record<StageTone, typeof Tag> = { neutral: CircleDashed, brand: CircleDot, teal: Eye, info: Users, destructive: RotateCcw, success: CircleCheck };
 
 /**
- * A stage pill per DS spec §13: a known stage gets its tone (dot or icon plus label on a
- * 14% tint). A custom stage falls back to the neutral `is-stage` pill with the workspace's
- * colour as a dot only, because an arbitrary hex cannot be relied on for 4.5:1 text.
+ * A stage pill per DS spec §13, through the shared `StagePill` (components/ui/stage-pill):
+ * a known stage gets its tone, a custom stage the neutral pill with its colour as a dot.
  */
 export function StagePill({ stage, variant = "dot" }: { stage: StageLike | null | undefined; variant?: "dot" | "icon" }) {
   if (!stage) return null;
   const tone = stageTone(stage.name, stage.kind);
   const Icon = tone ? TONE_ICON[tone] : null;
-  return (
-    <span className={`fx-pill ${tone ? "" : "is-stage"}`} data-tone={tone ?? undefined} style={tone ? undefined : ({ "--stage-color": stage.color } as CSSProperties)}>
-      {variant === "icon" && Icon ? <Icon aria-hidden="true" /> : <i aria-hidden="true" />}
-      {stage.name}
-    </span>
-  );
+  return <SharedStagePill name={stage.name} dataTone={tone ?? undefined} tone={tone ? "var(--tone, var(--muted-foreground))" : null} dot={tone ? null : stage.color} icon={variant === "icon" ? Icon : null} />;
 }
+
+/** The neutral pill for "no stage", the same size as a stage pill. */
+export function NoStagePill() { return <SharedStagePill name="No stage" />; }
 
 /** Keyboard hint. */
 export function Kbd({ children }: { children: React.ReactNode }) { return <kbd className="fx-kbd">{children}</kbd>; }

@@ -1,45 +1,45 @@
 /*
  * Tasks workflow board (`tb-`). Every colour comes from the Blaze Flow design-system
- * tokens (design-system/blaze-flow-design-system.md §2.2–2.5). The app does not ship
- * those tokens globally yet, so each one is read with the DS value as fallback, scoped
- * to `.tb-*` roots. Names that collide with the current palette (`--muted`, `--border`,
+ * tokens in app/tokens.css (`--bf-*`), aliased here under `--tb-*` and scoped to the
+ * `.tb-*` roots; inside the Files panel the `.fx` aliases of the same tokens win.
+ * Names that collide with the current palette (`--muted`, `--border`,
  * `--primary`, `--warning` mean different things in shell.css) are written as literals.
  */
 
 /* `--teal` (DS §14, Review stage) is defined once in app/globals.css. */
 
 .tb-root, .tb-sheet, .tb-sheet-overlay, .tb-dialog, .tb-menu, .tb-drag-root {
-  --tb-canvas: var(--canvas, oklch(0.13 0.004 285));
-  --tb-bg: var(--background, oklch(0.185 0.006 285));
-  --tb-field: var(--field, oklch(0.20 0.006 285));
-  --tb-card: var(--card, oklch(0.215 0.007 285));
-  --tb-muted: oklch(0.235 0.007 285);
-  --tb-popover: var(--popover, oklch(0.245 0.008 285));
-  --tb-accent: var(--accent, oklch(0.28 0.009 285));
-  --tb-fg: var(--foreground, oklch(0.955 0.005 285));
-  --tb-muted-fg: var(--muted-foreground, oklch(0.72 0.018 285));
-  --tb-subtle-fg: var(--subtle-foreground, oklch(0.64 0.015 285));
-  --tb-border: oklch(1 0 0 / 8%);
-  --tb-border-strong: var(--border-strong, oklch(1 0 0 / 14%));
-  --tb-input: var(--input, oklch(1 0 0 / 40%));
-  --tb-input-hover: var(--input-hover, oklch(1 0 0 / 50%));
-  --tb-primary: oklch(0.55 0.215 287);
-  --tb-primary-hover: oklch(0.58 0.215 287);
-  --tb-brand-fg: var(--brand-foreground, oklch(0.76 0.13 290));
-  --tb-ring: var(--ring, oklch(0.70 0.16 290));
-  --tb-success: var(--success, oklch(0.78 0.14 158));
-  --tb-danger: var(--destructive, oklch(0.72 0.17 20));
-  --tb-danger-solid: var(--destructive-solid, oklch(0.58 0.20 25));
-  --tb-info: var(--info, oklch(0.74 0.13 250));
-  --tb-warning: oklch(0.82 0.15 80);
-  --tb-annotation: var(--annotation, oklch(0.875 0.143 86.6));
-  --tb-overlay: var(--overlay, oklch(0.10 0.005 285 / 72%));
-  --tb-elevation-2: var(--elevation-2, 0 8px 24px oklch(0 0 0 / 40%));
-  --tb-elevation-3: var(--elevation-3, 0 24px 64px oklch(0 0 0 / 55%));
-  --tb-fast: var(--duration-fast, 120ms);
-  --tb-base: var(--duration-base, 180ms);
-  --tb-slow: var(--duration-slow, 240ms);
-  --tb-ease: var(--ease-out, cubic-bezier(.22, 1, .36, 1));
+  --tb-canvas: var(--canvas, var(--bf-canvas));
+  --tb-bg: var(--background, var(--bf-background));
+  --tb-field: var(--field, var(--bf-field));
+  --tb-card: var(--card, var(--bf-card));
+  --tb-muted: var(--bf-muted);
+  --tb-popover: var(--popover, var(--bf-popover));
+  --tb-accent: var(--accent, var(--bf-accent));
+  --tb-fg: var(--foreground, var(--bf-foreground));
+  --tb-muted-fg: var(--muted-foreground, var(--bf-muted-foreground));
+  --tb-subtle-fg: var(--subtle-foreground, var(--bf-subtle-foreground));
+  --tb-border: var(--bf-border);
+  --tb-border-strong: var(--border-strong, var(--bf-border-strong));
+  --tb-input: var(--input, var(--bf-input));
+  --tb-input-hover: var(--input-hover, var(--bf-input-hover));
+  --tb-primary: var(--bf-primary);
+  --tb-primary-hover: var(--bf-primary-hover);
+  --tb-brand-fg: var(--brand-foreground, var(--bf-brand-foreground));
+  --tb-ring: var(--ring, var(--bf-ring));
+  --tb-success: var(--success, var(--bf-success));
+  --tb-danger: var(--destructive, var(--bf-destructive));
+  --tb-danger-solid: var(--destructive-solid, var(--bf-destructive-solid));
+  --tb-info: var(--info, var(--bf-info));
+  --tb-warning: var(--bf-warning);
+  --tb-annotation: var(--annotation, var(--bf-annotation));
+  --tb-overlay: var(--overlay, var(--bf-overlay));
+  --tb-elevation-2: var(--elevation-2, var(--bf-elevation-2));
+  --tb-elevation-3: var(--elevation-3, var(--bf-elevation-3));
+  --tb-fast: var(--duration-fast, var(--bf-duration-fast));
+  --tb-base: var(--duration-base, var(--bf-duration-base));
+  --tb-slow: var(--duration-slow, var(--bf-duration-slow));
+  --tb-ease: var(--ease-out, var(--bf-ease-out));
   /* Stage tones (files-design-system.md §13). No stage is amber: amber means timecode feedback. */
   --tb-stage-todo: var(--tb-muted-fg);
   --tb-stage-in-progress: var(--tb-brand-fg);
@@ -66,8 +66,7 @@
 .tb-button svg { width: 16px; height: 16px; }
 .tb-button:hover { background: var(--tb-accent); }
 .tb-button:disabled { opacity: .5; cursor: not-allowed; }
-.tb-button.is-primary { border-color: transparent; background: var(--tb-primary); color: #fff; }
-.tb-button.is-primary:hover:not(:disabled) { background: var(--tb-primary-hover); }
+/* `.tb-button.is-primary` colour: app/ui.css (one primary variant). */
 .tb-button.is-danger { border-color: transparent; background: var(--tb-danger-solid); color: #fff; }
 .tb-button.is-ghost { border-color: transparent; color: var(--tb-muted-fg); }
 .tb-button.is-ghost:hover { color: var(--tb-fg); }
@@ -134,9 +133,7 @@ textarea.tb-input { height: auto; padding: 8px 10px; resize: vertical; }
 
 /* ---- Stage pill, dot, priority, avatar, due --------------------------------------------- */
 .tb-stage-dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 999px; background: var(--tb-dot, var(--tb-muted-fg)); }
-.tb-pill { --tb-tone: var(--tb-muted-fg); display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid color-mix(in oklch, var(--tb-tone) 28%, transparent); border-radius: 999px; background: color-mix(in oklch, var(--tb-tone) 14%, transparent); color: var(--tb-tone); font-weight: 500; font-size: 11px; line-height: 1; white-space: nowrap; }
-.tb-pill svg { width: 14px; height: 14px; }
-.tb-pill.is-custom { border-color: var(--tb-border-strong); background: var(--tb-muted); color: var(--tb-muted-fg); }
+/* Stage pill: `.bf-stage-pill` in app/ui.css (components/ui/stage-pill.tsx). */
 .tb-priority { display: inline-flex; align-items: center; gap: 4px; color: var(--tb-muted-fg); font-size: 12px; }
 .tb-priority svg { width: 16px; height: 16px; }
 .tb-priority.is-high svg, .tb-priority.is-urgent svg { color: var(--tb-fg); }
@@ -361,7 +358,7 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 .tb-link-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* Task sheet Money block (billing demo, components/tasks/task-money.tsx). */
-.tb-money { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--tb-border); border-radius: 10px; background: color-mix(in oklab, var(--tb-brand, #8b6cff) 5%, transparent); }
+.tb-money { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--tb-border); border-radius: 10px; background: color-mix(in oklab, var(--tb-brand, var(--bf-violet-400)) 5%, transparent); }
 .tb-money header { display: flex; align-items: center; gap: 8px; }
 .tb-money h3 { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; font-weight: 600; }
 .tb-money h3 svg { width: 16px; height: 16px; color: var(--tb-muted-fg); }

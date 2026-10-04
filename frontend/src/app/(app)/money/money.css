@@ -10,7 +10,7 @@
 .money-button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 7px 12px; border: 1px solid var(--border, #2d2c35); border-radius: 9px; background: var(--surface-2, #1f1f24); color: var(--text, #e4e1e6); font: 600 12px var(--font-geist-sans), sans-serif; cursor: pointer; white-space: nowrap; }
 .money-button:hover:not(:disabled) { border-color: #4a4656; background: #29282f; }
 .money-button:disabled { opacity: .5; cursor: not-allowed; }
-.money-button.is-primary { border-color: #8b6cff; background: linear-gradient(135deg, #8b6cff, #6949e8); color: #fff; box-shadow: 0 8px 22px rgba(105, 73, 232, .22); }
+/* `.money-button.is-primary` colour: app/ui.css (one primary variant). */
 .money-button.is-ghost { background: transparent; color: var(--shell-variant, #c9c4d8); }
 .money-button.is-sm { min-height: 28px; padding: 4px 9px; font-size: 11px; }
 .money-button.is-sm svg { width: 13px; height: 13px; }

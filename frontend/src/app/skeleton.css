@@ -38,7 +38,7 @@
  * on an in-app link and cleared once the resolved route changes.
  */
 .nav-progress { position: fixed; inset: 0 0 auto; height: 2px; z-index: 200; pointer-events: none; background: transparent; }
-.nav-progress > i { display: block; height: 100%; width: 100%; transform-origin: 0 50%; background: linear-gradient(90deg, #8b6cff, #a995ff); box-shadow: 0 0 12px #8b6cffaa; animation: nav-progress-grow 10s cubic-bezier(.12, .82, .28, 1) forwards; }
+.nav-progress > i { display: block; height: 100%; width: 100%; transform-origin: 0 50%; background: linear-gradient(90deg, var(--bf-violet-400), var(--bf-violet-300)); box-shadow: 0 0 12px #8b6cffaa; animation: nav-progress-grow 10s cubic-bezier(.12, .82, .28, 1) forwards; }
 @keyframes nav-progress-grow { 0% { transform: scaleX(.02); } 30% { transform: scaleX(.52); } 70% { transform: scaleX(.82); } 100% { transform: scaleX(.96); } }
 
 /* Shown inside a link whose navigation is still resolving, so the click has feedback at its source. */
