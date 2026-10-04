@@ -350,6 +350,17 @@ class GuestDecisionFlowTests(DecisionBase, TestCase):
         # The stage move is part of the decision, not a second row.
         self.assertFalse(any(r['action'] == 'media.workflow.transitioned' and r['object']['id'] == self.v2['id'] for r in feed))
 
+    def test_a_change_request_is_one_feed_row_carrying_its_message(self):
+        invite, headers = self.guest_link()
+        response = self.decide(headers, self.v2, 'changes_requested', message='Trim the sting')
+        comment_id = response.json()['review_comment_id']
+        self.as_user(self.owner)
+        feed = self.client.get(reverse('api-project-activity', args=[self.workspace.id, self.project_id])).json()['results']
+        self.assertIn('review.decision.changes_requested', [row['action'] for row in feed])
+        # The note exists (and is listed on the cut), but the feed does not repeat it as a comment.
+        self.assertNotIn('review.comment.created', [row['action'] for row in feed])
+        self.assertTrue(ReviewComment.objects.filter(id=comment_id).exists())
+
     def test_team_review_lists_the_client_approval_as_proof(self):
         self.note(self.v2, 'Logo is soft')
         invite, headers = self.guest_link()

@@ -77,7 +77,9 @@ def visible_activity(*, user, workspace):
     rows = AuditLog.objects.filter(workspace=workspace).filter(allowed)
     # A client decision is one row ("Rachel Kim approved 'Hero' V2 as the client"); the stage
     # move it caused is part of it, not a second event.
-    rows = rows.exclude(action='media.workflow.transitioned', metadata__has_key='review_decision_id')
+    rows = rows.exclude(
+        action__in=('media.workflow.transitioned', 'review.comment.created'), metadata__has_key='review_decision_id',
+    )
     if not sees_team:
         rows = rows.filter(team_only=False)
     return rows.select_related('actor_user', 'actor_guest_session').order_by('-created_at', '-id')

@@ -16,7 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from app.models import (
-    MediaVersion, MediaVersionStageEntry, MediaVersionStatus, NotificationKind, ReviewComment,
+    AuditLog, MediaVersion, MediaVersionStageEntry, MediaVersionStatus, NotificationKind, ReviewComment,
     ReviewDecision, ReviewDecisionKind, User, WorkflowStage, WorkflowStageStatusState,
 )
 from app.permissions import MEDIA_READ, has_project_permission
@@ -139,6 +139,13 @@ def record_decision(*, media_version, decision, message=None, start_time_ms=None
         open_notes_count=open_count, message=message or None, review_comment=comment,
         created_at=now,
     )
+
+    if comment is not None:
+        # The note is part of the decision: the feed shows one "requested changes" row with
+        # the message, not a second "commented on" row (see services/activity.py).
+        for row in AuditLog.objects.filter(action='review.comment.created', entity_id=str(comment.id)):
+            row.metadata = {**(row.metadata or {}), 'review_decision_id': str(record.id)}
+            row.save(update_fields=['metadata'])
 
     current = MediaVersionStageEntry.objects.filter(media_version=media, exited_at__isnull=True).first()
     transitioned = current is None or current.workflow_stage_id != stage.id
