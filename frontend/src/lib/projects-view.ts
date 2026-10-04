@@ -19,6 +19,8 @@ export type ProjectsView = {
   selectedCampaign: CampaignNode | null;
   /** Non-null when the API could not supply the page and demo content is shown instead. */
   notice: string | null;
+  /** Billing demo: true when the viewer holds billing.view here (shows the Pricing tab). */
+  canSeeBilling?: boolean;
 };
 
 function buildFolders(folders: ProjectFolder[]): FolderNode[] {
@@ -100,6 +102,7 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
     selectedClient,
     selectedCampaign,
     notice: null,
+    canSeeBilling: Boolean(workspace.billing?.view),
   };
 }
 

@@ -47,6 +47,12 @@ PROJECT_FILE_READ = 'project_file.read'
 PROJECT_FILE_CREATE = 'project_file.create'
 PROJECT_FILE_UPDATE = 'project_file.update'
 PROJECT_FILE_DELETE = 'project_file.delete'
+# Billing (demo). Only ever honoured on a team member's own (USER) membership: someone who
+# reaches the workspace through a client team never gets them, whatever their role holds.
+BILLING_VIEW = 'billing.view'        # Money page, receivables, invoices, client prices
+BILLING_MANAGE = 'billing.manage'    # set prices and pay, create/send invoices, record payments
+BILLING_RATES_VIEW = 'billing.rates.view'  # see every editor's pay, rates and payouts
+BILLING_PERMISSION_KEYS = (BILLING_VIEW, BILLING_MANAGE, BILLING_RATES_VIEW)
 
 OWNER_PERMISSION_KEYS = (
     WORKSPACE_READ,
@@ -78,6 +84,9 @@ OWNER_PERMISSION_KEYS = (
     PROJECT_FILE_CREATE,
     PROJECT_FILE_UPDATE,
     PROJECT_FILE_DELETE,
+    BILLING_VIEW,
+    BILLING_MANAGE,
+    BILLING_RATES_VIEW,
 )
 
 MEMBER_PERMISSION_KEYS = (

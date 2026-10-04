@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { LinkPending } from "@/components/nav-progress";
 import { usePathname } from "next/navigation";
-import { Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, PackageCheck, Search, Settings, SquareKanban, Users, X } from "lucide-react";
+import { Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
@@ -22,6 +22,9 @@ const primaryLinks = [
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/team", label: "Team & Roles", icon: Users },
 ];
+
+/** Billing demo: only for people whose role holds billing.view in the selected workspace. */
+const moneyLink = { href: "/money", label: "Money", icon: Wallet };
 
 /**
  * Render Queue and Deliverables had pages but no way to reach them (Help even tells people
@@ -48,6 +51,8 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(railCollapsed);
   const [health, setHealth] = useState<OperationsHealth | "restricted" | "unavailable" | null>(null);
+  const selected = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? workspaces[0];
+  const navLinks = selected?.billing?.view ? [...primaryLinks, moneyLink] : primaryLinks;
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   // Projects lays out its own full-bleed browser, so it opts out of the standard page padding.
   // Full-bleed routes: the projects tree and the review workspace both own their own
@@ -108,7 +113,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
           </form>
 
           <nav aria-label="Main navigation">
-            {primaryLinks.map(({ href, label, icon: Icon }) => (
+            {navLinks.map(({ href, label, icon: Icon }) => (
               <Link key={label} href={href} onClick={() => setOpen(false)} title={label} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}>
                 <Icon size={20} /><span>{label}</span><LinkPending />
               </Link>

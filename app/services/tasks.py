@@ -17,6 +17,7 @@ from app.models import (
     TaskStatus,
 )
 
+from . import billing
 from .audit import record_user_audit
 from .file_processing import SCAN_TOPIC, enqueue_file_event
 from .notifications import notify_task_assigned
@@ -76,6 +77,7 @@ def create_task(*, workspace, created_by_membership, project=None, actor=None, *
     )
     task.full_clean()
     task.save()
+    billing.on_task_stage_changed(task=task, from_stage=None)
     _task_audit(
         actor=actor, task=task, action='task.created', at=now,
         stage=stage_ref(task.task_stage), due_at=_iso(task.due_at),
@@ -103,6 +105,8 @@ def update_task(*, task, actor=None, **fields):
     task.full_clean()
     task.save()
     if task.task_stage_id != (before_stage.id if before_stage else None):
+        # Entering the Approved stage kind freezes every assignee's pay as earned.
+        billing.on_task_stage_changed(task=task, from_stage=before_stage)
         record_task_stage_move(task=task, actor=actor, from_stage=before_stage, to_stage=task.task_stage, at=task.updated_at)
     if task.due_at != before_due:
         _task_audit(actor=actor, task=task, action='task.due_date.changed', at=task.updated_at, before=_iso(before_due), after=_iso(task.due_at))
@@ -141,6 +145,7 @@ def add_task_assignee(*, task, membership, actor=None):
     )
     assignee.full_clean()
     assignee.save()
+    billing.ensure_assignee_pay(task=task, membership=membership)
     notify_task_assigned(assignee=assignee, actor=actor)
     _task_audit(
         actor=actor, task=task, action='task.assigned', at=assignee.assigned_at,
@@ -159,6 +164,7 @@ def remove_task_assignee(*, assignee, actor=None):
     task = assignee.task
     membership = assignee.workspace_membership
     assignee.delete()
+    billing.drop_pending_pay(task=task, membership=membership)
     _task_audit(actor=actor, task=task, action='task.unassigned', assignee=_membership_ref(membership))
 
 
