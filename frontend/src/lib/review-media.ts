@@ -1,5 +1,5 @@
 import { listAssetFiles, listAssetFolders, listClientTeams, listMediaVersions, listProjects, listTaskStages } from "./api";
-import type { ClientTeam, MediaVersion, Project, ProjectFile, ProjectFolder, TaskStage } from "./api";
+import type { ApiResult, ClientTeam, DashboardRole, MediaVersion, Project, ProjectFile, ProjectFolder, TaskStage, TaskWorkflow } from "./api";
 import { loadWorkspaceContext } from "./workspace";
 
 /**
@@ -90,6 +90,8 @@ export type ReviewAsset = {
 
 export type MediaCatalogue = {
   workspaceId: string | null;
+  /** The viewer's dashboard role here: a "client" is in the workspace only through a client team. */
+  role: DashboardRole | null;
   assets: ReviewAsset[];
   stages: TaskStage[];
   clients: ClientTeam[];
@@ -314,18 +316,40 @@ export function defaultSelection(assets: ReviewAsset[]) {
   return { asset, version };
 }
 
+/**
+ * The notice an optional list's failure deserves: none for a 403.
+ *
+ * A 403 on a list the page can do without (the client directory, the asset library, task
+ * stages) only means this viewer's role does not include it. That is not something to warn
+ * about; a 5xx or a network error still is.
+ */
+export function optionalFailureNotice(results: ApiResult<unknown>[]): string | null {
+  const failed = results.find((result) => !result.ok && result.error.status !== 403);
+  return failed && !failed.ok ? failed.error.detail : null;
+}
+
+const NO_TASK_WORKFLOW: TaskWorkflow = { stages: [], settings: { wip_warning: false, auto_notify_client: false, lock_done_editing: false } };
+
 export async function loadMediaCatalogue(): Promise<MediaCatalogue> {
   const context = await loadWorkspaceContext();
-  const empty = { workspaceId: null, assets: [], stages: [], clients: [], projects: [] };
+  const empty = { workspaceId: null, role: null, assets: [], stages: [], clients: [], projects: [] };
   if (!context.ok) return { ...empty, notice: context.error.detail };
   if (!context.data.selected) return { ...empty, notice: "This account has no workspace yet." };
 
   const workspaceId = context.data.selected.id;
+  const role = context.data.selected.dashboard_role ?? null;
+  // Client-team members cannot read the studio's client list, asset library or task stages,
+  // and their review page needs none of them: only their projects and the cuts in them.
+  const internal = role !== "client";
+  const skipped = <T,>(data: T): Promise<ApiResult<T>> => Promise.resolve({ ok: true, data });
   const [projects, clients, assetFiles, folders, workflow] = await Promise.all([
-    listProjects(workspaceId), listClientTeams(workspaceId), listAssetFiles(workspaceId),
-    listAssetFolders(workspaceId), listTaskStages(workspaceId),
+    listProjects(workspaceId),
+    internal ? listClientTeams(workspaceId) : skipped<ClientTeam[]>([]),
+    internal ? listAssetFiles(workspaceId) : skipped<ProjectFile[]>([]),
+    internal ? listAssetFolders(workspaceId) : skipped<ProjectFolder[]>([]),
+    internal ? listTaskStages(workspaceId) : skipped<TaskWorkflow>(NO_TASK_WORKFLOW),
   ]);
-  if (!projects.ok) return { ...empty, workspaceId, notice: projects.error.detail };
+  if (!projects.ok) return { ...empty, workspaceId, role, notice: projects.error.detail };
 
   const scans = await Promise.all(projects.data.map(async (project) => ({
     projectId: project.id,
@@ -342,13 +366,13 @@ export async function loadMediaCatalogue(): Promise<MediaCatalogue> {
     mediaVersions: scans.map(({ projectId, versions }) => ({ projectId, versions: versions.ok ? versions.data : [] })),
   });
 
-  const failed = [clients, assetFiles, folders, workflow].find((result) => !result.ok);
   return {
     workspaceId,
+    role,
     assets,
     stages: workflow.ok ? workflow.data.stages : [],
     clients: clients.ok ? clients.data : [],
     projects: projects.data,
-    notice: failed && !failed.ok ? failed.error.detail : null,
+    notice: optionalFailureNotice([clients, assetFiles, folders, workflow]),
   };
 }

@@ -5,20 +5,28 @@
    to sessionStorage and the API, not derived-state effects. */
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  CornerDownRight, Film, Flame, Loader, LogOut, MessageSquareText, Paperclip,
-  Send, SmilePlus, Trash2, TriangleAlert,
+  BadgeCheck, Check, CornerDownRight, Film, Flame, Loader, LogOut, MessageSquareText, Paperclip,
+  RotateCcw, Send, SmilePlus, Trash2, TriangleAlert,
 } from "lucide-react";
 import { nestNotes, type ReviewNote } from "@/lib/review-notes";
 import {
-  clearGuestSession, createGuestComment, deleteGuestComment, downloadGuestAttachment,
-  editGuestComment, exchangeGuestInvite, listGuestComments, loadGuestReview,
+  changeMessageProblem, decisionLine, guestBarActions, MESSAGE_MAX_LENGTH, openNotesWarning,
+} from "@/lib/review-decisions";
+import { timecode } from "@/lib/timecode";
+import { ConfirmDialog } from "@/components/tasks/task-dialogs";
+import { Player, type PlayerHandle, type PlayerSource } from "@/app/(app)/review/player";
+import {
+  clearGuestSession, createGuestComment, createGuestDecision, deleteGuestComment, downloadGuestAttachment,
+  editGuestComment, exchangeGuestInvite, getGuestPlayback, listGuestComments, loadGuestReview,
   readGuestSession, setGuestReaction, uploadGuestAttachment, writeGuestSession,
-  type GuestReview, type GuestSession,
+  type GuestMediaVersion, type GuestPlayback, type GuestReview, type GuestSession,
 } from "@/lib/guest-client";
 
 const REACTIONS = ["👍", "🎉", "👀"];
+const NO_ANNOTATIONS: never[] = [];
+const noop = () => {};
 
 /**
  * The public review surface a client opens from a shared link.
@@ -36,30 +44,34 @@ export function GuestReviewer({ token }: { token: string }) {
   const [notes, setNotes] = useState<ReviewNote[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [playback, setPlayback] = useState<{ versionId: string; data: GuestPlayback | null; error: string } | null>(null);
+  const [positionMs, setPositionMs] = useState(0);
+  const player = useRef<PlayerHandle>(null);
 
   useEffect(() => {
     setMounted(true);
     setSession(readGuestSession(token));
   }, [token]);
 
+  /** Reloads the project, its cuts and each cut's decision; keeps the cut on screen. */
+  const reload = useCallback(async (keepVersion: boolean) => {
+    if (!session) return;
+    const result = await loadGuestReview(session.projectId, session.accessKey);
+    if (!result.ok) {
+      // A revoked or expired link fails here; sending the reviewer back to the form
+      // would just loop, so the message stands on its own.
+      setError(result.error);
+      return;
+    }
+    setReview(result.data);
+    if (!keepVersion) setVersionId(result.data.media_versions.at(-1)?.id ?? null);
+  }, [session]);
+
   useEffect(() => {
     if (!session) return;
-    let live = true;
     setLoading(true);
-    void loadGuestReview(session.projectId, session.accessKey).then((result) => {
-      if (!live) return;
-      setLoading(false);
-      if (!result.ok) {
-        // A revoked or expired link fails here; sending the reviewer back to the form
-        // would just loop, so the message stands on its own.
-        setError(result.error);
-        return;
-      }
-      setReview(result.data);
-      setVersionId(result.data.media_versions.at(-1)?.id ?? null);
-    });
-    return () => { live = false; };
-  }, [session]);
+    void reload(false).finally(() => setLoading(false));
+  }, [session, reload]);
 
   const refresh = useCallback(async () => {
     if (!session || !versionId) return;
@@ -69,6 +81,23 @@ export function GuestReviewer({ token }: { token: string }) {
   }, [session, versionId]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  // The player source is a signed URL for this guest and this cut, fetched per cut.
+  useEffect(() => {
+    if (!session || !versionId) return;
+    let live = true;
+    void getGuestPlayback(session.projectId, versionId, session.accessKey).then((result) => {
+      if (!live) return;
+      setPlayback({ versionId, data: result.ok ? result.data : null, error: result.ok ? "" : result.error });
+    });
+    return () => { live = false; };
+  }, [session, versionId]);
+
+  const version = review?.media_versions.find((item) => item.id === versionId) ?? null;
+  const sources = useMemo<PlayerSource[]>(
+    () => (playback?.data && playback.versionId === versionId ? [{ id: "preview", label: "Preview", src: playback.data.url }] : []),
+    [playback, versionId],
+  );
 
   if (!token) {
     return (
@@ -85,6 +114,11 @@ export function GuestReviewer({ token }: { token: string }) {
     return <Identify token={token} onIdentified={setSession} />;
   }
 
+  const canComment = review?.viewer?.can_comment ?? true;
+  // A project can hold several cuts; name them when "V2" alone would be ambiguous.
+  const manyTitles = new Set(review?.media_versions.map((item) => item.title)).size > 1;
+  const pendingPlayback = !playback || playback.versionId !== versionId;
+
   return (
     <div className="gr-shell">
       <header className="gr-topbar">
@@ -97,7 +131,7 @@ export function GuestReviewer({ token }: { token: string }) {
           <span>{session.name}</span>
           <button
             type="button"
-            onClick={() => { clearGuestSession(token); setSession(null); setReview(null); setNotes([]); }}
+            onClick={() => { clearGuestSession(token); setSession(null); setReview(null); setNotes([]); setPlayback(null); }}
           >
             <LogOut size={13} />Leave
           </button>
@@ -108,34 +142,62 @@ export function GuestReviewer({ token }: { token: string }) {
 
       <div className="gr-body">
         <section className="gr-viewer">
-          {review && review.media_versions.length > 1 && (
-            <div className="gr-versions" role="tablist" aria-label="Cuts">
-              {review.media_versions.map((version) => (
-                <button
-                  key={version.id}
-                  role="tab"
-                  aria-selected={version.id === versionId}
-                  className={version.id === versionId ? "selected" : ""}
-                  onClick={() => { setVersionId(version.id); setNotes([]); }}
-                >
-                  V{version.version_number}
-                </button>
-              ))}
+          <div className="gr-viewer-bar">
+            {review && review.media_versions.length > 1 && (
+              <div className="gr-versions" role="tablist" aria-label="Cuts">
+                {review.media_versions.map((item) => (
+                  <button
+                    key={item.id}
+                    role="tab"
+                    aria-selected={item.id === versionId}
+                    className={item.id === versionId ? "selected" : ""}
+                    onClick={() => { setVersionId(item.id); setNotes([]); setPositionMs(0); }}
+                  >
+                    {manyTitles && <span className="gr-version-title">{item.title}</span>}
+                    V{item.version_number}
+                    {item.decision?.decision === "approved" && <Check size={11} aria-label="approved" />}
+                  </button>
+                ))}
+              </div>
+            )}
+            {version && session && review && (
+              <DecisionBar
+                key={version.id}
+                session={session}
+                version={version}
+                canDecide={Boolean(review.viewer?.can_decide)}
+                positionMs={positionMs}
+                onDecided={async () => { setError(""); await Promise.all([reload(true), refresh()]); }}
+                onError={setError}
+              />
+            )}
+          </div>
+
+          {sources.length > 0 && version ? (
+            <div className="gr-player rv">
+              <Player
+                key={version.id}
+                handle={player}
+                sources={sources}
+                title={version.title}
+                notes={notes}
+                annotations={NO_ANNOTATIONS}
+                pending={null}
+                canDraw={false}
+                onTime={setPositionMs}
+                onMeta={noop}
+                onDraw={noop}
+                onDeleteAnnotation={noop}
+                onFocusNote={noop}
+              />
+            </div>
+          ) : (
+            <div className="gr-stage">
+              {loading || (versionId && pendingPlayback) ? <Loader size={22} className="gr-spin" /> : <Film size={26} />}
+              <strong>{version?.title ?? (loading ? "Loading…" : "No cut available")}</strong>
+              {playback?.error && playback.versionId === versionId && <small>{playback.error}</small>}
             </div>
           )}
-
-          {/*
-            Guest links carry `media.read`, but the API exposes no endpoint that streams
-            media bytes to a guest — `media-versions/<id>/preview/` is session-authenticated.
-            Saying so is better than an empty player that looks broken.
-          */}
-          <div className="gr-stage">
-            {loading ? <Loader size={22} className="gr-spin" /> : <Film size={26} />}
-            <strong>
-              {review?.media_versions.find((version) => version.id === versionId)?.title ?? "No cut available"}
-            </strong>
-            <small>Playback is not yet available through a review link. Notes below are live.</small>
-          </div>
         </section>
 
         <section className="gr-notes">
@@ -152,24 +214,126 @@ export function GuestReviewer({ token }: { token: string }) {
                 note={note}
                 session={session}
                 versionId={versionId}
+                onSeek={(ms) => player.current?.seek(ms)}
                 onChanged={refresh}
                 onError={setError}
               />
             ))}
           </div>
 
-          {versionId && (
+          {versionId && canComment && (
             <Composer
               session={session}
               versionId={versionId}
               parent={null}
-              placeholder="Leave a note for the team…"
+              positionMs={sources.length > 0 ? positionMs : null}
+              placeholder={sources.length > 0 ? `Note at ${timecode(positionMs)}…` : "Leave a note for the team…"}
               onPosted={refresh}
               onError={setError}
             />
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Approve / Request changes on exactly the cut on screen, and what was decided.
+ *
+ * Shown only when the link allows decisions; the server checks again (revoked and expired
+ * links fail there). A decision belongs to this version: a newer cut starts undecided.
+ */
+function DecisionBar({ session, version, canDecide, positionMs, onDecided, onError }: {
+  session: GuestSession; version: GuestMediaVersion; canDecide: boolean; positionMs: number;
+  onDecided: () => Promise<void>; onError: (message: string) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState("");
+  const latest = version.decision ?? null;
+  const actions = guestBarActions(canDecide, latest);
+  const label = `V${version.version_number}`;
+  const warning = openNotesWarning(version.open_notes ?? 0, label);
+
+  const decide = async (decision: "approved" | "changes_requested") => {
+    setBusy(true);
+    const result = await createGuestDecision(session.projectId, version.id, session.accessKey,
+      decision === "approved" ? { decision } : { decision, message: message.trim(), start_time_ms: Math.max(0, Math.round(positionMs)) });
+    setBusy(false);
+    if (!result.ok) {
+      if (decision === "approved") setConfirming(false);
+      onError(result.error);
+      return;
+    }
+    setConfirming(false); setRequesting(false); setMessage(""); setProblem("");
+    await onDecided();
+  };
+
+  if (!latest && !actions.approve && !actions.requestChanges) return null;
+
+  return (
+    <div className="gr-decision">
+      {latest && (
+        <p className={`gr-decision-state is-${latest.decision}`} role="status" data-testid="guest-decision-state">
+          {latest.decision === "approved" ? <BadgeCheck size={14} /> : <RotateCcw size={13} />}
+          {decisionLine(latest)}
+        </p>
+      )}
+      {actions.requestChanges && (
+        <button type="button" className="gr-decide" onClick={() => setRequesting(!requesting)} aria-expanded={requesting} disabled={busy}>
+          <RotateCcw size={13} />Request changes
+        </button>
+      )}
+      {actions.approve && (
+        <button type="button" className="gr-decide is-approve" onClick={() => { onError(""); setConfirming(true); }} disabled={busy}>
+          <Check size={13} />Approve {label}
+        </button>
+      )}
+
+      {requesting && (
+        <form
+          className="gr-request"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const why = changeMessageProblem(message);
+            setProblem(why ?? "");
+            if (!why) void decide("changes_requested");
+          }}
+        >
+          <label htmlFor="gr-request-text">What should change in {label}? <small>Pinned at {timecode(positionMs)}</small></label>
+          <textarea
+            id="gr-request-text"
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            maxLength={MESSAGE_MAX_LENGTH}
+            rows={3}
+            autoFocus
+            placeholder="e.g. The logo sting runs long — trim it by a second."
+          />
+          {problem && <p className="gr-request-problem" role="alert">{problem}</p>}
+          <div>
+            <button type="button" onClick={() => { setRequesting(false); setProblem(""); }}>Cancel</button>
+            <button disabled={busy || !message.trim()}>{busy ? "Sending…" : "Send change request"}</button>
+          </div>
+        </form>
+      )}
+
+      <ConfirmDialog
+        open={confirming}
+        title={`Approve ${label} of “${version.title}”?`}
+        body={<>Your approval is recorded against <strong>{label}</strong> only, and the team is notified. If they upload a newer version, it will need its own approval.</>}
+        confirmLabel={busy ? "Approving…" : `Approve ${label}`}
+        busy={busy}
+        onConfirm={() => void decide("approved")}
+        onCancel={() => setConfirming(false)}
+      >
+        {warning && (
+          <p className="rv-confirm-warn" role="alert"><TriangleAlert size={14} /><span>{warning}</span></p>
+        )}
+      </ConfirmDialog>
     </div>
   );
 }
@@ -219,8 +383,8 @@ function Identify({ token, onIdentified }: { token: string; onIdentified: (sessi
   );
 }
 
-function Note({ note, session, versionId, onChanged, onError, depth = 0 }: {
-  note: ReviewNote; session: GuestSession; versionId: string | null;
+function Note({ note, session, versionId, onSeek, onChanged, onError, depth = 0 }: {
+  note: ReviewNote; session: GuestSession; versionId: string | null; onSeek: (ms: number) => void;
   onChanged: () => Promise<void>; onError: (message: string) => void; depth?: number;
 }) {
   const [replying, setReplying] = useState(false);
@@ -248,7 +412,12 @@ function Note({ note, session, versionId, onChanged, onError, depth = 0 }: {
         <span className="gr-avatar">{note.initials}</span>
         <div>
           <strong>{note.author}</strong>
-          <small>{note.timecode ? `${note.timecode} · ` : ""}{note.age}{note.resolved ? " · resolved" : ""}</small>
+          <small>
+            {note.timecode && note.startMs !== null
+              ? <button type="button" className="gr-timecode" onClick={() => onSeek(note.startMs ?? 0)}>{note.timecode}</button>
+              : null}
+            {note.timecode ? " · " : ""}{note.age}{note.resolved ? " · resolved" : ""}
+          </small>
         </div>
       </div>
 
@@ -343,6 +512,7 @@ function Note({ note, session, versionId, onChanged, onError, depth = 0 }: {
           session={session}
           versionId={versionId}
           parent={note.id}
+          positionMs={null}
           placeholder={`Reply to ${note.author}…`}
           onPosted={async () => { setReplying(false); await onChanged(); }}
           onError={onError}
@@ -350,14 +520,16 @@ function Note({ note, session, versionId, onChanged, onError, depth = 0 }: {
       )}
 
       {note.replies.map((reply) => (
-        <Note key={reply.id} note={reply} session={session} versionId={versionId} onChanged={onChanged} onError={onError} depth={depth + 1} />
+        <Note key={reply.id} note={reply} session={session} versionId={versionId} onSeek={onSeek} onChanged={onChanged} onError={onError} depth={depth + 1} />
       ))}
     </article>
   );
 }
 
-function Composer({ session, versionId, parent, placeholder, onPosted, onError }: {
-  session: GuestSession; versionId: string; parent: string | null; placeholder: string;
+function Composer({ session, versionId, parent, positionMs, placeholder, onPosted, onError }: {
+  session: GuestSession; versionId: string; parent: string | null;
+  /** Where a new top-level note is pinned; null for replies and when nothing is playing. */
+  positionMs: number | null; placeholder: string;
   onPosted: () => Promise<void>; onError: (message: string) => void;
 }) {
   const [text, setText] = useState("");
@@ -371,6 +543,7 @@ function Composer({ session, versionId, parent, placeholder, onPosted, onError }
     const result = await createGuestComment(session.projectId, versionId, session.accessKey, {
       text: body,
       ...(parent ? { parent_comment_id: parent } : {}),
+      ...(!parent && positionMs !== null ? { start_time_ms: Math.max(0, Math.round(positionMs)) } : {}),
     });
     setBusy(false);
     if (!result.ok) { onError(result.error); return; }

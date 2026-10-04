@@ -26,6 +26,7 @@ export type ActivityEntry = {
     version_number?: number | null; excerpt?: string | null; reply?: boolean; decision?: Decision;
     stage_kind?: string | null; from_kind?: string | null; to_kind?: string | null; reason?: string | null;
     assignee?: string; guest_name?: string | null; media_title?: string;
+    client_decision?: boolean; open_notes_count?: number | null; allow_decisions?: boolean;
   };
   team_only: boolean;
   /** The server's own one-line wording (what the CSV export uses). */
@@ -81,6 +82,10 @@ export function shortDate(iso: string | null | undefined, now: Date = new Date()
 }
 
 const version = (entry: ActivityEntry) => (entry.detail.version_number ? `V${entry.detail.version_number}` : null);
+const openNotesMeta = (entry: ActivityEntry) => {
+  const count = entry.detail.open_notes_count;
+  return typeof count === "number" && count > 0 ? [`${count} open ${count === 1 ? "note" : "notes"}`] : [];
+};
 
 export function describeActivity(entry: ActivityEntry, now: Date = new Date()): ActivityLine {
   const actor = entry.actor.name || "Someone";
@@ -125,6 +130,12 @@ export function describeActivity(entry: ActivityEntry, now: Date = new Date()): 
         meta: [version(entry) ?? "a cut", decisionLabel(entry.detail.decision)] };
     case "guest.invite.revoked":
       return line("revoked review link");
+    case "guest.invite.updated":
+      return line(entry.verb || "changed review link");
+    case "review.decision.approved":
+      return line("approved", { tail: [version(entry), "as the client"].filter(Boolean).join(" "), meta: openNotesMeta(entry) });
+    case "review.decision.changes_requested":
+      return line("requested changes on", { tail: [version(entry), "as the client"].filter(Boolean).join(" ") });
     case "guest.access.revoked":
       return { actor, verb: `revoked ${entry.detail.guest_name ?? entry.before ?? "a guest"}’s access to`, subject, tail: null, change: null, meta: [] };
     default:
@@ -211,16 +222,27 @@ export function timeAgo(iso: string, now: Date = new Date()): string {
 
 export type GuestLinkActivity = {
   visits: number; last_opened_at: string | null; last_version_number: number | null;
-  last_media_version_id: string | null; decision: Decision;
+  last_media_version_id: string | null;
+  /** The latest decision a reviewer made through this link (never the team's own approval). */
+  decision: Decision;
+  decision_version_number?: number | null; decided_by?: string | null; decided_at?: string | null;
 };
 
-/** "Opened 2 days ago · V2 · no decision yet", or "Not opened yet". */
+/**
+ * "Opened 2 days ago · V2 · no decision yet", "Opened 1 hour ago · V3 · approved V3 · Rachel Kim · Oct 3",
+ * or "Not opened yet".
+ */
 export function guestLinkStatus(activity: GuestLinkActivity | null | undefined, now: Date = new Date()): string {
-  if (!activity?.last_opened_at) return "Not opened yet";
-  const parts = [`Opened ${timeAgo(activity.last_opened_at, now)}`];
-  if (activity.last_version_number) {
-    parts.push(`V${activity.last_version_number}`);
-    parts.push(decisionLabel(activity.decision));
+  if (!activity?.last_opened_at && !activity?.decision) return "Not opened yet";
+  const parts = activity.last_opened_at ? [`Opened ${timeAgo(activity.last_opened_at, now)}`] : [];
+  if (activity.last_version_number) parts.push(`V${activity.last_version_number}`);
+  if (activity.decision) {
+    const label = decisionLabel(activity.decision);
+    parts.push(activity.decision_version_number ? `${label} V${activity.decision_version_number}` : label);
+    if (activity.decided_by) parts.push(activity.decided_by);
+    if (activity.decided_at) parts.push(shortDate(activity.decided_at, now));
+  } else if (activity.last_version_number) {
+    parts.push(decisionLabel(null));
   }
   return parts.join(" · ");
 }
@@ -233,9 +255,11 @@ export type DashboardActivityTone = "neutral" | "accent" | "success" | "warning"
 export function toDashboardRow(entry: ActivityEntry, now: Date = new Date()) {
   const line = describeActivity(entry, now);
   const action = activityText(line).slice(line.actor.length + 1);
-  const tone: DashboardActivityTone = entry.actor.type === "guest" ? "blue"
+  // A client's decision reads as the decision (green / amber), even when a guest made it.
+  const tone: DashboardActivityTone = entry.detail.client_decision ? (entry.detail.decision === "approved" ? "success" : "warning")
+    : entry.actor.type === "guest" ? "blue"
     : entry.detail.decision === "approved" ? "success"
-      : entry.action === "media.revision.requested" ? "warning"
+      : entry.action === "media.revision.requested" || entry.detail.decision === "changes_requested" ? "warning"
         : entry.category === "comments" ? "accent" : "neutral";
   const where = entry.project?.name;
   const age = timeAgo(entry.created_at, now);

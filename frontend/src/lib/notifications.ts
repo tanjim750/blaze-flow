@@ -112,10 +112,12 @@ export function describeNotification(item: NotificationItem): DescribedNotificat
       return { ...base, tone: "comment", verb: teamOnly ? "left a team-only note on" : "commented on", subject: cut ?? "your cut" };
     case "MEDIA_VERSION_NEW":
       return { ...base, tone: "version", verb: "uploaded a new version:", subject: cut ?? "a new cut" };
+    // A client decision (from a review link or a client-team member) says so: it is the
+    // client's sign-off on exactly that version, not a studio stage move.
     case "MEDIA_APPROVED":
-      return { ...base, tone: "approved", verb: "approved", subject: cut ?? "your cut" };
+      return { ...base, tone: "approved", verb: payload.client_decision === true ? "approved as the client:" : "approved", subject: cut ?? "your cut" };
     case "MEDIA_CHANGES_REQUESTED":
-      return { ...base, tone: "changes", verb: "requested changes on", subject: cut ?? "your cut" };
+      return { ...base, tone: "changes", verb: payload.client_decision === true ? "requested changes as the client on" : "requested changes on", subject: cut ?? "your cut" };
     case "TASK_ASSIGNED":
       return { ...base, tone: "task", verb: "assigned you", subject: title ? `“${clip(title, 60)}”` : "a task" };
     case "TASK_CLIENT_READY":
