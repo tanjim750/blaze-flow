@@ -103,6 +103,9 @@ export function Comments({
   const [replyTo, setReplyTo] = useState<ReviewNote | null>(null);
   const [showResolved, setShowResolved] = useState(false);
   const feed = useRef<HTMLDivElement>(null);
+  // A project cut the viewer can read but not comment on (a read-only role): show that,
+  // instead of a composer whose every send would be refused.
+  const viewOnly = Boolean(view.target) && !view.canComment;
 
   const open = notes.filter((note) => !note.resolved).length;
   const shown = showResolved ? notes : notes.filter((note) => !note.resolved);
@@ -181,12 +184,17 @@ export function Comments({
             writer={writer}
             focused={note.id === focusedId}
             onSeek={onSeek}
-            onReply={clientPreview ? undefined : setReplyTo}
+            onReply={clientPreview || viewOnly ? undefined : setReplyTo}
           />
         ))}
       </div>
 
-      {clientPreview ? (
+      {viewOnly ? (
+        <p className="rvc-viewonly" role="note">
+          <Eye size={13} aria-hidden="true" />
+          <span><strong>You have view-only access.</strong> You can watch this cut and read the notes, but not comment.</span>
+        </p>
+      ) : clientPreview ? (
         <p className="rvc-preview-note">
           You&rsquo;re seeing this cut as a client would. Turn off the client view to comment.
         </p>
@@ -224,13 +232,17 @@ function TeamBadge() {
   );
 }
 
-function Note({ note, target, writer, focused, onSeek, onReply, timed = true }: {
+function Note({ note, view, target, writer, focused, onSeek, onReply, timed = true }: {
   timed?: boolean; note: ReviewNote; view: ReviewView; target: ReviewView["target"]; writer: ReviewWriter; focused: boolean;
   onSeek: (ms: number) => void;
   /** Omitted where there is no composer to reply with, so no dead Reply button is drawn. */
   onReply?: (note: ReviewNote) => void;
 }) {
   const base = attachmentBase(target, note.id);
+  // Local (device-only) notes are always the viewer's own; project notes follow the API.
+  const access = target && !note.local ? view.access : null;
+  const canResolve = !access || access.resolve;
+  const canReact = !access || access.react;
   const recording = note.recording ?? (base ? recordingOf(note, (id) => `${base}/${id}/`) : null);
   const files = note.attachments.filter((item) => !recording || !item.mimeType.startsWith(recording.mimeType.split("/")[0]));
 
@@ -285,14 +297,14 @@ function Note({ note, target, writer, focused, onSeek, onReply, timed = true }: 
 
       <div className="rvc-actions">
         {onReply && <button type="button" onClick={() => onReply(note)}>Reply</button>}
-        <button type="button" onClick={() => writer.react(note, "👍")} aria-label="React with thumbs up"><SmilePlus size={12} /></button>
-        <button
+        {canReact && <button type="button" onClick={() => writer.react(note, "👍")} aria-label="React with thumbs up"><SmilePlus size={12} /></button>}
+        {canResolve && <button
           type="button"
           className={note.resolved ? "" : "rvc-resolve"}
           onClick={() => writer.setResolved(note, !note.resolved)}
         >
           {note.resolved ? "Reopen" : "Resolve"}
-        </button>
+        </button>}
         {note.local && (
           <button type="button" className="rvc-delete" onClick={() => writer.removeNote(note)} aria-label="Delete note"><Trash2 size={12} /></button>
         )}

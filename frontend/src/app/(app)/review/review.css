@@ -794,3 +794,9 @@
 .rv-publish-mode label { display: inline-flex; align-items: center; gap: 6px; color: var(--tb-fg, #fafafa); font-size: 13px; cursor: pointer; }
 .rv-publish-mode input { accent-color: var(--primary); }
 .rv-publish-carry { margin: 0; padding: 10px 12px; border: 1px solid var(--tb-border, #27272a); border-radius: 8px; color: var(--tb-muted-fg, #a1a1aa); font-size: 12px; line-height: 1.5; }
+
+/* Read-only role on a project cut: say so where the composer would be. */
+.rvc-viewonly { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 12px 14px; border-top: 1px solid var(--rv-line); color: var(--muted); font-size: 12px; line-height: 1.45; }
+.rvc-viewonly svg { flex: none; margin-top: 2px; }
+.rvc-viewonly strong { color: var(--foreground); font-weight: 600; }
+.rv-task dt label { display: inline-flex; align-items: center; gap: inherit; }

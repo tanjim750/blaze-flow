@@ -376,3 +376,10 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 .tb-money-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border: 1px solid var(--tb-border-strong); border-radius: 999px; color: var(--tb-muted-fg); font-size: 11px; white-space: nowrap; }
 .tb-money-chip svg { width: 11px; height: 11px; }
 .tb-money-chip.is-earned { color: #7de9bd; border-color: #2d6550; background: #183e31; }
+
+/* Read-only boards (clients, view-only roles): a quiet marker instead of write controls. */
+.tb-readonly { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--tb-border); border-radius: 8px; color: var(--tb-muted-fg); font-size: 12px; font-weight: 500; }
+.tb-readonly svg { width: 14px; height: 14px; }
+.tb-lock.is-readonly { border-color: var(--tb-border-strong); background: color-mix(in oklch, var(--tb-fg) 5%, transparent); }
+.tb-lock.is-readonly > svg { color: var(--tb-muted-fg); }
+.tb-empty.is-client { margin-top: 12px; }

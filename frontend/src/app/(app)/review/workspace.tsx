@@ -322,7 +322,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
               <Check size={14} />Approve
             </button>
           )}
-          {view.target && view.role !== "client" && (
+          {/* Sharing out needs share rights; a read-only member would only open a refusal. */}
+          {view.target && view.role !== "client" && view.canManageGuests && (
             <button type="button" onClick={() => setShareOpen(!shareOpen)} aria-pressed={shareOpen}>
               <Share2 size={14} />Share
             </button>
@@ -446,7 +447,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           notes={notes}
           annotations={annotations}
           pending={pending}
-          canDraw={view.target ? view.canComment : true}
+          canDraw={view.target ? view.canComment && (view.access?.annotate ?? true) : true}
           onTime={setPositionMs}
           onMeta={setMeta}
           onDraw={setPending}
@@ -462,6 +463,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
               stages={view.taskStages}
               workspaceId={view.workspaceId}
               mediaId={version.id}
+              access={view.taskAccess}
+              assignees={view.assignees}
               returnTo={returnTo}
               onNavigate={leave.guard}
             />

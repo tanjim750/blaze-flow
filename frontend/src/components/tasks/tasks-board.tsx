@@ -9,9 +9,11 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Columns3, LayoutList, Plus, Settings2, TriangleAlert, X } from "lucide-react";
+import { Columns3, Eye, LayoutList, Plus, Settings2, TriangleAlert, X } from "lucide-react";
 import type { ProjectFile, Task, TaskAttachment } from "@/lib/api";
 import type { TasksView } from "@/lib/tasks-view";
+import { FULL_TASK_ACCESS, isReadOnlyTasks } from "@/lib/permissions";
+import Link from "next/link";
 import { updateAssetFile, uploadAssetFile } from "@/lib/asset-api-client";
 import { openUniversalReview } from "@/components/universal-review";
 import { reviewHref, taskOpenTarget, type LinkedCandidate } from "@/lib/open-in-review";
@@ -42,6 +44,10 @@ export type TasksBoardProps = {
 
 export function TasksBoard({ view, projectId = null, compact = false, initialQuery = "", syncUrl = false }: TasksBoardProps) {
   const stages = useMemo(() => toBoardStages(view.stages), [view.stages]);
+  // What this viewer may change. A client or a read-only member gets the same board with
+  // every write control left out, rather than controls that can only fail.
+  const access = view.access ?? FULL_TASK_ACCESS;
+  const readOnly = isReadOnlyTasks(access);
   const stageById = useMemo(() => new Map(stages.map((stage) => [stage.id, stage])), [stages]);
   const [tasks, setTasks] = useState(view.tasks);
   const [files, setFiles] = useState(view.files);
@@ -253,14 +259,15 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
       if (target && (target.closest("input, textarea, select, [contenteditable=true], [role=dialog], [role=menu]"))) return;
       if (document.querySelector("[role=dialog][data-state=open]")) return;
       if (event.key === "/") { event.preventDefault(); searchRef.current?.focus(); }
-      else if (event.key.toLowerCase() === "n" && firstOpenStage) { event.preventDefault(); setMode("board"); setQuickAddStage(firstOpenStage.id); }
+      else if (event.key.toLowerCase() === "n" && firstOpenStage && access.create) { event.preventDefault(); setMode("board"); setQuickAddStage(firstOpenStage.id); }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [firstOpenStage]);
+  }, [access.create, firstOpenStage]);
 
   const hasAnything = visibleTasks.length + visibleFiles.length > 0;
   const clear = () => setFilters(EMPTY_FILTERS);
+  const clientEmpty = access.client && !scoped.length && !scopedFiles.length && !filterCount;
   const empty = mode === "list" ? !visibleTasks.length : filterCount > 0 && !hasAnything;
 
   return <div className={`tb-root ${compact ? "is-compact" : ""}`}>
@@ -275,8 +282,9 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
         <button type="button" aria-pressed={mode === "board"} onClick={() => setMode("board")}><Columns3 aria-hidden="true" />Board</button>
         <button type="button" aria-pressed={mode === "list"} onClick={() => setMode("list")}><LayoutList aria-hidden="true" />List</button>
       </div>
-      {!compact && <button type="button" className="tb-button is-ghost" aria-label="Customize stages" onClick={() => setDialog("stages")}><Settings2 aria-hidden="true" /><span className="tb-label-md">Customize stages</span></button>}
-      <button type="button" className="tb-button is-primary" onClick={() => setDialog("new")}><Plus aria-hidden="true" />New task</button>
+      {!compact && access.manageStages && <button type="button" className="tb-button is-ghost" aria-label="Customize stages" onClick={() => setDialog("stages")}><Settings2 aria-hidden="true" /><span className="tb-label-md">Customize stages</span></button>}
+      {access.create && <button type="button" className="tb-button is-primary" onClick={() => setDialog("new")}><Plus aria-hidden="true" />New task</button>}
+      {readOnly && <span className="tb-readonly" role="note"><Eye aria-hidden="true" />View only</span>}
     </header>
 
     <FilterBar
@@ -290,13 +298,20 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
           coverOf={coverOf} onOpen={activate} onDetails={(task) => setOpenTaskId(task.id)} onOpenFile={(file) => review(file.file.id, file.file.name)}
           onMove={requestMove} onMoveFile={(file, stageId) => void moveFile(file, stageId)} onDelete={setPendingDelete}
           onCreate={quickCreate} quickAddStage={quickAddStage} setQuickAddStage={setQuickAddStage} menuFor={menuFor} setMenuFor={setMenuFor}
+          canCreate={access.create} canMove={access.update} canDelete={access.delete}
         />
-      : <BoardList columns={columns} contextOf={contextOf} onOpen={activate} onDetails={(task) => setOpenTaskId(task.id)} onMove={requestMove} onDelete={setPendingDelete} menuFor={menuFor} setMenuFor={setMenuFor} />}
+      : <BoardList columns={columns} contextOf={contextOf} onOpen={activate} onDetails={(task) => setOpenTaskId(task.id)} onMove={requestMove} onDelete={setPendingDelete} menuFor={menuFor} setMenuFor={setMenuFor} canMove={access.update} canDelete={access.delete} />}
 
-    {empty && <div className="tb-empty" role="status">
+    {empty && !clientEmpty && <div className="tb-empty" role="status">
       <strong>{filterCount ? "No matching tasks" : "No tasks yet"}</strong>
-      <span>{filterCount ? "Nothing matches the current search and filters." : "Create the first piece of work with New task."}</span>
+      <span>{filterCount ? "Nothing matches the current search and filters." : access.create ? "Create the first piece of work with New task." : "Nothing has been shared with you here yet."}</span>
       {filterCount > 0 && <button type="button" className="tb-button" onClick={clear}><X aria-hidden="true" />Clear search and filters</button>}
+    </div>}
+
+    {clientEmpty && <div className="tb-empty is-client" role="status">
+      <strong>The studio runs production here</strong>
+      <span>Tasks are your studio&apos;s working board, so there is nothing for you to change. Cuts that are ready for you to review are on Home.</span>
+      <Link className="tb-button" href="/">Go to Home</Link>
     </div>}
 
     <p className="tb-sr" aria-live="polite" aria-atomic="true">{live}</p>
@@ -304,6 +319,7 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
     <TaskSheet
       task={openTask} stage={openStage} stages={stages} view={view}
       locked={Boolean(openStage?.isDone && view.workflowSettings.lock_done_editing)}
+      canEdit={access.update} canDelete={access.delete}
       attachments={openTask ? attachments[openTask.id] : undefined} loadingAttachments={Boolean(openTask && !Object.hasOwn(attachments, openTask.id))} fileBySourceId={fileBySourceId}
       onClose={() => setOpenTaskId(null)}
       onPatch={(payload) => openTask ? patch(openTask.id, payload) : Promise.resolve(false)}

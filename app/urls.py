@@ -106,6 +106,7 @@ from .activity_views import (
 )
 from . import billing_views
 from .publish_views import asset_file_publish
+from .permission_views import workspace_permissions
 
 urlpatterns = [
     path('health/', health_check, name='api-health'),
@@ -172,6 +173,7 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/task-stages/<uuid:stage_id>/', task_stage_detail, name='api-task-stage-detail'),
     path('workspaces/<uuid:workspace_id>/asset-folders/', asset_folder_list_create, name='api-asset-folders'),
     path('workspaces/<uuid:workspace_id>/asset-folders/<uuid:folder_id>/', asset_folder_detail, name='api-asset-folder-detail'),
+    path('workspaces/<uuid:workspace_id>/permissions/', workspace_permissions, name='api-workspace-permissions'),
     path('workspaces/<uuid:workspace_id>/asset-files/', asset_file_list_create, name='api-asset-files'),
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/', asset_file_detail, name='api-asset-file-detail'),
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/download/', asset_file_download, name='api-asset-file-download'),

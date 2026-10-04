@@ -1,4 +1,4 @@
-import { getTask, listAnnotations, listGuestInvites, listMediaDecisions, listReviewComments, listTaskAttachments, listTasks, listWorkflowStages, listWorkspaceMembers } from "./api";
+import { getTask, getWorkspacePermissions, listAnnotations, listGuestInvites, listMediaDecisions, listReviewComments, listTaskAttachments, listTasks, listWorkflowStages, listWorkspaceMembers } from "./api";
 import type { Annotation, DashboardRole, GuestInvite, Project, Task, TaskStage } from "./api";
 import { NO_DECISIONS, type DecisionViewer, type ReviewDecision } from "./review-decisions";
 import { nestNotes, type ReviewNote } from "./review-notes";
@@ -6,6 +6,7 @@ import { normalizeSpecs, specChips, type DeliverableSpecs } from "./project-brie
 import { approvalStageId } from "./review-stages";
 import { publishChoices, type PublishOptions } from "./publish";
 import { defaultSelection, loadMediaCatalogue, locate, locateByTarget, type ReviewAsset, type ReviewTarget, type ReviewVersion } from "./review-media";
+import { FULL_TASK_ACCESS, reviewAccess, taskAccess, type ReviewAccess, type TaskAccess } from "./permissions";
 
 export type { ReviewNote } from "./review-notes";
 export { nestNotes } from "./review-notes";
@@ -55,6 +56,16 @@ export type ReviewView = {
   guestInvites: GuestInvite[];
   canManageGuests: boolean;
   canComment: boolean;
+  /**
+   * What the viewer may do on this cut's project (comment, resolve, draw), from the
+   * permissions endpoint. Null when unknown — the page then offers what it always did and
+   * the server decides.
+   */
+  access: ReviewAccess | null;
+  /** What the review task panel may change (assignee, etc.). */
+  taskAccess: TaskAccess;
+  /** Workspace members with their membership ids, for the task panel's assignee picker. */
+  assignees: { id: string; name: string }[];
   /** "client" when the viewer is in the workspace only through a client team. */
   role: DashboardRole | null;
   /** Client decisions recorded on the cut on screen, newest first (the proof of delivery). */
@@ -85,7 +96,7 @@ export const MISSING_MEDIA = "This file isn't available to you. It may have been
 const EMPTY: ReviewView = {
   workspaceId: null, asset: null, version: null, target: null, notes: [], annotations: [],
   stages: [], taskStages: [], linkedTasks: [], members: [], guestInvites: [],
-  canManageGuests: false, canComment: false, comparison: null, specs: null, notice: null,
+  canManageGuests: false, canComment: false, access: null, taskAccess: FULL_TASK_ACCESS, assignees: [], comparison: null, specs: null, notice: null,
   role: null, decisions: [], decisionViewer: NO_DECISIONS, task: null, publish: null,
 };
 
@@ -118,12 +129,14 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
   if (!found) return base;
 
   const { asset, version } = found;
-  const [stages, members, taskContext] = await Promise.all([
+  const [stages, members, taskContext, permissions] = await Promise.all([
     listWorkflowStages(catalogue.workspaceId),
     listWorkspaceMembers(catalogue.workspaceId),
     // Tasks are the studio's internal board; a client-team member never gets the panel.
     params.taskId && !client ? loadTaskContext(catalogue.workspaceId, params.taskId, catalogue.assets, catalogue.projects, version.id) : null,
+    getWorkspacePermissions(catalogue.workspaceId, version.target?.projectId ?? null),
   ]);
+  const answer = permissions.ok ? permissions.data : null;
 
   const view: ReviewView = {
     ...base,
@@ -135,6 +148,11 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
     members: members.ok
       ? members.data.flatMap((row) => row.user ? [{ id: row.user.id, name: `${row.user.first_name} ${row.user.last_name}`.trim() || row.user.email, email: row.user.email }] : [])
       : [],
+    assignees: members.ok
+      ? members.data.flatMap((row) => row.user ? [{ id: row.id, name: `${row.user.first_name} ${row.user.last_name}`.trim() || row.user.email }] : [])
+      : [],
+    taskAccess: taskAccess(answer, catalogue.role),
+    access: reviewAccess(answer),
     stages: stages.ok ? withApproval(stages.data) : [],
     specs: projectSpecs(catalogue.projects.find((project) => project.id === asset.projectId)?.deliverable_specs),
     task: taskContext,
@@ -166,8 +184,10 @@ export async function loadReviewView(params: { mediaId?: string; projectId?: str
     ...withComparison,
     notes: comments.ok ? nestNotes(comments.data) : [],
     annotations: annotations.ok ? annotations.data : [],
-    // A 403 on the comment list means read access without comment rights.
-    canComment: comments.ok,
+    // Reading the comments is not the same as being allowed to write one: a read-only
+    // member can list them but the composer would only fail. Ask the permissions answer
+    // when there is one; otherwise fall back to "could list them".
+    canComment: comments.ok && (withComparison.access ? withComparison.access.comment : true),
     // A 403 here means review access without permission to share the project out.
     guestInvites: guestInvites?.ok ? guestInvites.data : [],
     canManageGuests: Boolean(guestInvites?.ok),
