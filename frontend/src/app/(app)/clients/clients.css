@@ -6,3 +6,10 @@
   border-color: var(--shell-accent);
   box-shadow: 0 0 0 1px var(--shell-accent), 0 10px 34px #583be833;
 }
+
+/* Header: project requests inbox link next to New client. */
+.clients-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.clients-requests-link{display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border:1px solid var(--shell-highest);border-radius:9px;background:var(--shell-container);color:var(--shell-on);font-size:13px;text-decoration:none}
+.clients-requests-link svg{width:15px}
+.clients-requests-link span{display:grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--shell-accent);color:#fff;font:650 11px var(--font-geist-mono)}
+@media(max-width:650px){.clients-head-actions>*{flex:1;justify-content:center}}

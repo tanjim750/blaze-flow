@@ -49,6 +49,8 @@ CONFIGURABLE_KINDS = (
     (NotificationKind.TASK_ASSIGNED, 'Task assignments', 'A task is assigned to you.'),
     (NotificationKind.TASK_CLIENT_READY, 'Ready for client review', 'A task moves to client review (client contacts only).'),
     (NotificationKind.CLIENT_UPLOAD_RECEIVED, 'Files from clients', 'A client sends files through an upload link or the client portal.'),
+    (NotificationKind.PROJECT_REQUEST_NEW, 'Project requests', 'A client asks for a new project from the portal.'),
+    (NotificationKind.PROJECT_REQUEST_DECIDED, 'Request answers', 'The studio accepts or declines a project you asked for.'),
 )
 
 SNIPPET_LENGTH = 240

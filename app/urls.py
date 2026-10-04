@@ -90,6 +90,10 @@ from .views import (
     workspace_retention_policy,
     workspace_workflow_stages,
 )
+from .portal_views import (
+    client_project_overview, project_request_detail, project_requests, public_studio_logo, workspace_branding,
+    workspace_branding_logo,
+)
 from .client_upload_views import (
     client_portal, project_client_uploads, project_upload_link_detail, project_upload_links,
     public_upload_link, public_upload_link_file,
@@ -133,6 +137,7 @@ urlpatterns = [
     path('notifications/read-all/', notification_read_all, name='api-notifications-read-all'),
     path('notifications/<uuid:notification_id>/read/', notification_read, name='api-notification-read'),
     path('guest-access/exchange/', guest_exchange, name='api-guest-exchange'),
+    path('public/studios/<uuid:workspace_id>/logo/', public_studio_logo, name='api-public-studio-logo'),
     path('public/upload-links/<str:token>/', public_upload_link, name='api-public-upload-link'),
     path('public/upload-links/<str:token>/files/', public_upload_link_file, name='api-public-upload-link-file'),
     path('guest/reviews/<uuid:project_id>/', guest_review, name='api-guest-review'),
@@ -218,6 +223,11 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/upload-links/<uuid:link_id>/', project_upload_link_detail, name='api-project-upload-link-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/client-uploads/', project_client_uploads, name='api-project-client-uploads'),
     path('workspaces/<uuid:workspace_id>/client-portal/', client_portal, name='api-client-portal'),
+    path('workspaces/<uuid:workspace_id>/client-portal/projects/<uuid:project_id>/', client_project_overview, name='api-client-project-overview'),
+    path('workspaces/<uuid:workspace_id>/branding/', workspace_branding, name='api-workspace-branding'),
+    path('workspaces/<uuid:workspace_id>/branding/logo/', workspace_branding_logo, name='api-workspace-branding-logo'),
+    path('workspaces/<uuid:workspace_id>/project-requests/', project_requests, name='api-project-requests'),
+    path('workspaces/<uuid:workspace_id>/project-requests/<uuid:request_id>/', project_request_detail, name='api-project-request-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/guest-invites/', project_guest_invites, name='api-project-guest-invites'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/guest-invites/<uuid:invite_id>/', project_guest_invite_detail, name='api-project-guest-invite-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/guest-access/<uuid:access_id>/', project_guest_access_detail, name='api-project-guest-access-detail'),

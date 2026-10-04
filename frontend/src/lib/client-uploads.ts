@@ -31,10 +31,13 @@ export type ClientUploadRow = {
 export type PublicUploadLink = {
   studio_name: string; project_name: string; label: string; instructions: string;
   due_at: string | null; expires_at: string | null; max_file_bytes: number; allowed_kinds: UploadKind[]; accept: string[];
+  /** Absent on backends older than client portal v2. */
+  branding?: import("./portal").Branding;
 };
 export type ClientPortal = {
   projects: { id: string; name: string; status: string }[];
   recent_uploads: ClientUploadRow[]; max_file_bytes: number; accept: string[];
+  branding?: import("./portal").Branding;
 };
 export type UploadLinkInput = {
   label: string; instructions?: string; due_at?: string | null; expires_at?: string | null;
@@ -130,7 +133,7 @@ const csrfToken = () =>
 
 export type CallResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
 
-async function call<T>(path: string, init: RequestInit = {}): Promise<CallResult<T>> {
+export async function call<T>(path: string, init: RequestInit = {}): Promise<CallResult<T>> {
   let response: Response;
   try {
     const csrf = csrfToken();

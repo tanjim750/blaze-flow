@@ -4,9 +4,10 @@ import { useMemo, useState } from "react";
 import { CalendarClock, CircleCheckBig, Lock } from "lucide-react";
 import { DropUploader } from "@/components/client-uploads/drop-uploader";
 import { publicUploadUrl, shortDateTime, type PublicUploadLink } from "@/lib/client-uploads";
+import { accentStyle } from "@/lib/portal";
+import { StudioMark } from "@/components/portal/studio-mark";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "BF";
 
 /** Why uploads cannot start yet, or null. Exported for tests. */
 export function senderProblem(name: string, email: string): string | null {
@@ -23,9 +24,9 @@ export function PublicUploader({ token, link }: { token: string; link: PublicUpl
   const fields = useMemo(() => ({ name: name.trim(), email: email.trim() }), [name, email]);
 
   return (
-    <main className="ul-shell">
+    <main className="ul-shell" style={accentStyle(link.branding?.brand_color)}>
       <header className="ul-studio">
-        <span className="ul-monogram" aria-hidden="true">{initials(link.studio_name)}</span>
+        <StudioMark branding={{ studio_name: link.studio_name, logo_url: link.branding?.logo_url ?? null }} size={36} />
         <div><strong>{link.studio_name}</strong><small>File request</small></div>
       </header>
 

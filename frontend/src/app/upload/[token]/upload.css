@@ -8,7 +8,7 @@
 .ul-monogram{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:var(--primary);color:#fff;font-weight:750;font-size:13px}
 .ul-card{width:min(960px,100%);display:grid;gap:26px;padding:32px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 30px 80px #0006}
 .ul-intro{display:grid;gap:8px}
-.ul-eyebrow{margin:0;color:var(--primary);font-size:12px;font-weight:650;letter-spacing:.02em}
+.ul-eyebrow{margin:0;color:var(--portal-accent-line,var(--primary));font-size:12px;font-weight:650;letter-spacing:.02em}
 .ul-intro h1{margin:0;font-size:28px;letter-spacing:-.03em;line-height:1.15}
 .ul-instructions{margin:4px 0 0;max-width:62ch;color:var(--muted);line-height:1.6;white-space:pre-line}
 .ul-facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
@@ -41,3 +41,8 @@
   .ul-sender{padding:14px}
   .ul-intro h1{font-size:21px}
 }
+
+/* Studio branding (client portal v2): the mark is the shared StudioMark. */
+.ul-studio .pt-mark{display:grid;place-items:center;flex:none;border-radius:10px;background:var(--portal-accent,var(--primary));color:var(--portal-accent-ink,#fff);font-weight:750}
+.ul-studio .pt-mark.is-logo{width:auto;max-width:150px;object-fit:contain;background:none;border-radius:6px}
+.ul-shell{background:radial-gradient(ellipse at top,var(--portal-accent-soft,#1d1930) 0%,var(--bg) 60%)}

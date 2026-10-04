@@ -176,3 +176,26 @@ describe("client decisions", () => {
     expect(sentence(describeNotification(changes))).toBe("Maya Chen requested changes as the client on Spring Launch Hero · V2");
   });
 });
+
+describe("project request notifications", () => {
+  const base = (extra: Partial<NotificationItem>): NotificationItem => ({
+    id: "n", kind: "PROJECT_REQUEST_NEW", workspace_id: "w", actor: { id: "u", email: "sam@client.example", name: "Sam Lee" },
+    entity_type: "project_request", entity_id: "r1", payload: {}, link: "/clients/requests", snippet: null,
+    unread: true, read_at: null, created_at: "2026-10-04T10:00:00Z", ...extra,
+  });
+
+  it("words a new request for the studio", () => {
+    const row = describeNotification(base({ payload: { title: "Summer menu launch", client_team_name: "Northlight Coffee" } }));
+    expect(sentence(row)).toBe("Sam Lee asked for a new project: “Summer menu launch” (Northlight Coffee)");
+    expect(row.tone).toBe("request");
+    expect(row.href).toBe("/clients/requests");
+  });
+
+  it("words the answer for the client, quoting a decline note", () => {
+    const accepted = describeNotification(base({ kind: "PROJECT_REQUEST_DECIDED", actor: { id: "a", email: "alex@x", name: "Alex" }, payload: { title: "Summer", status: "accepted" }, link: "/portal/projects/p1" }));
+    expect(sentence(accepted)).toBe("Alex accepted your project request “Summer”");
+    const declined = describeNotification(base({ kind: "PROJECT_REQUEST_DECIDED", actor: { id: "a", email: "alex@x", name: "Alex" }, payload: { title: "Summer", status: "declined", decision_note: "Booked in July" } }));
+    expect(sentence(declined)).toBe("Alex declined your project request “Summer”");
+    expect(declined.snippet).toBe("Booked in July");
+  });
+});

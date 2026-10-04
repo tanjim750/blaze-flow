@@ -172,6 +172,10 @@ class NotificationKind(models.TextChoices):
     MEDIA_CHANGES_REQUESTED = 'MEDIA_CHANGES_REQUESTED'
     # A client sent files through an upload link or the client portal.
     CLIENT_UPLOAD_RECEIVED = 'CLIENT_UPLOAD_RECEIVED'
+    # A client asked for a new project from the portal (to the studio's owner).
+    PROJECT_REQUEST_NEW = 'PROJECT_REQUEST_NEW'
+    # The studio accepted or declined a project request (to the client who sent it).
+    PROJECT_REQUEST_DECIDED = 'PROJECT_REQUEST_DECIDED'
 
 
 class OutboxEventStatus(models.TextChoices):
@@ -324,6 +328,14 @@ class WorkspaceProfile(models.Model):
     state = models.CharField(max_length=100, null=True, blank=True)
     postal_code = models.CharField(max_length=30, null=True, blank=True)
     country_code = models.CharField(max_length=2, null=True, blank=True)
+    # Client portal branding: an accent colour (#RRGGBB), a logo image and a short welcome
+    # line. Shown to clients on the portal and on public upload pages; the team UI keeps
+    # Blaze Flow's own look.
+    brand_color = models.CharField(max_length=7, null=True, blank=True)
+    logo_object_key = models.CharField(max_length=500, null=True, blank=True)
+    logo_mime_type = models.CharField(max_length=50, null=True, blank=True)
+    logo_updated_at = models.DateTimeField(null=True, blank=True)
+    portal_welcome = models.CharField(max_length=280, null=True, blank=True)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -1933,4 +1945,48 @@ class ClientUpload(models.Model):
             models.Index(fields=['project', 'created_at']),
             models.Index(fields=['upload_link', 'created_at']),
             models.Index(fields=['batch_id']),
+        ]
+
+
+class ProjectRequestStatus(models.TextChoices):
+    PENDING = 'pending', 'Waiting for the studio'
+    ACCEPTED = 'accepted', 'Accepted'
+    DECLINED = 'declined', 'Declined'
+    WITHDRAWN = 'withdrawn', 'Withdrawn'
+
+
+class ProjectRequest(models.Model):
+    """A client asking the studio for new work, from the client portal.
+
+    The studio accepts it (which opens a draft project for that client, carrying the brief)
+    or declines it with a note. Nothing about money is promised: ``budget_range`` is a hint.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    client_team = models.ForeignKey(ClientTeam, on_delete=models.CASCADE, db_column='client_team_id', related_name='project_requests')
+    requested_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='requested_by_user_id', null=True, blank=True, related_name='+')
+    requester_name = models.CharField(max_length=150)
+    title = models.CharField(max_length=200)
+    # [{"kind": "social_cutdown", "quantity": 3}, ...] from services.project_requests.DELIVERABLE_KINDS.
+    deliverables = models.JSONField(default=list, blank=True)
+    platform = models.CharField(max_length=40, null=True, blank=True)
+    aspect_ratio = models.CharField(max_length=10, null=True, blank=True)
+    target_length_seconds = models.PositiveIntegerField(null=True, blank=True)
+    brief = models.TextField()
+    references = models.TextField(blank=True, default='')
+    wanted_by = models.DateField(null=True, blank=True)
+    budget_range = models.CharField(max_length=20, blank=True, default='')
+    status = models.CharField(max_length=20, choices=ProjectRequestStatus.choices, default=ProjectRequestStatus.PENDING)
+    decision_note = models.TextField(blank=True, default='')
+    decided_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='decided_by_user_id', null=True, blank=True, related_name='+')
+    decided_at = models.DateTimeField(null=True, blank=True)
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, db_column='project_id', null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'project_requests'
+        indexes = [
+            models.Index(fields=['workspace', 'status', 'created_at']),
+            models.Index(fields=['client_team', 'created_at']),
         ]

@@ -13,6 +13,7 @@ from .permissions import (
     PROJECT_FILE_CREATE, PROJECT_FILE_READ, PROJECT_READ, PROJECT_UPDATE, accessible_projects, has_project_permission,
     memberships_with_permission,
 )
+from .services.portal import branding_for
 from .services.client_uploads import (
     KIND_ACCEPT, UPLOAD_KINDS, ClientUploadError, create_upload_link, effective_max_bytes, file_kind, link_status,
     portal_upload_membership, receive_client_upload, resolve_link, revoke_upload_link, update_upload_link,
@@ -188,6 +189,7 @@ def client_portal(request, workspace_id):
     return Response({
         'projects': targets, 'recent_uploads': [upload_data(row) for row in recent],
         'max_file_bytes': effective_max_bytes(None), 'accept': _accept(None),
+        'branding': branding_for(workspace),
     })
 
 
@@ -198,7 +200,7 @@ def _public_link(link):
         'studio_name': _studio_name(link.workspace), 'project_name': link.project.name, 'label': link.label,
         'instructions': link.instructions, 'due_at': link.due_at, 'expires_at': link.expires_at,
         'max_file_bytes': effective_max_bytes(link), 'allowed_kinds': link.allowed_kinds or list(UPLOAD_KINDS),
-        'accept': _accept(link.allowed_kinds),
+        'accept': _accept(link.allowed_kinds), 'branding': branding_for(link.workspace),
     }
 
 
