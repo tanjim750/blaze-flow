@@ -35,6 +35,7 @@
 .nf-kind.is-changes { background: #5e3c1f; color: #ffc98f; }
 .nf-kind.is-mention, .nf-kind.is-reply, .nf-kind.is-comment { background: #3d2f7a; color: #d7c6ff; }
 .nf-kind.is-task { background: #1f4a5e; color: #8fd8ff; }
+.nf-kind.is-upload { background: #3d2f12; color: #ffd27a; }
 .nf-text { display: grid; flex: 1; min-width: 0; gap: 3px; }
 .nf-line { color: var(--shell-variant); font-size: 13px; line-height: 1.35; }
 .nf-line strong { color: var(--shell-on); font-weight: 600; }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, ArrowUpRight, CircleCheckBig, Download, Film, Link2, ListTodo, Loader2, MessageSquareText, RotateCcw, TriangleAlert,
+  Activity, ArrowUpRight, CircleCheckBig, Download, Film, FolderInput, Link2, ListTodo, Loader2, MessageSquareText, RotateCcw, TriangleAlert,
 } from "lucide-react";
 import {
   ACTIVITY_FILTERS, activityText, clockTime, describeActivity, groupByDay, mergePages,
@@ -23,6 +23,7 @@ function kindIcon(entry: ActivityEntry) {
     case "comments": return <MessageSquareText {...props} />;
     case "media": return <Film {...props} />;
     case "guests": return <Link2 {...props} />;
+    case "uploads": return <FolderInput {...props} />;
     default: return <Activity {...props} />;
   }
 }
@@ -46,6 +47,7 @@ function Sentence({ entry }: { entry: ActivityEntry }) {
     <p className="af-line">
       <strong>{line.actor}</strong>
       {entry.actor.type === "guest" && <span className="af-tag">Guest</span>}
+      {entry.actor.type === "client" && <span className="af-tag">Client</span>}
       {" "}{line.verb}
       {line.subject && <> <q>{line.subject}</q></>}
       {line.tail && <> {line.tail}</>}

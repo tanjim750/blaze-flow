@@ -48,6 +48,7 @@ CONFIGURABLE_KINDS = (
     (NotificationKind.MEDIA_CHANGES_REQUESTED, 'Changes requested', 'Someone requests changes on a cut you uploaded or are assigned to.'),
     (NotificationKind.TASK_ASSIGNED, 'Task assignments', 'A task is assigned to you.'),
     (NotificationKind.TASK_CLIENT_READY, 'Ready for client review', 'A task moves to client review (client contacts only).'),
+    (NotificationKind.CLIENT_UPLOAD_RECEIVED, 'Files from clients', 'A client sends files through an upload link or the client portal.'),
 )
 
 SNIPPET_LENGTH = 240

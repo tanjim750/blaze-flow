@@ -170,6 +170,8 @@ class NotificationKind(models.TextChoices):
     TASK_ASSIGNED = 'TASK_ASSIGNED'
     MEDIA_APPROVED = 'MEDIA_APPROVED'
     MEDIA_CHANGES_REQUESTED = 'MEDIA_CHANGES_REQUESTED'
+    # A client sent files through an upload link or the client portal.
+    CLIENT_UPLOAD_RECEIVED = 'CLIENT_UPLOAD_RECEIVED'
 
 
 class OutboxEventStatus(models.TextChoices):
@@ -1868,4 +1870,67 @@ class Payment(models.Model):
         indexes = [
             models.Index(fields=['workspace', 'direction']),
             models.Index(fields=['payee_membership']),
+        ]
+
+
+class UploadLink(models.Model):
+    """A public "send us your files" link for one project. No account is needed to use it.
+
+    ``token`` is the bearer secret in the URL. It is kept (not only hashed) so the team can
+    copy the link again later, the way a share link in a file app works; revoking or letting
+    it expire is how it stops working.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, db_column='project_id', related_name='upload_links')
+    label = models.CharField(max_length=150)
+    instructions = models.TextField(blank=True, default='')
+    token = models.CharField(max_length=64, unique=True)
+    # A soft deadline shown to the client ("Please send by …"); uploads still work after it.
+    due_at = models.DateTimeField(null=True, blank=True)
+    # A hard stop: after this the link refuses uploads.
+    expires_at = models.DateTimeField(null=True, blank=True)
+    # Per-file cap; never above the workspace-wide MAX_PROJECT_FILE_BYTES.
+    max_file_bytes = models.BigIntegerField(null=True, blank=True)
+    # Subset of video, image, audio, document. Empty means all of them.
+    allowed_kinds = models.JSONField(default=list, blank=True)
+    created_by_workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.DO_NOTHING, db_column='created_by_workspace_membership_id', related_name='+')
+    created_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='created_by_user_id', null=True, blank=True, related_name='+')
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='revoked_by_user_id', null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'upload_links'
+        indexes = [models.Index(fields=['project', 'created_at'])]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(max_file_bytes__isnull=True) | models.Q(max_file_bytes__gt=0),
+                name='upload_links_max_file_bytes_positive',
+            ),
+        ]
+
+
+class ClientUpload(models.Model):
+    """Who sent a file from outside the team: through an upload link, or the client portal."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, db_column='project_id', related_name='client_uploads')
+    project_file = models.OneToOneField(ProjectFile, on_delete=models.CASCADE, db_column='project_file_id', related_name='client_upload')
+    upload_link = models.ForeignKey(UploadLink, on_delete=models.SET_NULL, db_column='upload_link_id', null=True, blank=True, related_name='uploads')
+    # Set when a signed-in client sent it from the portal; null for an anonymous link upload.
+    uploaded_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='uploaded_by_user_id', null=True, blank=True, related_name='+')
+    uploader_name = models.CharField(max_length=120)
+    uploader_email = models.EmailField(max_length=255)
+    # Files dropped together share a batch, so the team gets one notification per drop.
+    batch_id = models.UUIDField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'client_uploads'
+        indexes = [
+            models.Index(fields=['project', 'created_at']),
+            models.Index(fields=['upload_link', 'created_at']),
+            models.Index(fields=['batch_id']),
         ]

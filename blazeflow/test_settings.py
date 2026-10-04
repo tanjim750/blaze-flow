@@ -23,5 +23,6 @@ REST_FRAMEWORK = {
         'login': '10000/hour',
         'password_reset': '10000/hour',
         'email_verification': '10000/hour',
+        'upload_link': '10000/hour',
     },
 }

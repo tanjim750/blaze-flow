@@ -6,8 +6,9 @@
  * The API already decides who may see a row; nothing here filters for permissions.
  */
 
-export type ActivityCategory = "tasks" | "comments" | "media" | "guests";
-export type ActivityActor = { type: "user" | "guest" | "system"; id: string | null; name: string; initials: string; avatar_url: string | null };
+export type ActivityCategory = "tasks" | "comments" | "media" | "guests" | "uploads";
+/** `client` is someone who sent files through a public upload link (no account). */
+export type ActivityActor = { type: "user" | "guest" | "client" | "system"; id: string | null; name: string; initials: string; avatar_url: string | null };
 export type ActivityObject = { type: string; id: string | null; label: string; href: string | null };
 export type Decision = "approved" | "changes_requested" | null;
 
@@ -27,6 +28,7 @@ export type ActivityEntry = {
     stage_kind?: string | null; from_kind?: string | null; to_kind?: string | null; reason?: string | null;
     assignee?: string; guest_name?: string | null; media_title?: string;
     client_decision?: boolean; open_notes_count?: number | null; allow_decisions?: boolean;
+    via?: "link" | "portal" | null; link_label?: string | null;
   };
   team_only: boolean;
   /** The server's own one-line wording (what the CSV export uses). */
@@ -44,6 +46,7 @@ export const ACTIVITY_FILTERS: { value: ActivityCategory | null; label: string }
   { value: "comments", label: "Comments" },
   { value: "media", label: "Uploads & approvals" },
   { value: "guests", label: "Client links" },
+  { value: "uploads", label: "Client files" },
 ];
 
 export const DECISION_LABELS: Record<"approved" | "changes_requested" | "none", string> = {
@@ -136,6 +139,12 @@ export function describeActivity(entry: ActivityEntry, now: Date = new Date()): 
       return line("approved", { tail: [version(entry), "as the client"].filter(Boolean).join(" "), meta: openNotesMeta(entry) });
     case "review.decision.changes_requested":
       return line("requested changes on", { tail: [version(entry), "as the client"].filter(Boolean).join(" ") });
+    case "client_upload.received":
+      return line("sent", { tail: entry.detail.link_label ? `via ${entry.detail.link_label}` : entry.detail.via === "portal" ? "from the client portal" : null });
+    case "upload_link.created":
+      return line("created upload link");
+    case "upload_link.revoked":
+      return line("turned off upload link");
     case "guest.access.revoked":
       return { actor, verb: `revoked ${entry.detail.guest_name ?? entry.before ?? "a guest"}’s access to`, subject, tail: null, change: null, meta: [] };
     default:
@@ -257,7 +266,7 @@ export function toDashboardRow(entry: ActivityEntry, now: Date = new Date()) {
   const action = activityText(line).slice(line.actor.length + 1);
   // A client's decision reads as the decision (green / amber), even when a guest made it.
   const tone: DashboardActivityTone = entry.detail.client_decision ? (entry.detail.decision === "approved" ? "success" : "warning")
-    : entry.actor.type === "guest" ? "blue"
+    : entry.actor.type === "guest" || entry.actor.type === "client" ? "blue"
     : entry.detail.decision === "approved" ? "success"
       : entry.action === "media.revision.requested" || entry.detail.decision === "changes_requested" ? "warning"
         : entry.category === "comments" ? "accent" : "neutral";

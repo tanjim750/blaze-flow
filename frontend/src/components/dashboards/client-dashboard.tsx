@@ -3,7 +3,8 @@ import { CheckCheck, Download, FolderKanban } from "lucide-react";
 import { DashboardPoster } from "@/components/dashboard-poster";
 import type { LayoutChoice } from "@/lib/dashboard-role";
 import type { ClientDashboard as ClientView } from "@/lib/role-dashboard-view";
-import { CounterStrip, DashboardHeading, EmptyState, InlineProblem, ReviewQueuePanel } from "./parts";
+import { ClientUploadPanel } from "@/components/client-uploads/client-upload-panel";
+import { ActivityPanel, CounterStrip, DashboardHeading, EmptyState, InlineProblem, ReviewQueuePanel } from "./parts";
 import { ClientInvoicesPanel } from "./money-panels";
 
 function subline(view: ClientView): string {
@@ -13,8 +14,9 @@ function subline(view: ClientView): string {
 }
 
 /**
- * The client layout: their projects, cuts to review, and approved work. It is built from
- * projects and cuts only; it never loads tasks, workload or notes.
+ * The client layout (the client portal home): cuts to review, approved work, a place to
+ * send files to the studio, invoices, recent activity and their projects. It never loads
+ * tasks, workload or internal notes; activity is the API's client-scoped feed.
  */
 export function ClientDashboard({ view, choice }: { view: ClientView; choice: LayoutChoice }) {
   return <div className="home-shell role-client">
@@ -47,6 +49,16 @@ export function ClientDashboard({ view, choice }: { view: ClientView; choice: La
         </div>
       </section>
     </div>
+
+    {(view.portal || view.activity) && <div className={`dashboard-columns client-portal-row${view.portal && view.activity ? "" : " is-single"}`}>
+      {view.portal && <ClientUploadPanel workspaceId={view.portal.workspaceId} projects={view.portal.projects} recent={view.portal.recent} maxBytes={view.portal.maxBytes} accept={view.portal.accept} />}
+      {view.activity && <ActivityPanel
+        items={view.activity}
+        problem={view.problems.activity ?? null}
+        hint="On your projects"
+        emptyBody="New cuts, notes, approvals and files you send show up here."
+      />}
+    </div>}
 
     {view.invoices && <ClientInvoicesPanel invoices={view.invoices} />}
 

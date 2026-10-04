@@ -90,6 +90,10 @@ from .views import (
     workspace_retention_policy,
     workspace_workflow_stages,
 )
+from .client_upload_views import (
+    client_portal, project_client_uploads, project_upload_link_detail, project_upload_links,
+    public_upload_link, public_upload_link_file,
+)
 from .guest_views import (
     guest_annotation_detail, guest_annotation_revisions, guest_annotations,
     guest_attachment_download, guest_attachment_preview,
@@ -129,6 +133,8 @@ urlpatterns = [
     path('notifications/read-all/', notification_read_all, name='api-notifications-read-all'),
     path('notifications/<uuid:notification_id>/read/', notification_read, name='api-notification-read'),
     path('guest-access/exchange/', guest_exchange, name='api-guest-exchange'),
+    path('public/upload-links/<str:token>/', public_upload_link, name='api-public-upload-link'),
+    path('public/upload-links/<str:token>/files/', public_upload_link_file, name='api-public-upload-link-file'),
     path('guest/reviews/<uuid:project_id>/', guest_review, name='api-guest-review'),
     path('guest/reviews/<uuid:project_id>/access-key/rotate/', guest_access_key_rotate, name='api-guest-access-key-rotate'),
     path('guest/reviews/<uuid:project_id>/media-versions/<uuid:media_version_id>/playback/', guest_playback, name='api-guest-playback'),
@@ -208,6 +214,10 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/activity/', project_activity, name='api-project-activity'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/activity/export/', project_activity_export, name='api-project-activity-export'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/', project_detail, name='api-project-detail'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/upload-links/', project_upload_links, name='api-project-upload-links'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/upload-links/<uuid:link_id>/', project_upload_link_detail, name='api-project-upload-link-detail'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/client-uploads/', project_client_uploads, name='api-project-client-uploads'),
+    path('workspaces/<uuid:workspace_id>/client-portal/', client_portal, name='api-client-portal'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/guest-invites/', project_guest_invites, name='api-project-guest-invites'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/guest-invites/<uuid:invite_id>/', project_guest_invite_detail, name='api-project-guest-invite-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/guest-access/<uuid:access_id>/', project_guest_access_detail, name='api-project-guest-access-detail'),

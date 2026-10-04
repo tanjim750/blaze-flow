@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { MediaVersion, MyCut, NoteToAddress, Project, ProjectFile, Task, TeamWorkload } from "./api";
 import type { DashboardReady } from "./dashboard-view";
 import {
-  buildApprovals, buildClientDashboard, buildDelivered, buildEditorDashboard, buildEditorTasks, buildMyCutsInReview,
+  buildApprovals, buildClientDashboard, buildClientPortal, buildDelivered, buildEditorDashboard, buildEditorTasks, buildMyCutsInReview,
   buildNotes, buildOwnerDashboard, buildProjectHealth, buildWorkload, inReviewLoop,
 } from "./role-dashboard-view";
 
@@ -227,5 +227,31 @@ describe("client view", () => {
       media("newer", { name: "Approved", slug: "approved", entered_at: iso(-1) }),
     ] }], NOW);
     expect(rows.map((row) => row.id)).toEqual(["newer", "older"]);
+  });
+});
+
+describe("client portal additions", () => {
+  const portal = {
+    projects: [{ id: "p1", name: "Spring", status: "ACTIVE" }], max_file_bytes: 100, accept: ["video/*"],
+    recent_uploads: Array.from({ length: 9 }, (_, index) => ({ id: `u${index}` })) as never[],
+  };
+
+  it("builds the upload area only when there is a project to send to", () => {
+    expect(buildClientPortal("w1", portal)).toMatchObject({ workspaceId: "w1", maxBytes: 100, projects: portal.projects });
+    expect(buildClientPortal("w1", portal)?.recent).toHaveLength(6);
+    expect(buildClientPortal("w1", { ...portal, projects: [] })).toBeUndefined();
+    expect(buildClientPortal("w1", { status: 500, detail: "x" })).toBeUndefined();
+    expect(buildClientPortal("w1", null)).toBeUndefined();
+  });
+
+  it("adds recent activity when it was loaded, and reports a failed load", () => {
+    const base = { greetingName: "Sam", now: NOW, workspace: { name: "Studio" }, projects: [], scanned: [] };
+    expect(buildClientDashboard(base).activity).toBeUndefined();
+    const failedLoad = buildClientDashboard({ ...base, activity: { status: 500, detail: "down" } });
+    expect(failedLoad.activity).toEqual([]);
+    expect(failedLoad.problems.activity).toBe("Activity could not be loaded: down");
+    const ok = buildClientDashboard({ ...base, activity: [] });
+    expect(ok.activity).toEqual([]);
+    expect(ok.problems.activity).toBeNull();
   });
 });
