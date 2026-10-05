@@ -647,37 +647,12 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
           </div>
         </header>
         <div className="fx-toolbar is-secondary">
-          <div className="fx-toolbar-lead">
-            <label className="fx-search">
-              <Search aria-hidden="true" />
-              <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this location" aria-label={searchEverywhere ? "Search all folders" : "Search this location"}
-                onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (query) setQuery(""); else event.currentTarget.blur(); } }} />
-              {query && <button type="button" className="fx-icon-btn is-xs" onClick={() => { setQuery(""); searchRef.current?.focus(); }} aria-label="Clear search text"><X /></button>}
-            </label>
-            <div className="fx-filter-strip" role="toolbar" aria-label="Quick filters">
-              <button type="button" className={fromClient ? "is-on" : ""} aria-pressed={fromClient} onClick={() => setFromClient(!fromClient)}>From client</button>
-              <label className="fx-filter-select">
-                <span className="fx-sr-only">Type</span>
-                <select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as LibraryKind | "")} aria-label="Filter by type">
-                  <option value="">All types</option>
-                  <option value="video">Video</option>
-                  <option value="image">Images</option>
-                  <option value="audio">Audio</option>
-                  <option value="document">Documents</option>
-                  <option value="source">Source files</option>
-                  <option value="other">Other</option>
-                </select>
-              </label>
-              {!projectId && (view?.clients?.length ?? 0) > 0 && <label className="fx-filter-select">
-                <span className="fx-sr-only">Client</span>
-                <select value={clientFilter} onChange={(event) => { setClientFilter(event.target.value); if (!event.target.value) setProjectFilter(""); setFolderId(null); }} aria-label="Filter by client">
-                  <option value="">All clients</option>
-                  {(view?.clients ?? []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
-                </select>
-              </label>}
-            </div>
-            {activeChips.length > 0 && <ul className="fx-chips" aria-label="Active filters">{activeChips.map((chip) => <li key={chip.key}><span>{chip.label}</span><button type="button" onClick={chip.clear} aria-label={`Remove filter ${chip.label}`}><X /></button></li>)}</ul>}
-          </div>
+          <label className="fx-search">
+            <Search aria-hidden="true" />
+            <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this location" aria-label={searchEverywhere ? "Search all folders" : "Search this location"}
+              onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (query) setQuery(""); else event.currentTarget.blur(); } }} />
+            {query && <button type="button" className="fx-icon-btn is-xs" onClick={() => { setQuery(""); searchRef.current?.focus(); }} aria-label="Clear search text"><X /></button>}
+          </label>
           <div className="fx-toolbar-trail">
             <FilterMenu
               view={view} groups={filteredProjects} stages={stages} showRelations={!projectId} activeCount={activeFilters}
@@ -701,6 +676,29 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
             </div>
             <button type="button" className={`fx-icon-btn fx-details-toggle ${inspectorVisible ? "is-on" : ""}`} onClick={toggleInspector} aria-pressed={inspectorVisible} aria-label="Details panel" title="Details panel (])"><PanelRight /></button>
           </div>
+          <div className="fx-filter-strip" role="toolbar" aria-label="Quick filters">
+            <button type="button" className={fromClient ? "is-on" : ""} aria-pressed={fromClient} onClick={() => setFromClient(!fromClient)}>From client</button>
+            <label className="fx-filter-select">
+              <span className="fx-sr-only">Type</span>
+              <select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as LibraryKind | "")} aria-label="Filter by type">
+                <option value="">All types</option>
+                <option value="video">Video</option>
+                <option value="image">Images</option>
+                <option value="audio">Audio</option>
+                <option value="document">Documents</option>
+                <option value="source">Source files</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            {!projectId && (view?.clients?.length ?? 0) > 0 && <label className="fx-filter-select">
+              <span className="fx-sr-only">Client</span>
+              <select value={clientFilter} onChange={(event) => { setClientFilter(event.target.value); if (!event.target.value) setProjectFilter(""); setFolderId(null); }} aria-label="Filter by client">
+                <option value="">All clients</option>
+                {(view?.clients ?? []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+              </select>
+            </label>}
+          </div>
+          {activeChips.length > 0 && <ul className="fx-chips" aria-label="Active filters">{activeChips.map((chip) => <li key={chip.key}><span>{chip.label}</span><button type="button" onClick={chip.clear} aria-label={`Remove filter ${chip.label}`}><X /></button></li>)}</ul>}
         </div>
         {selected.size > 1 && <div className={`fx-bulk${phone ? " is-phone-sheet" : ""}`} role="region" aria-label="Selection">
           <strong role="status" aria-live="polite">{selected.size} selected</strong>
