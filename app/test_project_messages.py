@@ -188,7 +188,7 @@ class UnreadAndNotificationTests(MessagesBase):
         rows = self.bell(self.owner, NotificationKind.PROJECT_MESSAGE_NEW)
         self.assertEqual(rows.count(), 1)
         self.assertEqual(rows.get().payload['message_count'], 3)
-        self.assertIn(f'campaign={self.project_id}', rows.get().payload['link'])
+        self.assertIn('/chat/', rows.get().payload['link']); self.assertIn('side=client', rows.get().payload['link'])
         self.assertFalse(self.bell(self.client_user).exists())
         # Reading the thread clears it; the next message starts a fresh count.
         self.as_user(self.owner)
@@ -202,7 +202,7 @@ class UnreadAndNotificationTests(MessagesBase):
     def test_studio_messages_reach_the_client_with_a_portal_link(self):
         self.post(self.owner, 'V2 is ready')
         row = self.bell(self.client_user, NotificationKind.PROJECT_MESSAGE_NEW).get()
-        self.assertEqual(row.payload['link'], f'/portal/projects/{self.project_id}#messages')
+        self.assertTrue(row.payload['link'].startswith('/portal/chat/')); self.assertIn('side=client', row.payload['link'])
 
     def test_team_channel_never_notifies_the_client(self):
         self.post(self.maya, 'internal only', channel='team')

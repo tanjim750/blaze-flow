@@ -2004,20 +2004,56 @@ class MessageChannel(models.TextChoices):
     TEAM = 'team', 'Team only'
 
 
-class ProjectMessage(models.Model):
-    """One message in a project's thread. A project has two channels (see MessageChannel)."""
+class ChatChannel(models.Model):
+    """A Slack-style conversation slot: one General per client, plus one per project.
+
+    ``project`` null means the client's General channel. ``client_team`` null means a
+    Studio project with no client (team-only). The With-client / Team-only sides still live
+    on each message as ``MessageChannel``.
+    """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, db_column='project_id', related_name='messages')
+    client_team = models.ForeignKey(ClientTeam, on_delete=models.CASCADE, db_column='client_team_id', null=True, blank=True, related_name='chat_channels')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, db_column='project_id', null=True, blank=True, related_name='chat_channels')
+    last_message_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'chat_channels'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['workspace', 'client_team'],
+                condition=models.Q(project__isnull=True, client_team__isnull=False),
+                name='chat_channel_general_uniq',
+            ),
+            models.UniqueConstraint(
+                fields=['workspace', 'project'],
+                condition=models.Q(project__isnull=False),
+                name='chat_channel_project_uniq',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['workspace', 'last_message_at']),
+            models.Index(fields=['client_team', 'last_message_at']),
+        ]
+
+
+class ProjectMessage(models.Model):
+    """One message in a chat channel, on either the client or team side."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    chat_channel = models.ForeignKey(ChatChannel, on_delete=models.CASCADE, db_column='chat_channel_id', related_name='messages', null=True, blank=True)
+    # Kept for the project-scoped aliases and for linking attachments to a project.
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, db_column='project_id', null=True, blank=True, related_name='messages')
     channel = models.CharField(max_length=10, choices=MessageChannel.choices)
     author_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='author_user_id', null=True, blank=True, related_name='+')
     # Copied in so the thread still reads right after the account is gone.
     author_name = models.CharField(max_length=150)
     author_is_client = models.BooleanField(default=False)
     body = models.TextField(blank=True, default='')
-    # A reply quotes one earlier message of the same channel.
+    # A reply quotes one earlier message of the same side.
     reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, db_column='reply_to_id', null=True, blank=True, related_name='+')
-    # User ids (strings) mentioned in the body, validated against who can read the channel.
+    # User ids (strings) mentioned in the body; mirrored into ProjectMessageMention for counts.
     mentions = models.JSONField(default=list, blank=True)
     edited_at = models.DateTimeField(null=True, blank=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
@@ -2025,7 +2061,10 @@ class ProjectMessage(models.Model):
 
     class Meta:
         db_table = 'project_messages'
-        indexes = [models.Index(fields=['project', 'channel', 'created_at'])]
+        indexes = [
+            models.Index(fields=['chat_channel', 'channel', 'created_at']),
+            models.Index(fields=['project', 'channel', 'created_at']),
+        ]
 
 
 class ProjectMessageAttachment(models.Model):
@@ -2037,7 +2076,8 @@ class ProjectMessageAttachment(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, db_column='project_id', related_name='+')
+    chat_channel = models.ForeignKey(ChatChannel, on_delete=models.CASCADE, db_column='chat_channel_id', null=True, blank=True, related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, db_column='project_id', null=True, blank=True, related_name='+')
     message = models.ForeignKey(ProjectMessage, on_delete=models.CASCADE, db_column='message_id', null=True, blank=True, related_name='attachments')
     kind = models.CharField(max_length=10, choices=(('upload', 'Upload'), ('file', 'Project file'), ('cut', 'Cut')))
     file = models.ForeignKey(File, on_delete=models.SET_NULL, db_column='file_id', null=True, blank=True, related_name='+')
@@ -2048,17 +2088,36 @@ class ProjectMessageAttachment(models.Model):
 
     class Meta:
         db_table = 'project_message_attachments'
-        indexes = [models.Index(fields=['message']), models.Index(fields=['project', 'created_at'])]
+        indexes = [models.Index(fields=['message']), models.Index(fields=['chat_channel', 'created_at']), models.Index(fields=['project', 'created_at'])]
+
+
+class ProjectMessageMention(models.Model):
+    """One @mention of one person in one message. Used for per-channel mention badges."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    message = models.ForeignKey(ProjectMessage, on_delete=models.CASCADE, db_column='message_id', related_name='mention_rows')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id', related_name='+')
+    chat_channel = models.ForeignKey(ChatChannel, on_delete=models.CASCADE, db_column='chat_channel_id', related_name='+')
+    side = models.CharField(max_length=10, choices=MessageChannel.choices)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'project_message_mentions'
+        constraints = [models.UniqueConstraint(fields=['message', 'user'], name='project_message_mentions_uniq')]
+        indexes = [models.Index(fields=['user', 'chat_channel', 'side', 'created_at'])]
 
 
 class ProjectMessageRead(models.Model):
-    """How far one person has read one channel of one project."""
+    """How far one person has read one side of one chat channel."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id', related_name='+')
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, db_column='project_id', related_name='+')
+    chat_channel = models.ForeignKey(ChatChannel, on_delete=models.CASCADE, db_column='chat_channel_id', null=True, blank=True, related_name='+')
+    # Legacy columns kept through the data migration, then dropped.
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, db_column='project_id', null=True, blank=True, related_name='+')
     channel = models.CharField(max_length=10, choices=MessageChannel.choices)
     last_read_at = models.DateTimeField()
 
     class Meta:
         db_table = 'project_message_reads'
-        constraints = [models.UniqueConstraint(fields=['user', 'project', 'channel'], name='project_message_reads_uniq')]
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'chat_channel', 'channel'], name='project_message_reads_channel_uniq'),
+        ]
