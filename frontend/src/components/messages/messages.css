@@ -182,3 +182,26 @@
 .mt-page-count{padding:5px 11px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--muted);font-size:12.5px}
 .mt-empty-line{margin:0;padding:14px;color:var(--muted);font-size:13px}
 .mt-inbox-latest svg{vertical-align:-1px;color:var(--mt-team,#f5b546)}
+
+
+/* Chat shell embeds the thread full-height; don't fight the flex column. */
+.ch-thread .mt-channels{flex-wrap:wrap;min-width:0}
+.ch-thread .mt-banner{min-width:0;overflow-wrap:anywhere}
+.ch-thread .mt-composer{min-width:0}
+.ch-thread .mt-tools{min-width:0}
+.ch-thread .mt-file{max-width:min(300px,100%)}
+
+@media (max-width:1279px){
+  /* Full-screen thread in compact chat: allow the list to fill remaining space. */
+  .ch-thread .mt-thread.is-studio,
+  .ch-thread .mt-thread.is-portal{height:100%;min-height:0}
+  .ch-thread .mt-list{max-height:none;min-height:0}
+}
+
+@media (max-width:640px){
+  .ch-thread .mt-channel span{/* keep labels — tabs wrap */}
+  .ch-thread .mt-hint{display:none}
+  .ch-thread .mt-tool span{display:none}
+  .ch-thread .mt-send{margin-left:auto}
+  .ch-thread .mt-file{max-width:100%}
+}
