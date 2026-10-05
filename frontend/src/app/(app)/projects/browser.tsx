@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
   Activity, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
-  FolderInput, FolderOpen, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Wallet, X,
+  FolderInput, FolderOpen, MessagesSquare, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Wallet, X,
 } from "lucide-react";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
@@ -15,6 +15,8 @@ import { ProjectBrief } from "@/components/project-brief";
 import { ProjectPricing } from "@/components/money/project-pricing";
 import { ActivityFeed } from "@/components/activity/activity-feed";
 import { UploadLinksPanel } from "@/components/client-uploads/upload-links-panel";
+import { ChatPreview } from "@/components/chat/preview";
+import { chatHref, fetchUnread, unreadLabel } from "@/lib/messages";
 import "@/components/project-brief.css";
 import { LinkPending } from "@/components/nav-progress";
 import { TasksBoard } from "@/app/(app)/tasks/board";
@@ -95,6 +97,24 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
   const [expanded, setExpanded] = useState<string[]>(view.selectedClient ? [view.selectedClient.id] : []);
   const [uploading, setUploading] = useState(false);
   const [railClosed, setRailClosed] = useState(false);
+  const campaignId = view.selectedCampaign?.id ?? null;
+  const [unread, setUnread] = useState<{ project: string | null; count: number }>({ project: null, count: 0 });
+  const messagesUnread = unread.project === campaignId ? unread.count : 0;
+
+  // The tab's badge: this project's unread count from the workspace summary, refreshed every
+  // half minute (the open thread reports its own count while it is on screen).
+  useEffect(() => {
+    if (!view.workspaceId || !campaignId) return;
+    let alive = true;
+    const load = () => void fetchUnread(view.workspaceId as string).then((result) => {
+      if (!alive || !result.ok) return;
+      const row = result.data.projects.find((project) => project.project_id === campaignId);
+      setUnread({ project: campaignId, count: row?.total_unread ?? 0 });
+    });
+    load();
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") load(); }, 30_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [view.workspaceId, campaignId]);
 
   return (
     <div className={railClosed ? "pb-layout is-rail-closed" : "pb-layout"}>
@@ -129,6 +149,9 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
             </div>
             <div className="pb-title-actions">
               <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions"><Ellipsis size={15} /></button>
+              {view.workspaceId && view.selectedCampaign && (
+                <ChatHeaderButton workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} unread={messagesUnread} />
+              )}
               <button className="pb-primary-button" type="button" disabled={!view.workspaceId || !view.selectedCampaign} onClick={() => setUploading(true)}><CloudUpload size={15} />Upload Asset</button>
             </div>
           </div>
@@ -149,6 +172,10 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
             {view.notice && <small>Demo content</small>}
           </div>
         </div>
+
+        {view.selectedCampaign && view.workspaceId && tab === "Files" && (
+          <div className="pb-chat-preview"><ChatPreview workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} /></div>
+        )}
 
         {tab === "Files" && view.selectedCampaign ? (
           <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient?.id ?? null} />
@@ -180,6 +207,18 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
       )}
     </div>
   );
+}
+
+function ChatHeaderButton({ workspaceId, projectId, unread }: { workspaceId: string; projectId: string; unread: number }) {
+  const [href, setHref] = useState(`/chat`);
+  useEffect(() => {
+    void fetchUnread(workspaceId).then((result) => {
+      if (!result.ok) return;
+      const row = result.data.projects.find((project) => project.project_id === projectId);
+      if (row?.chat_channel_id) setHref(chatHref(row.chat_channel_id, "team", (row.unread?.team ?? 0) > 0 && !(row.unread?.client) ? "team" : "client"));
+    });
+  }, [workspaceId, projectId]);
+  return <Link className="pb-ghost-button" href={href}><MessagesSquare size={14} />Chat{unread > 0 ? ` (${unreadLabel(unread)})` : ""}</Link>;
 }
 
 /**

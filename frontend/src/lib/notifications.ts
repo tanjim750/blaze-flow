@@ -27,7 +27,7 @@ export type NotificationPage = {
   page: number; page_size: number; has_next: boolean;
 };
 
-export type NotificationTone = "comment" | "reply" | "mention" | "version" | "approved" | "changes" | "task" | "upload" | "request" | "other";
+export type NotificationTone = "comment" | "reply" | "mention" | "version" | "approved" | "changes" | "task" | "upload" | "request" | "message" | "other";
 
 /** One rendered row: "<actor> <verb> <subject>", plus the quoted snippet. */
 export type DescribedNotification = {
@@ -143,6 +143,20 @@ export function describeNotification(item: NotificationItem): DescribedNotificat
         ...base, tone: "request", verb: accepted ? "accepted your project request" : "declined your project request",
         subject: title ? `“${clip(title, 60)}”` : null, snippet: text(payload.decision_note),
       };
+    }
+    case "PROJECT_MESSAGE_NEW": {
+      // "Sam Lee sent 3 new messages in Spring Launch (team only)". One row per thread, counted up while unread.
+      const count = num(payload.message_count) ?? 1;
+      const project = text(payload.project_name);
+      const team = payload.channel === "team";
+      return {
+        ...base, tone: "message", verb: count > 1 ? `sent ${count} new messages in` : "sent a message in",
+        subject: `${project ? clip(project, 60) : "a project"}${team ? " (team only)" : ""}`,
+      };
+    }
+    case "PROJECT_MESSAGE_MENTION": {
+      const project = text(payload.project_name);
+      return { ...base, tone: "mention", verb: "mentioned you in", subject: `${project ? clip(project, 60) : "a project"}${payload.channel === "team" ? " (team only)" : ""}` };
     }
     case "TASK_CLIENT_READY":
       return { ...base, tone: "task", verb: "marked ready for your review:", subject: title ? `“${clip(title, 60)}”` : "a task" };

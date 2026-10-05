@@ -7,7 +7,7 @@
  * permission-scoped by the API.
  */
 import {
-  getClientPortalData, getTeamWorkload, listActivity, listAssetFiles, listClientTeams, listMediaVersions, listMyCuts,
+  getClientPortalData, getMessageUnread, getTeamWorkload, listActivity, listAssetFiles, listClientTeams, listMediaVersions, listMyCuts,
   listNotesToAddress, listProjectRequests, listProjects, listTaskStages, listTasks,
 } from "./api";
 import type {
@@ -23,6 +23,7 @@ import type { ActivityItem, DashboardFailure, DashboardReady, ReviewQueueItem, T
 import type { ActivityEntry } from "./activity";
 import type { ClientPortal } from "./client-uploads";
 import type { Branding, ProjectRequest } from "./portal";
+import type { UnreadSummary } from "./messages";
 import { timecode } from "./timecode";
 import { getMoneySummary, getMyEarnings, getMyInvoices } from "./billing-api";
 import { buildClientInvoices, buildEarnings, buildOwnerMoneyCards } from "./money-view";
@@ -370,6 +371,8 @@ export type ClientDashboard = Base & {
   branding?: Branding;
   /** The client's project requests; absent for people who cannot send one (e.g. the team previewing). */
   requests?: { workspaceId: string; items: ProjectRequest[] };
+  /** Conversations with the studio, per project; absent when the messages API is unavailable. */
+  messages?: { workspaceId: string; summary: UnreadSummary };
 };
 
 export type RoleDashboard = OwnerDashboard | EditorDashboard | ClientDashboard;
@@ -567,10 +570,10 @@ export async function loadEditorDashboard(greetingName: string, workspace: Works
 
 export async function loadClientDashboard(greetingName: string, workspace: Workspace): Promise<ClientDashboard | DashboardFailure> {
   const now = new Date();
-  const [projects, invoices, activity, portal, requests] = await Promise.all([
+  const [projects, invoices, activity, portal, requests, messages] = await Promise.all([
     listProjects(workspace.id), getMyInvoices(workspace.id),
     listActivity(workspace.id, { pageSize: DASHBOARD_ACTIVITY_LIMIT }), getClientPortalData(workspace.id),
-    listProjectRequests(workspace.id),
+    listProjectRequests(workspace.id), getMessageUnread(workspace.id),
   ]);
   if (!projects.ok) return failureView(greetingName, now, projects.error);
   const targets = openProjects(projects.data).slice(0, CLIENT_SCAN_LIMIT);
@@ -585,6 +588,7 @@ export async function loadClientDashboard(greetingName: string, workspace: Works
     ...dashboard, portal: buildClientPortal(workspace.id, settle(portal)),
     branding: portal.ok ? portal.data.branding : undefined,
     requests: requests.ok && requests.data.can_request ? { workspaceId: workspace.id, items: requests.data.requests } : undefined,
+    messages: messages.ok ? { workspaceId: workspace.id, summary: messages.data } : undefined,
   };
   // Invoices come from the billing demo's own permission check: a client sees only what was sent to them.
   return invoices.ok && invoices.data.results.length > 0 ? { ...withPortal, invoices: buildClientInvoices(invoices.data, now) } : withPortal;

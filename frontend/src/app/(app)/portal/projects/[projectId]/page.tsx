@@ -1,12 +1,14 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowLeft, CalendarClock, CheckCircle2, CircleDot, Clapperboard, Download, Eye, FileText, Flag, History, ListChecks, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowLeft, CalendarClock, CheckCircle2, CircleDot, Clapperboard, Download, Eye, FileText, Flag, History, ListChecks, MessagesSquare, RotateCcw, Sparkles } from "lucide-react";
 import { getClientPortalData, getClientProjectOverview } from "@/lib/api";
 import { formatBytes } from "@/lib/client-uploads";
 import { CUT_STATE_LABEL, PHASE_HINT, accentStyle, dayDate, dueLabel, splitTimeline, type TimelineEvent } from "@/lib/portal";
 import { loadWorkspaceContext } from "@/lib/workspace";
 import { PortalBrandBar } from "@/components/portal/brand-bar";
 import { ClientUploadPanel } from "@/components/client-uploads/client-upload-panel";
+import { ChatPreview } from "@/components/chat/preview";
+import { DiscussInChatButton } from "@/components/chat/discuss-button";
 import "@/components/portal/portal.css";
 
 /* Posters are small, permission-checked images from our own API (as on the dashboard); plain <img> on purpose. */
@@ -79,7 +81,7 @@ export default async function ClientProjectPage({ params }: PageProps<"/portal/p
           <ul className="pt-files">{waiting.map((cut) => <li className="pt-file" key={cut.id}>
             <span className="pt-thumb">{cut.poster_path ? <img src={cut.poster_path} alt="" /> : <Clapperboard size={16} aria-hidden="true" />}</span>
             <span className="pt-file-copy"><strong>{cut.title} · V{cut.version_number}</strong><small>Shared {dayDate(cut.stage_entered_at ?? cut.created_at, now)}</small></span>
-            <span className="pt-file-actions"><Link className="pt-cta" href={cut.review_path}>Review</Link></span>
+            <span className="pt-file-actions"><Link className="pt-cta" href={cut.review_path}>Review</Link><DiscussInChatButton workspaceId={workspace.id} projectId={projectId} label="Discuss" quote={`${cut.title} V${cut.version_number}`} /></span>
           </li>)}</ul>
         </section>}
 
@@ -101,6 +103,7 @@ export default async function ClientProjectPage({ params }: PageProps<"/portal/p
                   {cut.download_path
                     ? <a className="pt-cta" href={cut.download_path} download aria-label={`Download ${cut.title} V${cut.version_number}`}><Download />Download</a>
                     : <span className="pt-ghost" aria-disabled="true" title="The studio has not switched on downloads for this file yet">Not yet</span>}
+                  <DiscussInChatButton workspaceId={workspace.id} projectId={projectId} label="Discuss" quote={`${cut.title} V${cut.version_number}`} />
                 </span>
               </li>)}</ul>}
         </section>
@@ -147,5 +150,10 @@ export default async function ClientProjectPage({ params }: PageProps<"/portal/p
         />}
       </div>
     </div>
+
+    <section className="pt-card pt-messages" id="messages" aria-labelledby="pt-messages-title">
+      <div className="pt-card-head"><h2 id="pt-messages-title"><MessagesSquare />Messages with the studio</h2><Link className="pt-ghost" href="/portal/chat">All conversations</Link></div>
+      <ChatPreview workspaceId={workspace.id} projectId={projectId} variant="portal" />
+    </section>
   </div>;
 }

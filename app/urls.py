@@ -90,6 +90,11 @@ from .views import (
     workspace_retention_policy,
     workspace_workflow_stages,
 )
+from .message_views import (
+    chat_channel_attachment, chat_channel_list, chat_channel_message_detail, chat_channel_messages,
+    chat_channel_read, chat_channel_uploads, chat_search, project_message_attachment, project_message_detail,
+    project_message_uploads, project_messages, project_messages_read, workspace_message_unread,
+)
 from .portal_views import (
     client_project_overview, project_request_detail, project_requests, public_studio_logo, workspace_branding,
     workspace_branding_logo,
@@ -224,6 +229,19 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/client-uploads/', project_client_uploads, name='api-project-client-uploads'),
     path('workspaces/<uuid:workspace_id>/client-portal/', client_portal, name='api-client-portal'),
     path('workspaces/<uuid:workspace_id>/client-portal/projects/<uuid:project_id>/', client_project_overview, name='api-client-project-overview'),
+    path('workspaces/<uuid:workspace_id>/messages/unread/', workspace_message_unread, name='api-workspace-message-unread'),
+    path('workspaces/<uuid:workspace_id>/chat/channels/', chat_channel_list, name='api-chat-channels'),
+    path('workspaces/<uuid:workspace_id>/chat/search/', chat_search, name='api-chat-search'),
+    path('workspaces/<uuid:workspace_id>/chat/channels/<uuid:channel_id>/messages/', chat_channel_messages, name='api-chat-channel-messages'),
+    path('workspaces/<uuid:workspace_id>/chat/channels/<uuid:channel_id>/messages/read/', chat_channel_read, name='api-chat-channel-read'),
+    path('workspaces/<uuid:workspace_id>/chat/channels/<uuid:channel_id>/messages/uploads/', chat_channel_uploads, name='api-chat-channel-uploads'),
+    path('workspaces/<uuid:workspace_id>/chat/channels/<uuid:channel_id>/messages/<uuid:message_id>/', chat_channel_message_detail, name='api-chat-channel-message-detail'),
+    path('workspaces/<uuid:workspace_id>/chat/channels/<uuid:channel_id>/messages/<uuid:message_id>/attachments/<uuid:attachment_id>/', chat_channel_attachment, name='api-chat-channel-attachment'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/messages/', project_messages, name='api-project-messages'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/messages/read/', project_messages_read, name='api-project-messages-read'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/messages/uploads/', project_message_uploads, name='api-project-message-uploads'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/messages/<uuid:message_id>/', project_message_detail, name='api-project-message-detail'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/messages/<uuid:message_id>/attachments/<uuid:attachment_id>/', project_message_attachment, name='api-project-message-attachment'),
     path('workspaces/<uuid:workspace_id>/branding/', workspace_branding, name='api-workspace-branding'),
     path('workspaces/<uuid:workspace_id>/branding/logo/', workspace_branding_logo, name='api-workspace-branding-logo'),
     path('workspaces/<uuid:workspace_id>/project-requests/', project_requests, name='api-project-requests'),
