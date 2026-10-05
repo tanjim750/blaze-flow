@@ -647,56 +647,60 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
           </div>
         </header>
         <div className="fx-toolbar is-secondary">
-          <label className="fx-search">
-            <Search aria-hidden="true" />
-            <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this location…" aria-label={searchEverywhere ? "Search all folders" : "Search this location"}
-              onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (query) setQuery(""); else event.currentTarget.blur(); } }} />
-            {query && <button type="button" className="fx-icon-btn is-xs" onClick={() => { setQuery(""); searchRef.current?.focus(); }} aria-label="Clear search text"><X /></button>}
-          </label>
-          <div className="fx-filter-strip" role="toolbar" aria-label="Quick filters">
-            <button type="button" className={fromClient ? "is-on" : ""} aria-pressed={fromClient} onClick={() => setFromClient(!fromClient)}>From client</button>
-            <label className="fx-filter-select">
-              <span className="fx-sr-only">Type</span>
-              <select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as LibraryKind | "")} aria-label="Filter by type">
-                <option value="">All types</option>
-                <option value="video">Video</option>
-                <option value="image">Images</option>
-                <option value="audio">Audio</option>
-                <option value="document">Documents</option>
-                <option value="source">Source files</option>
-                <option value="other">Other</option>
-              </select>
+          <div className="fx-toolbar-lead">
+            <label className="fx-search">
+              <Search aria-hidden="true" />
+              <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this location" aria-label={searchEverywhere ? "Search all folders" : "Search this location"}
+                onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (query) setQuery(""); else event.currentTarget.blur(); } }} />
+              {query && <button type="button" className="fx-icon-btn is-xs" onClick={() => { setQuery(""); searchRef.current?.focus(); }} aria-label="Clear search text"><X /></button>}
             </label>
-            {!projectId && (view?.clients?.length ?? 0) > 0 && <label className="fx-filter-select">
-              <span className="fx-sr-only">Client</span>
-              <select value={clientFilter} onChange={(event) => { setClientFilter(event.target.value); if (!event.target.value) setProjectFilter(""); setFolderId(null); }} aria-label="Filter by client">
-                <option value="">All clients</option>
-                {(view?.clients ?? []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
-              </select>
-            </label>}
+            <div className="fx-filter-strip" role="toolbar" aria-label="Quick filters">
+              <button type="button" className={fromClient ? "is-on" : ""} aria-pressed={fromClient} onClick={() => setFromClient(!fromClient)}>From client</button>
+              <label className="fx-filter-select">
+                <span className="fx-sr-only">Type</span>
+                <select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as LibraryKind | "")} aria-label="Filter by type">
+                  <option value="">All types</option>
+                  <option value="video">Video</option>
+                  <option value="image">Images</option>
+                  <option value="audio">Audio</option>
+                  <option value="document">Documents</option>
+                  <option value="source">Source files</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              {!projectId && (view?.clients?.length ?? 0) > 0 && <label className="fx-filter-select">
+                <span className="fx-sr-only">Client</span>
+                <select value={clientFilter} onChange={(event) => { setClientFilter(event.target.value); if (!event.target.value) setProjectFilter(""); setFolderId(null); }} aria-label="Filter by client">
+                  <option value="">All clients</option>
+                  {(view?.clients ?? []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+                </select>
+              </label>}
+            </div>
+            {activeChips.length > 0 && <ul className="fx-chips" aria-label="Active filters">{activeChips.map((chip) => <li key={chip.key}><span>{chip.label}</span><button type="button" onClick={chip.clear} aria-label={`Remove filter ${chip.label}`}><X /></button></li>)}</ul>}
           </div>
-          <FilterMenu
-            view={view} groups={filteredProjects} stages={stages} showRelations={!projectId} activeCount={activeFilters}
-            searchEverywhere={searchEverywhere} setSearchEverywhere={setSearchEverywhere}
-            clientFilter={clientFilter} setClientFilter={setClientFilter}
-            projectFilter={projectFilter} setProjectFilter={setProjectFilter}
-            kindFilter={kindFilter} setKindFilter={setKindFilter}
-            stageFilter={stageFilter} setStageFilter={setStageFilter}
-            sort={sort} setSort={setSort} onReset={resetFilters}
-            groupBy={groupBy} setGroupBy={setGroupBy} density={density} setDensity={setDensity}
-          />
-          {activeChips.length > 0 && <ul className="fx-chips" aria-label="Active filters">{activeChips.map((chip) => <li key={chip.key}><span>{chip.label}</span><button type="button" onClick={chip.clear} aria-label={`Remove filter ${chip.label}`}><X /></button></li>)}</ul>}
-          <span className="fx-spacer" />
-          {order.length > 0 && <label className="fx-select-all"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} />Select all visible</label>}
-          <div className="fx-segmented" role="group" aria-label="Layout">
-            <button type="button" className={mode === "grid" ? "is-on" : ""} onClick={() => setMode("grid")} aria-label="Grid view" aria-pressed={mode === "grid"}><LayoutGrid /></button>
-            <button type="button" className={mode === "list" ? "is-on" : ""} onClick={() => setMode("list")} aria-label="List view" aria-pressed={mode === "list"}><List /></button>
+          <div className="fx-toolbar-trail">
+            <FilterMenu
+              view={view} groups={filteredProjects} stages={stages} showRelations={!projectId} activeCount={activeFilters}
+              searchEverywhere={searchEverywhere} setSearchEverywhere={setSearchEverywhere}
+              fromClient={fromClient} setFromClient={setFromClient}
+              clientFilter={clientFilter} setClientFilter={setClientFilter}
+              projectFilter={projectFilter} setProjectFilter={setProjectFilter}
+              kindFilter={kindFilter} setKindFilter={setKindFilter}
+              stageFilter={stageFilter} setStageFilter={setStageFilter}
+              sort={sort} setSort={setSort} onReset={resetFilters}
+              groupBy={groupBy} setGroupBy={setGroupBy} density={density} setDensity={setDensity}
+            />
+            {order.length > 0 && <label className="fx-select-all"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} />Select all visible</label>}
+            <div className="fx-segmented" role="group" aria-label="Layout">
+              <button type="button" className={mode === "grid" ? "is-on" : ""} onClick={() => setMode("grid")} aria-label="Grid view" aria-pressed={mode === "grid"}><LayoutGrid /></button>
+              <button type="button" className={mode === "list" ? "is-on" : ""} onClick={() => setMode("list")} aria-label="List view" aria-pressed={mode === "list"}><List /></button>
+            </div>
+            <div className="fx-segmented is-density" role="group" aria-label="Density">
+              <button type="button" className={density === "comfortable" ? "is-on" : ""} onClick={() => setDensity("comfortable")} aria-pressed={density === "comfortable"} title="Comfortable">L</button>
+              <button type="button" className={density === "compact" ? "is-on" : ""} onClick={() => setDensity("compact")} aria-pressed={density === "compact"} title="Compact">S</button>
+            </div>
+            <button type="button" className={`fx-icon-btn fx-details-toggle ${inspectorVisible ? "is-on" : ""}`} onClick={toggleInspector} aria-pressed={inspectorVisible} aria-label="Details panel" title="Details panel (])"><PanelRight /></button>
           </div>
-          <div className="fx-segmented is-density" role="group" aria-label="Density">
-            <button type="button" className={density === "comfortable" ? "is-on" : ""} onClick={() => setDensity("comfortable")} aria-pressed={density === "comfortable"} title="Comfortable">L</button>
-            <button type="button" className={density === "compact" ? "is-on" : ""} onClick={() => setDensity("compact")} aria-pressed={density === "compact"} title="Compact">S</button>
-          </div>
-          <button type="button" className={`fx-icon-btn fx-details-toggle ${inspectorVisible ? "is-on" : ""}`} onClick={toggleInspector} aria-pressed={inspectorVisible} aria-label="Details panel" title="Details panel (])"><PanelRight /></button>
         </div>
         {selected.size > 1 && <div className={`fx-bulk${phone ? " is-phone-sheet" : ""}`} role="region" aria-label="Selection">
           <strong role="status" aria-live="polite">{selected.size} selected</strong>
@@ -814,7 +818,7 @@ function SheetFocus({ active, onClose, children }: { active: boolean; onClose: (
  */
 function FilterMenu({
   view, groups, stages, showRelations, activeCount,
-  searchEverywhere, setSearchEverywhere, clientFilter, setClientFilter, projectFilter, setProjectFilter,
+  searchEverywhere, setSearchEverywhere, fromClient, setFromClient, clientFilter, setClientFilter, projectFilter, setProjectFilter,
   kindFilter, setKindFilter, stageFilter, setStageFilter, sort, setSort, onReset,
   groupBy, setGroupBy, density, setDensity,
 }: {
@@ -824,6 +828,7 @@ function FilterMenu({
   showRelations: boolean;
   activeCount: number;
   searchEverywhere: boolean; setSearchEverywhere: (value: boolean) => void;
+  fromClient: boolean; setFromClient: (value: boolean) => void;
   clientFilter: string; setClientFilter: (value: string) => void;
   projectFilter: string; setProjectFilter: (value: string) => void;
   kindFilter: LibraryKind | ""; setKindFilter: (value: LibraryKind | "") => void;
@@ -846,6 +851,14 @@ function FilterMenu({
             <small>Look through every subfolder, not just this one.</small>
           </span>
           <Switch checked={searchEverywhere} onCheckedChange={setSearchEverywhere} label="Search all folders" />
+        </label>
+
+        <label className="al-filter-switch">
+          <span>
+            From client
+            <small>Only files and folders clients uploaded.</small>
+          </span>
+          <Switch checked={fromClient} onCheckedChange={setFromClient} label="From client" />
         </label>
 
         {showRelations && (
