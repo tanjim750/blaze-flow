@@ -19,7 +19,7 @@ type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { 
 const primaryLinks = [
   { href: "/", label: "Home", icon: House },
   { href: "/projects", label: "Projects", icon: SquareKanban },
-  { href: "/messages", label: "Messages", icon: MessagesSquare },
+  { href: "/chat", label: "Chat", icon: MessagesSquare },
   { href: "/tasks", label: "Tasks", icon: CheckCircle2 },
   { href: "/files", label: "Files", icon: FolderOpen },
   { href: "/clients", label: "Clients", icon: Building2 },
@@ -62,7 +62,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   // Projects lays out its own full-bleed browser, so it opts out of the standard page padding.
   // Full-bleed routes: the projects tree and the review workspace both own their own
   // chrome and fill the viewport, so the shell gives them the frame without the padding.
-  const flush = pathname.startsWith("/projects") || pathname.startsWith("/review") || pathname.startsWith("/files");
+  const flush = pathname.startsWith("/projects") || pathname.startsWith("/review") || pathname.startsWith("/files") || pathname.startsWith("/chat") || pathname.startsWith("/portal/chat");
 
   useEffect(() => {
     let active = true;
@@ -134,7 +134,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
             {navLinks.map(({ href, label, icon: Icon }) => (
               <Link key={label} href={href} onClick={() => setOpen(false)} title={label} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}>
                 <Icon size={20} /><span>{label}</span>
-                {href === "/messages" && messagesUnread > 0 && <b className="studio-nav-badge" aria-label={`${messagesUnread} unread messages`}>{unreadLabel(messagesUnread)}</b>}
+                {href === "/chat" && messagesUnread > 0 && <b className="studio-nav-badge" aria-label={`${messagesUnread} unread messages`}>{unreadLabel(messagesUnread)}</b>}
                 <LinkPending />
               </Link>
             ))}

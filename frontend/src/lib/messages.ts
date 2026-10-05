@@ -35,11 +35,42 @@ export type Thread = {
 };
 export type UnreadSummary = {
   total_unread: number;
+  total_mentions?: number;
   projects: {
     project_id: string; project_name: string; client_name: string | null;
     unread: Partial<Record<Channel, number>>; total_unread: number; last_message_at: string | null;
     latest: { author_name: string; channel: Channel; snippet: string; created_at: string } | null;
-    viewer_kind: "team" | "client";
+    viewer_kind: "team" | "client"; chat_channel_id?: string;
+    mentions?: Partial<Record<Channel, number>>;
+  }[];
+  sections?: ChatSection[];
+  studio?: ChatChannelRow[];
+};
+
+export type ChatChannelRow = {
+  id: string; kind: "general" | "project"; name: string;
+  project_id: string | null; project_status: string | null;
+  client_team_id: string | null; client_team_name: string | null;
+  viewer_kind: "team" | "client"; sides: Channel[];
+  unread: Partial<Record<Channel, number>>; mentions: Partial<Record<Channel, number>>;
+  total_unread: number; total_mentions: number; team_unread: number;
+  last_message_at: string | null;
+  latest: { author_name: string; channel: Channel; snippet: string; created_at: string } | null;
+  is_past: boolean;
+};
+export type ChatSection = {
+  id: string; name: string; channels: ChatChannelRow[]; past: ChatChannelRow[];
+  total_unread: number; total_mentions: number;
+};
+export type ChatList = {
+  sections: ChatSection[]; studio: ChatChannelRow[]; total_unread: number; total_mentions: number;
+};
+export type ChatSearchResult = {
+  query: string;
+  results: {
+    message_id: string; chat_channel_id: string; channel: Channel; channel_name: string;
+    client_team_name: string | null; project_name: string | null;
+    author_name: string; author_is_client: boolean; snippet: string; created_at: string; team_only: boolean;
   }[];
 };
 export type PostInput = {
@@ -52,22 +83,32 @@ export const MAX_ATTACHMENTS = 10;
 
 // ---------------------------------------------------------------- browser calls
 
-const base = (workspaceId: string, projectId: string) => `/workspaces/${workspaceId}/projects/${projectId}/messages/`;
-const json = (body: unknown): RequestInit => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+/** Target either a Slack-style chat channel or the legacy project alias. */
+export type ThreadTarget = { workspaceId: string; chatChannelId: string; projectId?: string } | { workspaceId: string; projectId: string; chatChannelId?: undefined };
 
-export function fetchThread(workspaceId: string, projectId: string, channel: Channel, options: { after?: string; before?: string } = {}): Promise<CallResult<Thread>> {
+const json = (body: unknown): RequestInit => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const messagesPath = (target: ThreadTarget) => target.chatChannelId
+  ? `/workspaces/${target.workspaceId}/chat/channels/${target.chatChannelId}/messages/`
+  : `/workspaces/${target.workspaceId}/projects/${target.projectId}/messages/`;
+
+export function fetchThread(target: ThreadTarget, channel: Channel, options: { after?: string; before?: string } = {}): Promise<CallResult<Thread>> {
   const query = new URLSearchParams({ channel });
   if (options.after) query.set("after", options.after);
   if (options.before) query.set("before", options.before);
-  return call<Thread>(`${base(workspaceId, projectId)}?${query}`);
+  return call<Thread>(`${messagesPath(target)}?${query}`);
 }
-export const postMessage = (workspaceId: string, projectId: string, input: PostInput) => call<Message>(base(workspaceId, projectId), json(input));
-export const editMessage = (workspaceId: string, projectId: string, id: string, body: string) =>
-  call<Message>(`${base(workspaceId, projectId)}${id}/`, { ...json({ body }), method: "PATCH" });
-export const deleteMessage = (workspaceId: string, projectId: string, id: string) => call<null>(`${base(workspaceId, projectId)}${id}/`, { method: "DELETE" });
-export const markRead = (workspaceId: string, projectId: string, channel: Channel) => call<{ channel: Channel; last_read_at: string }>(`${base(workspaceId, projectId)}read/`, json({ channel }));
+export const postMessage = (target: ThreadTarget, input: PostInput) => call<Message>(messagesPath(target), json(input));
+export const editMessage = (target: ThreadTarget, id: string, body: string) =>
+  call<Message>(`${messagesPath(target)}${id}/`, { ...json({ body }), method: "PATCH" });
+export const deleteMessage = (target: ThreadTarget, id: string) => call<null>(`${messagesPath(target)}${id}/`, { method: "DELETE" });
+export const markRead = (target: ThreadTarget, channel: Channel) => call<{ channel: Channel; last_read_at: string }>(`${messagesPath(target)}read/`, json({ channel }));
 export const fetchUnread = (workspaceId: string) => call<UnreadSummary>(`/workspaces/${workspaceId}/messages/unread/`);
-export const uploadUrl = (workspaceId: string, projectId: string) => `/api${base(workspaceId, projectId)}uploads/`;
+export const fetchChatList = (workspaceId: string) => call<ChatList>(`/workspaces/${workspaceId}/chat/channels/`);
+export const searchChat = (workspaceId: string, query: string, extra: Record<string, string> = {}) => {
+  const params = new URLSearchParams({ q: query, ...extra });
+  return call<ChatSearchResult>(`/workspaces/${workspaceId}/chat/search/?${params}`);
+};
+export const uploadUrl = (target: ThreadTarget) => `/api${messagesPath(target)}uploads/`;
 
 // ------------------------------------------------------------------ pure rules
 
@@ -159,7 +200,16 @@ export function bodyParts(body: string, mentions: string[], people: Person[]): {
 export const unreadLabel = (count: number) => (count > 99 ? "99+" : String(count));
 
 /** Where a project's thread lives for this viewer. */
-export function threadHref(projectId: string, kind: "team" | "client", channel?: Channel): string {
+export function threadHref(projectId: string, kind: "team" | "client", channel?: Channel, chatChannelId?: string): string {
+  if (chatChannelId) {
+    const side = channel ? `?side=${channel}` : "";
+    return kind === "client" ? `/portal/chat/${chatChannelId}${side}` : `/chat/${chatChannelId}${side}`;
+  }
   if (kind === "client") return `/portal/projects/${projectId}#messages`;
   return `/projects?campaign=${projectId}&tab=messages${channel ? `&channel=${channel}` : ""}`;
+}
+
+export function chatHref(channelId: string, kind: "team" | "client" = "team", side?: Channel): string {
+  const query = side ? `?side=${side}` : "";
+  return kind === "client" ? `/portal/chat/${channelId}${query}` : `/chat/${channelId}${query}`;
 }

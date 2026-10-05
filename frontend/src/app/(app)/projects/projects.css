@@ -343,3 +343,5 @@
 /* Messages tab */
 .pb-tabs button > b.pb-tab-count { font: 700 10.5px var(--font-geist-sans, inherit); min-width: 18px; text-align: center; background: #ff5c7a; color: #fff; padding: 2px 5px; border-radius: 999px; }
 .pb-messages { padding: 4px 0 8px; }
+
+.pb-chat-preview { padding: 0 0 12px; max-width: 720px; }

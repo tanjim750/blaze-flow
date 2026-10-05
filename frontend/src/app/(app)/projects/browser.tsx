@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
   Activity, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
@@ -15,8 +15,8 @@ import { ProjectBrief } from "@/components/project-brief";
 import { ProjectPricing } from "@/components/money/project-pricing";
 import { ActivityFeed } from "@/components/activity/activity-feed";
 import { UploadLinksPanel } from "@/components/client-uploads/upload-links-panel";
-import { ProjectThread } from "@/components/messages/thread";
-import { fetchUnread, unreadLabel, type Channel } from "@/lib/messages";
+import { ChatPreview } from "@/components/chat/preview";
+import { chatHref, fetchUnread, unreadLabel } from "@/lib/messages";
 import "@/components/project-brief.css";
 import { LinkPending } from "@/components/nav-progress";
 import { TasksBoard } from "@/app/(app)/tasks/board";
@@ -85,8 +85,8 @@ function InlineCreate({ action, hidden, placeholder, label, onClose, nested = fa
     </form>
   );
 }
-const TABS = ["Files", "Tasks", "Messages", "Brief & Specs", "Activity Log", "Client uploads", "Pricing"] as const;
-/** "Client uploads" also answers to `?tab=client-uploads`, "Messages" to `?tab=messages` (what notifications and the feed link to). */
+const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log", "Client uploads", "Pricing"] as const;
+/** "Client uploads" also answers to `?tab=client-uploads` (what notifications and the feed link to). */
 const tabSlug = (value: string) => value.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
 
 export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initialQuery = "" }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string; initialQuery?: string }) {
@@ -149,6 +149,9 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
             </div>
             <div className="pb-title-actions">
               <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions"><Ellipsis size={15} /></button>
+              {view.workspaceId && view.selectedCampaign && (
+                <ChatHeaderButton workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} unread={messagesUnread} />
+              )}
               <button className="pb-primary-button" type="button" disabled={!view.workspaceId || !view.selectedCampaign} onClick={() => setUploading(true)}><CloudUpload size={15} />Upload Asset</button>
             </div>
           </div>
@@ -158,13 +161,11 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
               {TABS.filter((value) => value !== "Pricing" || view.canSeeBilling).map((value) => (
                 <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? "selected" : ""} onClick={() => setTab(value)}>
                   {value === "Files" && <FolderOpen size={14} />}
-                  {value === "Messages" && <MessagesSquare size={14} />}
                   {value === "Brief & Specs" && <FileText size={14} />}
                   {value === "Activity Log" && <Activity size={14} />}
                   {value === "Client uploads" && <FolderInput size={14} />}
                   {value === "Pricing" && <Wallet size={14} />}
                   <span>{value}</span>
-                  {value === "Messages" && messagesUnread > 0 && <b className="pb-tab-count" aria-label={`${messagesUnread} unread`}>{unreadLabel(messagesUnread)}</b>}
                 </button>
               ))}
             </div>
@@ -172,12 +173,14 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
           </div>
         </div>
 
+        {view.selectedCampaign && view.workspaceId && tab === "Files" && (
+          <div className="pb-chat-preview"><ChatPreview workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} /></div>
+        )}
+
         {tab === "Files" && view.selectedCampaign ? (
           <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient?.id ?? null} />
         ) : tab === "Tasks" && view.selectedCampaign ? (
           <TasksBoard compact view={tasksView} projectId={view.selectedCampaign.id} />
-        ) : tab === "Messages" && view.selectedCampaign && view.workspaceId ? (
-          <MessagesTab key={view.selectedCampaign.id} workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} onUnread={(count) => setUnread({ project: campaignId, count })} />
         ) : tab === "Brief & Specs" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (
           // Keyed on the project so switching campaigns never carries one brief's unsaved text into another.
           <ProjectBrief key={view.selectedCampaign.id} workspaceId={view.workspaceId} project={view.selectedCampaign.project} />
@@ -206,11 +209,16 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
   );
 }
 
-/** The project's thread; `?channel=team` (from a notification) opens the internal channel. */
-function MessagesTab({ workspaceId, projectId, onUnread }: { workspaceId: string; projectId: string; onUnread: (count: number) => void }) {
-  const params = useSearchParams();
-  const channel: Channel = params.get("channel") === "team" ? "team" : "client";
-  return <div className="pb-messages"><ProjectThread workspaceId={workspaceId} projectId={projectId} initialChannel={channel} onUnreadChange={onUnread} /></div>;
+function ChatHeaderButton({ workspaceId, projectId, unread }: { workspaceId: string; projectId: string; unread: number }) {
+  const [href, setHref] = useState(`/chat`);
+  useEffect(() => {
+    void fetchUnread(workspaceId).then((result) => {
+      if (!result.ok) return;
+      const row = result.data.projects.find((project) => project.project_id === projectId);
+      if (row?.chat_channel_id) setHref(chatHref(row.chat_channel_id, "team", (row.unread?.team ?? 0) > 0 && !(row.unread?.client) ? "team" : "client"));
+    });
+  }, [workspaceId, projectId]);
+  return <Link className="pb-ghost-button" href={href}><MessagesSquare size={14} />Chat{unread > 0 ? ` (${unreadLabel(unread)})` : ""}</Link>;
 }
 
 /**

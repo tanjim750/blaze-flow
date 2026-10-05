@@ -58,16 +58,18 @@ describe("messages rules", () => {
   it("links each viewer to their own copy of the thread", () => {
     expect(threadHref("p1", "client")).toBe("/portal/projects/p1#messages");
     expect(threadHref("p1", "team", "team")).toBe("/projects?campaign=p1&tab=messages&channel=team");
+    expect(threadHref("p1", "client", "client", "ch1")).toBe("/portal/chat/ch1?side=client");
+    expect(threadHref("p1", "team", "team", "ch1")).toBe("/chat/ch1?side=team");
     expect(unreadLabel(140)).toBe("99+");
   });
 
   it("describes batched and mention notifications", () => {
     const base = { id: "n", workspace_id: "w", actor: { id: "u", email: "s@x", name: "Sam Lee" }, entity_type: "project_thread", entity_id: "p:client", unread: true, read_at: null, created_at: "2026-10-04T10:00:00Z" };
-    const burst = describeNotification({ ...base, kind: "PROJECT_MESSAGE_NEW", payload: { project_name: "Spring Launch", channel: "client", message_count: 3, excerpt: "Hi" }, link: "/portal/projects/p#messages" });
+    const burst = describeNotification({ ...base, kind: "PROJECT_MESSAGE_NEW", payload: { project_name: "Spring Launch", channel: "client", message_count: 3, excerpt: "Hi" }, link: "/portal/chat/ch1?side=client" });
     expect(burst.verb).toBe("sent 3 new messages in");
     expect(burst.subject).toBe("Spring Launch");
     expect(burst.tone).toBe("message");
-    expect(burst.href).toBe("/portal/projects/p#messages");
+    expect(burst.href).toBe("/portal/chat/ch1?side=client");
     const team = describeNotification({ ...base, kind: "PROJECT_MESSAGE_MENTION", payload: { project_name: "Spring Launch", channel: "team" } });
     expect(team.verb).toBe("mentioned you in");
     expect(team.subject).toBe("Spring Launch (team only)");

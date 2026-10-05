@@ -32,7 +32,7 @@ export function MessagesInbox({ workspaceId, initial, limit, emptyText }: {
   if (rows.length === 0) return <p className="mt-empty-line">{emptyText ?? "No project conversations yet."}</p>;
   return <ul className="mt-inbox">
     {rows.map((row) => <li key={row.project_id}>
-      <Link className={`mt-inbox-row${row.total_unread ? " is-unread" : ""}`} href={threadHref(row.project_id, row.viewer_kind, row.unread.team && !row.unread.client ? "team" : undefined)}>
+      <Link className={`mt-inbox-row${row.total_unread ? " is-unread" : ""}`} href={threadHref(row.project_id, row.viewer_kind, row.unread.team && !row.unread.client ? "team" : undefined, row.chat_channel_id)}>
         <span className="mt-inbox-title"><MessagesSquare size={15} aria-hidden="true" /><strong>{row.project_name}</strong>{row.client_name && row.viewer_kind === "team" && <small>{row.client_name}</small>}</span>
         <p className="mt-inbox-latest">{row.latest
           ? <>{row.latest.channel === "team" && <Lock size={11} aria-label="Team only" />} <b>{row.latest.author_name}:</b> {row.latest.snippet || "sent an attachment"}</>

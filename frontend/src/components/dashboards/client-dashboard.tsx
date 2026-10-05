@@ -27,6 +27,7 @@ export function ClientDashboard({ view, choice }: { view: ClientView; choice: La
   const pending = view.requests?.items.filter((row) => row.status === "pending").length ?? 0;
   return <div className="home-shell role-client pt-scope" style={accentStyle(view.branding?.brand_color)}>
     {view.branding && <PortalBrandBar branding={view.branding}>
+      <Link className="pt-ghost" href="/portal/chat" style={{ height: 36, padding: "0 12px" }}><MessagesSquare size={14} />Messages</Link>
       {view.requests && <Link className="pt-cta" href="/portal/requests/new"><Plus />Start a new project</Link>}
     </PortalBrandBar>}
     <DashboardHeading workspaceName={view.workspaceName} today={view.today} greetingName={view.greetingName} subline={subline(view)} choice={choice} />
@@ -72,7 +73,7 @@ export function ClientDashboard({ view, choice }: { view: ClientView; choice: La
     {view.messages && view.messages.summary.projects.length > 0 && <section className="panel pt-home-messages" aria-labelledby="messages-title">
       <div className="panel-title"><h2 id="messages-title"><MessagesSquare size={16} />Messages with the studio</h2><small>{view.messages.summary.total_unread ? `${view.messages.summary.total_unread} unread` : "All caught up"}</small></div>
       <MessagesInbox workspaceId={view.messages.workspaceId} initial={view.messages.summary} limit={4} emptyText="No messages yet. Open a project to write to the studio." />
-      {view.messages.summary.projects.length > 4 && <Link className="pt-back" href="/messages">All conversations<ArrowRight size={14} /></Link>}
+      {view.messages.summary.projects.length > 4 && <Link className="pt-back" href="/portal/chat">All conversations<ArrowRight size={14} /></Link>}
     </section>}
 
     {view.requests && view.requests.items.length > 0 && <section className="panel pt-home-requests" aria-labelledby="requests-title">

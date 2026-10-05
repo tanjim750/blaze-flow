@@ -10,7 +10,7 @@ import { call, formatBytes, sendFile } from "@/lib/client-uploads";
 import {
   BODY_MAX, CHANNEL_LABEL, MAX_ATTACHMENTS, bodyParts, clock, deleteMessage, editMessage, fetchThread, filterPeople,
   groupByDay, insertMention, markRead, mentionQuery, mentionedIds, mergeMessages, newestAt, postMessage, unreadLabel,
-  uploadUrl, type Channel, type Message, type MessageAttachment, type Person, type Thread, type Viewer,
+  uploadUrl, type Channel, type Message, type MessageAttachment, type Person, type Thread, type ThreadTarget, type Viewer,
 } from "@/lib/messages";
 import "@/components/portal/portal.css";
 import "./messages.css";
@@ -22,10 +22,14 @@ const POLL_MS = 5000;
  * locked "Team only") or the single shared channel for a client. Polls every few seconds
  * while the tab is visible and marks what is on screen as read.
  */
-export function ProjectThread({ workspaceId, projectId, initialChannel = "client", variant = "studio", onUnreadChange }: {
-  workspaceId: string; projectId: string; initialChannel?: Channel; variant?: "studio" | "portal";
+export function ProjectThread({ workspaceId, projectId, chatChannelId, initialChannel = "client", initialQuote = "", variant = "studio", onUnreadChange }: {
+  workspaceId: string; projectId?: string; chatChannelId?: string; initialChannel?: Channel; initialQuote?: string; variant?: "studio" | "portal";
   onUnreadChange?: (total: number) => void;
 }) {
+  const target: ThreadTarget = useMemo(
+    () => (chatChannelId ? { workspaceId, chatChannelId, projectId } : { workspaceId, projectId: projectId as string }),
+    [workspaceId, chatChannelId, projectId],
+  );
   const [channel, setChannel] = useState<Channel>(variant === "portal" ? "client" : initialChannel);
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [unread, setUnread] = useState<Partial<Record<Channel, number>>>({});
@@ -51,15 +55,15 @@ export function ProjectThread({ workspaceId, projectId, initialChannel = "client
         {(unread[value] ?? 0) > 0 && channel !== value && <b className="mt-count" aria-label={`${unread[value]} unread`}>{unreadLabel(unread[value] ?? 0)}</b>}
       </button>)}
     </div>}
-    <ChannelView key={channel} workspaceId={workspaceId} projectId={projectId} channel={channel} variant={variant} onThread={report} />
+    <ChannelView key={channel} target={target} projectId={projectId} channel={channel} variant={variant} initialQuote={initialQuote} onThread={report} />
   </section>;
 }
 
 type Pending = { key: string; name: string; progress: number | null; id?: string; error?: string };
 type Linked = { id: string; name: string; kind: "file" | "cut" };
 
-function ChannelView({ workspaceId, projectId, channel, variant, onThread }: {
-  workspaceId: string; projectId: string; channel: Channel; variant: "studio" | "portal"; onThread: (thread: Thread) => void;
+function ChannelView({ target, projectId, channel, variant, initialQuote = "", onThread }: {
+  target: ThreadTarget; projectId?: string; channel: Channel; variant: "studio" | "portal"; initialQuote?: string; onThread: (thread: Thread) => void;
 }) {
   const [thread, setThread] = useState<Thread | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -73,20 +77,20 @@ function ChannelView({ workspaceId, projectId, channel, variant, onThread }: {
 
   const read = useCallback(() => {
     if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-    void markRead(workspaceId, projectId, channel).then((result) => {
+    void markRead(target, channel).then((result) => {
       if (!result.ok) return;
       setThread((current) => {
         if (!current) return current;
         const next = { ...current, unread: { ...current.unread, [channel]: 0 } };
-        onThread(next);
+        queueMicrotask(() => onThread(next));
         return next;
       });
     });
-  }, [workspaceId, projectId, channel, onThread]);
+  }, [target, channel, onThread]);
 
   useEffect(() => {
     let alive = true;
-    void fetchThread(workspaceId, projectId, channel).then((result) => {
+    void fetchThread(target, channel).then((result) => {
       if (!alive) return;
       if (!result.ok) { setError(result.status === 404 ? "This conversation is not available to you." : result.error); return; }
       setThread(result.data);
@@ -96,14 +100,14 @@ function ChannelView({ workspaceId, projectId, channel, variant, onThread }: {
       if ((result.data.unread[channel] ?? 0) > 0) read();
     });
     return () => { alive = false; };
-  }, [workspaceId, projectId, channel, onThread, read]);
+  }, [target, channel, onThread, read]);
 
   const ready = thread !== null;
   useEffect(() => {
     if (!ready) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      void fetchThread(workspaceId, projectId, channel, { after: since.current }).then((result) => {
+      void fetchThread(target, channel, { after: since.current }).then((result) => {
         if (!result.ok) return;
         const fresh = result.data.messages;
         if (fresh.length || result.data.changed.length) setMessages((current) => mergeMessages(current, fresh, result.data.changed));
@@ -114,7 +118,7 @@ function ChannelView({ workspaceId, projectId, channel, variant, onThread }: {
       });
     }, POLL_MS);
     return () => window.clearInterval(timer);
-  }, [ready, workspaceId, projectId, channel, onThread, read]);
+  }, [ready, target, channel, onThread, read]);
 
   // Keep the newest message in view unless someone has scrolled up to read older ones.
   useEffect(() => {
@@ -128,7 +132,7 @@ function ChannelView({ workspaceId, projectId, channel, variant, onThread }: {
     setOlderBusy(true);
     const list = listRef.current;
     const height = list?.scrollHeight ?? 0;
-    void fetchThread(workspaceId, projectId, channel, { before: first.created_at }).then((result) => {
+    void fetchThread(target, channel, { before: first.created_at }).then((result) => {
       setOlderBusy(false);
       if (!result.ok) return;
       stick.current = false;
@@ -172,16 +176,16 @@ function ChannelView({ workspaceId, projectId, channel, variant, onThread }: {
         <p className="mt-day-label"><span>{group.day}</span></p>
         {group.items.map(({ message, continued }) => <MessageRow
           key={message.id} message={message} continued={continued} people={people} viewer={viewer}
-          workspaceId={workspaceId} projectId={projectId} onReplace={replace}
-          onReply={(target) => { setReplyTo(target); composerRef.current?.focus(); }}
-          onQuote={(target) => composerRef.current?.quote(target)}
+          target={target} onReplace={replace}
+          onReply={(message) => { setReplyTo(message); composerRef.current?.focus(); }}
+          onQuote={(message) => composerRef.current?.quote(message)}
         />)}
       </div>)}
     </div>
 
     {viewer.can_post
       ? <Composer
-        ref={composerRef} workspaceId={workspaceId} projectId={projectId} channel={channel} viewer={viewer} people={people}
+        ref={composerRef} target={target} projectId={projectId} channel={channel} viewer={viewer} people={people} initialQuote={initialQuote}
         replyTo={replyTo} onCancelReply={() => setReplyTo(null)}
         onSent={(message) => { stick.current = true; setReplyTo(null); setMessages((current) => mergeMessages(current, [message])); since.current = newestAt([message], since.current); }}
       />
@@ -193,8 +197,8 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "?";
 }
 
-function MessageRow({ message, continued, people, viewer, workspaceId, projectId, onReplace, onReply, onQuote }: {
-  message: Message; continued: boolean; people: Person[]; viewer: Viewer; workspaceId: string; projectId: string;
+function MessageRow({ message, continued, people, viewer, target, onReplace, onReply, onQuote }: {
+  message: Message; continued: boolean; people: Person[]; viewer: Viewer; target: ThreadTarget;
   onReplace: (message: Message) => void; onReply: (message: Message) => void; onQuote: (message: Message) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -205,7 +209,7 @@ function MessageRow({ message, continued, people, viewer, workspaceId, projectId
 
   function save() {
     setBusy(true);
-    void editMessage(workspaceId, projectId, message.id, draft).then((result) => {
+    void editMessage(target, message.id, draft).then((result) => {
       setBusy(false);
       if (!result.ok) { setProblem(result.error); return; }
       setEditing(false); setProblem(null); onReplace(result.data);
@@ -213,7 +217,7 @@ function MessageRow({ message, continued, people, viewer, workspaceId, projectId
   }
   function remove() {
     setBusy(true);
-    void deleteMessage(workspaceId, projectId, message.id).then((result) => {
+    void deleteMessage(target, message.id).then((result) => {
       setBusy(false);
       if (!result.ok) { setProblem(result.error); return; }
       onReplace({ ...message, deleted: true, body: "", attachments: [], mentions: [], can_edit: false });
@@ -278,11 +282,11 @@ function AttachmentChip({ item }: { item: MessageAttachment }) {
 
 type ComposerHandle = { focus: () => void; quote: (message: Message) => void };
 
-function Composer({ ref, workspaceId, projectId, channel, viewer, people, replyTo, onCancelReply, onSent }: {
-  ref: React.Ref<ComposerHandle>; workspaceId: string; projectId: string; channel: Channel; viewer: Viewer; people: Person[];
-  replyTo: Message | null; onCancelReply: () => void; onSent: (message: Message) => void;
+function Composer({ ref, target, projectId, channel, viewer, people, replyTo, onCancelReply, onSent, initialQuote = "" }: {
+  ref: React.Ref<ComposerHandle>; target: ThreadTarget; projectId?: string; channel: Channel; viewer: Viewer; people: Person[];
+  replyTo: Message | null; onCancelReply: () => void; onSent: (message: Message) => void; initialQuote?: string;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => initialQuote ? `Re: ${initialQuote}\n\n` : "");
   const [chosen, setChosen] = useState<Person[]>([]);
   const [caret, setCaret] = useState(0);
   const [highlight, setHighlight] = useState(0);
@@ -347,7 +351,7 @@ function Composer({ ref, workspaceId, projectId, channel, viewer, people, replyT
     for (const file of list) {
       const key = `${file.name}-${file.size}-${Math.random().toString(36).slice(2)}`;
       setPending((current) => [...current, { key, name: file.name, progress: 0 }]);
-      void sendFile(uploadUrl(workspaceId, projectId), file, {}, (progress) => {
+      void sendFile(uploadUrl(target), file, {}, (progress) => {
         setPending((current) => current.map((item) => item.key === key ? { ...item, progress } : item));
       }).then((result) => {
         setPending((current) => current.map((item) => item.key === key
@@ -360,7 +364,7 @@ function Composer({ ref, workspaceId, projectId, channel, viewer, people, replyT
   function send() {
     setSending(true);
     setProblem(null);
-    void postMessage(workspaceId, projectId, {
+    void postMessage(target, {
       channel, body: text, reply_to_id: replyTo?.id ?? null, mention_user_ids: mentionedIds(text, chosen),
       attachment_ids: pending.filter((item) => item.id).map((item) => item.id as string),
       project_file_ids: linked.filter((item) => item.kind === "file").map((item) => item.id),
@@ -430,7 +434,7 @@ function Composer({ ref, workspaceId, projectId, channel, viewer, people, replyT
       </button>
     </div>
     {problem && <p className="mt-problem" role="alert">{problem}</p>}
-    {picker && <LinkPicker workspaceId={workspaceId} projectId={projectId} viewer={viewer} channel={channel}
+    {picker && projectId && <LinkPicker workspaceId={target.workspaceId} projectId={projectId} viewer={viewer} channel={channel}
       chosen={linked} onClose={() => setPicker(false)}
       onPick={(item) => setLinked((current) => current.some((row) => row.id === item.id && row.kind === item.kind) || attachCount >= MAX_ATTACHMENTS ? current : [...current, item])} />}
   </div>;
