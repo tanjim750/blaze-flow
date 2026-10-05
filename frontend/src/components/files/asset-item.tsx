@@ -132,16 +132,14 @@ export function FileItem({ file, stage, relation, reviewable, common }: {
       {frame}
       <span className="fx-caption">
         <span className="fx-name-line"><KindIcon kind={file.kind} className="fx-kind" />{name}</span>
-        {common.density === "comfortable" && (
-          <small className="fx-meta">
-            {failed ? <span className="fx-failed"><TriangleAlert />Upload failed</span> : <>
-              <span className="fx-mono">{formatSize(file.size)}</span>
-              {aspect && <span className="fx-mono">{aspect}</span>}
-              {versions.versionCount > 1 && <span className="fx-mono" title={`${versions.versionCount} versions of ${versions.assetName}`}><Layers />v{versions.versionNumber}</span>}
-              {feedback > 0 && <span className="fx-feedback" title={`${feedback} comment${feedback === 1 ? "" : "s"}`}><MessageSquareText />{feedback}</span>}
-            </>}
-          </small>
-        )}
+        <small className="fx-meta">
+          {failed ? <span className="fx-failed"><TriangleAlert />Upload failed</span> : <>
+            <span className="fx-mono">{formatSize(file.size)}</span>
+            {aspect && <span className="fx-mono">{aspect}</span>}
+            {versions.versionCount > 1 && <span className="fx-mono" title={`${versions.versionCount} versions of ${versions.assetName}`}><Layers />v{versions.versionNumber}</span>}
+            {feedback > 0 && <span className="fx-feedback" title={`${feedback} comment${feedback === 1 ? "" : "s"}`}><MessageSquareText />{feedback}</span>}
+          </>}
+        </small>
         {common.density === "comfortable" && stage && <span className="fx-stage-line"><StagePill stage={stage} /></span>}
       </span>
       <span className="fx-tile-actions">{common.menu}</span>

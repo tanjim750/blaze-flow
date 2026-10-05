@@ -24,6 +24,9 @@ const file = (id: string, name: string, extra: Partial<LibraryFile> = {}): Libra
 });
 
 beforeEach(() => {
+  // Dock tree + inspector like a wide desktop (Chat lesson uses viewport ≥1280).
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
+  Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
   replaceLibrary({
     deletedIds: [],
     folders: [{ id: "folder", name: "Selects", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-12", createdBy: "Ada" }],
@@ -175,7 +178,7 @@ describe("Files panel interactions", () => {
 
   it("opens folders from the tree and navigates it with the keyboard", () => {
     render(<AssetLibrary view={view} />);
-    const tree = screen.getByRole("tree", { name: "Folders" });
+    const tree = screen.getByRole("tree", { name: "Library" });
     const items = within(tree).getAllByRole("treeitem");
     expect(items[0]).toHaveAttribute("aria-selected", "true");
     items[0].focus();
