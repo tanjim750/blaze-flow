@@ -3,12 +3,11 @@
 /**
  * The Files panel: the asset library redesigned after Figma's assets panel.
  *
- * Three regions: a resizable Library tree (folders + campaigns) on the left, the main area
- * (breadcrumb toolbar, search, collapsible grouped sections in a grid or list) and a
- * resizable inspector for the selection on the right. Below the widths that fit, the tree
- * becomes a drawer and the inspector a sheet (a bottom sheet on phones). In project mode
- * (`compact`, the project page's Files tab) the tree is left out, since the project page has
- * its own.
+ * Three regions: a resizable Library tree (By client → project → folders, plus Studio) on
+ * the left, the main area (breadcrumb, search, filter strip, Grid/List) and a resizable
+ * inspector on the right. Below ~1280px the tree becomes a drawer and the inspector a sheet
+ * (bottom sheet on phones) so three panes never squeeze — same lesson as Chat. In project
+ * mode (`compact`) the tree is left out; the project page owns navigation.
  *
  * Every write still goes through `useAssetWrite` (optimistic, rolled back and reported on
  * failure). The pure rules (filtering, grouping, selection, keyboard movement) live in
@@ -22,7 +21,7 @@ import { Archive, ChevronRight, Clapperboard, Copy, Download, Ellipsis, Eye, Fol
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
 import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, updateAssetFile, updateAssetFolder, uploadAssetFile } from "@/lib/asset-api-client";
-import { folderTreeRows, formatSize, groupSections, isMoveKey, moveIndex, nextSelection, pruneSelection, scopeItems, visibleOrder, type Density, type GroupBy, type SelectionState, type SortKey, type ViewMode } from "@/lib/files-panel";
+import { formatSize, groupSections, isMoveKey, libraryNavRows, moveIndex, nextSelection, pruneSelection, scopeItems, visibleOrder, type Density, type GroupBy, type LibraryNavRow, type SelectionState, type SortKey, type ViewMode } from "@/lib/files-panel";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { openUniversalReview } from "@/components/universal-review";
@@ -123,7 +122,7 @@ function useStoredSet(key: string): [ReadonlySet<string>, (update: (current: Set
   });
   return [value, update];
 }
-/** The panel's own width, which decides what docks. Assumes a desktop width until measured (and under jsdom). */
+/** Panel width (minus app rail) — used for phone/main-room math. Desktop default until measured. */
 function useWidth(ref: React.RefObject<HTMLElement | null>) {
   const [width, setWidth] = useState(1440);
   useEffect(() => {
@@ -136,6 +135,18 @@ function useWidth(ref: React.RefObject<HTMLElement | null>) {
     return () => observer.disconnect();
   }, [ref]);
   return width;
+}
+/** Viewport width for the Chat-style dock breakpoint (≥1280). Panel width alone is already minus the app rail. */
+function useViewportWidth() {
+  // Fixed default so SSR HTML matches the first client paint; measure after mount.
+  const [vw, setVw] = useState(1440);
+  useEffect(() => {
+    const measure = () => setVw(window.innerWidth);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+  return vw;
 }
 /**
  * Whether a click came from a finger. `pointerType` is on the click event itself in every
@@ -163,9 +174,9 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const [folderId, setFolderIdRaw] = useState<string | null>(initial.folder); const [query, setQuery] = useState(initial.q); const [searchEverywhere, setSearchEverywhere] = useState(initial.all);
   const [dialog, setDialog] = useState<"folder" | "upload" | null>(null); const [dropped, setDropped] = useState<File[]>([]);
   const [preview, setPreview] = useState<LibraryFile | null>(null);
-  const [clientFilter, setClientFilter] = useState(initial.client); const [projectFilter, setProjectFilter] = useState(initial.project); const [kindFilter, setKindFilter] = useState<LibraryKind | "">(initial.kind as LibraryKind | ""); const [stageFilter, setStageFilter] = useState(initial.stage); const [sort, setSort] = useState<SortKey>((initial.sort || "newest") as SortKey);
+  const [clientFilter, setClientFilter] = useState(initial.client); const [projectFilter, setProjectFilter] = useState(initial.project); const [kindFilter, setKindFilter] = useState<LibraryKind | "">(initial.kind as LibraryKind | ""); const [stageFilter, setStageFilter] = useState(initial.stage); const [fromClient, setFromClient] = useState(false); const [sort, setSort] = useState<SortKey>((initial.sort || "newest") as SortKey);
   const [mode, setMode] = useStoredChoice<ViewMode>("bf.files.view", "grid", VIEW_MODES);
-  const [density, setDensity] = useStoredChoice<Density>("bf.files.density", "comfortable", DENSITIES);
+  const [density, setDensity] = useStoredChoice<Density>("bf.files.density", "compact", DENSITIES);
   const [groupBy, setGroupBy] = useStoredChoice<GroupBy>(compact ? "bf.files.group.project" : "bf.files.group", compact ? "type" : "project", GROUPINGS);
   const [collapsed, setCollapsed] = useStoredSet("bf.files.collapsed");
   const [expandedFolders, setExpandedFolders] = useStoredSet("bf.files.tree");
@@ -184,6 +195,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const itemRefs = useRef(new Map<string, HTMLDivElement>());
   const gridRefs = useRef(new Map<string, HTMLDivElement>());
   const width = useWidth(rootRef);
+  const viewportW = useViewportWidth();
 
   const stages = view?.stages ?? [];
   const serverFolders: LibraryFolder[] = (view?.folders ?? []).map((folder) => ({ id: folder.id, name: folder.name, clientId: folder.client_team_id, projectId: folder.project_id, parentFolderId: folder.parent_folder_id, createdAt: folder.created_at, createdBy: "Workspace member" }));
@@ -202,7 +214,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const folders = merge(offline ? demoLibrary.folders : serverFolders, stored.folders, localWins).filter((item) => !stored.deletedIds.includes(item.id) && (!projectId || item.projectId === projectId));
   const files = merge(offline ? demoLibrary.files : serverFiles, stored.files, localWins).filter((item) => !stored.deletedIds.includes(item.id) && (!projectId || item.projectId === projectId));
   const current = folders.find((item) => item.id === folderId) ?? null;
-  const scope = scopeItems({ folders, files, folderId, query, everywhere: searchEverywhere, client: clientFilter, project: projectFilter, kind: kindFilter, stage: stageFilter, sort });
+  const scope = scopeItems({ folders, files, folderId, query, everywhere: searchEverywhere, client: clientFilter, project: projectFilter, kind: kindFilter, stage: stageFilter, fromClient, sort });
   const recursiveSearch = scope.recursive;
   const filteredProjects = (view?.groups ?? []).filter((group) => !clientFilter || group.clientId === clientFilter);
   const projectName_ = (id: string) => view?.groups.find((group) => group.projectId === id)?.projectName;
@@ -213,13 +225,15 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const rootLabel = projectName || "All files";
   const setFolderId = (id: string | null) => { setFolderIdRaw(id); setSelection({ selected: new Set(), anchor: null }); setFocusedId(null); setTreeDrawer(false); };
 
-  // Layout: what docks depends on the panel's own width (it is also used inside the project page).
+  // Layout: dock tree + inspector at viewport ≥1280 (Chat lesson). Panel `width` is already
+  // minus the app rail, so using it alone never reached 1280 at a 1440 viewport. Below that,
+  // drawer / sheet — never squeeze rail + tree + grid + inspector.
   const phone = width < 768;
-  const treeWidth = clamp(treeWidthPref ?? (width >= 1400 ? 240 : 224), 200, 360);
-  const inspectorWidth = clamp(inspectorWidthPref ?? (width >= 1400 ? 320 : 280), 280, 400);
+  const treeWidth = clamp(treeWidthPref ?? (viewportW >= 1440 ? 280 : 260), 220, 360);
+  const inspectorWidth = clamp(inspectorWidthPref ?? (viewportW >= 1440 ? 300 : 280), 260, 380);
   const hasTree = !compact;
-  const treeDocked = hasTree && width >= 1000;
-  const inspectorDocked = !phone && width - (treeDocked ? treeWidth : 0) - inspectorWidth >= MIN_MAIN;
+  const treeDocked = hasTree && viewportW >= 1280;
+  const inspectorDocked = !phone && viewportW >= 1280 && width - (treeDocked ? treeWidth : 0) - inspectorWidth >= MIN_MAIN;
   const inspectorVisible = inspectorDocked ? inspectorPref === "open" : sheetOpen;
   const toggleInspector = () => { if (inspectorDocked) setInspectorPref(inspectorPref === "open" ? "closed" : "open"); else setSheetOpen(!sheetOpen); };
 
@@ -313,11 +327,11 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   }, [workingKey, poll, router, view?.workspaceId]);
   // Drives the count on the filter button, so a narrowed list is never a silent surprise.
   const activeFilters = [clientFilter, projectFilter, kindFilter, stageFilter].filter(Boolean).length
-    + (searchEverywhere ? 1 : 0) + (sort === "newest" ? 0 : 1);
+    + (fromClient ? 1 : 0) + (searchEverywhere ? 1 : 0) + (sort === "newest" ? 0 : 1);
   /** Whether the empty grid means "nothing matches" rather than "nothing here". Sort never hides anything. */
-  const narrowing = Boolean(query.trim()) || [clientFilter, projectFilter, kindFilter, stageFilter].some(Boolean);
+  const narrowing = Boolean(query.trim()) || fromClient || [clientFilter, projectFilter, kindFilter, stageFilter].some(Boolean);
   const resetFilters = () => {
-    setClientFilter(""); setProjectFilter(""); setKindFilter(""); setStageFilter("");
+    setClientFilter(""); setProjectFilter(""); setKindFilter(""); setStageFilter(""); setFromClient(false);
     setSort("newest"); setSearchEverywhere(false);
   };
 
@@ -529,30 +543,61 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   };
 
   const itemTotal = scope.folders.length + scope.files.length;
-  const treeRows = folderTreeRows(folders, files, expandedFolders, folderId);
-  const campaigns = (view?.groups ?? []).map((group) => ({ id: group.projectId, name: group.projectName, count: files.filter((file) => file.projectId === group.projectId && file.versioning.isLatest).length })).sort((a, b) => a.name.localeCompare(b.name));
+  const navRows = libraryNavRows({
+    folders, files,
+    clients: view?.clients ?? [],
+    projects: view?.groups ?? [],
+    expanded: expandedFolders,
+    folderId, clientFilter, projectFilter,
+  });
   const activeChips: { key: string; label: string; clear: () => void }[] = [
+    ...(fromClient ? [{ key: "from-client", label: "From client", clear: () => setFromClient(false) }] : []),
     ...(clientFilter ? [{ key: "client", label: `Client: ${view?.clients.find((item) => item.id === clientFilter)?.name ?? "…"}`, clear: () => { setClientFilter(""); setProjectFilter(""); } }] : []),
     ...(projectFilter ? [{ key: "project", label: `Campaign: ${projectName_(projectFilter) ?? "…"}`, clear: () => setProjectFilter("") }] : []),
     ...(kindFilter ? [{ key: "kind", label: `Type: ${kindFilter}`, clear: () => setKindFilter("") }] : []),
     ...(stageFilter ? [{ key: "stage", label: `Stage: ${stages.find((item) => item.id === stageFilter)?.name ?? "…"}`, clear: () => setStageFilter("") }] : []),
   ];
 
+  const activateNav = (row: LibraryNavRow) => {
+    if (row.kind === "root") {
+      setFolderId(null); setClientFilter(""); setProjectFilter("");
+      return;
+    }
+    if (row.kind === "studio") {
+      setFolderId(null); setClientFilter(""); setProjectFilter("");
+      setExpandedFolders((set) => { set.add("studio"); return set; });
+      return;
+    }
+    if (row.kind === "client") {
+      setFolderId(null); setClientFilter(row.clientId ?? ""); setProjectFilter("");
+      setExpandedFolders((set) => { if (row.clientId) set.add(`client:${row.clientId}`); return set; });
+      return;
+    }
+    if (row.kind === "project") {
+      setFolderId(null); setClientFilter(row.clientId ?? ""); setProjectFilter(row.projectId ?? "");
+      setExpandedFolders((set) => { if (row.projectId) set.add(`project:${row.projectId}`); return set; });
+      return;
+    }
+    if (row.kind === "folder" && row.folderId) {
+      setClientFilter(row.clientId ?? ""); setProjectFilter(row.projectId ?? "");
+      setFolderId(row.folderId);
+    }
+  };
+
   const tree = hasTree && (
     <aside className={`fx-tree ${treeDocked ? "is-docked" : "is-drawer"}`} style={{ width: treeDocked ? treeWidth : undefined }} aria-label="Library">
       <header className="fx-tree-head">
-        <h1>{compact ? rootLabel : "Files"}</h1>
+        <h1>Assets</h1>
         {!treeDocked && <button type="button" className="fx-icon-btn is-sm" onClick={() => setTreeDrawer(false)} aria-label="Close library panel"><X /></button>}
       </header>
       <LibraryTree
-        rows={treeRows} rootLabel={rootLabel} rootCount={files.filter((file) => file.versioning.isLatest).length}
-        folderId={folderId} onOpenFolder={setFolderId}
-        onToggleFolder={(id, open) => setExpandedFolders((set) => { if (open) set.add(id); else set.delete(id); return set; })}
-        campaigns={campaigns} campaignFilter={projectFilter}
-        onCampaign={(id) => { setProjectFilter(projectFilter === id ? "" : id); setFolderId(null); }}
-        canDrop={canMoveInto} onDrop={(target) => { if (!dragging) return; const ids = dragging.ids; setDragging(null); setDropTarget(null); moveInto(ids, target); }}
+        rows={navRows}
+        onActivate={activateNav}
+        onToggle={(id, open) => setExpandedFolders((set) => { if (open) set.add(id); else set.delete(id); return set; })}
+        canDrop={canMoveInto}
+        onDrop={(target) => { if (!dragging) return; const ids = dragging.ids; setDragging(null); setDropTarget(null); moveInto(ids, target); }}
       />
-      {treeDocked && <PanelResizer label="Resize library panel" value={treeWidth} min={200} max={360} fallback={width >= 1400 ? 240 : 224} edge="left" onChange={setTreeWidth} />}
+      {treeDocked && <PanelResizer label="Resize library panel" value={treeWidth} min={220} max={360} fallback={viewportW >= 1440 ? 280 : 260} edge="left" onChange={setTreeWidth} />}
     </aside>
   );
 
@@ -563,7 +608,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
       aria-labelledby="fx-inspector-title"
       {...(inspectorDocked ? {} : { role: "dialog", "aria-modal": true })}
     >
-      {inspectorDocked && <PanelResizer label="Resize details panel" value={inspectorWidth} min={280} max={400} fallback={width >= 1400 ? 320 : 280} edge="right" onChange={setInspectorWidth} />}
+      {inspectorDocked && <PanelResizer label="Resize details panel" value={inspectorWidth} min={280} max={400} fallback={viewportW >= 1440 ? 320 : 280} edge="right" onChange={setInspectorWidth} />}
       <SheetFocus active={!inspectorDocked} onClose={() => setSheetOpen(false)}>
         <AssetInspector
           selectedFiles={selectedFiles} selectedFolders={selectedFolders}
@@ -608,6 +653,28 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
               onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (query) setQuery(""); else event.currentTarget.blur(); } }} />
             {query && <button type="button" className="fx-icon-btn is-xs" onClick={() => { setQuery(""); searchRef.current?.focus(); }} aria-label="Clear search text"><X /></button>}
           </label>
+          <div className="fx-filter-strip" role="toolbar" aria-label="Quick filters">
+            <button type="button" className={fromClient ? "is-on" : ""} aria-pressed={fromClient} onClick={() => setFromClient(!fromClient)}>From client</button>
+            <label className="fx-filter-select">
+              <span className="fx-sr-only">Type</span>
+              <select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as LibraryKind | "")} aria-label="Filter by type">
+                <option value="">All types</option>
+                <option value="video">Video</option>
+                <option value="image">Images</option>
+                <option value="audio">Audio</option>
+                <option value="document">Documents</option>
+                <option value="source">Source files</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            {!projectId && (view?.clients?.length ?? 0) > 0 && <label className="fx-filter-select">
+              <span className="fx-sr-only">Client</span>
+              <select value={clientFilter} onChange={(event) => { setClientFilter(event.target.value); if (!event.target.value) setProjectFilter(""); setFolderId(null); }} aria-label="Filter by client">
+                <option value="">All clients</option>
+                {(view?.clients ?? []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+              </select>
+            </label>}
+          </div>
           <FilterMenu
             view={view} groups={filteredProjects} stages={stages} showRelations={!projectId} activeCount={activeFilters}
             searchEverywhere={searchEverywhere} setSearchEverywhere={setSearchEverywhere}
@@ -625,9 +692,13 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
             <button type="button" className={mode === "grid" ? "is-on" : ""} onClick={() => setMode("grid")} aria-label="Grid view" aria-pressed={mode === "grid"}><LayoutGrid /></button>
             <button type="button" className={mode === "list" ? "is-on" : ""} onClick={() => setMode("list")} aria-label="List view" aria-pressed={mode === "list"}><List /></button>
           </div>
+          <div className="fx-segmented is-density" role="group" aria-label="Density">
+            <button type="button" className={density === "comfortable" ? "is-on" : ""} onClick={() => setDensity("comfortable")} aria-pressed={density === "comfortable"} title="Comfortable">L</button>
+            <button type="button" className={density === "compact" ? "is-on" : ""} onClick={() => setDensity("compact")} aria-pressed={density === "compact"} title="Compact">S</button>
+          </div>
           <button type="button" className={`fx-icon-btn fx-details-toggle ${inspectorVisible ? "is-on" : ""}`} onClick={toggleInspector} aria-pressed={inspectorVisible} aria-label="Details panel" title="Details panel (])"><PanelRight /></button>
         </div>
-        {selected.size > 1 && <div className="fx-bulk" role="region" aria-label="Selection">
+        {selected.size > 1 && <div className={`fx-bulk${phone ? " is-phone-sheet" : ""}`} role="region" aria-label="Selection">
           <strong role="status" aria-live="polite">{selected.size} selected</strong>
           <button type="button" className="fx-btn is-ghost is-sm" onClick={() => setSelection({ selected: new Set(), anchor: null })}>Clear</button>
           <span className="fx-spacer" />

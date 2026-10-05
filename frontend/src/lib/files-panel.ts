@@ -27,6 +27,8 @@ export type ScopeInput = {
   project: string;
   kind: LibraryKind | "";
   stage: string;
+  /** Only folders named "From client" and the files that live under them. */
+  fromClient?: boolean;
   sort: SortKey;
 };
 
@@ -38,14 +40,36 @@ const matchesRelation = (entity: { clientId: string | null; projectId: string | 
  * What the current location shows. Folders are hidden by a type or stage filter, since
  * neither describes a folder, and only the latest cut of each asset is listed.
  */
+/** True when this folder is (or sits under) a project "From client" drop folder. */
+export function isFromClientFolder(folder: LibraryFolder | null | undefined, folders: LibraryFolder[]): boolean {
+  let cursor = folder ?? null;
+  const byId = new Map(folders.map((item) => [item.id, item]));
+  const seen = new Set<string>();
+  while (cursor) {
+    if (cursor.name === "From client") return true;
+    if (!cursor.parentFolderId || seen.has(cursor.id)) break;
+    seen.add(cursor.id);
+    cursor = byId.get(cursor.parentFolderId) ?? null;
+  }
+  return false;
+}
+
 export function scopeItems(input: ScopeInput): { folders: LibraryFolder[]; files: LibraryFile[]; recursive: boolean } {
   const recursive = input.everywhere && Boolean(input.query.trim());
   const inScope = (parent: string | null) => recursive || parent === input.folderId;
+  const byId = new Map(input.folders.map((item) => [item.id, item]));
+  const fromClientOk = (folderId: string | null, asFolder?: LibraryFolder) => {
+    if (!input.fromClient) return true;
+    if (asFolder) return isFromClientFolder(asFolder, input.folders);
+    return isFromClientFolder(folderId ? byId.get(folderId) ?? null : null, input.folders);
+  };
   const folders = input.kind || input.stage ? [] : input.folders.filter((item) =>
-    inScope(item.parentFolderId) && matchesQuery(item.name, input.query) && matchesRelation(item, input.client, input.project));
+    inScope(item.parentFolderId) && matchesQuery(item.name, input.query) && matchesRelation(item, input.client, input.project)
+    && fromClientOk(item.id, item));
   const files = input.files.filter((item) =>
     inScope(item.folderId) && matchesQuery(item.name, input.query) && matchesRelation(item, input.client, input.project)
-    && (!input.kind || item.kind === input.kind) && (!input.stage || item.stageId === input.stage) && item.versioning.isLatest);
+    && (!input.kind || item.kind === input.kind) && (!input.stage || item.stageId === input.stage) && item.versioning.isLatest
+    && fromClientOk(item.folderId));
   return { folders: sortFolders(folders, input.sort), files: sortFiles(files, input.sort), recursive };
 }
 
@@ -210,6 +234,148 @@ export function folderTreeRows(folders: LibraryFolder[], files: LibraryFile[], e
     });
   };
   walk(null, 0, new Set());
+  return rows;
+}
+
+
+/* ------------------------------------------------------------------ library nav (By client → project → folders) */
+
+export type LibraryNavKind = "root" | "client" | "project" | "folder" | "studio";
+export type LibraryNavRow = {
+  id: string;
+  kind: LibraryNavKind;
+  label: string;
+  depth: number;
+  count: number;
+  expandable: boolean;
+  expanded: boolean;
+  selected: boolean;
+  parentId: string | null;
+  /** Folder id that accepts drops; null for root / studio. */
+  dropTarget?: string | null;
+  clientId?: string | null;
+  projectId?: string | null;
+  folderId?: string | null;
+};
+
+export type LibraryNavInput = {
+  folders: LibraryFolder[];
+  files: LibraryFile[];
+  clients: { id: string; name: string }[];
+  projects: { projectId: string; projectName: string; clientId: string | null }[];
+  expanded: ReadonlySet<string>;
+  folderId: string | null;
+  clientFilter: string;
+  projectFilter: string;
+  studioOpen?: boolean;
+};
+
+/**
+ * Frame-style left rail for Blaze: All files, then By client → project → folders,
+ * then Studio for assets/folders with no client. Counts are latest files only.
+ */
+export function libraryNavRows(input: LibraryNavInput): LibraryNavRow[] {
+  const latest = input.files.filter((file) => file.versioning.isLatest);
+  const countAll = latest.length;
+  const open = new Set(input.expanded);
+  // Reveal ancestors of the folder being viewed.
+  let cursor = input.folderId ? input.folders.find((folder) => folder.id === input.folderId) ?? null : null;
+  if (cursor?.clientId) open.add(`client:${cursor.clientId}`);
+  if (cursor?.projectId) open.add(`project:${cursor.projectId}`);
+  while (cursor?.parentFolderId) {
+    open.add(`folder:${cursor.parentFolderId}`);
+    cursor = input.folders.find((folder) => folder.id === cursor!.parentFolderId) ?? null;
+  }
+  if (input.clientFilter) open.add(`client:${input.clientFilter}`);
+  if (input.projectFilter) open.add(`project:${input.projectFilter}`);
+
+  const rows: LibraryNavRow[] = [{
+    id: "root", kind: "root", label: "All files", depth: 0, count: countAll,
+    expandable: false, expanded: true,
+    selected: !input.folderId && !input.clientFilter && !input.projectFilter,
+    parentId: null, dropTarget: null,
+  }];
+
+  const clientsWithWork = input.clients
+    .map((client) => {
+      const projects = input.projects.filter((project) => project.clientId === client.id);
+      const count = latest.filter((file) => file.clientId === client.id || projects.some((project) => project.projectId === file.projectId)).length;
+      return { ...client, projects, count };
+    })
+    .filter((client) => client.projects.length > 0 || client.count > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (clientsWithWork.length) {
+    // Section eyebrow is rendered by the tree UI; rows start at depth 0 under By client.
+  }
+
+  const folderKids = (parentId: string | null, projectId: string | null, clientId: string | null) =>
+    input.folders.filter((folder) => {
+      const parent = folder.parentFolderId;
+      if (parentId) return parent === parentId;
+      // Root folders of this project (or client-only / studio).
+      if (parent && input.folders.some((candidate) => candidate.id === parent)) return false;
+      if (projectId) return folder.projectId === projectId;
+      if (clientId) return folder.clientId === clientId && !folder.projectId;
+      return !folder.clientId && !folder.projectId;
+    }).sort((a, b) => a.name.localeCompare(b.name));
+
+  const fileCountIn = (folderId: string) => latest.filter((file) => file.folderId === folderId).length;
+
+  const walkFolders = (parentFolderId: string | null, projectId: string | null, clientId: string | null, depth: number, parentNavId: string) => {
+    folderKids(parentFolderId, projectId, clientId).forEach((folder) => {
+      const id = `folder:${folder.id}`;
+      const kids = folderKids(folder.id, projectId, clientId);
+      const expanded = open.has(id) && kids.length > 0;
+      rows.push({
+        id, kind: "folder", label: folder.name, depth, count: fileCountIn(folder.id) + kids.length,
+        expandable: kids.length > 0, expanded,
+        selected: input.folderId === folder.id, parentId: parentNavId,
+        dropTarget: folder.id, clientId: folder.clientId, projectId: folder.projectId, folderId: folder.id,
+      });
+      if (expanded) walkFolders(folder.id, projectId, clientId, depth + 1, id);
+    });
+  };
+
+  clientsWithWork.forEach((client) => {
+    const clientId = `client:${client.id}`;
+    const clientOpen = open.has(clientId);
+    rows.push({
+      id: clientId, kind: "client", label: client.name, depth: 0, count: client.count,
+      expandable: true, expanded: clientOpen,
+      selected: !input.folderId && input.clientFilter === client.id && !input.projectFilter,
+      parentId: "root", clientId: client.id,
+    });
+    if (!clientOpen) return;
+    client.projects.sort((a, b) => a.projectName.localeCompare(b.projectName)).forEach((project) => {
+      const projectNavId = `project:${project.projectId}`;
+      const projectCount = latest.filter((file) => file.projectId === project.projectId).length;
+      const projectOpen = open.has(projectNavId);
+      const rootFolders = folderKids(null, project.projectId, client.id);
+      rows.push({
+        id: projectNavId, kind: "project", label: project.projectName, depth: 1, count: projectCount,
+        expandable: rootFolders.length > 0, expanded: projectOpen && rootFolders.length > 0,
+        selected: !input.folderId && input.projectFilter === project.projectId,
+        parentId: clientId, clientId: client.id, projectId: project.projectId,
+      });
+      if (projectOpen) walkFolders(null, project.projectId, client.id, 2, projectNavId);
+    });
+  });
+
+  const studioFolders = folderKids(null, null, null);
+  const studioFiles = latest.filter((file) => !file.clientId && !file.projectId);
+  const studioCount = studioFiles.length + studioFolders.reduce((sum, folder) => sum + fileCountIn(folder.id), 0);
+  if (studioFolders.length || studioFiles.length) {
+    // Studio is a section (eyebrow in the tree UI), not a destination — list its folders
+    // directly so unfiled media is one click away, matching "All files" + By client.
+    const studioMarker: LibraryNavRow = {
+      id: "studio", kind: "studio", label: "Studio", depth: 0, count: studioCount || studioFiles.length,
+      expandable: false, expanded: true, selected: false, parentId: "root", dropTarget: null,
+    };
+    rows.push(studioMarker);
+    walkFolders(null, null, null, 0, "studio");
+  }
+
   return rows;
 }
 

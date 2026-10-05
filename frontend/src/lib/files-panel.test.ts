@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LibraryFile, LibraryFolder } from "./asset-library";
-import { aspectLabel, folderTreeRows, groupSections, middleTruncate, moveIndex, nextSelection, pruneSelection, runtime, scopeItems, stageTone, summarize, visibleOrder, type ScopeInput } from "./files-panel";
+import { aspectLabel, folderTreeRows, groupSections, isFromClientFolder, libraryNavRows, middleTruncate, moveIndex, nextSelection, pruneSelection, runtime, scopeItems, stageTone, summarize, visibleOrder, type ScopeInput } from "./files-panel";
 
 const folder = (id: string, name: string, parent: string | null = null, extra: Partial<LibraryFolder> = {}): LibraryFolder =>
   ({ id, name, clientId: null, projectId: null, parentFolderId: parent, createdAt: "2026-09-10", createdBy: "Ada", ...extra });
@@ -207,3 +207,54 @@ describe("formatters and tones", () => {
     expect(summary.stages.get(null)).toBe(1);
   });
 });
+
+describe("fromClient scope and library nav", () => {
+  const folders = [
+    { id: "fc", name: "From client", clientId: "c1", projectId: "p1", parentFolderId: null, createdAt: "2026-09-01T00:00:00Z", createdBy: "x" },
+    { id: "shot", name: "Shots", clientId: "c1", projectId: "p1", parentFolderId: null, createdAt: "2026-09-01T00:00:00Z", createdBy: "x" },
+    { id: "studio", name: "Graphics", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-01T00:00:00Z", createdBy: "x" },
+  ];
+  const file = (id: string, folderId: string | null, extra: Record<string, unknown> = {}) => ({
+    id, fileId: null, name: id, kind: "video" as const, mimeType: "video/mp4", size: 1, durationMs: null, status: "READY" as const,
+    versioning: { assetId: null, assetName: id, versionNumber: 1, versionCount: 1, isLatest: true },
+    url: null, preview: null, uploadedBy: "x", uploadedAt: "2026-09-02T00:00:00Z", folderId, clientId: "c1", projectId: "p1", stageId: null, ...extra,
+  });
+  const files = [file("a", "fc"), file("b", "shot"), file("c", "studio", { clientId: null, projectId: null })];
+
+  it("detects From client folders", () => {
+    expect(isFromClientFolder(folders[0], folders)).toBe(true);
+    expect(isFromClientFolder(folders[1], folders)).toBe(false);
+  });
+
+  it("filters scope to From client when asked", () => {
+    const base: ScopeInput = { folders, files, folderId: null, query: "", everywhere: false, client: "", project: "", kind: "", stage: "", sort: "newest" };
+    const root = scopeItems(base);
+    expect(root.folders.map((row) => row.id).sort()).toEqual(["fc", "shot", "studio"]);
+    expect(root.files).toEqual([]);
+    const onlyFolders = scopeItems({ ...base, fromClient: true });
+    expect(onlyFolders.folders.map((row) => row.id)).toEqual(["fc"]);
+    const inFromClient = scopeItems({ ...base, folderId: "fc", fromClient: true });
+    expect(inFromClient.files.map((row) => row.id)).toEqual(["a"]);
+    const inShots = scopeItems({ ...base, folderId: "shot", fromClient: true });
+    expect(inShots.files).toEqual([]);
+  });
+
+  it("builds By client → project → folders and Studio", () => {
+    const rows = libraryNavRows({
+      folders, files,
+      clients: [{ id: "c1", name: "Northlight" }],
+      projects: [{ projectId: "p1", projectName: "Spring", clientId: "c1" }],
+      expanded: new Set(["client:c1", "project:p1", "studio"]),
+      folderId: null, clientFilter: "", projectFilter: "",
+    });
+    expect(rows[0].kind).toBe("root");
+    expect(rows.some((row) => row.kind === "client" && row.label === "Northlight")).toBe(true);
+    expect(rows.some((row) => row.kind === "project" && row.label === "Spring")).toBe(true);
+    expect(rows.some((row) => row.kind === "folder" && row.label === "From client")).toBe(true);
+    expect(rows.some((row) => row.kind === "studio")).toBe(true);
+    const graphics = rows.find((row) => row.kind === "folder" && row.label === "Graphics");
+    expect(graphics?.depth).toBe(0);
+    expect(graphics?.parentId).toBe("studio");
+  });
+});
+
