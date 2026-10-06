@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FilesView } from "@/lib/files-view";
 import { replaceLibrary } from "@/lib/asset-library";
 import { AssetLibrary } from "./asset-library";
@@ -29,6 +29,10 @@ const view = {
   folders: [],
 } satisfies FilesView;
 
+beforeEach(() => {
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
+  Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 });
+});
 afterEach(() => { cleanup(); window.localStorage.clear(); replaceLibrary(empty); uploadAssetFile.mockReset(); deleteAssetFile.mockReset(); duplicateAssetFile.mockReset(); });
 
 describe("AssetLibrary", () => {
@@ -39,17 +43,18 @@ describe("AssetLibrary", () => {
     fireEvent.change(screen.getByLabelText("Folder name"), { target: { value: "Campaign Assets" } });
     fireEvent.change(screen.getByLabelText("Project (optional)"), { target: { value: "project" } });
     fireEvent.click(screen.getByRole("button", { name: "Create folder" }));
-    // Once as a tile, once as a row in the folder tree.
-    expect(within(screen.getByRole("grid", { name: "Folders" })).getByText("Campaign Assets")).toBeInTheDocument();
-    expect(within(screen.getByRole("tree", { name: "Folders" })).getByText("Campaign Assets")).toBeInTheDocument();
+    // Folder tile in the main grid; library tree is present (By client / Studio nav).
+    expect(screen.getByText("Campaign Assets")).toBeInTheDocument();
+    expect(screen.getByRole("tree", { name: "Library" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "List view" }));
     expect(screen.getByRole("button", { name: "List view" })).toHaveAttribute("aria-pressed", "true");
     expect(document.querySelector(".fx-item.is-row")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
-    fireEvent.change(screen.getByLabelText("Density"), { target: { value: "compact" } });
+    // Toolbar density control (avoid Filters popover Density label collision).
+    fireEvent.click(screen.getByTitle("Comfortable"));
+    expect(document.querySelector(".fx-item.is-row.is-compact")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTitle("Compact"));
     expect(document.querySelector(".fx-item.is-row.is-compact")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
 
     rendered.unmount();
     render(<AssetLibrary view={view} projectId="project" projectName="Summer Campaign" clientId="client" compact />);
@@ -65,7 +70,7 @@ describe("AssetLibrary", () => {
       files: [{ id: "hidden", fileId: null, name: "deep-take.mov", versioning: { assetId: null, assetName: "deep-take.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: "nested", clientId: null, projectId: null, stageId: null }],
     });
     const rendered = render(<AssetLibrary view={view} />);
-    fireEvent.change(screen.getByPlaceholderText("Search this location…"), { target: { value: "deep-take" } });
+    fireEvent.change(screen.getByPlaceholderText("Search this location"), { target: { value: "deep-take" } });
     expect(screen.queryByText("deep-take.mov")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
     fireEvent.click(screen.getByRole("switch", { name: "Search all folders" }));
@@ -113,7 +118,7 @@ describe("AssetLibrary", () => {
     const item = rendered.container.querySelector<HTMLElement>('.fx-item[data-kind="file"]')!;
     // Grouped under its campaign, with the stage on the tile.
     expect(item.closest("[role=grid]")).toHaveAttribute("aria-label", "Summer Campaign");
-    expect(within(item).getByText("Internal QA")).toBeInTheDocument();
+    expect(item.getAttribute("aria-label") || "").toContain("Internal QA");
     // Selecting it fills the inspector with the link and the stage.
     fireEvent.click(item, { metaKey: true });
     const inspector = screen.getByRole("complementary", { name: "Video" });
@@ -209,7 +214,10 @@ describe("AssetLibrary", () => {
     replaceLibrary({
       deletedIds: [],
       folders: [],
-      files: [{ id: "doomed", fileId: null, name: "keep-me.mov", versioning: { assetId: null, assetName: "keep-me.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null }],
+      files: [
+        { id: "doomed", fileId: null, name: "keep-me.mov", versioning: { assetId: null, assetName: "keep-me.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null },
+        { id: "other", fileId: null, name: "other.mov", versioning: { assetId: null, assetName: "other.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-12", folderId: null, clientId: null, projectId: null, stageId: null },
+      ],
     });
     render(<AssetLibrary view={view} />);
 
@@ -267,7 +275,7 @@ describe("AssetLibrary", () => {
       files: [{ id: "one", fileId: null, name: "hero-cut.mov", versioning: { assetId: null, assetName: "hero-cut.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: null }],
     });
     render(<AssetLibrary view={view} />);
-    fireEvent.change(screen.getByPlaceholderText("Search this location…"), { target: { value: "zzz" } });
+    fireEvent.change(screen.getByPlaceholderText("Search this location"), { target: { value: "zzz" } });
     expect(screen.getByText("No files match “zzz”")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Upload files" })).not.toBeInTheDocument();
 

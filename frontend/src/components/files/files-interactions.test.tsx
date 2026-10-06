@@ -192,7 +192,7 @@ describe("Files panel interactions", () => {
 
   it("offers Clear search and Search all folders when nothing matches", () => {
     render(<AssetLibrary view={view} />);
-    fireEvent.change(screen.getByPlaceholderText("Search this location…"), { target: { value: "delta" } });
+    fireEvent.change(screen.getByPlaceholderText("Search this location"), { target: { value: "delta" } });
     expect(screen.getByText("No files match “delta”")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Search all folders" }));
     expect(screen.getByRole("row", { name: /^delta\.mp4/ })).toBeInTheDocument();
