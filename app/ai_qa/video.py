@@ -199,7 +199,7 @@ def build_tracks(frames):
     within ``MERGE_GAP_MS`` of the track's last sighting, and it is in the same place (or
     close enough for moving text). Otherwise it starts a new track.
     """
-    from rapidfuzz import fuzz
+    from difflib import SequenceMatcher
 
     tracks = []
     for time_ms, candidates in frames:
@@ -211,7 +211,7 @@ def build_tracks(frames):
                     continue
                 if track.category != cand.category:
                     continue
-                if fuzz.ratio(track.key, word) < 85:
+                if SequenceMatcher(None, track.key, word).ratio() < 0.85:
                     continue
                 if same_place(track.last_region, cand.region):
                     match = track

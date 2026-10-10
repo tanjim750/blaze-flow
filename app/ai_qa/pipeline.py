@@ -62,7 +62,7 @@ def _progress(review, **changes):
 
 def _claim(review_id):
     with transaction.atomic():
-        review = AIReview.objects.select_for_update().select_related(
+        review = AIReview.objects.select_for_update(of=('self',)).select_related(
             'media_version__original_file', 'media_version__project__workspace', 'requested_by',
         ).get(id=review_id)
         if review.status not in (AIReviewStatus.QUEUED, AIReviewStatus.PROCESSING):
