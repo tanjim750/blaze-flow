@@ -85,7 +85,7 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
         model = ReviewComment
         fields = (
             'id', 'parent_comment_id', 'author', 'text', 'start_time_ms', 'end_time_ms',
-            'resolved', 'resolved_by_user_id', 'resolved_at', 'visibility', 'mentions', 'attachments', 'reactions', 'revision_count',
+            'resolved', 'resolved_by_user_id', 'resolved_at', 'visibility', 'source', 'mentions', 'attachments', 'reactions', 'revision_count',
             'created_at', 'updated_at',
         )
 

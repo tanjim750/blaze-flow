@@ -11,7 +11,8 @@ from app.models import OutboxEvent, OutboxEventStatus
 
 def process_outbox_events(
     *, limit=100, event_dispatcher=dispatch, reclaim_after_seconds=300,
-    max_attempts=None, retry_base_seconds=None, retry_max_seconds=None
+    max_attempts=None, retry_base_seconds=None, retry_max_seconds=None,
+    topic_prefix=None, exclude_topic_prefix=None,
 ):
     max_attempts = max_attempts or settings.OUTBOX_MAX_ATTEMPTS
     retry_base_seconds = settings.OUTBOX_RETRY_BASE_SECONDS if retry_base_seconds is None else retry_base_seconds
@@ -19,7 +20,7 @@ def process_outbox_events(
     now = timezone.now()
     stale_before = now - timedelta(seconds=reclaim_after_seconds)
     with transaction.atomic():
-        events = list(
+        claimable = (
             OutboxEvent.objects.select_for_update(skip_locked=True).filter(
                 Q(
                     status__in=[OutboxEventStatus.PENDING, OutboxEventStatus.FAILED],
@@ -29,8 +30,13 @@ def process_outbox_events(
                     status=OutboxEventStatus.PROCESSING,
                     locked_at__lte=stale_before,
                 )
-            ).order_by('created_at')[:limit]
+            )
         )
+        if topic_prefix:
+            claimable = claimable.filter(topic__startswith=topic_prefix)
+        if exclude_topic_prefix:
+            claimable = claimable.exclude(topic__startswith=exclude_topic_prefix)
+        events = list(claimable.order_by('created_at')[:limit])
         for event in events:
             event.status = OutboxEventStatus.PROCESSING
             event.attempts += 1

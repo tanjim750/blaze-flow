@@ -1,5 +1,6 @@
 import time
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import close_old_connections
 
@@ -22,7 +23,9 @@ class Command(BaseCommand):
         while True:
             if not options['once']:
                 close_old_connections()
-            result = process_outbox_events(limit=options['batch_size'])
+            # AI Visual QA runs belong to `run_ai_qa_worker` (see AI_QA_DEDICATED_WORKER).
+            exclude = 'ai_visual_qa.' if settings.AI_QA_DEDICATED_WORKER else None
+            result = process_outbox_events(limit=options['batch_size'], exclude_topic_prefix=exclude)
             if any(result.values()):
                 self.stdout.write(str(result))
             if options['once']:

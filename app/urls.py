@@ -1,4 +1,5 @@
 from django.urls import path
+from . import ai_qa_views
 
 from .views import (
     asset_file_detail,
@@ -263,6 +264,14 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/preview/', media_version_preview, name='api-media-version-preview'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/poster/', media_version_poster, name='api-media-version-poster'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/workflow/', media_version_workflow, name='api-media-version-workflow'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-reviews/', ai_qa_views.ai_review_list_create, name='api-ai-reviews'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-reviews/<uuid:review_id>/', ai_qa_views.ai_review_detail, name='api-ai-review-detail'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-reviews/<uuid:review_id>/retry/', ai_qa_views.ai_review_retry, name='api-ai-review-retry'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-reviews/<uuid:review_id>/findings/', ai_qa_views.ai_review_findings, name='api-ai-review-findings'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-findings/<uuid:finding_id>/', ai_qa_views.ai_finding_detail, name='api-ai-finding-detail'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-findings/<uuid:finding_id>/comment/', ai_qa_views.ai_finding_comment, name='api-ai-finding-comment'),
+    path('workspaces/<uuid:workspace_id>/ai-glossary/', ai_qa_views.glossary_list_create, name='api-ai-glossary'),
+    path('workspaces/<uuid:workspace_id>/ai-glossary/<uuid:term_id>/', ai_qa_views.glossary_detail, name='api-ai-glossary-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/', review_comment_list_create, name='api-review-comments'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/', review_comment_detail, name='api-review-comment-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/resolution/', review_comment_resolution, name='api-review-comment-resolution'),

@@ -39,6 +39,8 @@ export type ReviewNote = {
   replies: ReviewNote[];
   /** `team` notes are internal to the workspace; guests never receive them. */
   visibility?: CommentVisibility;
+  /** Added from an AI Visual QA finding: shown as "AI-suggested · added by <author>". */
+  aiSuggested?: boolean;
   /** Set on notes held on the device because their media has no project review record. */
   local?: boolean;
   /** A voice or screen recording carried by this note, resolved from its attachment. */
@@ -109,6 +111,7 @@ export function toNote(comment: ReviewComment): ReviewNote {
     mentions: comment.mentions?.map((item) => ({ id: item.id, name: item.name })) ?? [],
     replies: [],
     visibility: comment.visibility === "team" ? "team" : "client",
+    aiSuggested: comment.source === "ai_visual_qa",
     ...(comment.revision_count > 0 ? { edited: true } : {}),
   };
 }

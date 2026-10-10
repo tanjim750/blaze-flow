@@ -808,6 +808,8 @@ class ReviewComment(models.Model):
     resolved_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='resolved_by_user_id', null=True, blank=True, related_name='+')
     resolved_at = models.DateTimeField(null=True, blank=True)
     visibility = models.CharField(max_length=10, choices=ReviewCommentVisibility.choices, default=ReviewCommentVisibility.CLIENT)
+    # 'ai_visual_qa' when it was added from an AI Visual QA finding (see AIFinding.comment).
+    source = models.CharField(max_length=20, default='human')
     deleted_at = models.DateTimeField(null=True, blank=True)
     deleted_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='deleted_by_user_id', null=True, blank=True, related_name='+')
     deleted_by_guest_session = models.ForeignKey(GuestSession, on_delete=models.DO_NOTHING, db_column='deleted_by_guest_session_id', null=True, blank=True, related_name='+')
@@ -2120,4 +2122,196 @@ class ProjectMessageRead(models.Model):
         db_table = 'project_message_reads'
         constraints = [
             models.UniqueConstraint(fields=['user', 'chat_channel', 'channel'], name='project_message_reads_channel_uniq'),
+        ]
+
+
+# ---------------------------------------------------------------------------
+# AI Visual QA (first capability: spelling in visible text on images/posters)
+# ---------------------------------------------------------------------------
+
+class ReviewCommentSource(models.TextChoices):
+    HUMAN = 'human'
+    # Written from an AI Visual QA finding. The author is still the person who confirmed it.
+    AI_VISUAL_QA = 'ai_visual_qa'
+
+
+class AIReviewMode(models.TextChoices):
+    PROOFREAD = 'PROOFREAD'
+
+
+class AIReviewStatus(models.TextChoices):
+    QUEUED = 'QUEUED'
+    PROCESSING = 'PROCESSING'
+    SUCCEEDED = 'SUCCEEDED'
+    PARTIAL = 'PARTIAL'
+    FAILED = 'FAILED'
+    CANCELLED = 'CANCELLED'
+
+
+AI_REVIEW_ACTIVE_STATUSES = (AIReviewStatus.QUEUED, AIReviewStatus.PROCESSING)
+
+
+class AIFindingCategory(models.TextChoices):
+    POSSIBLE_SPELLING_ERROR = 'POSSIBLE_SPELLING_ERROR'
+    OCR_UNCERTAIN = 'OCR_UNCERTAIN'
+
+
+class AIFindingBand(models.TextChoices):
+    HIGH = 'high'
+    MEDIUM = 'medium'
+    LOW = 'low'
+
+
+class AIFindingStatus(models.TextChoices):
+    PENDING = 'PENDING'
+    ACCEPTED = 'ACCEPTED'
+    DISMISSED = 'DISMISSED'
+    NOT_AN_ERROR = 'NOT_AN_ERROR'
+    COMMENT_CREATED = 'COMMENT_CREATED'
+
+
+class GlossaryTermKind(models.TextChoices):
+    BRAND = 'brand'
+    PRODUCT = 'product'
+    NAME = 'name'
+    ACRONYM = 'acronym'
+    STYLISATION = 'stylisation'
+    OTHER = 'other'
+
+
+class AIReview(models.Model):
+    """One AI Visual QA run against one immutable media version."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='+')
+    media_version = models.ForeignKey(MediaVersion, on_delete=models.CASCADE, related_name='+')
+    file_checksum = models.CharField(max_length=512, null=True, blank=True)
+    requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='+')
+    review_type = models.CharField(max_length=40, default='VISUAL_TEXT_QA')
+    mode = models.CharField(max_length=40, choices=AIReviewMode.choices, default=AIReviewMode.PROOFREAD)
+    language = models.CharField(max_length=10, default='en-GB')
+    status = models.CharField(max_length=20, choices=AIReviewStatus.choices, default=AIReviewStatus.QUEUED)
+    stage = models.CharField(max_length=40, default='queued')
+    progress = models.JSONField(default=dict, blank=True)
+    engine = models.CharField(max_length=60, blank=True, default='')
+    engine_version = models.CharField(max_length=60, blank=True, default='')
+    pipeline_version = models.CharField(max_length=20)
+    options = models.JSONField(default=dict, blank=True)
+    options_hash = models.CharField(max_length=64)
+    attempts = models.PositiveIntegerField(default=0)
+    error_code = models.CharField(max_length=60, blank=True, default='')
+    error_message = models.CharField(max_length=500, blank=True, default='')
+    usage = models.JSONField(default=dict, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ai_reviews'
+        ordering = ('-created_at',)
+        indexes = [
+            models.Index(fields=['media_version', 'created_at']),
+            models.Index(fields=['workspace', 'status']),
+            models.Index(fields=['workspace', 'created_at']),
+        ]
+        constraints = [
+            # Double-clicking Run (or two tabs) joins the active run instead of starting another.
+            models.UniqueConstraint(
+                fields=['media_version', 'options_hash', 'pipeline_version'],
+                condition=models.Q(status__in=['QUEUED', 'PROCESSING']),
+                name='ai_reviews_one_active_run_per_options',
+            ),
+        ]
+
+
+class AIFrameObservation(models.Model):
+    """Raw OCR output, kept apart from interpreted findings for debugging and re-processing."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ai_review = models.ForeignKey(AIReview, on_delete=models.CASCADE, related_name='observations')
+    time_ms = models.BigIntegerField(null=True, blank=True)
+    frame_index = models.IntegerField(default=0)
+    text = models.TextField()
+    confidence = models.FloatField()
+    # Normalised 0-1 polygon [[x, y], ...] in the displayed (EXIF-corrected) orientation.
+    polygon = models.JSONField(default=list)
+    engine = models.CharField(max_length=60)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'ai_frame_observations'
+        indexes = [models.Index(fields=['ai_review', 'frame_index'])]
+
+
+class AIFinding(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='+')
+    ai_review = models.ForeignKey(AIReview, on_delete=models.CASCADE, related_name='findings')
+    media_version = models.ForeignKey(MediaVersion, on_delete=models.CASCADE, related_name='+')
+    category = models.CharField(max_length=40, choices=AIFindingCategory.choices)
+    band = models.CharField(max_length=10, choices=AIFindingBand.choices)
+    detected_text = models.CharField(max_length=500)
+    suggested_text = models.CharField(max_length=500, blank=True, default='')
+    edited_suggestion = models.CharField(max_length=500, blank=True, default='')
+    context_text = models.CharField(max_length=1000, blank=True, default='')
+    explanation = models.CharField(max_length=500, blank=True, default='')
+    ocr_confidence = models.FloatField()
+    decision_confidence = models.FloatField()
+    # Normalised 0-1 box {x, y, width, height} in the displayed orientation.
+    region = models.JSONField(default=dict)
+    start_time_ms = models.BigIntegerField(null=True, blank=True)
+    end_time_ms = models.BigIntegerField(null=True, blank=True)
+    observation_ids = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=20, choices=AIFindingStatus.choices, default=AIFindingStatus.PENDING)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    comment = models.OneToOneField(
+        ReviewComment, on_delete=models.SET_NULL, null=True, blank=True, related_name='ai_finding',
+    )
+    # Stable across reruns of the same version: category + normalised text + coarse region.
+    dedupe_key = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ai_findings'
+        ordering = ('region__y', 'region__x', 'created_at')
+        indexes = [
+            models.Index(fields=['media_version', 'dedupe_key']),
+            models.Index(fields=['ai_review', 'status']),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['ai_review', 'dedupe_key'], name='ai_findings_review_dedupe_uniq'),
+        ]
+
+
+class GlossaryTerm(models.Model):
+    """Approved spellings (brands, names, stylisations) that AI Visual QA never flags."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='+')
+    # Null means every project in the workspace.
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name='+')
+    term = models.CharField(max_length=200)
+    normalized = models.CharField(max_length=200)
+    kind = models.CharField(max_length=20, choices=GlossaryTermKind.choices, default=GlossaryTermKind.OTHER)
+    enabled = models.BooleanField(default=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'glossary_terms'
+        ordering = ('normalized',)
+        indexes = [models.Index(fields=['workspace', 'project'])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['workspace', 'normalized'], condition=models.Q(project__isnull=True),
+                name='glossary_terms_workspace_term_uniq',
+            ),
+            models.UniqueConstraint(
+                fields=['workspace', 'project', 'normalized'], condition=models.Q(project__isnull=False),
+                name='glossary_terms_project_term_uniq',
+            ),
         ]
