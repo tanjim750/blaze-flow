@@ -3,5 +3,5 @@
 .files-page > .fx { flex: 1; min-height: 0; }
 .files-notice { display: flex; flex: none; align-items: flex-start; gap: 8px; margin: 0; padding: 8px 24px; border-bottom: 1px solid oklch(1 0 0 / 8%); background: color-mix(in oklch, oklch(0.82 0.15 80) 10%, transparent); color: oklch(0.955 0.005 285); font-size: 13px; line-height: 20px; }
 .files-notice svg { flex: none; width: 16px; height: 16px; margin-top: 2px; color: oklch(0.82 0.15 80); }
-@media (max-width: 900px) { .files-page { height: calc(100dvh - 60px); } }
-@media (max-width: 767px) { .files-page { height: auto; min-height: calc(100dvh - 60px); } .files-page > .fx { flex: none; height: auto; overflow: visible; } .files-page .fx-main, .files-page .fx-content { overflow: visible; } .files-notice { padding: 8px 16px; } }
+@media (max-width: 900px) { .files-page { height: calc(100dvh - var(--mobilebar-h)); } }
+@media (max-width: 767px) { .files-page { height: auto; min-height: calc(100dvh - var(--mobilebar-h)); } .files-page > .fx { flex: none; height: auto; overflow: visible; } .files-page .fx-main, .files-page .fx-content { overflow: visible; } .files-notice { padding: 8px 16px; } }

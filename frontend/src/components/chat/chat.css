@@ -151,10 +151,10 @@
   .ch-side-head{padding-top:14px}
 }
 
-/* App rail is off-canvas here (shell.css @900); leave room for the floating menu. */
+/* App rail is off-canvas here (shell.css @900). */
 @media (max-width:900px){
-  .ch-side-head{padding-right:56px} /* clear the floating mobile menu button */
-  .ch-main-head{padding-right:56px}
+  /* The mobile top bar sits above; the shell fills what is left. */
+  .ch-shell,.ch-shell.is-portal{height:calc(100dvh - var(--mobilebar-h));min-height:calc(100dvh - var(--mobilebar-h))}
 }
 
 @media (max-width:640px){

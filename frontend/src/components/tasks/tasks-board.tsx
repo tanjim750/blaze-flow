@@ -283,7 +283,7 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
         <button type="button" aria-pressed={mode === "list"} onClick={() => setMode("list")}><LayoutList aria-hidden="true" />List</button>
       </div>
       {!compact && access.manageStages && <button type="button" className="tb-button is-ghost" aria-label="Customize stages" onClick={() => setDialog("stages")}><Settings2 aria-hidden="true" /><span className="tb-label-md">Customize stages</span></button>}
-      {access.create && <button type="button" className="tb-button is-primary" onClick={() => setDialog("new")}><Plus aria-hidden="true" />New task</button>}
+      {access.create && <button type="button" className="tb-button is-primary" data-mobile-primary="New task" onClick={() => setDialog("new")}><Plus aria-hidden="true" />New task</button>}
       {readOnly && <span className="tb-readonly" role="note"><Eye aria-hidden="true" />View only</span>}
     </header>
 

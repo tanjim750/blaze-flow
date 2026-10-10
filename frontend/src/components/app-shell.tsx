@@ -13,6 +13,8 @@ import { UniversalReviewLayout } from "@/components/universal-review";
 import { NotificationBell } from "@/components/notifications/bell";
 import { fetchUnread, unreadLabel } from "@/lib/messages";
 import "@/components/messages/messages.css";
+import { mobileTitle } from "@/lib/mobile-title";
+import { Plus, Upload } from "lucide-react";
 
 type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { severity: string; code: string; count: number }[] };
 
@@ -100,13 +102,39 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
     document.cookie = `${RAIL_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
   }
 
+  // Below 900px the bell and avatar move from the rail into the top bar. They render in one
+  // place only, so the notification feed is polled once.
+  const narrow = useNarrow();
+  // The page's own main action (marked `data-mobile-primary`) is mirrored into the top bar.
+  const [primary, setPrimary] = useState<string | null>(null);
+  useEffect(() => {
+    if (!narrow) return;
+    const find = () => setPrimary(document.querySelector<HTMLElement>(".studio-main [data-mobile-primary]:not([disabled])")?.dataset.mobilePrimary ?? null);
+    find();
+    const observer = new MutationObserver(find);
+    const root = document.querySelector(".studio-main");
+    if (root) observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["disabled", "data-mobile-primary"] });
+    return () => observer.disconnect();
+  }, [narrow, pathname]);
+  const runPrimary = () => document.querySelector<HTMLElement>(".studio-main [data-mobile-primary]:not([disabled])")?.click();
+  useEffect(() => { if (!open) return; const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [open]);
+
   const shellClass = `studio-shell${collapsed ? " is-collapsed" : ""}`;
 
   return (
     <div className={shellClass}>
-      <button className="mobile-menu" onClick={() => setOpen(!open)} aria-label="Toggle navigation" aria-expanded={open}>
-        {open ? <X /> : <Menu />}
-      </button>
+      <header className="studio-mobilebar">
+        <button type="button" className="studio-mobilebar-btn" onClick={() => setOpen(!open)} aria-label={open ? "Close navigation" : "Open navigation"} aria-expanded={open}>
+          {open ? <X size={20} /> : <Menu size={20} />}
+        </button>
+        <h1 className="studio-mobilebar-title">{mobileTitle(pathname)}</h1>
+        <div className="studio-mobilebar-actions">
+          {primary && <button type="button" className="studio-mobilebar-btn is-primary" onClick={runPrimary} aria-label={primary}>{/upload/i.test(primary) ? <Upload size={18} /> : <Plus size={18} />}</button>}
+          {narrow && <div className="studio-notifications"><NotificationBell workspaceId={selectedWorkspaceId} /></div>}
+          {narrow && <AccountMenu user={user} />}
+        </div>
+      </header>
+      {open && <button type="button" className="studio-scrim" aria-label="Close navigation" tabIndex={-1} onClick={() => setOpen(false)} />}
 
       <aside className={open ? "studio-sidebar open" : "studio-sidebar"}>
         <motion.button
@@ -157,9 +185,9 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
           </div>
 
           <div className="studio-rail-account">
-            <AccountMenu user={user} />
+            {!narrow && <AccountMenu user={user} />}
             {user && <span className="studio-rail-who"><strong>{user.name}</strong><small>{user.email}</small></span>}
-            <div className="studio-notifications"><NotificationBell workspaceId={selectedWorkspaceId} /></div>
+            {!narrow && <div className="studio-notifications"><NotificationBell workspaceId={selectedWorkspaceId} /></div>}
           </div>
         </div>
       </aside>
@@ -255,4 +283,16 @@ function AccountMenu({ user }: { user: ShellUser | null }) {
       )}
     </div>
   );
+}
+
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 900px)");
+    const update = () => setNarrow(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return narrow;
 }
