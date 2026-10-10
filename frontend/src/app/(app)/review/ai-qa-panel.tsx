@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, CircleHelp, Loader2, MessageSquarePlus, Pencil, RotateCcw, Sparkles, X } from "lucide-react";
+import { AlertTriangle, Check, CircleHelp, Clock3, Loader2, MessageSquarePlus, Pencil, RotateCcw, Sparkles, Square, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import {
   BAND_LABEL, CATEGORY_LABEL, FILTERS, aiQaApi, batchable, filterCounts, hasRegion, isActive, matchesFilter,
-  pollDelay, readability, sortFindings, stageLabel, stageStep, suggestion,
+  pollDelay, progressLabel, readability, sortFindings, stageLabel, stageStep, suggestion, timeRangeLabel,
   type AiFinding, type AiQaState, type AiRegion, type AiReview, type AiTarget, type FindingFilter,
 } from "@/lib/ai-qa";
 import "./ai-qa.css";
@@ -21,6 +21,7 @@ export type AiQa = {
   error: string | null;
   start: (language: string) => Promise<boolean>;
   retry: () => Promise<void>;
+  cancel: () => Promise<void>;
   update: (finding: AiFinding) => void;
 };
 
@@ -105,9 +106,18 @@ export function useAiQa(target: AiTarget | null): AiQa {
     setReview(result.data);
   }, [reviewId]);
 
+  const cancel = useCallback(async () => {
+    const t = targetRef.current; if (!t || !reviewId) return;
+    const result = await aiQaApi.cancel(t, reviewId);
+    if (!result.ok) { toast.error(result.detail); return; }
+    startedAt.current = 0;
+    setReview(result.data);
+    toast("AI Visual QA cancelled.");
+  }, [reviewId]);
+
   const update = useCallback((next: AiFinding) => setFindings((list) => list.map((item) => item.id === next.id ? next : item)), []);
 
-  return { available, state, review, findings, error, start, retry, update };
+  return { available, state, review, findings, error, start, retry, cancel, update };
 }
 
 type Props = {
@@ -117,11 +127,14 @@ type Props = {
   title: string;
   selectedId: string | null;
   onSelect: (finding: AiFinding | null) => void;
+  /** Bumped by the header's "Run AI Visual QA" button to open the run dialog here. */
+  runRequest?: number;
+  video?: boolean;
 };
 
 const STEPS = ["Queued", "Reading text", "Checking spelling", "Done"];
 
-export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelect }: Props) {
+export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelect, runRequest = 0, video = false }: Props) {
   const router = useRouter();
   const [runOpen, setRunOpen] = useState(false);
   const [language, setLanguage] = useState("en-GB");
@@ -131,6 +144,14 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
   const { review, findings } = qa;
   const canRun = Boolean(qa.state?.can_run);
   const active = isActive(review);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [handledRun, setHandledRun] = useState(runRequest);
+  if (runRequest !== handledRun) {
+    // Adjusting state during render (not in an effect) is React's sanctioned way to react to a prop.
+    setHandledRun(runRequest);
+    if (runRequest > 0 && canRun && !active) setRunOpen(true);
+  }
+  const steps = video ? ["Queued", "Reading frames", "Checking spelling", "Done"] : STEPS;
 
   const counts = useMemo(() => filterCounts(findings), [findings]);
   const shown = useMemo(() => sortFindings(findings.filter((f) => matchesFilter(f, filter))), [findings, filter]);
@@ -187,14 +208,20 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
       {review && active && (
         <div className="aiqa-progress" role="status" aria-live="polite" data-testid="ai-qa-progress">
           <ol className="aiqa-steps">
-            {STEPS.map((step, index) => (
+            {steps.map((step, index) => (
               <li key={step} className={index < stageStep(review) ? "is-done" : index === stageStep(review) ? "is-current" : ""}>
                 <span aria-hidden="true">{index < stageStep(review) ? <Check size={10} /> : index + 1}</span>{step}
               </li>
             ))}
           </ol>
-          <p><Loader2 size={13} className="aiqa-spin" /> {stageLabel(review)}{review.progress.frames_total ? ` · image ${review.progress.frames_done ?? 0} of ${review.progress.frames_total}` : ""}</p>
-          <small>You can leave this page; the check keeps running.</small>
+          <p><Loader2 size={13} className="aiqa-spin" /> {stageLabel(review)}{progressLabel(review) ? ` · ${progressLabel(review)}` : ""}</p>
+          {review.progress.frames_total ? (
+            <div className="aiqa-bar" role="progressbar" aria-valuemin={0} aria-valuemax={review.progress.frames_total} aria-valuenow={review.progress.frames_done ?? 0} aria-label="Frames read">
+              <span style={{ width: `${Math.min(100, ((review.progress.frames_done ?? 0) / review.progress.frames_total) * 100)}%` }} />
+            </div>
+          ) : null}
+          <small>You can leave this page; the check keeps running and you’ll get a notification when it’s done.</small>
+          {canRun && <button type="button" className="tb-button aiqa-cancel" onClick={() => setCancelOpen(true)} data-testid="ai-qa-cancel"><Square size={11} />Cancel check</button>}
         </div>
       )}
 
@@ -279,9 +306,20 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
       </ConfirmDialog>
 
       <ConfirmDialog
+        open={cancelOpen}
+        title="Cancel this check?"
+        body="Nothing found so far is kept. You can run it again at any time."
+        confirmLabel="Cancel check"
+        cancelLabel="Keep running"
+        danger
+        onConfirm={() => { setCancelOpen(false); void qa.cancel(); }}
+        onCancel={() => setCancelOpen(false)}
+      />
+
+      <ConfirmDialog
         open={batchOpen}
         title={`Add ${batch.length} comment${batch.length === 1 ? "" : "s"}?`}
-        body="Each becomes a team-only note marked AI-suggested, with its highlight drawn on the image."
+        body={video ? "Each becomes a team-only note marked AI-suggested, pinned to its time range with the highlight drawn on the frame." : "Each becomes a team-only note marked AI-suggested, with its highlight drawn on the image."}
         confirmLabel={busy ? "Adding…" : `Add ${batch.length}`}
         busy={busy}
         onConfirm={() => void addBatch()}
@@ -318,11 +356,12 @@ function FindingCard({ finding, target, selected, canAct, onSelect, onUpdate, on
       data-testid="ai-qa-finding"
       data-finding={finding.id}
     >
-      <button type="button" className="aiqa-card-main" onClick={onSelect} aria-pressed={selected} aria-label={`Show “${finding.detected_text}” on the image`}>
+      <button type="button" className="aiqa-card-main" onClick={onSelect} aria-pressed={selected} aria-label={timeRangeLabel(finding) ? `Jump to ${timeRangeLabel(finding)} and show “${finding.detected_text}”` : `Show “${finding.detected_text}” on the image`}>
         <span className="aiqa-card-top">
           <span className="aiqa-cat">{finding.category === "OCR_UNCERTAIN" ? <CircleHelp size={12} /> : <Sparkles size={12} />}{CATEGORY_LABEL[finding.category]}</span>
           <span className={`aiqa-pill is-${finding.band}`}>{BAND_LABEL[finding.band]}</span>
         </span>
+        {timeRangeLabel(finding) && <span className="aiqa-time" data-testid="ai-qa-time"><Clock3 size={11} aria-hidden="true" />{timeRangeLabel(finding)}</span>}
         <span className="aiqa-fix">
           <s>{finding.detected_text}</s>
           {fix && <><span aria-hidden="true">→</span><strong>{fix}</strong></>}

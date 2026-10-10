@@ -32,7 +32,11 @@ class AIQAError(Exception):
 
 
 def is_supported(media_version):
-    return (media_version.original_file.mime_type or '').startswith('image/')
+    return (media_version.original_file.mime_type or '').startswith(('image/', 'video/'))
+
+
+def is_video(media_version):
+    return (media_version.original_file.mime_type or '').startswith('video/')
 
 
 def options_hash(options):
@@ -55,9 +59,19 @@ def start_review(*, media_version, user, language='en-GB'):
     if language not in LANGUAGES:
         raise AIQAError('ai_qa_bad_language', 'Choose English (UK) or English (US).')
     if not is_supported(media_version):
-        raise AIQAError('ai_qa_unsupported_media', 'AI Visual QA checks images and posters for now. Video is coming next.')
+        raise AIQAError('ai_qa_unsupported_media', 'AI Visual QA checks images, posters and videos.')
     file = media_version.original_file
-    if file.size_bytes > settings.AI_QA_MAX_IMAGE_BYTES:
+    if is_video(media_version):
+        duration_ms = (file.metadata or {}).get('duration_ms') or 0
+        limit = settings.AI_QA_MAX_VIDEO_SECONDS
+        if duration_ms > limit * 1000:
+            raise AIQAError(
+                'ai_qa_too_long',
+                f'Videos up to {limit // 60} minutes can be checked; this one is {duration_ms // 60000} min {duration_ms // 1000 % 60} s. Export a shorter cut to check it.',
+            )
+        if file.size_bytes > settings.AI_QA_MAX_VIDEO_BYTES:
+            raise AIQAError('ai_qa_too_large', 'This video is too large to check.')
+    elif file.size_bytes > settings.AI_QA_MAX_IMAGE_BYTES:
         raise AIQAError('ai_qa_too_large', 'This image is too large to check.')
     workspace = media_version.project.workspace
     options = {'mode': 'PROOFREAD', 'language': language, 'engine': settings.AI_QA_ENGINE}
@@ -78,7 +92,7 @@ def start_review(*, media_version, user, language='en-GB'):
         workspace=workspace, media_version=media_version, file_checksum=file.checksum,
         requested_by=user, language=language, options=options, options_hash=digest,
         pipeline_version=PIPELINE_VERSION, engine=settings.AI_QA_ENGINE,
-        progress={'stages': ['queued', 'reading', 'checking', 'done']},
+        progress={'kind': 'video' if is_video(media_version) else 'image'},
     )
     _enqueue(review)
     record_user_audit(
@@ -113,6 +127,45 @@ def retry_review(*, review, user):
         available_at=now, created_at=now, updated_at=now,
     )
     return review
+
+
+@transaction.atomic
+def cancel_review(*, review, user):
+    review = AIReview.objects.select_for_update().get(id=review.id)
+    if review.status not in AI_REVIEW_ACTIVE_STATUSES:
+        raise AIQAError('ai_qa_not_running', 'Only a queued or running check can be cancelled.', 409)
+    review.status = AIReviewStatus.CANCELLED
+    review.stage = 'cancelled'
+    review.completed_at = timezone.now()
+    review.usage = {**review.usage, 'cancelled_by': str(user.id)}
+    review.save()
+    record_user_audit(user=user, workspace=review.workspace, action='ai_qa.review.cancelled',
+                      entity_type='ai_review', entity_id=review.id, metadata={})
+    return review
+
+
+def notify_review_finished(review):
+    """In-app note to whoever started the check. Never allowed to undo stored findings."""
+    try:
+        from app.models import NotificationKind
+        from app.services.notifications import _media_payload, _notify, review_link
+
+        if review.requested_by is None:
+            return None
+        payload = {
+            **_media_payload(review.media_version),
+            'link': review_link(media_version=review.media_version) + '&panel=ai',
+            'status': review.status, 'finding_count': review.findings.count(),
+            'error_message': review.error_message or None,
+        }
+        return _notify(
+            recipient=review.requested_by, workspace=review.workspace, actor=None, actor_name='AI Visual QA',
+            kind=NotificationKind.AI_QA_COMPLETED, entity_type='ai_review', entity_id=review.id, payload=payload,
+        )
+    except Exception:  # pragma: no cover - a notification problem must not fail the run
+        import logging
+        logging.getLogger(__name__).warning('AI QA notification failed for %s', review.id, exc_info=True)
+        return None
 
 
 def effective_glossary(*, workspace, project):
@@ -206,9 +259,13 @@ def create_comment_from_finding(*, finding, user, visibility=ReviewCommentVisibi
     comment.source = ReviewCommentSource.AI_VISUAL_QA
     comment.save(update_fields=['source'])
     if finding.region:
+        # A brief sighting still deserves a highlight you can see: hold it at least 1.5 s.
+        end_ms = finding.end_time_ms
+        if finding.start_time_ms is not None:
+            end_ms = max(end_ms or finding.start_time_ms, finding.start_time_ms + 1500)
         create_annotation(
             media_version=finding.media_version, user=user, review_comment=comment,
-            start_time_ms=finding.start_time_ms, end_time_ms=finding.end_time_ms,
+            start_time_ms=finding.start_time_ms, end_time_ms=end_ms,
             elements=[{
                 'element_type': 'RECTANGLE', 'geometry': _padded(finding.region),
                 'style': {'color': '#f5a524', 'stroke_width': 2},

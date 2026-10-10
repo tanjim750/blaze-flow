@@ -53,5 +53,26 @@ The gate is **HIGH-band precision ≥ 0.8** and **≤ 1 false positive per clean
 
 Caveat: the set is synthetic and small, and the skip rules were tuned while looking at it, so treat the numbers as a smoke test, not a calibration. Customer-approved real posters must be added before any auto-comment threshold is considered.
 
-## Not in v1 (next PRs)
-Video (sampling, tracking, time ranges), approved-copy compare, a cloud engine, an LLM verifier, a glossary management UI (API only for now; "Not an error" adds terms), notifications on completion, and cancelling a run.
+## Video (PR2)
+**Sampling.** Two ffmpeg decode passes; every timestamp comes from `showinfo`'s `pts_time`, never from an assumed frame rate, so it matches the review player's clock (variable frame rate included). ffmpeg auto-rotates, so boxes are in display orientation.
+1. Baseline: a frame every 0.5 s (`gte(t-prev_selected_t,0.5)`) plus scene changes (`gt(scene,0.3)`), scaled to at most 1280 px wide.
+2. Densify: between neighbouring baseline samples whose recognised text differs (a title arriving, moving, fading, changing), re-sample every 0.125 s. That pins start/end times and catches text that was only half-visible at a baseline sample. Best effort: if this pass fails the baseline result still stands.
+- Caps: 15 min (`AI_QA_MAX_VIDEO_SECONDS`, checked at Run time from the stored duration and again by ffprobe in the worker, with a clear message), 2,400 frames (`AI_QA_MAX_FRAMES`).
+
+**Near-duplicate skip.** A frame where ≤ 0.2 % of a 160×90 greyscale copy changed by more than 24 levels reuses the previous frame's OCR. A whole-frame perceptual hash (dHash) was tried first and rejected: on a static shot a subtitle appearing barely changes it, and the eval missed both subtitle typos. Local pixel change catches them while compression noise stays below the threshold.
+
+**Tracking.** Spelling candidates from every frame are merged into tracks: same category, same word (fuzzy ratio ≥ 85 to absorb OCR noise), within 1.2 s of the track's last sighting, and in the same place (IoU > 0.3, or centre drift < 0.15 × width / 0.1 × height for moving titles). One track becomes one finding with `start_time_ms`/`end_time_ms` and a `track` of `{t, x, y, width, height}` points so the highlight can follow a moving word.
+- **Majority rule:** if a word was read wrongly in fewer than half the frames its line was on screen (and at least 3), it is downgraded to *OCR unsure* (low): a real typo is wrong in every frame; an OCR slip is not.
+- A single-sighting HIGH finding is shown as MEDIUM: one frame is weaker evidence than a sustained one.
+- Dedupe key for re-runs is the poster key plus a 2 s time bucket, so decisions and comments carry over between runs.
+
+**Review page.** Clicking a finding seeks the player to its start. The highlight uses the same display-window rule as a held drawing (`lib/annotation-window`), held at least 1.5 s so a brief sighting can still be seen, and follows the track. AI findings show as purple bars on the timeline above note markers (only while the AI QA tab is open, to keep the timeline quiet otherwise); clicking one seeks and selects it. "Add comment" creates a team-only comment with the finding's time range and a rectangle annotation over the same window.
+
+**Header button, cancel, notifications.** "Run AI Visual QA" sits in the review header tools (icon only under 1240 px), opening the AI QA tab and its run dialog. A queued or running check can be cancelled (`POST …/ai-reviews/{id}/cancel/`); the worker checks between frames and drops partial findings. On finish or failure the person who started it gets an in-app `AI_QA_COMPLETED` notification (switchable in Settings like other kinds) linking to `/review?media=…&panel=ai`.
+
+**Eval.** `python manage.py eval_ai_qa_video --out /tmp/aiqa-veval` renders 10 synthetic clips (slide, fade, zoom titles, burned-in subtitles, a 1 s flash; 4 clean, 6 with 7 seeded typos) and reports precision, recall, false positives per clean clip, start-time error and processing seconds per minute of video. A finding counts when the word matches and its range overlaps the truth ± 0.6 s.
+
+**Cost.** CPU-bound: Paddle reads each non-duplicate frame (~2-4 s at 1280 px on 8 cores). Static shots are cheap (dedupe); constant motion (a sliding title) defeats dedupe. See the PR for measured seconds per minute of video. A 15-minute video with constant motion can take over an hour on one worker; that is why the cap and the one-run-per-workspace limit exist.
+
+## Not yet (next PRs)
+Approved-copy compare, a cloud engine (Google Video Intelligence has native text tracking), an LLM verifier, a glossary management UI, GPU/parallel frame OCR, and partial results while a long video is still running.

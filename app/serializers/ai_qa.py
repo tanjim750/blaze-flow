@@ -37,7 +37,7 @@ class AIFindingSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'category', 'band', 'detected_text', 'suggested_text', 'edited_suggestion',
             'context_text', 'explanation', 'ocr_confidence', 'decision_confidence', 'region',
-            'start_time_ms', 'end_time_ms', 'status', 'comment_id', 'reviewed_at', 'created_at',
+            'start_time_ms', 'end_time_ms', 'track', 'status', 'comment_id', 'reviewed_at', 'created_at',
         )
 
     def get_comment_id(self, finding):

@@ -22,7 +22,7 @@ class OcrEngine:
     name = 'base'
     version = ''
 
-    def read(self, image_path, *, width, height, source_path=None):  # pragma: no cover - interface
+    def read(self, image_path, *, width, height, source_path=None, time_ms=None, file_metadata=None):  # pragma: no cover - interface
         raise NotImplementedError
 
 
@@ -36,7 +36,17 @@ class FakeOcrEngine(OcrEngine):
     name = 'fake'
     version = '1'
 
-    def read(self, image_path, *, width, height, source_path=None):
+    def read(self, image_path, *, width, height, source_path=None, time_ms=None, file_metadata=None):
+        # Video frames carry no PNG chunk: tests script the timeline on File.metadata instead.
+        if time_ms is not None:
+            lines = []
+            for item in (file_metadata or {}).get('fake_ocr_timeline', []):
+                if item['start_ms'] <= time_ms <= item['end_ms']:
+                    x, y, w, h = item['box']
+                    dx = item.get('dx_per_s', 0) * (time_ms - item['start_ms']) / 1000
+                    lines.append(OcrLine(text=item['text'], confidence=float(item.get('confidence', 0.95)),
+                                         polygon=[[x + dx, y], [x + dx + w, y], [x + dx + w, y + h], [x + dx, y + h]]))
+            return lines
         from PIL import Image
 
         # The processed copy is re-encoded and loses PNG text chunks, so read the upload.
@@ -80,7 +90,7 @@ class PaddleOcrEngine(OcrEngine):
             enable_mkldnn=False,
         )
 
-    def read(self, image_path, *, width, height, source_path=None):  # pragma: no cover - needs the model
+    def read(self, image_path, *, width, height, source_path=None, time_ms=None, file_metadata=None):  # pragma: no cover - needs the model
         lines = []
         for page in self._model().predict(str(image_path)):
             data = page.json.get('res', page.json) if hasattr(page, 'json') else page

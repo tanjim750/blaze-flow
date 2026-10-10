@@ -177,6 +177,8 @@ class NotificationKind(models.TextChoices):
     PROJECT_REQUEST_NEW = 'PROJECT_REQUEST_NEW'
     # The studio accepted or declined a project request (to the client who sent it).
     PROJECT_REQUEST_DECIDED = 'PROJECT_REQUEST_DECIDED'
+    # An AI Visual QA check you started finished (or failed).
+    AI_QA_COMPLETED = 'AI_QA_COMPLETED'
     # New messages in a project thread you follow (one row per thread, counted up).
     PROJECT_MESSAGE_NEW = 'PROJECT_MESSAGE_NEW'
     # Someone @mentioned you in a project message.
@@ -2263,6 +2265,8 @@ class AIFinding(models.Model):
     start_time_ms = models.BigIntegerField(null=True, blank=True)
     end_time_ms = models.BigIntegerField(null=True, blank=True)
     observation_ids = models.JSONField(default=list, blank=True)
+    # Video: where the word was in each sighting, [{t, x, y, width, height}, ...] in time order.
+    track = models.JSONField(default=list, blank=True)
     status = models.CharField(max_length=20, choices=AIFindingStatus.choices, default=AIFindingStatus.PENDING)
     reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     reviewed_at = models.DateTimeField(null=True, blank=True)
