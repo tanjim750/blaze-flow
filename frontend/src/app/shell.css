@@ -151,7 +151,8 @@
    wrapper persists across routes; its page slot owns the same padding `main` used to. */
 .universal-review-page > main { padding: 34px 28px 60px; }
 .universal-review-page > main.flush { padding: 0; }
-.mobile-menu { display: none; }
+.studio-mobilebar, .studio-scrim { display: none; }
+:root { --mobilebar-h: calc(56px + env(safe-area-inset-top, 0px)); }
 
 @media (max-width: 900px) {
   /* Off-canvas below this width, so the collapse toggle has nothing to do. */
@@ -160,8 +161,35 @@
   .studio-sidebar.open { transform: none; box-shadow: 20px 0 60px #000; }
   .studio-rail-toggle { display: none; }
   .studio-main { padding-left: 0; }
-  .universal-review-page > main, .universal-review-page > main.flush { padding-top: 60px; }
-  .mobile-menu { display: grid; place-items: center; position: fixed; right: 16px; top: 12px; z-index: 60; width: 34px; height: 34px; border: 0; border-radius: 9px; background: var(--shell-accent); color: #fff; cursor: pointer; }
+  .universal-review-page > main { padding-top: calc(var(--mobilebar-h) + 16px); }
+  .universal-review-page > main.flush { padding-top: var(--mobilebar-h); }
+  /* Mobile top bar: menu, page title, the page's main action, bell, avatar. */
+  .studio-mobilebar {
+    display: flex; align-items: center; gap: 4px;
+    position: fixed; inset: 0 0 auto 0; z-index: 55;
+    height: var(--mobilebar-h);
+    padding: env(safe-area-inset-top, 0px) max(6px, env(safe-area-inset-right, 0px)) 0 max(6px, env(safe-area-inset-left, 0px));
+    background: color-mix(in srgb, var(--shell-container, #121218) 92%, transparent);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--shell-high, #26262f);
+  }
+  .studio-mobilebar-title { flex: 1; min-width: 0; margin: 0 4px; font-size: 16px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .studio-mobilebar-actions { display: flex; align-items: center; gap: 4px; }
+  .studio-mobilebar-btn { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none; color: var(--shell-on, #ececf1); cursor: pointer; }
+  .studio-mobilebar-btn:hover { background: var(--shell-high, #26262f); }
+  /* 44px hit areas; the filled shape is drawn smaller inside with a content-box background. */
+  .studio-mobilebar-btn.is-primary { padding: 3px; background: var(--shell-accent) content-box; color: #fff; border-radius: 13px; }
+  .studio-mobilebar .studio-avatar { width: 44px; height: 44px; padding: 4px; border: 0; background: none; position: relative; }
+  .studio-mobilebar .studio-avatar::before { content: ""; position: absolute; inset: 4px; z-index: -1; border-radius: 50%; background: #302744; border: 1px solid var(--shell-highest); }
+  .studio-mobilebar .studio-avatar { isolation: isolate; }
+  .studio-mobilebar .studio-notifications > button { width: 44px; height: 44px; }
+  .studio-mobilebar .studio-account-menu { right: 0; left: auto; top: calc(100% + 8px); }
+  .studio-mobilebar .studio-notification-menu { position: fixed; top: calc(var(--mobilebar-h) + 6px); right: 8px; left: 8px; width: auto; }
+  .studio-sidebar { z-index: 70; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  /* The whole drawer scrolls on a short phone, so no link hides behind the footer. */
+  .studio-sidebar { overflow-y: auto; overscroll-behavior: contain; }
+  .studio-sidebar-top { flex: none; overflow: visible; }
+  .studio-scrim { display: block; position: fixed; inset: 0; z-index: 65; border: 0; padding: 0; background: #0009; }
   .universal-review-page > main { padding-inline: 16px; }
 }
 
@@ -195,6 +223,26 @@
 
 /* Chat flush: fill the viewport under the floating menu; headers clear the button. */
 @media (max-width: 900px) {
-  .universal-review-page > main.flush:has(.ch-shell) { padding-top: 0; padding-inline: 0; }
+  .universal-review-page > main.flush:has(.ch-shell) { padding-top: var(--mobilebar-h); padding-inline: 0; }
 }
 
+
+/* 44px tap targets on touch screens and narrow widths. Icon buttons, chips, tabs, row
+   actions and menu items grow their hit area; most keep their look and gain padding. */
+@media (pointer: coarse), (max-width: 900px) {
+  .studio-main :is(button, [role=tab], [role=menuitem], [role=option], select, summary):not(.studio-scrim):not([data-tap-exempt]),
+  .studio-main a:is([role=tab], [role=menuitem], [role=button]),
+  [role=menu] :is(button, a, [role=menuitem]),
+  [role=dialog] button,
+  .studio-sidebar nav a, .studio-sidebar button {
+    min-height: 44px;
+  }
+  .studio-main :is(button, [role=tab]):not(.studio-scrim):not([data-tap-exempt]),
+  [role=dialog] button {
+    min-width: 44px;
+  }
+  /* Inline text fields share the height so rows line up. */
+  .studio-main :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select) { min-height: 44px; }
+  /* Checkboxes and radios keep their size; their label carries the target. */
+  .studio-main label:has(> input[type=checkbox]), .studio-main label:has(> input[type=radio]) { min-height: 44px; display: inline-flex; align-items: center; }
+}

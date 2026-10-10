@@ -380,3 +380,17 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 .tb-lock.is-readonly { border-color: var(--tb-border-strong); background: color-mix(in oklch, var(--tb-fg) 5%, transparent); }
 .tb-lock.is-readonly > svg { color: var(--tb-muted-fg); }
 .tb-empty.is-client { margin-top: 12px; }
+
+/* Phone toolbar (390px): title on its own row, view switch + actions on the next, search
+   full width, the filter menus in one scrollable row, stage chips that never squash. */
+@media (max-width: 767px) {
+  .tb-head { gap: 8px; }
+  .tb-head .tb-spacer { display: none; }
+  .tb-head .tb-segmented { flex: 1 1 auto; }
+  .tb-head .tb-segmented button { flex: 1; justify-content: center; }
+  .tb-filter-row { flex-wrap: wrap; overflow: visible; }
+  .tb-filter-row .tb-search { flex: 1 1 100%; min-width: 0; }
+  .tb-filter-row .tb-filter { flex: 0 0 auto; white-space: nowrap; padding-inline: 12px; border-color: var(--tb-border); }
+  .tb-stage-strip button { flex: 0 0 auto; }
+  .tb-chips { flex-wrap: wrap; }
+}

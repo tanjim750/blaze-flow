@@ -326,7 +326,7 @@ function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onTogg
       <div className="pb-rail-top">
         <div className="pb-rail-head">
           <h2><Building2 size={16} />Clients</h2>
-          <button type="button" className="pb-new-button" onClick={() => setCreating(!creating)} aria-expanded={creating}>
+          <button type="button" className="pb-new-button" data-mobile-primary="New" onClick={() => setCreating(!creating)} aria-expanded={creating}>
             <Plus size={13} />NEW
           </button>
         </div>

@@ -115,9 +115,14 @@
 @media (max-width: 960px) { .money-columns { grid-template-columns: 1fr; } .money-heading { flex-direction: column; align-items: stretch; } }
 
 @media print {
-  .studio-sidebar, .mobile-menu, .invoice-toolbar, nextjs-portal, .studio-rail-toggle { display: none !important; }
+  .studio-sidebar, .studio-mobilebar, .invoice-toolbar, nextjs-portal, .studio-rail-toggle { display: none !important; }
   .studio-shell, .studio-main, .studio-main main { margin: 0 !important; padding: 0 !important; background: #fff !important; }
   .invoice-paper { border: 0; background: #fff !important; color: #111; padding: 0; }
   .invoice-paper * { color: #111 !important; border-color: #ccc !important; }
   .invoice-title h1 { color: #4b2fc9 !important; }
 }
+/* Narrow screens: the tables scroll inside their panel instead of widening the page. */
+@media (max-width: 900px) { .money-panel { position: relative; overflow-x: auto; min-width: 0; max-width: 100%; } .money-columns, .money-page { min-width: 0; } .money-columns > *, .money-page > * { min-width: 0; } .money-table td, .money-table th { white-space: nowrap; } }
+/* At any width a wide table scrolls inside its panel; `relative` keeps its sr-only text inside too. */
+.money-panel { position: relative; overflow-x: auto; min-width: 0; }
+.money-columns > * { min-width: 0; }

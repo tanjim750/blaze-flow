@@ -643,7 +643,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
             <button type="button" className="fx-btn" onClick={() => setDialog("folder")}><FolderPlus /><span>New folder</span></button>
             <button type="button" className="fx-icon-btn" onClick={() => router.refresh()} aria-label="Refresh assets"><RefreshCw /></button>
             {/* Inside the project page the page header already owns the one primary Upload. */}
-            <button type="button" className={`fx-btn ${compact ? "" : "is-primary"}`} onClick={() => setDialog("upload")}><Upload /><span>Upload</span></button>
+            <button type="button" className={`fx-btn ${compact ? "" : "is-primary"}`} data-mobile-primary="Upload" onClick={() => setDialog("upload")}><Upload /><span>Upload</span></button>
           </div>
         </header>
         <div className="fx-toolbar is-secondary">

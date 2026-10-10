@@ -52,7 +52,7 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
         <h1>Money</h1>
         <p>What clients owe {workspaceName}, what {workspaceName} owes editors, and the margin in between.</p>
       </div>
-      {access.manage && <button type="button" className="money-button is-primary" onClick={() => setCreating(true)} disabled={!projects.length}><FilePlus2 aria-hidden="true" />New invoice</button>}
+      {access.manage && <button type="button" className="money-button is-primary" data-mobile-primary="New invoice" onClick={() => setCreating(true)} disabled={!projects.length}><FilePlus2 aria-hidden="true" />New invoice</button>}
     </header>
 
     <section className="money-totals" aria-label="Totals">
