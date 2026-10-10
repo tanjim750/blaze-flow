@@ -55,7 +55,7 @@ Caveat: the set is synthetic and small, and the skip rules were tuned while look
 
 ## Video (PR2)
 **Sampling.** Two ffmpeg decode passes; every timestamp comes from `showinfo`'s `pts_time`, never from an assumed frame rate, so it matches the review player's clock (variable frame rate included). ffmpeg auto-rotates, so boxes are in display orientation.
-1. Baseline: a frame every 0.5 s (`gte(t-prev_selected_t,0.5)`) plus scene changes (`gt(scene,0.3)`), scaled to at most 1280 px wide.
+1. Baseline: a frame every 0.5 s (`gte(t-prev_selected_t,0.5)`) plus scene changes (`gt(scene,0.3)`), scaled to at most 960 px wide (1280 px read the same eval set at ~1.8× the CPU time with no recall gain).
 2. Densify: between neighbouring baseline samples whose recognised text differs (a title arriving, moving, fading, changing), re-sample every 0.125 s. That pins start/end times and catches text that was only half-visible at a baseline sample. Best effort: if this pass fails the baseline result still stands.
 - Caps: 15 min (`AI_QA_MAX_VIDEO_SECONDS`, checked at Run time from the stored duration and again by ffprobe in the worker, with a clear message), 2,400 frames (`AI_QA_MAX_FRAMES`).
 
@@ -72,7 +72,7 @@ Caveat: the set is synthetic and small, and the skip rules were tuned while look
 
 **Eval.** `python manage.py eval_ai_qa_video --out /tmp/aiqa-veval` renders 10 synthetic clips (slide, fade, zoom titles, burned-in subtitles, a 1 s flash; 4 clean, 6 with 7 seeded typos) and reports precision, recall, false positives per clean clip, start-time error and processing seconds per minute of video. A finding counts when the word matches and its range overlaps the truth ± 0.6 s.
 
-**Cost.** CPU-bound: Paddle reads each non-duplicate frame (~2-4 s at 1280 px on 8 cores). Static shots are cheap (dedupe); constant motion (a sliding title) defeats dedupe. See the PR for measured seconds per minute of video. A 15-minute video with constant motion can take over an hour on one worker; that is why the cap and the one-run-per-workspace limit exist.
+**Cost.** CPU-bound: Paddle reads each non-duplicate frame (~2.5 s at 960 px on 8 CPU cores). Static shots are cheap (dedupe); constant motion (a sliding title) defeats dedupe. See the PR for measured seconds per minute of video. A 15-minute video with constant motion can take over an hour on one worker; that is why the cap and the one-run-per-workspace limit exist.
 
 ## Not yet (next PRs)
 Approved-copy compare, a cloud engine (Google Video Intelligence has native text tracking), an LLM verifier, a glossary management UI, GPU/parallel frame OCR, and partial results while a long video is still running.

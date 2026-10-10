@@ -377,7 +377,7 @@ AI_QA_MAX_VIDEO_SECONDS = int(os.environ.get('AI_QA_MAX_VIDEO_SECONDS', str(15 *
 AI_QA_MAX_VIDEO_BYTES = int(os.environ.get('AI_QA_MAX_VIDEO_BYTES', str(MAX_MEDIA_UPLOAD_BYTES)))
 # 2 fps over 15 minutes is 1,800 baseline frames; the rest is room for densified frames.
 AI_QA_MAX_FRAMES = int(os.environ.get('AI_QA_MAX_FRAMES', '2400'))
-AI_QA_FRAME_WIDTH = int(os.environ.get('AI_QA_FRAME_WIDTH', '1280'))
+AI_QA_FRAME_WIDTH = int(os.environ.get('AI_QA_FRAME_WIDTH', '960'))
 AI_QA_FFMPEG_TIMEOUT_SECONDS = int(os.environ.get('AI_QA_FFMPEG_TIMEOUT_SECONDS', '1800'))
 # A frame where at most this share of a small greyscale copy changed reuses the previous OCR.
 AI_QA_DEDUPE_FRAMES = os.environ.get('AI_QA_DEDUPE_FRAMES', 'true').lower() == 'true'
