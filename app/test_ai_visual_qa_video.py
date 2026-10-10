@@ -188,3 +188,45 @@ class SeparatorTests(TestCase):
     def test_a_middle_dot_separates_words_even_without_spaces(self):
         from .ai_qa.spelling import tokens
         self.assertEqual([t[0] for t in tokens('Small batch·Northlight | Coffee')], ['Small', 'batch', 'Northlight', 'Coffee'])
+
+
+@skipUnless(HAS_FFMPEG, 'ffmpeg is required for the video pipeline tests')
+@override_settings(AI_VISUAL_QA_ENABLED=True, AI_QA_ENGINE='fake', AI_QA_DEDUPE_FRAMES=False, AI_QA_PARTIAL_EVERY_FRAMES=2)
+class StreamingAndAdaptiveTests(VideoQAApiTests):
+    """Speed-up behaviour: partial findings while running, sparse reads on text-free stretches."""
+
+    def test_partial_findings_are_written_while_running_and_are_read_only(self):
+        from unittest import mock
+        from .ai_qa import pipeline
+        seen = []
+        real = pipeline._write_partial
+
+        def spy(review, rows):
+            real(review, rows)
+            seen.append(sorted(AIFinding.objects.filter(ai_review=review).values_list('detected_text', flat=True)))
+            if len(seen) == 1:
+                finding = AIFinding.objects.filter(ai_review=review).first()
+                if finding:
+                    blocked = self.client.patch(reverse('api-ai-finding-detail', args=[*self.args, finding.id]), {'status': 'DISMISSED'}, format='json')
+                    seen.append(('blocked', blocked.status_code))
+        with mock.patch.object(pipeline, '_write_partial', spy):
+            review = self.run_check()
+        self.assertEqual(review['status'], 'SUCCEEDED')
+        self.assertGreater(len(seen), 2)
+        self.assertIn(('blocked', 409), seen)
+        final = {f['detected_text'] for f in self.findings(review['id'])}
+        self.assertEqual(final, {'PREMUIM', 'Recieve'})
+        finding = self.findings(review['id'])[0]
+        ok = self.client.patch(reverse('api-ai-finding-detail', args=[*self.args, finding['id']]), {'status': 'DISMISSED'}, format='json')
+        self.assertEqual(ok.status_code, 200)
+
+    def test_text_free_stretches_are_read_once_a_second(self):
+        self.file.metadata = {**self.file.metadata, 'fake_ocr_timeline': [
+            {'start_ms': 3000, 'end_ms': 4000, 'text': 'FREE SHIPING', 'box': [0.1, 0.4, 0.5, 0.1]},
+        ]}
+        self.file.save(update_fields=['metadata'])
+        review = self.run_check()
+        self.assertGreater(review['usage']['frames_skipped'], 0)
+        [finding] = self.findings(review['id'])
+        self.assertEqual(finding['detected_text'], 'SHIPING')
+        self.assertLessEqual(abs(finding['start_time_ms'] - 3000), 150)

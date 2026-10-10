@@ -74,5 +74,13 @@ Caveat: the set is synthetic and small, and the skip rules were tuned while look
 
 **Cost.** CPU-bound: Paddle reads each non-duplicate frame (~2.5 s at 960 px on 8 CPU cores). Static shots are cheap (dedupe); constant motion (a sliding title) defeats dedupe. See the PR for measured seconds per minute of video. A 15-minute video with constant motion can take over an hour on one worker; that is why the cap and the one-run-per-workspace limit exist.
 
+## Video speed-up (self-hosted only)
+Measured on the 10-clip eval, 8 cores: **324 → 73 CPU-seconds per minute of video**, with the same recall (7/7), precision and zero false positives.
+- **Detection first, recognition on crops.** Video frames use the light `PP-OCRv5_mobile_det` detector (0.44 s vs 2.3 s for the medium one at 960 px; `PP-OCRv6_mobile_det` has no Paddle bindings yet) and the medium `PP-OCRv6` recogniser on the detected crops only, batched 8 at a time. A frame with no text costs one detection. The textline-orientation classifier is skipped for video (burned-in titles are upright). Posters keep the full medium pipeline.
+- **Per-region reuse.** Each crop is compared with recent recognised crops (same size ±10 %, ≤ 3 % of a 96×24 greyscale copy changed). A match reuses the text, even if the region moved, so a sliding or held title is recognised once. On the eval about 40 % of regions were reused.
+- **Adaptive sampling.** Frames are still extracted every 0.5 s (and 0.125 s where text changes), but the in-between frames are only read when a neighbour has text. Text-free stretches are read once a second. Trade-off: text on screen for under ~1 s that falls entirely between two text-free samples can be missed (scene-change frames still catch cuts).
+- **Threads and workers.** `AI_QA_CPU_THREADS` (default: all cores). `run_ai_qa_worker --processes 2` runs two workers, splitting the cores; jobs are claimed with `SKIP LOCKED`, and the one-run-per-workspace limit still applies, so parallelism is across workspaces.
+- **Streaming.** Every 12 frames (`AI_QA_PARTIAL_EVERY_FRAMES`) the findings so far are written, and the panel shows them under the progress bar ("Found so far"). They are read-only until the run finishes (the API answers 409 `ai_qa_still_running`), because they are rewritten as more frames arrive; the final write is the one that carries decisions and comments across runs.
+
 ## Not yet (next PRs)
 Approved-copy compare, a cloud engine (Google Video Intelligence has native text tracking), an LLM verifier, a glossary management UI, GPU/parallel frame OCR, and partial results while a long video is still running.
