@@ -10,13 +10,18 @@ from django.utils import timezone
 from app.models import (
     File,
     FileStatus,
+    MediaAsset,
     MediaVersion,
     MediaVersionStageEntry,
     Project,
+    ProjectFile,
     StorageBackend,
     WorkflowStage,
     WorkflowStageStatusState,
+    WorkspacePrincipalType,
 )
+from app.permissions import active_memberships_for_user
+
 from .audit import record_user_audit
 from .file_processing import PREVIEW_TOPIC, enqueue_file_event
 from .notifications import notify_new_media_version
@@ -87,6 +92,44 @@ def _storage_backend(now):
     )
 
 
+def _add_to_project_files(*, project, file_record, title, user, now):
+    """Lists an uploaded cut in the project's Files, as a publish does for a library file.
+
+    The project's Files tab, the Files library and the folder tree all read ``ProjectFile``;
+    a cut that only has a ``MediaVersion`` is reachable from its review link and nowhere
+    else. A cut whose title matches an earlier cut in the project (the review page's
+    version rule, "Hero 30s" / "Hero 30s v2") joins that asset as its next version, in the
+    same folder; anything else is a new asset at V1, like a Files upload.
+    """
+    from django.db.models import Max
+
+    from .notifications import version_key
+    membership = active_memberships_for_user(user=user, workspace=project.workspace).filter(
+        principal_type=WorkspacePrincipalType.USER,
+    ).order_by('created_at').first()
+    if membership is None:
+        return None
+    key = version_key(title)
+    sibling_files = [
+        mv.original_file_id for mv in MediaVersion.objects.filter(project=project).exclude(original_file=file_record).only('title', 'original_file_id')
+        if version_key(mv.title) == key
+    ]
+    sibling = ProjectFile.objects.filter(
+        file_id__in=sibling_files, project=project, deleted_at__isnull=True, media_asset__isnull=False,
+    ).order_by('-version_number').first() if key else None
+    if sibling:
+        asset, folder = sibling.media_asset, sibling.folder
+        number = (ProjectFile.objects.filter(media_asset=asset).aggregate(n=Max('version_number'))['n'] or 0) + 1
+    else:
+        asset = MediaAsset.objects.create(workspace=project.workspace, name=(title or Path(file_record.original_name).stem)[:255])
+        folder, number = None, 1
+    return ProjectFile.objects.create(
+        id=uuid.uuid4(), workspace=project.workspace, client_team=project.client_team, project=project,
+        folder=folder, file=file_record, media_asset=asset, version_number=number,
+        added_by_workspace_membership=membership, created_at=now, updated_at=now,
+    )
+
+
 def upload_media_version(*, project, user, upload, title, note='', priority='MEDIUM', allow_download=False, initial_stage=None):
     detected_type = validate_media_upload(upload)
     enforce_workspace_storage_limit(workspace=project.workspace, additional_bytes=upload.size)
@@ -151,6 +194,7 @@ def upload_media_version(*, project, user, upload, title, note='', priority='MED
                 created_at=now,
                 updated_at=now,
             )
+            _add_to_project_files(project=locked_project, file_record=file_record, title=title, user=user, now=now)
             MediaVersionStageEntry.objects.create(
                 id=uuid.uuid4(),
                 media_version=media_version,
