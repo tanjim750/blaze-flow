@@ -152,10 +152,10 @@ class AIVisualQAApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(capped.status_code, 429)
         self.assertEqual(capped.json()['code'], 'ai_qa_quota')
 
-    def test_video_is_not_supported_yet(self):
+    def test_documents_are_not_supported(self):
         from .models import File, MediaVersion
         media = MediaVersion.objects.get(id=self.media_id)
-        File.objects.filter(id=media.original_file_id).update(mime_type='video/mp4')
+        File.objects.filter(id=media.original_file_id).update(mime_type='application/pdf')
         response = self.client.post(reverse('api-ai-reviews', args=self.args), {}, format='json')
         self.assertEqual(response.json()['code'], 'ai_qa_unsupported_media')
 

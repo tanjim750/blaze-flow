@@ -267,6 +267,7 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-reviews/', ai_qa_views.ai_review_list_create, name='api-ai-reviews'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-reviews/<uuid:review_id>/', ai_qa_views.ai_review_detail, name='api-ai-review-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-reviews/<uuid:review_id>/retry/', ai_qa_views.ai_review_retry, name='api-ai-review-retry'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-reviews/<uuid:review_id>/cancel/', ai_qa_views.ai_review_cancel, name='api-ai-review-cancel'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-reviews/<uuid:review_id>/findings/', ai_qa_views.ai_review_findings, name='api-ai-review-findings'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-findings/<uuid:finding_id>/', ai_qa_views.ai_finding_detail, name='api-ai-finding-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-findings/<uuid:finding_id>/comment/', ai_qa_views.ai_finding_comment, name='api-ai-finding-comment'),

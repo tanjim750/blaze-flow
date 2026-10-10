@@ -158,6 +158,11 @@ export function describeNotification(item: NotificationItem): DescribedNotificat
       const project = text(payload.project_name);
       return { ...base, tone: "mention", verb: "mentioned you in", subject: `${project ? clip(project, 60) : "a project"}${payload.channel === "team" ? " (team only)" : ""}` };
     }
+    case "AI_QA_COMPLETED": {
+      const count = num(payload.finding_count) ?? 0;
+      if (payload.status === "FAILED") return { ...base, tone: "other", verb: "couldn’t finish checking", subject: cut ?? "your file", snippet: text(payload.error_message) };
+      return { ...base, tone: "other", verb: count ? `found ${count} possible mistake${count === 1 ? "" : "s"} in` : "found no likely mistakes in", subject: cut ?? "your file" };
+    }
     case "TASK_CLIENT_READY":
       return { ...base, tone: "task", verb: "marked ready for your review:", subject: title ? `“${clip(title, 60)}”` : "a task" };
     default: {

@@ -52,6 +52,7 @@ CONFIGURABLE_KINDS = (
     (NotificationKind.PROJECT_REQUEST_NEW, 'Project requests', 'A client asks for a new project from the portal.'),
     (NotificationKind.PROJECT_REQUEST_DECIDED, 'Request answers', 'The studio accepts or declines a project you asked for.'),
     (NotificationKind.PROJECT_MESSAGE_NEW, 'Project messages', 'New messages in a project thread you follow. Bursts arrive as one entry.'),
+    (NotificationKind.AI_QA_COMPLETED, 'AI Visual QA', 'An AI Visual QA check you started has finished.'),
     (NotificationKind.PROJECT_MESSAGE_MENTION, 'Message mentions', 'Someone @mentions you in a project thread.'),
 )
 

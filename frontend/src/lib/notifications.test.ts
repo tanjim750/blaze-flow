@@ -199,3 +199,22 @@ describe("project request notifications", () => {
     expect(declined.snippet).toBe("Booked in July");
   });
 });
+
+describe("AI Visual QA notifications", () => {
+  const ai = (payload: Record<string, unknown>) => describeNotification(item({
+    kind: "AI_QA_COMPLETED", actor: null, link: "/review?media=f1&panel=ai",
+    payload: { actor_name: "AI Visual QA", media_title: "Spot", version_number: 2, link: "/review?media=f1&panel=ai", ...payload },
+  }));
+  it("says what the check found and links to the AI QA tab", () => {
+    const row = ai({ status: "SUCCEEDED", finding_count: 2 });
+    expect(row.actor).toBe("AI Visual QA");
+    expect(row.verb).toBe("found 2 possible mistakes in");
+    expect(row.href).toContain("panel=ai");
+    expect(ai({ status: "SUCCEEDED", finding_count: 0 }).verb).toBe("found no likely mistakes in");
+  });
+  it("explains a failed check", () => {
+    const row = ai({ status: "FAILED", error_message: "Videos up to 15 minutes can be checked." });
+    expect(row.verb).toBe("couldn’t finish checking");
+    expect(row.snippet).toContain("15 minutes");
+  });
+});

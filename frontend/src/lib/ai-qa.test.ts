@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { batchable, filterCounts, matchesFilter, pollDelay, readability, sortFindings, stageLabel, stageStep, suggestion, type AiFinding, type AiReview } from "./ai-qa";
+import { MIN_HOLD_MS, batchable, filterCounts, findingWindow, matchesFilter, pollDelay, progressLabel, readability, regionAt, sortFindings, stageLabel, stageStep, suggestion, timeRangeLabel, type AiFinding, type AiReview } from "./ai-qa";
 
 const finding = (over: Partial<AiFinding>): AiFinding => ({
   id: "f", category: "POSSIBLE_SPELLING_ERROR", band: "high", detected_text: "PREMUIM", suggested_text: "PREMIUM",
@@ -42,5 +42,35 @@ describe("ai-qa helpers", () => {
     expect(suggestion(finding({ edited_suggestion: "Premium" }))).toBe("Premium");
     expect(pollDelay(1_000)).toBe(2_000);
     expect(pollDelay(60_000)).toBe(5_000);
+  });
+});
+
+describe("video findings", () => {
+  const track = [
+    { t: 1000, x: 0.1, y: 0.4, width: 0.2, height: 0.05 },
+    { t: 1500, x: 0.15, y: 0.4, width: 0.2, height: 0.05 },
+    { t: 2000, x: 0.2, y: 0.4, width: 0.2, height: 0.05 },
+  ];
+  it("follows a moving word along its track", () => {
+    const finding = { region: track[0], track };
+    expect(regionAt(finding, 500)?.x).toBe(0.1);
+    expect(regionAt(finding, 1600)?.x).toBe(0.15);
+    expect(regionAt(finding, 9000)?.x).toBe(0.2);
+    expect(regionAt({ region: track[0], track: [] }, 0)?.x).toBe(0.1);
+  });
+  it("holds a brief sighting long enough to see", () => {
+    expect(findingWindow({ start_time_ms: 2000, end_time_ms: 2000 })).toEqual({ startMs: 2000, endMs: 2000 + MIN_HOLD_MS });
+    expect(findingWindow({ start_time_ms: 1000, end_time_ms: 5000 })).toEqual({ startMs: 1000, endMs: 5000 });
+    expect(findingWindow({ start_time_ms: null, end_time_ms: null })).toBeNull();
+  });
+  it("labels ranges and frame progress", () => {
+    expect(timeRangeLabel({ start_time_ms: 12400, end_time_ms: 15000 })).toBe("0:12.4–0:15.0");
+    expect(timeRangeLabel({ start_time_ms: 62000, end_time_ms: 62000 })).toBe("1:02.0");
+    expect(progressLabel({ progress: { kind: "video", frames_done: 40, frames_total: 120 } } as never)).toBe("frame 40 of 120");
+    expect(progressLabel({ progress: {} } as never)).toBeNull();
+  });
+  it("orders video findings by time", () => {
+    const at = (id: string, start: number, band: "high" | "low") => ({ id, start_time_ms: start, band, region: {} }) as never;
+    expect(sortFindings([at("b", 5000, "high"), at("a", 1000, "low")]).map((f: { id: string }) => f.id)).toEqual(["a", "b"]);
   });
 });
