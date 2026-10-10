@@ -120,6 +120,25 @@ export function setLocalNoteResolved(mediaId: string, noteId: string, resolved: 
   mutate(mediaId, (media) => ({ ...media, notes: media.notes.map((note) => note.id === noteId ? { ...note, resolved } : note) }));
 }
 
+/** Rewrites a note's or reply's text, marking it edited the way the API's revision count does. */
+export function editLocalNote(mediaId: string, noteId: string, text: string) {
+  const edit = (note: ReviewNote): ReviewNote => note.id === noteId ? { ...note, text, edited: true } : { ...note, replies: note.replies.map(edit) };
+  mutate(mediaId, (media) => ({ ...media, notes: media.notes.map(edit) }));
+}
+
+/** Changes how long a session drawing stays on screen; `endMs === startMs` is frame-only. */
+export function setLocalAnnotationWindow(mediaId: string, annotationId: string, endMs: number | null) {
+  mutate(mediaId, (media) => ({
+    ...media,
+    annotations: media.annotations.map((item) => item.id !== annotationId ? item : {
+      ...item,
+      end_time_ms: item.start_time_ms !== null && endMs !== null && endMs >= item.start_time_ms ? endMs : null,
+      revision_count: item.revision_count + 1,
+      updated_at: new Date().toISOString(),
+    }),
+  }));
+}
+
 export function removeLocalNote(mediaId: string, noteId: string) {
   mutate(mediaId, (media) => ({
     notes: media.notes.filter((note) => note.id !== noteId).map((note) => ({ ...note, replies: note.replies.filter((reply) => reply.id !== noteId) })),

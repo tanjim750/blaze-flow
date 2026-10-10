@@ -225,6 +225,70 @@ class ReviewCommentApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(audit.metadata['deleted_comment_count'], 2)
         self.assertTrue(ReviewComment.objects.filter(id=reply.json()['id']).exists())
 
+    def detail_url(self, comment_id):
+        return reverse(
+            'api-review-comment-detail',
+            args=[self.workspace.id, self.project_id, self.media_id, comment_id],
+        )
+
+    def member_without_manage(self):
+        RolePermission.objects.filter(
+            role=self.member_role,
+            permission_key=REVIEW_COMMENT_MANAGE,
+        ).delete()
+        self.invite_and_accept()
+        self.client.force_authenticate(self.member_user)
+
+    def test_author_can_delete_own_comment_and_reply_without_manage(self):
+        self.member_without_manage()
+        own = self.create_comment(text='My own note').json()['id']
+        parent = self.create_comment(text='Thread').json()['id']
+        reply = self.client.post(
+            self.comments_url(),
+            {'text': 'My own reply', 'parent_comment_id': parent},
+            format='json',
+        ).json()['id']
+
+        self.assertEqual(self.client.delete(self.detail_url(reply)).status_code, 204)
+        self.assertEqual(self.client.delete(self.detail_url(own)).status_code, 204)
+        remaining = [item['id'] for item in self.client.get(self.comments_url()).json()]
+        self.assertEqual(remaining, [parent])
+
+    def test_non_author_without_manage_cannot_delete(self):
+        owners = self.create_comment(text="Owner's note").json()['id']
+        self.member_without_manage()
+        denied = self.client.delete(self.detail_url(owners))
+        self.assertEqual(denied.status_code, 403)
+        self.assertFalse(ReviewComment.objects.get(id=owners).deleted_at)
+
+    def test_author_without_manage_cannot_delete_thread_others_replied_to(self):
+        self.member_without_manage()
+        parent = self.create_comment(text='Member note').json()['id']
+        self.client.force_authenticate(self.owner)
+        self.client.post(
+            self.comments_url(),
+            {'text': 'Owner reply', 'parent_comment_id': parent},
+            format='json',
+        )
+        self.client.force_authenticate(self.member_user)
+        denied = self.client.delete(self.detail_url(parent))
+        self.assertEqual(denied.status_code, 403)
+        self.assertIn('replied', denied.json()['detail'])
+
+        # A manager may still remove the whole thread.
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(self.client.delete(self.detail_url(parent)).status_code, 204)
+
+    def test_edit_marks_revision_count_and_is_author_only(self):
+        mine = self.create_comment(text='First take').json()['id']
+        edited = self.client.patch(self.detail_url(mine), {'text': 'Second take'}, format='json')
+        self.assertEqual(edited.status_code, 200)
+        self.assertEqual(edited.json()['revision_count'], 1)
+        self.invite_and_accept()
+        self.client.force_authenticate(self.member_user)
+        denied = self.client.patch(self.detail_url(mine), {'text': 'Not mine'}, format='json')
+        self.assertEqual(denied.status_code, 403)
+
     def test_revision_request_creates_feedback_and_moves_workflow_atomically(self):
         url = reverse(
             'api-media-revision-request',

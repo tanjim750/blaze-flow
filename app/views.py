@@ -247,6 +247,7 @@ from .services import (
     grant_client_team_workspace_access,
     grant_project_access,
     delete_review_comment_tree,
+    thread_has_other_authors,
     delete_annotation,
     delete_project_file,
     delete_project_folder,
@@ -2189,12 +2190,27 @@ def review_comment_detail(request, workspace_id, project_id, media_version_id, c
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(ReviewCommentSerializer(comment).data)
 
-    _require_project_permission(
-        request,
-        project,
-        REVIEW_COMMENT_MANAGE,
-        'You do not have permission to delete comments.',
+    # Authors may take back their own note or reply with the same right that let them
+    # post it; deleting anyone else's still needs manage. An author without manage cannot
+    # take other people's replies down with their note, because deleting a note deletes
+    # its whole thread.
+    is_author = comment.author_user_id == request.user.id
+    can_manage = has_project_permission(
+        user=request.user, project=project, permission_key=REVIEW_COMMENT_MANAGE,
     )
+    if not can_manage:
+        if not is_author:
+            raise PermissionDenied('You do not have permission to delete comments.')
+        _require_project_permission(
+            request,
+            project,
+            REVIEW_COMMENT_CREATE,
+            'You do not have permission to delete comments.',
+        )
+        if thread_has_other_authors(comment=comment, user=request.user):
+            raise PermissionDenied(
+                'Others have replied to this note, so only someone who can manage comments can delete it.'
+            )
     try:
         delete_review_comment_tree(comment=comment, user=request.user)
     except ReviewCommentError as exc:

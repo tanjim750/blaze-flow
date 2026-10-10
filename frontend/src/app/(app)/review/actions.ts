@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createAnnotation, createGuestInvite, createMediaDecision, createReviewComment, deleteAnnotation, requestMediaRevision, revokeGuestAccess, revokeGuestInvite, setCommentReaction, setCommentResolution, transitionMediaVersion, updateAnnotation, updateGuestInvite } from "@/lib/api";
+import { createAnnotation, createGuestInvite, createMediaDecision, createReviewComment, deleteAnnotation, deleteReviewComment, editReviewComment, requestMediaRevision, revokeGuestAccess, revokeGuestInvite, setCommentReaction, setCommentResolution, transitionMediaVersion, updateAnnotation, updateGuestInvite } from "@/lib/api";
 import { changeMessageProblem, type DecisionKind } from "@/lib/review-decisions";
 import type { AnnotationElement, CommentVisibility } from "@/lib/api";
 import { endTimeField, startTimeField } from "@/lib/review-timing";
@@ -87,6 +87,40 @@ export async function setNoteResolvedAction(
   if (!updated.ok) return { error: updated.error.detail };
   revalidatePath("/review");
   return ok;
+}
+
+/** Edits the text of the viewer's own note or reply. */
+export async function editNoteAction(
+  workspaceId: string, projectId: string, versionId: string, commentId: string, text: string,
+): Promise<ActionState> {
+  if (!text.trim()) return { error: "A note can't be empty. Delete it instead." };
+  const result = await editReviewComment(workspaceId, projectId, versionId, commentId, { text: text.trim() });
+  if (!result.ok) return { error: result.error.detail };
+  revalidatePath("/review"); return ok;
+}
+
+/** Deletes a note (with its replies) or a reply. */
+export async function deleteNoteAction(workspaceId: string, projectId: string, versionId: string, commentId: string): Promise<ActionState> {
+  const result = await deleteReviewComment(workspaceId, projectId, versionId, commentId);
+  if (!result.ok) return { error: result.error.detail };
+  revalidatePath("/review"); return ok;
+}
+
+/**
+ * Changes how long a posted drawing stays on screen. The API replaces the elements on every
+ * PATCH, so the existing ones are sent back unchanged alongside the new window.
+ */
+export async function setAnnotationWindowAction(
+  workspaceId: string, projectId: string, versionId: string, annotationId: string,
+  elements: AnnotationElement[], startMs: number, endMs: number,
+): Promise<ActionState> {
+  const result = await updateAnnotation(workspaceId, projectId, versionId, annotationId, {
+    ...startTimeField(startMs),
+    ...endTimeField(startMs, endMs),
+    elements: elements.map(({ element_type, geometry, style, payload }) => ({ element_type, geometry, style, payload })),
+  });
+  if (!result.ok) return { error: result.error.detail };
+  revalidatePath("/review"); return ok;
 }
 
 export async function reactToCommentAction(workspaceId: string, projectId: string, versionId: string, commentId: string, emoji: string): Promise<ActionState> {

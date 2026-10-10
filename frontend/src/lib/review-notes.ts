@@ -1,4 +1,4 @@
-import type { CommentVisibility, ReviewComment } from "./api";
+import type { AnnotationElement, CommentVisibility, ReviewComment } from "./api";
 import { timecode } from "./timecode";
 import type { DisplayWindow } from "./annotation-window";
 
@@ -43,6 +43,23 @@ export type ReviewNote = {
   local?: boolean;
   /** A voice or screen recording carried by this note, resolved from its attachment. */
   recording?: { url: string; mimeType: string; kind: "voice" | "screen" } | null;
+  /** The text was changed after posting (the API kept a revision). */
+  edited?: boolean;
+  /** Shown before the server has confirmed it: posted optimistically, still saving. */
+  pending?: boolean;
+  /**
+   * The drawing saved with this note, so its author can change how long it stays on
+   * screen after posting. Filled in by the review page beside `drawingWindow`.
+   */
+  drawing?: NoteDrawing | null;
+};
+
+export type NoteDrawing = {
+  annotationId: string;
+  elements: AnnotationElement[];
+  startMs: number | null;
+  endMs: number | null;
+  authorId: string | null;
 };
 
 /** Recordings are ordinary attachments; their mime type is the only thing marking them. */
@@ -92,6 +109,7 @@ export function toNote(comment: ReviewComment): ReviewNote {
     mentions: comment.mentions?.map((item) => ({ id: item.id, name: item.name })) ?? [],
     replies: [],
     visibility: comment.visibility === "team" ? "team" : "client",
+    ...(comment.revision_count > 0 ? { edited: true } : {}),
   };
 }
 

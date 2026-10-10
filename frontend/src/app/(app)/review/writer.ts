@@ -1,14 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import type { AnnotationElement, CommentVisibility } from "@/lib/api";
-import type { ReviewNote } from "@/lib/review-notes";
+import { initialsFrom, type NoteDrawing, type ReviewNote } from "@/lib/review-notes";
+import { timecode } from "@/lib/timecode";
+import { EMPTY_OVERLAY, applyOverlay, dropEntry, pruneOverlay, type Overlay } from "@/lib/review-optimistic";
 import type { ReviewView } from "@/lib/review-view";
-import { addLocalAnnotation, addLocalNote, removeLocalAnnotation, removeLocalNote, setLocalNoteResolved, toggleLocalReaction } from "@/lib/review-local";
+import { addLocalAnnotation, addLocalNote, editLocalNote, removeLocalAnnotation, removeLocalNote, setLocalAnnotationWindow, setLocalNoteResolved, toggleLocalReaction } from "@/lib/review-local";
 import { updateAssetFile } from "@/lib/asset-api-client";
 import {
-  addAnnotationAction, deleteAnnotationAction, postNoteAction, reactToCommentAction,
+  addAnnotationAction, deleteAnnotationAction, deleteNoteAction, editNoteAction, postNoteAction, reactToCommentAction, setAnnotationWindowAction,
   clientDecisionAction, recolorAnnotationAction, requestRevisionAction, setNoteResolvedAction, transitionStageAction,
   updateAnnotationElementsAction, type ActionState,
 } from "./actions";
@@ -57,12 +60,42 @@ const extensionFor = (mimeType: string) => {
   return subtype === "quicktime" ? "mov" : subtype === "mpeg" ? "mp3" : subtype;
 };
 
-export function useReviewWriter(view: ReviewView, author: string) {
+export function useReviewWriter(view: ReviewView, author: string, authorId: string | null = null) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const target = view.target;
   const mediaId = view.version?.id ?? null;
+
+  /*
+   * Optimistic writes. Post, edit, resolve, delete and a drawing's duration show at once;
+   * each entry is pruned when the refreshed server data agrees with it, or dropped (rolled
+   * back) the moment its request fails, with the error said in the composer and a toast.
+   */
+  const [overlay, setOverlay] = useState<Overlay>(EMPTY_OVERLAY);
+  const annotationEnds = useMemo(() => new Map(view.annotations.map((item) => [item.id, item.end_time_ms])), [view.annotations]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reconciles the overlay with the server data that just arrived
+    setOverlay((current) => pruneOverlay(current, view.notes, annotationEnds));
+  }, [annotationEnds, view.notes]);
+  const apply = useCallback((notes: ReviewNote[]) => applyOverlay(notes, overlay), [overlay]);
+
+  /** Sends one optimistic write; on failure undoes `rollback`, reports, and resolves false. */
+  const optimistic = useCallback(async (work: () => Promise<ActionState>, rollback: () => void, failure: string) => {
+    setError(null);
+    try {
+      const result = await work();
+      if (result.error) throw new Error(result.error);
+      router.refresh();
+      return true;
+    } catch (cause) {
+      rollback();
+      const message = cause instanceof Error && cause.message ? cause.message : failure;
+      setError(message);
+      toast.error(failure, { description: message === failure ? undefined : message });
+      return false;
+    }
+  }, [router]);
 
   const run = useCallback(async (work: () => Promise<ActionState | void>) => {
     setBusy(true);
@@ -122,30 +155,104 @@ export function useReviewWriter(view: ReviewView, author: string) {
       });
       return Boolean(note);
     }
-    return run(async () => {
+    const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const startMs = input.parentId ? null : input.startMs;
+    const endMs = input.parentId ? null : input.endMs ?? null;
+    const text = input.text.trim() || (input.recording?.kind === "voice" ? "Voice comment" : "Screen recording");
+    const draft: ReviewNote = {
+      id: tempId, author, authorId, guestSessionId: null, initials: initialsFrom(author),
+      timecode: startMs === null ? null : timecode(startMs), startMs,
+      endMs: startMs !== null && endMs !== null && endMs > startMs ? endMs : null,
+      text, age: "just now", resolved: false, reactions: [], attachments: [], mentions: input.mentions, replies: [],
+      visibility: input.visibility ?? "client", pending: true,
+    };
+    setOverlay((current) => ({ ...current, added: [...current.added, { tempId, serverId: null, parentId: input.parentId, note: draft }] }));
+    setError(null);
+    try {
       const created = await postNoteAction({
-        ...target,
-        text: input.text.trim() || (input.recording?.kind === "voice" ? "Voice comment" : "Screen recording"),
-        startMs: input.startMs,
-        endMs: input.parentId ? null : input.endMs ?? null,
-        parentId: input.parentId,
+        ...target, text, startMs, endMs, parentId: input.parentId,
         mentionedUserIds: input.mentions.map((mention) => mention.id),
         visibility: input.visibility,
       });
-      if (created.error || !created.commentId) return { error: created.error ?? "The comment was not created." };
-      if (input.recording) await attachRecording(created.commentId, input.recording);
-      if (input.annotation) {
-        const drawn = await addAnnotationAction(target.workspaceId, target.projectId, target.versionId, input.annotation, input.startMs, created.commentId, input.annotationEndMs ?? null);
-        if (drawn.error) return drawn;
+      if (created.error || !created.commentId) throw new Error(created.error ?? "The comment was not created.");
+      const commentId = created.commentId;
+      setOverlay((current) => ({ ...current, added: current.added.map((entry) => entry.tempId === tempId ? { ...entry, serverId: commentId } : entry) }));
+      // The note exists from here on: a failed recording or drawing is reported, not rolled back.
+      try {
+        if (input.recording) await attachRecording(commentId, input.recording);
+        if (input.annotation) {
+          const drawn = await addAnnotationAction(target.workspaceId, target.projectId, target.versionId, input.annotation, input.startMs, commentId, input.annotationEndMs ?? null);
+          if (drawn.error) throw new Error(drawn.error);
+        }
+      } catch (cause) {
+        setError(`The note was posted, but ${cause instanceof Error ? cause.message : "its attachment could not be saved."}`);
       }
-      return undefined;
-    });
-  }, [attachRecording, author, mediaId, run, target]);
+      router.refresh();
+      return true;
+    } catch (cause) {
+      setOverlay((current) => dropEntry(current, "added", tempId));
+      const message = cause instanceof Error ? cause.message : "The comment could not be posted.";
+      setError(message);
+      toast.error("Comment not posted", { description: `${message} Your text is back in the box.` });
+      return false;
+    }
+  }, [attachRecording, author, authorId, mediaId, router, target]);
 
   const setResolved = useCallback((note: ReviewNote, resolved: boolean) => {
     if (!target || note.local) { if (mediaId) setLocalNoteResolved(mediaId, note.id, resolved); return; }
-    void run(() => setNoteResolvedAction(target.workspaceId, target.projectId, target.versionId, note.id, resolved));
-  }, [mediaId, run, target]);
+    if (note.pending) return;
+    setOverlay((current) => ({ ...current, resolved: { ...current.resolved, [note.id]: resolved } }));
+    void optimistic(
+      () => setNoteResolvedAction(target.workspaceId, target.projectId, target.versionId, note.id, resolved),
+      () => setOverlay((current) => dropEntry(current, "resolved", note.id)),
+      resolved ? "Couldn't resolve the note" : "Couldn't reopen the note",
+    );
+  }, [mediaId, optimistic, target]);
+
+  /** Rewrites the viewer's own note or reply. Resolves false (and restores the old text) on failure. */
+  const editNote = useCallback(async (note: ReviewNote, text: string): Promise<boolean> => {
+    const next = text.trim();
+    if (!next) { setError("A note can't be empty. Delete it instead."); return false; }
+    if (next === note.text.trim()) return true;
+    if (!target || note.local) { if (mediaId) editLocalNote(mediaId, note.id, next); return true; }
+    setOverlay((current) => ({ ...current, edits: { ...current.edits, [note.id]: next } }));
+    return optimistic(
+      () => editNoteAction(target.workspaceId, target.projectId, target.versionId, note.id, next),
+      () => setOverlay((current) => dropEntry(current, "edits", note.id)),
+      "Couldn't save your edit",
+    );
+  }, [mediaId, optimistic, target]);
+
+  /** Deletes a note (with its thread) or a reply; it comes back if the server refuses. */
+  const deleteNote = useCallback(async (note: ReviewNote): Promise<boolean> => {
+    if (!target || note.local) { if (mediaId) removeLocalNote(mediaId, note.id); return true; }
+    if (note.pending) return false;
+    setOverlay((current) => ({ ...current, deleted: [...current.deleted, note.id] }));
+    return optimistic(
+      () => deleteNoteAction(target.workspaceId, target.projectId, target.versionId, note.id),
+      () => setOverlay((current) => dropEntry(current, "deleted", note.id)),
+      "Couldn't delete the note",
+    );
+  }, [mediaId, optimistic, target]);
+
+  /**
+   * Changes how long a posted drawing stays on screen (`endMs === startMs`: just its frame).
+   * The caveat from the first drawing-duration change: until now this was fixed at posting.
+   */
+  const setDrawingWindow = useCallback(async (drawing: NoteDrawing, endMs: number): Promise<boolean> => {
+    if (drawing.startMs === null) return false;
+    if (!target || drawing.annotationId.startsWith("local-")) {
+      if (mediaId) setLocalAnnotationWindow(mediaId, drawing.annotationId, endMs);
+      return true;
+    }
+    const startMs = drawing.startMs;
+    setOverlay((current) => ({ ...current, windows: { ...current.windows, [drawing.annotationId]: endMs } }));
+    return optimistic(
+      () => setAnnotationWindowAction(target.workspaceId, target.projectId, target.versionId, drawing.annotationId, drawing.elements, startMs, endMs),
+      () => setOverlay((current) => dropEntry(current, "windows", drawing.annotationId)),
+      "Couldn't change how long the drawing shows",
+    );
+  }, [mediaId, optimistic, target]);
 
   const react = useCallback((note: ReviewNote, emoji: string) => {
     if (!target || note.local) { if (mediaId) toggleLocalReaction(mediaId, note.id, emoji); return; }
@@ -202,7 +309,7 @@ export function useReviewWriter(view: ReviewView, author: string) {
     return run(async () => { await updateAssetFile(view.workspaceId!, assetFileId, { task_stage_id: stageId }); });
   }, [run, view.version?.assetFileId, view.workspaceId]);
 
-  return { error, setError, busy, compose, setResolved, react, removeNote, draw, eraseAnnotation, moveAnnotation, recolorAnnotation, moveToStage, requestChanges, decideAsClient, setTaskStage };
+  return { error, setError, busy, overlay, apply, compose, setResolved, editNote, deleteNote, setDrawingWindow, react, removeNote, draw, eraseAnnotation, moveAnnotation, recolorAnnotation, moveToStage, requestChanges, decideAsClient, setTaskStage };
 }
 
 export type ReviewWriter = ReturnType<typeof useReviewWriter>;
