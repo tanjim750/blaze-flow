@@ -380,6 +380,24 @@ def set_review_comment_resolution(*, comment, user, resolved):
     return locked
 
 
+def thread_has_other_authors(*, comment, user):
+    """Whether anyone but `user` wrote a live reply anywhere under `comment`."""
+    seen = {comment.id}
+    frontier = {comment.id}
+    while frontier:
+        rows = list(
+            ReviewComment.objects.filter(
+                parent_comment_id__in=frontier,
+                deleted_at__isnull=True,
+            ).values_list('id', 'author_user_id')
+        )
+        if any(author_id != user.id for _, author_id in rows):
+            return True
+        frontier = {row_id for row_id, _ in rows} - seen
+        seen.update(frontier)
+    return False
+
+
 @transaction.atomic
 def delete_review_comment_tree(*, comment, user):
     root = ReviewComment.objects.select_for_update().get(id=comment.id)

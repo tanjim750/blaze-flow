@@ -301,13 +301,23 @@ export const setCommentResolution = (
   `/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/comments/${commentId}/resolution/`,
   jsonBody({ resolved }),
 );
+/** Edits a note's text. Author-only on the server; each edit is kept as a revision. */
+export const editReviewComment = (
+  workspaceId: string, projectId: string, mediaVersionId: string, commentId: string, payload: { text: string; mentioned_user_ids?: string[] },
+) => request<ReviewComment>(
+  `/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/comments/${commentId}/`,
+  { ...jsonBody(payload), method: "PATCH" },
+);
+/** Deletes a note and its replies. The author may delete their own; anyone else needs manage. */
+export const deleteReviewComment = (workspaceId: string, projectId: string, mediaVersionId: string, commentId: string) =>
+  request<void>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/comments/${commentId}/`, { method: "DELETE" });
 export const setCommentReaction = (workspaceId: string, projectId: string, mediaVersionId: string, commentId: string, emoji: string, remove = false) =>
   request<ReviewComment | void>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/comments/${commentId}/reactions/`, { ...jsonBody({ emoji }), method: remove ? "DELETE" : "POST" });
 export const requestMediaRevision = (workspaceId: string, projectId: string, mediaVersionId: string, payload: { text: string; start_time_ms?: number }) =>
   request<{ comment: ReviewComment; workflow: StageHistoryEntry; workflow_transitioned: boolean }>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/revision-requests/`, jsonBody(payload));
 export const listAnnotations = (workspaceId: string, projectId: string, mediaVersionId: string) => request<Annotation[]>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/annotations/?limit=200`);
 export const createAnnotation = (workspaceId: string, projectId: string, mediaVersionId: string, payload: { start_time_ms?: number; end_time_ms?: number; review_comment_id?: string; elements: Omit<AnnotationElement, "id">[] }) => request<Annotation>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/annotations/`, jsonBody(payload));
-export const updateAnnotation = (workspaceId: string, projectId: string, mediaVersionId: string, annotationId: string, payload: { start_time_ms?: number; elements: Omit<AnnotationElement, "id">[] }) => request<Annotation>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/annotations/${annotationId}/`, { ...jsonBody(payload), method: "PATCH" });
+export const updateAnnotation = (workspaceId: string, projectId: string, mediaVersionId: string, annotationId: string, payload: { start_time_ms?: number; end_time_ms?: number; elements: Omit<AnnotationElement, "id">[] }) => request<Annotation>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/annotations/${annotationId}/`, { ...jsonBody(payload), method: "PATCH" });
 export const deleteAnnotation = (workspaceId: string, projectId: string, mediaVersionId: string, annotationId: string) => request<void>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/annotations/${annotationId}/`, { method: "DELETE" });
 
 export const transitionMediaVersion = (workspaceId: string, projectId: string, mediaVersionId: string, workflowStageId: string) =>

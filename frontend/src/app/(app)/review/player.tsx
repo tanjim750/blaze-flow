@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from "react";
 import {
   AudioLines, ChevronFirst, ChevronLast, Circle, Crosshair, Download, ExternalLink, FileText, Film, Gauge, ImageOff, Loader2, Maximize2, MonitorPlay,
-  MoveUpRight, Pause, PencilLine, Play, RotateCw, Square, Trash2, Type, Volume2, VolumeX,
+  MoveUpRight, Pause, PencilLine, Play, Repeat, RotateCw, Square, Trash2, Type, Volume2, VolumeX, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { AnnotationElement } from "@/lib/api";
 import type { ReviewNote } from "@/lib/review-notes";
 import { timecode } from "@/lib/timecode";
 import { displayWindow, holdLabel, rangeLabel, windowOpacity } from "@/lib/annotation-window";
+import { dragRange, leavesLoop, loopSeek, moveHandle, rangeOut, type LoopRange, type MarkRange } from "@/lib/review-range";
 import type { ReviewSurface } from "@/lib/open-in-review";
 import { playerShouldIgnoreKey } from "./player-keys";
 import {
@@ -18,7 +19,12 @@ import {
 } from "./player-state";
 
 export type DrawTool = "POINT" | "RECTANGLE" | "ELLIPSE" | "ARROW" | "PATH" | "TEXT";
-export type PlayerHandle = { seek: (ms: number) => void; position: () => number };
+export type PlayerHandle = {
+  seek: (ms: number) => void;
+  position: () => number;
+  /** Starts playback (used to begin looping a range). */
+  play: () => void;
+};
 export type PlayerSource = { id: string; label: string; src: string };
 export type DrawnAnnotation = {
   id: string; elements: AnnotationElement[]; startMs: number | null;
@@ -63,6 +69,12 @@ type Props = {
   onDraw: (element: AnnotationElement) => void;
   onDeleteAnnotation: (annotationId: string) => void;
   onFocusNote: (noteId: string) => void;
+  /** The composer's in/out points, drawn on the timeline with draggable handles. */
+  mark?: MarkRange | null;
+  onMark?: (range: MarkRange | null) => void;
+  /** A range playing on repeat; a seek outside it, or Esc, ends it. */
+  loop?: LoopRange | null;
+  onStopLoop?: () => void;
 };
 
 export function Player(props: Props) {
@@ -104,7 +116,7 @@ function DocumentViewer({ sources, title, surface, downloadHref }: Props & { sur
   );
 }
 
-function MediaPlayer({ handle, sources, title, notes, annotations, pending, pendingWindow = null, canDraw, onTime, onMeta, onDraw, onDeleteAnnotation, onFocusNote, surface }: Props & { surface: "video" | "audio" | "image" }) {
+function MediaPlayer({ handle, sources, title, notes, annotations, pending, pendingWindow = null, canDraw, onTime, onMeta, onDraw, onDeleteAnnotation, onFocusNote, surface, mark = null, onMark, loop = null, onStopLoop }: Props & { surface: "video" | "audio" | "image" }) {
   const still = surface === "image";
   const image = useRef<HTMLImageElement>(null);
   const [imageFailed, setImageFailed] = useState(false);
@@ -185,6 +197,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
   useImperativeHandle(handle, () => ({
     seek,
     position: () => (video.current ? video.current.currentTime * 1000 : positionMs),
+    play: () => { void video.current?.play().catch(() => undefined); },
   }), [seek, positionMs]);
 
   const toggle = useCallback(() => {
@@ -193,6 +206,33 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
     if (element.paused) void element.play();
     else element.pause();
   }, []);
+
+  /*
+   * Looping a range note. A frame-accurate check needs more than `timeupdate` (about four
+   * times a second), so while a loop plays the playhead is read every animation frame and
+   * sent back to the in point as soon as it reaches the out point.
+   */
+  const loopRef = useRef(loop);
+  useEffect(() => { loopRef.current = loop; }, [loop]);
+  useEffect(() => {
+    if (!loop || !playing) return;
+    let frame = 0;
+    const tick = () => {
+      const element = video.current;
+      if (element && !element.seeking) {
+        const jump = loopSeek(element.currentTime * 1000, loopRef.current);
+        if (jump !== null) element.currentTime = jump / 1000;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [loop, playing]);
+  /** Seeks the viewer asked for themselves; going outside a loop ends it. */
+  const userSeek = useCallback((ms: number) => {
+    if (leavesLoop(ms, loopRef.current)) onStopLoop?.();
+    seek(ms);
+  }, [onStopLoop, seek]);
 
   /**
    * Reads the loaded video's own state, rather than waiting to be told about it.
@@ -319,14 +359,34 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
     if (element) { element.volume = volume; element.muted = muted; element.playbackRate = speed; }
   }, [muted, speed, volume]);
 
-  // Transport shortcuts, skipped while typing and for keys a focused control owns.
+  /** Moves by whole seconds without changing whether it plays. */
+  const jump = useCallback((seconds: number) => {
+    const element = video.current;
+    if (!element) return;
+    userSeek((element.currentTime + seconds) * 1000);
+  }, [userSeek]);
+
+  /*
+   * Transport shortcuts, skipped while typing and for keys a focused control owns. J/K/L
+   * follow the editing convention as far as a browser allows: K stops (and resets the
+   * speed), L plays and, pressed again, plays faster. Browsers cannot play video backwards
+   * smoothly, so J steps back a second instead of shuttling in reverse.
+   */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (playerShouldIgnoreKey(event)) return;
+      const element = video.current;
       const keys: Record<string, () => void> = {
-        " ": toggle, k: toggle,
-        j: () => step(-fps.current), l: () => step(fps.current),
-        ArrowLeft: () => step(-1), ArrowRight: () => step(1),
+        " ": toggle,
+        k: () => { setSpeed(1); toggle(); },
+        l: () => {
+          if (!element) return;
+          if (element.paused) { setSpeed(1); void element.play(); return; }
+          setSpeed((current) => (current < 1.5 ? 1.5 : 2));
+        },
+        j: () => jump(-1),
+        ArrowLeft: () => (event.shiftKey ? jump(-1) : step(-1)),
+        ArrowRight: () => (event.shiftKey ? jump(1) : step(1)),
         m: () => setMuted((value) => !value),
         f: () => void stage.current?.requestFullscreen().catch(() => undefined),
       };
@@ -337,7 +397,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [step, toggle]);
+  }, [jump, step, toggle]);
 
   // Scrubbing: the playhead follows the pointer while it is held, and the one real seek
   // happens on release, so a drag does not queue dozens of competing range requests.
@@ -345,19 +405,46 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
     const bounds = event.currentTarget.getBoundingClientRect();
     return positionFromPointer(event.clientX, bounds.left, bounds.width, durationMs);
   };
+  /*
+   * Shift-dragging marks a range instead of scrubbing (and the handles of an existing range
+   * drag its in or out point), so a text note can cover a span as easily as a drawing.
+   */
+  const [rangeFrom, setRangeFrom] = useState<number | null>(null);
+  const [handleDrag, setHandleDrag] = useState<"in" | "out" | null>(null);
   const scrubStart = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!durationMs || failed || event.button !== 0) return;
     event.currentTarget.setPointerCapture?.(event.pointerId);
+    if (event.shiftKey && onMark) { setRangeFrom(pointerMs(event)); return; }
     setDragMs(pointerMs(event));
   };
   const scrubMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (handleDrag && mark && onMark) { onMark(moveHandle(mark, handleDrag, pointerMs(event), durationMs)); return; }
+    if (rangeFrom !== null && onMark) {
+      const range = dragRange(rangeFrom, pointerMs(event), durationMs);
+      if (range) onMark(range);
+      return;
+    }
     if (dragMs !== null) setDragMs(pointerMs(event));
   };
   const scrubEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (handleDrag) { setHandleDrag(null); return; }
+    if (rangeFrom !== null) {
+      const range = dragRange(rangeFrom, pointerMs(event), durationMs);
+      setRangeFrom(null);
+      if (range && onMark) { onMark(range); seek(range.inMs); }
+      return;
+    }
     if (dragMs === null) return;
     const target = pointerMs(event);
     setDragMs(null);
-    seek(target);
+    userSeek(target);
+  };
+  const grabHandle = (which: "in" | "out") => (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    event.stopPropagation();
+    // Captured on the bar, so the move and release land in the handlers above.
+    (event.currentTarget.parentElement as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
+    setHandleDrag(which);
   };
 
   const markers = still ? [] : notes.filter((note) => note.startMs !== null);
@@ -388,6 +475,8 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
       ? [{ key: "pending", startMs: pendingWindow.startMs, endMs: pendingWindow.endMs, kind: "pending" as const }] : []),
   ];
   const pct = (ms: number) => `${Math.max(0, Math.min(100, (ms / durationMs) * 100))}%`;
+  const markOutMs = rangeOut(mark);
+  const showMark = Boolean(mark && durationMs && !still);
 
   return (
     <section className="rvp">
@@ -523,12 +612,13 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
 
       {!still && <div className="rvp-timeline">
         <div
-          className={`rvp-scrub ${dragMs !== null ? "is-dragging" : ""}`}
+          className={`rvp-scrub ${dragMs !== null ? "is-dragging" : ""} ${rangeFrom !== null || handleDrag ? "is-marking" : ""}`}
           role="presentation"
+          data-testid="scrub"
           onPointerDown={scrubStart}
           onPointerMove={scrubMove}
           onPointerUp={scrubEnd}
-          onPointerCancel={() => setDragMs(null)}
+          onPointerCancel={() => { setDragMs(null); setRangeFrom(null); setHandleDrag(null); }}
         >
           {buffered.map((span) => (
             <span key={`${span.start}-${span.end}`} className="rvp-buffered" style={{ left: `${span.start}%`, width: `${span.end - span.start}%` }} />
@@ -542,8 +632,41 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
               aria-hidden="true"
             />
           ))}
+          {showMark && mark && markOutMs !== null && (
+            <span
+              className="rvp-mark"
+              style={{ left: pct(mark.inMs), width: `calc(${pct(markOutMs)} - ${pct(mark.inMs)})` }}
+              title={`Range for the next comment · ${rangeLabel(mark.inMs, markOutMs)}`}
+              aria-hidden="true"
+            />
+          )}
+          {loop && durationMs > 0 && !still && (
+            <span className="rvp-loop" style={{ left: pct(loop.startMs), width: `calc(${pct(loop.endMs)} - ${pct(loop.startMs)})` }} aria-hidden="true" />
+          )}
           <span className="rvp-played" style={{ width: `${progress}%` }} />
           <span className="rvp-head" style={{ left: `${progress}%` }} />
+          {showMark && mark && (
+            <button
+              type="button"
+              className="rvp-handle is-in"
+              style={{ left: pct(mark.inMs) }}
+              aria-label={`In point ${timecode(mark.inMs)}. Drag to move.`}
+              title={`In ${timecode(mark.inMs)} · drag to move, I to set at the playhead`}
+              onPointerDown={grabHandle("in")}
+              onClick={(event) => event.stopPropagation()}
+            />
+          )}
+          {showMark && mark && markOutMs !== null && (
+            <button
+              type="button"
+              className="rvp-handle is-out"
+              style={{ left: pct(markOutMs) }}
+              aria-label={`Out point ${timecode(markOutMs)}. Drag to move.`}
+              title={`Out ${timecode(markOutMs)} · drag to move, O to set at the playhead`}
+              onPointerDown={grabHandle("out")}
+              onClick={(event) => event.stopPropagation()}
+            />
+          )}
           {markers.map((note) => (
             <button
               key={note.id}
@@ -553,7 +676,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
               title={`${note.timecode} — ${note.author}`}
               aria-label={`Jump to ${note.timecode} by ${note.author}`}
               onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => { event.stopPropagation(); seek(note.startMs!); onFocusNote(note.id); }}
+              onClick={(event) => { event.stopPropagation(); userSeek(note.startMs!); onFocusNote(note.id); }}
             >
               <i>{note.initials}</i>
             </button>
@@ -575,6 +698,14 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
           <strong>{timecode(positionMs)}</strong>
           <span>/ {timecode(durationMs)}</span>
         </div>
+
+        {loop && (
+          <span className="rvp-loop-chip" role="status">
+            <Repeat aria-hidden="true" />
+            <span>Looping {rangeLabel(loop.startMs, loop.endMs)}</span>
+            <button type="button" onClick={onStopLoop} aria-label="Stop looping" title="Stop looping (Esc)"><X /></button>
+          </span>
+        )}
 
         <div className="rvp-group rvp-volume">
           <button type="button" onClick={() => setMuted(!muted)} aria-label={muted ? "Unmute" : "Mute"} title="Mute (m)">
