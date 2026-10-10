@@ -73,6 +73,8 @@ export function useAiQa(target: AiTarget | null): AiQa {
         if (stopped) return;
         if (result.ok) {
           setReview(result.data);
+          // Video findings stream in while the check runs; fetch them alongside progress.
+          if (isActive(result.data) && result.data.progress.kind === "video") void loadFindings(result.data.id);
           if (!isActive(result.data)) {
             startedAt.current = 0;
             void loadFindings(result.data.id);
@@ -221,6 +223,19 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
             </div>
           ) : null}
           <small>You can leave this page; the check keeps running and you’ll get a notification when it’s done.</small>
+          {findings.length > 0 && (
+            <div className="aiqa-partial" data-testid="ai-qa-partial">
+              <p className="aiqa-partial-head"><Sparkles size={12} />Found so far · {findings.length} <span>— you can act on these when the check finishes</span></p>
+              <div className="aiqa-list">
+                {sortFindings(findings).map((finding) => (
+                  <FindingCard
+                    key={finding.id} finding={finding} target={target} selected={selectedId === finding.id} canAct={false}
+                    onSelect={() => onSelect(selectedId === finding.id ? null : finding)} onUpdate={qa.update} onComment={() => undefined}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
           {canRun && <button type="button" className="tb-button aiqa-cancel" onClick={() => setCancelOpen(true)} data-testid="ai-qa-cancel"><Square size={11} />Cancel check</button>}
         </div>
       )}

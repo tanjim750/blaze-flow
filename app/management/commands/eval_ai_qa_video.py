@@ -28,7 +28,7 @@ class Command(BaseCommand):
         out.mkdir(parents=True, exist_ok=True)
         only = {c for c in options['only'].split(',') if c}
         if hasattr(engine, '_model'):
-            engine._model()  # load the model outside the timings
+            engine._detector(); engine._recogniser()  # load the models outside the timings
         rows, started = [], time.monotonic()
         for case in CASES:
             case_id, seconds, _, typos = case
@@ -55,7 +55,7 @@ class Command(BaseCommand):
             missed = [w for w, _, _ in typos if w not in hit_typos]
             rows.append({'case': case_id, 'clean': not typos, 'seconds': seconds, 'findings': scored, 'missed': missed,
                          'start_error_ms': list(hit_typos.values()), 'elapsed_s': round(elapsed, 1), 'usage': usage})
-            self.stdout.write(f"{case_id:22} {elapsed:5.1f}s frames={usage['frames_total']} ocr={usage['frames_ocr']} "
+            self.stdout.write(f"{case_id:22} {elapsed:5.1f}s frames={usage['frames_total']} ocr={usage['frames_ocr']} skipped={usage.get('frames_skipped', 0)} rec={usage.get('regions_recognised', '-')}/{usage.get('regions', '-')} "
                               f"found={[(s['text'], s['band'], s['start_ms'], s['end_ms'], 'TP' if s['correct'] else 'FP') for s in scored]} missed={missed}")
 
         flat = [s for r in rows for s in r['findings']]

@@ -382,3 +382,8 @@ AI_QA_FFMPEG_TIMEOUT_SECONDS = int(os.environ.get('AI_QA_FFMPEG_TIMEOUT_SECONDS'
 # A frame where at most this share of a small greyscale copy changed reuses the previous OCR.
 AI_QA_DEDUPE_FRAMES = os.environ.get('AI_QA_DEDUPE_FRAMES', 'true').lower() == 'true'
 AI_QA_DUP_MAX_CHANGED = float(os.environ.get('AI_QA_DUP_MAX_CHANGED', '0.002'))
+# Threads Paddle may use per worker process; split the cores when running several workers.
+AI_QA_CPU_THREADS = int(os.environ.get('AI_QA_CPU_THREADS', str(os.cpu_count() or 4)))
+AI_QA_VIDEO_DET_MODEL = os.environ.get('AI_QA_VIDEO_DET_MODEL', 'PP-OCRv5_mobile_det')
+# Partial video findings are written after this many frames, so the panel fills in as it runs.
+AI_QA_PARTIAL_EVERY_FRAMES = int(os.environ.get('AI_QA_PARTIAL_EVERY_FRAMES', '12'))
