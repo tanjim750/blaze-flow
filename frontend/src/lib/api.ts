@@ -84,6 +84,8 @@ export type ReviewComment = {
   resolved: boolean; resolved_by_user_id: string | null; resolved_at: string | null;
   /** `team` notes are internal: the guest endpoints never return them. Absent on old payloads. */
   visibility?: CommentVisibility;
+  /** `ai_visual_qa` when the note was added from an AI Visual QA finding. Absent on old payloads. */
+  source?: string;
   revision_count: number; created_at: string; updated_at: string;
   /** Workspace users notified by this note. The API resolves and de-duplicates the list. */
   mentions: { id: string; email: string; name: string }[];

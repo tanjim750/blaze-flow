@@ -75,6 +75,8 @@ type Props = {
   /** A range playing on repeat; a seek outside it, or Esc, ends it. */
   loop?: LoopRange | null;
   onStopLoop?: () => void;
+  /** An AI Visual QA finding's text region, drawn as a dashed box (0–1 coordinates). */
+  highlight?: { x: number; y: number; width: number; height: number } | null;
 };
 
 export function Player(props: Props) {
@@ -116,7 +118,7 @@ function DocumentViewer({ sources, title, surface, downloadHref }: Props & { sur
   );
 }
 
-function MediaPlayer({ handle, sources, title, notes, annotations, pending, pendingWindow = null, canDraw, onTime, onMeta, onDraw, onDeleteAnnotation, onFocusNote, surface, mark = null, onMark, loop = null, onStopLoop }: Props & { surface: "video" | "audio" | "image" }) {
+function MediaPlayer({ handle, sources, title, notes, annotations, pending, pendingWindow = null, canDraw, onTime, onMeta, onDraw, onDeleteAnnotation, onFocusNote, surface, mark = null, onMark, loop = null, onStopLoop, highlight = null }: Props & { surface: "video" | "audio" | "image" }) {
   const still = surface === "image";
   const image = useRef<HTMLImageElement>(null);
   const [imageFailed, setImageFailed] = useState(false);
@@ -545,7 +547,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
           </div>
         )}
 
-        <svg className="rvp-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden={visible.length === 0}>
+        <svg className="rvp-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden={visible.length === 0 && !highlight}>
           <defs>
             <marker id="rvp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffcf5a" />
@@ -572,6 +574,14 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
             </g>
           ))}
           {pending && <Shape element={pending} onActivate={() => undefined} />}
+          {highlight && (
+            <rect
+              className="aiqa-highlight" data-testid="ai-qa-highlight"
+              x={highlight.x * 100 - 0.8} y={highlight.y * 100 - 0.8}
+              width={highlight.width * 100 + 1.6} height={highlight.height * 100 + 1.6}
+              rx="0.6" vectorEffect="non-scaling-stroke"
+            />
+          )}
         </svg>
 
         {tool && canDraw && (

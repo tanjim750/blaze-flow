@@ -353,3 +353,23 @@ REST_FRAMEWORK = {
         'upload_link': os.environ.get('UPLOAD_LINK_THROTTLE_RATE', '240/hour'),
     },
 }
+
+
+# AI Visual QA (spelling in visible text). Off unless switched on; see docs/ai-visual-qa/.
+AI_VISUAL_QA_ENABLED = os.environ.get('AI_VISUAL_QA_ENABLED', 'false').lower() == 'true'
+# 'paddleocr' needs `pip install -r requirements-ai.txt`; 'fake' is for tests and CI.
+AI_QA_ENGINE = os.environ.get('AI_QA_ENGINE', 'paddleocr')
+AI_QA_MAX_IMAGE_BYTES = int(os.environ.get('AI_QA_MAX_IMAGE_BYTES', str(50 * 1024 * 1024)))
+AI_QA_MAX_DECODE_PIXELS = int(os.environ.get('AI_QA_MAX_DECODE_PIXELS', str(80_000_000)))
+AI_QA_MAX_PIXELS = int(os.environ.get('AI_QA_MAX_PIXELS', str(8_300_000)))
+AI_QA_MAX_CONCURRENT_PER_WORKSPACE = int(os.environ.get('AI_QA_MAX_CONCURRENT_PER_WORKSPACE', '1'))
+AI_QA_DAILY_RUNS_PER_WORKSPACE = int(os.environ.get('AI_QA_DAILY_RUNS_PER_WORKSPACE', '50'))
+AI_QA_MAX_ATTEMPTS = int(os.environ.get('AI_QA_MAX_ATTEMPTS', '3'))
+AI_QA_MIN_OCR_CONFIDENCE = float(os.environ.get('AI_QA_MIN_OCR_CONFIDENCE', '0.6'))
+AI_QA_REQUIRE_CLEAN_SCAN = os.environ.get('AI_QA_REQUIRE_CLEAN_SCAN', 'true').lower() == 'true'
+AI_QA_HUNSPELL_DIRS = [d for d in os.environ.get(
+    'AI_QA_HUNSPELL_DIRS', '/usr/share/hunspell:/usr/share/myspell/dicts:/usr/share/myspell',
+).split(':') if d]
+# The general outbox worker leaves AI QA runs to `run_ai_qa_worker`, so a long OCR job
+# never holds up notification e-mail. Set false to process everything in one worker.
+AI_QA_DEDICATED_WORKER = os.environ.get('AI_QA_DEDICATED_WORKER', 'true').lower() == 'true'

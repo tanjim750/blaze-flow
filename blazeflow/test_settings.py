@@ -26,3 +26,6 @@ REST_FRAMEWORK = {
         'upload_link': '10000/hour',
     },
 }
+
+# AI Visual QA runs on the fake engine in tests (no Paddle needed).
+AI_QA_ENGINE = 'fake'

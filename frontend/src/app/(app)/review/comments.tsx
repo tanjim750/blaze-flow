@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, AtSign, CornerDownRight, Eye, Lock, MessageSquareText, Paperclip, Pencil, PencilLine, Repeat, RotateCcw, Search, Send, SmilePlus, Timer, Trash2, Users, X } from "lucide-react";
+import { ArrowLeftRight, AtSign, CornerDownRight, Sparkles, Eye, Lock, MessageSquareText, Paperclip, Pencil, PencilLine, Repeat, RotateCcw, Search, Send, SmilePlus, Timer, Trash2, Users, X } from "lucide-react";
 import {
   DEFAULT_HOLD, HOLD_PRESETS_MS, displayWindow, drawingEndMs, holdLabel, noteEndMs, parseTime, rangeLabel, rememberHold, validChoice, type HoldChoice,
 } from "@/lib/annotation-window";
@@ -497,7 +497,9 @@ function Note({ note, view, target, writer, focused, live = false, onSeek, onRep
     <article className={`rvc-note ${note.resolved ? "is-resolved" : ""} ${focused ? "is-focused" : ""} ${live ? "is-live" : ""} ${note.visibility === "team" ? "is-team" : ""} ${note.pending ? "is-pending" : ""}`} data-note={note.id}>
       <div className="rvc-meta">
         <span className="rvc-avatar">{note.initials}</span>
-        <strong>{note.author}</strong>
+        {note.aiSuggested
+          ? <strong className="rvc-ai-author" data-testid="ai-suggested-author"><span className="rvc-ai-badge"><Sparkles size={11} aria-hidden="true" />AI-suggested</span> · added by {note.author}</strong>
+          : <strong>{note.author}</strong>}
         <small>{note.pending ? "Sending…" : note.age}</small>
         {note.edited && <small className="rvc-edited" title="This note was edited after it was posted">· edited</small>}
         {note.visibility === "team" && <TeamBadge />}

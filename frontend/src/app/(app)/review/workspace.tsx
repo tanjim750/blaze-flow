@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { BadgeCheck, Check, ChevronLeft, Columns2, HardDriveDownload, Info, Keyboard, Link2, MessageSquareText, MoreHorizontal, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, UploadCloud, X } from "lucide-react";
+import { BadgeCheck, Sparkles, Check, ChevronLeft, Columns2, HardDriveDownload, Info, Keyboard, Link2, MessageSquareText, MoreHorizontal, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { markIn, markOut, type LoopRange, type MarkRange } from "@/lib/review-range";
@@ -32,6 +32,8 @@ import { TaskPanel } from "./task-panel";
 import { REVIEW_FROM_KEY } from "@/components/universal-review";
 import { returnLabel, reviewSurface, safeReturnPath } from "@/lib/open-in-review";
 import { useReviewWriter } from "./writer";
+import { AiQaPanel, useAiQa } from "./ai-qa-panel";
+import { hasRegion, type AiFinding, type AiTarget } from "@/lib/ai-qa";
 
 type Props = {
   view: ReviewView; author: string; userId?: string | null; initialShareOpen?: boolean; embedded?: boolean;
@@ -67,7 +69,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const compareWriter = useReviewWriter(comparisonView, author, userId);
   const local = useLocalReview(view.version?.id ?? null);
 
-  const [panel, setPanel] = useState<"comments" | "fields">("comments");
+  const [panel, setPanel] = useState<"comments" | "fields" | "ai">("comments");
+  const [aiSelected, setAiSelected] = useState<AiFinding | null>(null);
   const [positionMs, setPositionMs] = useState(0);
   const [meta, setMeta] = useState<{ durationMs: number; width: number; height: number } | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(initialCommentId);
@@ -260,6 +263,16 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const seek = (ms: number) => player.current?.seek(ms);
   const seekCompare = (versionId: string, ms: number) => compare.current?.seek(versionId, ms);
   const timed = surface === "video" || surface === "audio";
+  // AI Visual QA: images only in v1, and only for workspace teammates (the API says the rest).
+  const aiTarget = useMemo<AiTarget | null>(
+    () => view.target && surface === "image" && canWriteTeam
+      ? { workspaceId: view.target.workspaceId, projectId: view.target.projectId, versionId: view.target.versionId }
+      : null,
+    [view.target, surface, canWriteTeam],
+  );
+  const aiQa = useAiQa(aiTarget);
+  const aiHighlight = panel === "ai" && aiSelected && hasRegion(aiSelected.region) ? aiSelected.region : null;
+
   /** Clicking a range note's loop button: jump to its in point and play it on repeat. */
   const playRange = useCallback((startMs: number, endMs: number) => {
     setLoop({ startMs, endMs });
@@ -609,6 +622,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           canDraw={view.target ? view.canComment && (view.access?.annotate ?? true) : true}
           onTime={setPositionMs}
           onMeta={setMeta}
+          highlight={aiHighlight}
           onDraw={setPending}
           onDeleteAnnotation={writer.eraseAnnotation}
           onFocusNote={setFocusedId}
@@ -639,7 +653,24 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
             <button type="button" role="tab" aria-selected={panel === "fields"} onClick={() => setPanel("fields")}>
               <SlidersHorizontal size={14} />Fields
             </button>
+            {aiQa.available && (
+              <button type="button" role="tab" aria-selected={panel === "ai"} onClick={() => setPanel("ai")} data-testid="ai-qa-tab">
+                <Sparkles size={14} />AI QA{aiQa.findings.length > 0 && <span className="rv-tab-count">{aiQa.findings.filter((f) => f.status === "PENDING" || f.status === "ACCEPTED").length}</span>}
+              </button>
+            )}
           </div>
+          {aiQa.available && aiTarget && version && (
+            <div className="rv-panel-body" hidden={panel !== "ai"}>
+              <AiQaPanel
+                qa={aiQa}
+                target={aiTarget}
+                versionLabel={version.label}
+                title={version.title}
+                selectedId={aiSelected?.id ?? null}
+                onSelect={setAiSelected}
+              />
+            </div>
+          )}
 
           {/* Comments stay mounted behind the Fields tab, so switching tabs never drops an
               unsent note or an attached recording. */}
