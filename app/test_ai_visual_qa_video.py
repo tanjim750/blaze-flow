@@ -182,3 +182,9 @@ class VideoQAApiTests(WorkspaceAccessSetupMixin, TestCase):
         listed = self.client.get(reverse('api-notifications') + f'?workspace={self.workspace.id}').json()
         rows = listed['results'] if isinstance(listed, dict) else listed
         self.assertTrue(any(row['kind'] == 'AI_QA_COMPLETED' for row in rows))
+
+
+class SeparatorTests(TestCase):
+    def test_a_middle_dot_separates_words_even_without_spaces(self):
+        from .ai_qa.spelling import tokens
+        self.assertEqual([t[0] for t in tokens('Small batch·Northlight | Coffee')], ['Small', 'batch', 'Northlight', 'Coffee'])

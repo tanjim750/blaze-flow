@@ -187,7 +187,7 @@ def _word_box(polygon, start, end, length):
 
 
 def tokens(text):
-    for match in re.finditer(r'\S+', text):
+    for match in re.finditer(r'[^\s·•|]+', text):  # bullets and pipes separate words even when OCR drops the spaces
         raw = match.group(0)
         lead = len(raw) - len(raw.lstrip(WORD_STRIP))
         core = raw.strip(WORD_STRIP)
