@@ -1,5 +1,6 @@
 /* AI Visual QA panel (review sidebar tab) and its on-image highlight. */
-.aiqa { --aiqa-amber: var(--bf-warning); display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* `contain: inline-size` keeps the scrolling filter row from widening the sidebar on phones. */
+.aiqa { --aiqa-amber: var(--bf-warning); min-width: 0; width: 100%; contain: inline-size; display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .aiqa-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--rv-line); flex: none; }
 .aiqa-head strong { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .aiqa-head strong svg { color: var(--bf-violet-300); }
@@ -40,7 +41,7 @@
 .aiqa-pill.is-low { background: var(--bf-muted); color: var(--muted); }
 
 .aiqa-filters { display: flex; gap: 4px; padding: 6px 14px 10px; overflow-x: auto; flex: none; scrollbar-width: none; border-bottom: 1px solid var(--rv-line); }
-.aiqa-filters button { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--rv-line);
+.aiqa-filters button { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--rv-line);
   background: none; color: var(--muted); font-size: 11.5px; white-space: nowrap; cursor: pointer; }
 .aiqa-filters button span { font-size: 10px; opacity: .8; }
 .aiqa-filters button[aria-selected="true"] { background: var(--bf-secondary); color: var(--text); border-color: var(--bf-border-strong); }
