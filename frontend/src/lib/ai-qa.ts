@@ -6,6 +6,7 @@
  */
 
 export type AiRegion = { x: number; y: number; width: number; height: number };
+export type AiTrackPoint = AiRegion & { t: number };
 export type AiReviewStatus = "QUEUED" | "PROCESSING" | "SUCCEEDED" | "PARTIAL" | "FAILED" | "CANCELLED";
 export type AiFindingStatus = "PENDING" | "ACCEPTED" | "DISMISSED" | "NOT_AN_ERROR" | "COMMENT_CREATED";
 export type AiCategory = "POSSIBLE_SPELLING_ERROR" | "OCR_UNCERTAIN";
@@ -13,7 +14,7 @@ export type AiBand = "high" | "medium" | "low";
 
 export type AiReview = {
   id: string; media_version_id: string; status: AiReviewStatus; stage: string;
-  progress: { frames_total?: number; frames_done?: number; lines?: number };
+  progress: { kind?: "image" | "video"; frames_total?: number; frames_done?: number; lines?: number; duration_ms?: number };
   language: string; engine: string; engine_version: string;
   error_code: string; error_message: string;
   requested_by: { id: string; name: string } | null;
@@ -27,10 +28,12 @@ export type AiFinding = {
   edited_suggestion: string; context_text: string; explanation: string;
   ocr_confidence: number; decision_confidence: number; region: AiRegion | Record<string, never>;
   start_time_ms: number | null; end_time_ms: number | null; status: AiFindingStatus;
+  /** Video: where the word sat in each sighting, in time order. */
+  track?: AiTrackPoint[];
   comment_id: string | null; reviewed_at: string | null; created_at: string;
 };
 
-export type AiQaState = { supported: boolean; can_run: boolean; engine: string; latest: AiReview | null };
+export type AiQaState = { supported: boolean; can_run: boolean; engine: string; max_video_seconds?: number; latest: AiReview | null };
 
 export type AiTarget = { workspaceId: string; projectId: string; versionId: string };
 
@@ -68,6 +71,7 @@ export const aiQaApi = {
   start: (t: AiTarget, language: string) => call<AiReview>(`${base(t)}/ai-reviews/`, { method: "POST", body: JSON.stringify({ language }) }),
   review: (t: AiTarget, id: string) => call<AiReview>(`${base(t)}/ai-reviews/${id}/`),
   retry: (t: AiTarget, id: string) => call<AiReview>(`${base(t)}/ai-reviews/${id}/retry/`, { method: "POST", body: "{}" }),
+  cancel: (t: AiTarget, id: string) => call<AiReview>(`${base(t)}/ai-reviews/${id}/cancel/`, { method: "POST", body: "{}" }),
   findings: (t: AiTarget, id: string) => call<AiFinding[]>(`${base(t)}/ai-reviews/${id}/findings/?limit=200`),
   decide: (t: AiTarget, id: string, body: { status?: AiFindingStatus; edited_suggestion?: string; add_to_glossary?: "project" | "workspace" }) =>
     call<AiFinding>(`${base(t)}/ai-findings/${id}/`, { method: "PATCH", body: JSON.stringify(body) }),
@@ -106,10 +110,14 @@ export function matchesFilter(finding: AiFinding, filter: FindingFilter): boolea
   }
 }
 
-/** Highest confidence first, then top-to-bottom, left-to-right as they sit on the poster. */
+/**
+ * Video findings in the order they appear; poster findings highest confidence first, then
+ * top-to-bottom, left-to-right as they sit on the poster.
+ */
 export function sortFindings(findings: AiFinding[]): AiFinding[] {
   return [...findings].sort((a, b) =>
-    BAND_ORDER[a.band] - BAND_ORDER[b.band]
+    (a.start_time_ms !== null && b.start_time_ms !== null ? a.start_time_ms - b.start_time_ms : 0)
+    || BAND_ORDER[a.band] - BAND_ORDER[b.band]
     || (("y" in a.region ? a.region.y : 0) - ("y" in b.region ? b.region.y : 0))
     || (("x" in a.region ? a.region.x : 0) - ("x" in b.region ? b.region.x : 0)));
 }
@@ -132,7 +140,14 @@ export function readability(ocr: number): string {
 
 export function stageLabel(review: AiReview): string {
   if (review.status === "QUEUED") return review.stage === "waiting_for_scan" ? "Waiting for the security scan" : review.stage === "retrying" ? "Retrying…" : "Queued";
-  if (review.status === "PROCESSING") return review.stage === "checking" ? "Checking spelling" : "Reading text";
+  if (review.status === "PROCESSING") {
+    switch (review.stage) {
+      case "checking": return "Checking spelling";
+      case "sampling": return "Sampling frames";
+      case "refining": return "Looking closer where text changes";
+      default: return "Reading text";
+    }
+  }
   if (review.status === "FAILED") return "Check failed";
   if (review.status === "PARTIAL") return "Partly checked";
   if (review.status === "CANCELLED") return "Cancelled";
@@ -156,3 +171,43 @@ export function hasRegion(region: AiFinding["region"]): region is AiRegion {
 
 export const batchable = (findings: AiFinding[]) =>
   findings.filter((finding) => finding.band === "high" && OPEN.includes(finding.status) && finding.category === "POSSIBLE_SPELLING_ERROR");
+
+/** A brief sighting still gets a highlight you can see: held at least this long. */
+export const MIN_HOLD_MS = 1500;
+
+/** The window a finding's highlight is shown in, the same shape a drawing uses. */
+export function findingWindow(finding: Pick<AiFinding, "start_time_ms" | "end_time_ms">): { startMs: number; endMs: number } | null {
+  if (finding.start_time_ms === null) return null;
+  const end = Math.max(finding.end_time_ms ?? finding.start_time_ms, finding.start_time_ms + MIN_HOLD_MS);
+  return { startMs: finding.start_time_ms, endMs: end };
+}
+
+/** Where a moving word was nearest to `ms` (its last sighting at or before, else the first). */
+export function regionAt(finding: Pick<AiFinding, "region" | "track">, ms: number): AiRegion | null {
+  const track = finding.track ?? [];
+  if (track.length === 0) return hasRegion(finding.region) ? finding.region : null;
+  let point = track[0];
+  for (const item of track) { if (item.t <= ms) point = item; else break; }
+  return { x: point.x, y: point.y, width: point.width, height: point.height };
+}
+
+/** "0:12.4" style, with tenths, for the short spans a title is on screen. */
+export function shortTime(ms: number): string {
+  const total = Math.max(0, ms) / 1000;
+  const minutes = Math.floor(total / 60);
+  const seconds = (total % 60).toFixed(1).padStart(4, "0");
+  return `${minutes}:${seconds}`;
+}
+
+export function timeRangeLabel(finding: Pick<AiFinding, "start_time_ms" | "end_time_ms">): string | null {
+  if (finding.start_time_ms === null) return null;
+  const end = finding.end_time_ms ?? finding.start_time_ms;
+  return end - finding.start_time_ms < 100 ? shortTime(finding.start_time_ms) : `${shortTime(finding.start_time_ms)}–${shortTime(end)}`;
+}
+
+/** "frame 40 of 120" for video, "image 1 of 1" for posters; null before frames are known. */
+export function progressLabel(review: AiReview): string | null {
+  const { frames_total: total, frames_done: done = 0, kind } = review.progress;
+  if (!total) return null;
+  return `${kind === "video" ? "frame" : "image"} ${Math.min(done, total)} of ${total}`;
+}

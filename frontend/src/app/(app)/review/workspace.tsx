@@ -36,7 +36,7 @@ import { AiQaPanel, useAiQa } from "./ai-qa-panel";
 import { hasRegion, type AiFinding, type AiTarget } from "@/lib/ai-qa";
 
 type Props = {
-  view: ReviewView; author: string; userId?: string | null; initialShareOpen?: boolean; embedded?: boolean;
+  view: ReviewView; author: string; userId?: string | null; initialShareOpen?: boolean; initialPanel?: "ai" | null; embedded?: boolean;
   /** `?comment=` from a notification: the note to scroll to and highlight. */
   initialCommentId?: string | null;
   /** `?t=` in milliseconds: where to seek once the media has loaded. */
@@ -52,7 +52,7 @@ const stamp = (iso: string | null) => iso
 
 const shortDate = (iso: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(iso));
 
-export function ReviewWorkspace({ view, author, userId = null, initialShareOpen = false, embedded = false, initialCommentId = null, initialTimeMs = null, returnTo = null }: Props) {
+export function ReviewWorkspace({ view, author, userId = null, initialShareOpen = false, initialPanel = null, embedded = false, initialCommentId = null, initialTimeMs = null, returnTo = null }: Props) {
   const router = useRouter();
   const reduced = useReducedMotion();
   const player = useRef<PlayerHandle>(null);
@@ -69,7 +69,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const compareWriter = useReviewWriter(comparisonView, author, userId);
   const local = useLocalReview(view.version?.id ?? null);
 
-  const [panel, setPanel] = useState<"comments" | "fields" | "ai">("comments");
+  const [panel, setPanel] = useState<"comments" | "fields" | "ai">(initialPanel ?? "comments");
+  const [aiRunRequest, setAiRunRequest] = useState(0);
   const [aiSelected, setAiSelected] = useState<AiFinding | null>(null);
   const [positionMs, setPositionMs] = useState(0);
   const [meta, setMeta] = useState<{ durationMs: number; width: number; height: number } | null>(null);
@@ -263,15 +264,27 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const seek = (ms: number) => player.current?.seek(ms);
   const seekCompare = (versionId: string, ms: number) => compare.current?.seek(versionId, ms);
   const timed = surface === "video" || surface === "audio";
-  // AI Visual QA: images only in v1, and only for workspace teammates (the API says the rest).
+  // AI Visual QA: images and video, only for workspace teammates (the API says the rest).
+  const aiVideo = surface === "video";
   const aiTarget = useMemo<AiTarget | null>(
-    () => view.target && surface === "image" && canWriteTeam
+    () => view.target && (surface === "image" || surface === "video") && canWriteTeam
       ? { workspaceId: view.target.workspaceId, projectId: view.target.projectId, versionId: view.target.versionId }
       : null,
     [view.target, surface, canWriteTeam],
   );
   const aiQa = useAiQa(aiTarget);
-  const aiHighlight = panel === "ai" && aiSelected && hasRegion(aiSelected.region) ? aiSelected.region : null;
+  const aiHighlight = panel === "ai" && aiSelected && hasRegion(aiSelected.region) ? aiSelected : null;
+  const aiMarkers = useMemo(() => aiVideo
+    ? aiQa.findings
+        .filter((f) => f.start_time_ms !== null && f.status !== "DISMISSED" && f.status !== "NOT_AN_ERROR")
+        .map((f) => ({ id: f.id, startMs: f.start_time_ms!, endMs: f.end_time_ms ?? f.start_time_ms!, label: f.detected_text, band: f.band, selected: f.id === aiSelected?.id }))
+    : [], [aiVideo, aiQa.findings, aiSelected?.id]);
+  /** Selecting a video finding seeks to where it first shows; the highlight then follows it. */
+  const selectAi = useCallback((finding: AiFinding | null) => {
+    setAiSelected(finding);
+    if (finding && finding.start_time_ms !== null) player.current?.seek(finding.start_time_ms);
+  }, []);
+  const openAiRun = () => { setPanel("ai"); setAiRunRequest((n) => n + 1); };
 
   /** Clicking a range note's loop button: jump to its in point and play it on repeat. */
   const playRange = useCallback((startMs: number, endMs: number) => {
@@ -457,6 +470,15 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
 
           {/* Everything else: sharing on wide screens, the rest behind More. */}
           <div className="rv-actions-tools" role="group" aria-label="Tools">
+            {aiQa.available && aiQa.state?.can_run && (
+              <button
+                type="button" className="rv-ai-btn" onClick={openAiRun} data-testid="ai-qa-run-header"
+                disabled={aiQa.review?.status === "QUEUED" || aiQa.review?.status === "PROCESSING"}
+                title={aiQa.review?.status === "QUEUED" || aiQa.review?.status === "PROCESSING" ? "AI Visual QA is running" : "Check the visible text for spelling mistakes"}
+              >
+                <Sparkles size={14} /><span>Run AI Visual QA</span>
+              </button>
+            )}
             {/* Sharing out needs share rights; a read-only member would only open a refusal. */}
             {canShare && (
               <button type="button" className="rv-share-btn" onClick={() => setShareOpen(!shareOpen)} aria-pressed={shareOpen} title="Share with guest reviewers">
@@ -623,6 +645,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           onTime={setPositionMs}
           onMeta={setMeta}
           highlight={aiHighlight}
+          aiMarkers={panel === "ai" ? aiMarkers : []}
+          onAiMarker={(id) => { setPanel("ai"); setAiSelected(aiQa.findings.find((f) => f.id === id) ?? null); }}
           onDraw={setPending}
           onDeleteAnnotation={writer.eraseAnnotation}
           onFocusNote={setFocusedId}
@@ -667,7 +691,9 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
                 versionLabel={version.label}
                 title={version.title}
                 selectedId={aiSelected?.id ?? null}
-                onSelect={setAiSelected}
+                onSelect={selectAi}
+                runRequest={aiRunRequest}
+                video={aiVideo}
               />
             </div>
           )}

@@ -38,6 +38,7 @@ export default async function Review({ searchParams }: PageProps<"/review">) {
       view={session.notice ? { ...view, notice: session.notice } : view}
       author={session.user ? displayName(session.user) : "You"}
       initialShareOpen={params.share === "1"}
+      initialPanel={params.panel === "ai" ? "ai" : null}
       initialCommentId={single("comment") ?? null}
       initialTimeMs={timeParam(single("t"))}
       returnTo={safeReturnPath(single("from"))}

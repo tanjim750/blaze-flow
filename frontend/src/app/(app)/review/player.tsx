@@ -12,6 +12,7 @@ import { timecode } from "@/lib/timecode";
 import { displayWindow, holdLabel, rangeLabel, windowOpacity } from "@/lib/annotation-window";
 import { dragRange, leavesLoop, loopSeek, moveHandle, rangeOut, type LoopRange, type MarkRange } from "@/lib/review-range";
 import type { ReviewSurface } from "@/lib/open-in-review";
+import { findingWindow, regionAt, timeRangeLabel, type AiFinding } from "@/lib/ai-qa";
 import { playerShouldIgnoreKey } from "./player-keys";
 import {
   BUFFERING_DELAY_MS, bufferedSpans, canSeekTo, clampSeekMs, describePlaybackError,
@@ -75,9 +76,18 @@ type Props = {
   /** A range playing on repeat; a seek outside it, or Esc, ends it. */
   loop?: LoopRange | null;
   onStopLoop?: () => void;
-  /** An AI Visual QA finding's text region, drawn as a dashed box (0–1 coordinates). */
-  highlight?: { x: number; y: number; width: number; height: number } | null;
+  /**
+   * An AI Visual QA finding's text, drawn as a dashed box (0–1 coordinates). On video it
+   * follows the word's track and shows over the finding's window, like a held drawing.
+   */
+  highlight?: AiHighlightTarget | null;
+  /** AI Visual QA findings on the timeline; clicking one seeks there and selects it. */
+  aiMarkers?: AiMarker[];
+  onAiMarker?: (id: string) => void;
 };
+
+export type AiHighlightTarget = Pick<AiFinding, "region" | "track" | "start_time_ms" | "end_time_ms">;
+export type AiMarker = { id: string; startMs: number; endMs: number; label: string; band: "high" | "medium" | "low"; selected: boolean };
 
 export function Player(props: Props) {
   const surface = props.surface ?? "video";
@@ -118,7 +128,7 @@ function DocumentViewer({ sources, title, surface, downloadHref }: Props & { sur
   );
 }
 
-function MediaPlayer({ handle, sources, title, notes, annotations, pending, pendingWindow = null, canDraw, onTime, onMeta, onDraw, onDeleteAnnotation, onFocusNote, surface, mark = null, onMark, loop = null, onStopLoop, highlight = null }: Props & { surface: "video" | "audio" | "image" }) {
+function MediaPlayer({ handle, sources, title, notes, annotations, pending, pendingWindow = null, canDraw, onTime, onMeta, onDraw, onDeleteAnnotation, onFocusNote, surface, mark = null, onMark, loop = null, onStopLoop, highlight = null, aiMarkers = [], onAiMarker }: Props & { surface: "video" | "audio" | "image" }) {
   const still = surface === "image";
   const image = useRef<HTMLImageElement>(null);
   const [imageFailed, setImageFailed] = useState(false);
@@ -466,6 +476,11 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
     return { ...item, window, opacity: windowOpacity(window, positionMs, playing) };
   });
   const visible = timedAnnotations.filter((item) => item.opacity > 0);
+  // The AI highlight uses the same display-window rule as a held drawing, and follows a
+  // moving word along its track.
+  const aiWindow = highlight && !still ? findingWindow(highlight) : null;
+  const aiOpacity = highlight ? windowOpacity(aiWindow ? displayWindow(aiWindow.startMs, aiWindow.endMs) : null, positionMs, playing) : 0;
+  const aiRegion = highlight ? regionAt(highlight, positionMs) : null;
   // Timeline spans: each held drawing and each range note, so the reviewer can see what
   // stays up for how long.
   const spans = still || !durationMs ? [] : [
@@ -547,7 +562,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
           </div>
         )}
 
-        <svg className="rvp-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden={visible.length === 0 && !highlight}>
+        <svg className="rvp-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden={visible.length === 0 && !aiRegion}>
           <defs>
             <marker id="rvp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffcf5a" />
@@ -574,11 +589,12 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
             </g>
           ))}
           {pending && <Shape element={pending} onActivate={() => undefined} />}
-          {highlight && (
+          {aiRegion && (
             <rect
-              className="aiqa-highlight" data-testid="ai-qa-highlight"
-              x={highlight.x * 100 - 0.8} y={highlight.y * 100 - 0.8}
-              width={highlight.width * 100 + 1.6} height={highlight.height * 100 + 1.6}
+              className="aiqa-highlight" data-testid="ai-qa-highlight" data-shown={aiOpacity > 0 ? "true" : "false"}
+              style={{ opacity: aiOpacity }}
+              x={aiRegion.x * 100 - 0.8} y={aiRegion.y * 100 - 0.8}
+              width={aiRegion.width * 100 + 1.6} height={aiRegion.height * 100 + 1.6}
               rx="0.6" vectorEffect="non-scaling-stroke"
             />
           )}
@@ -677,6 +693,19 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
               onClick={(event) => event.stopPropagation()}
             />
           )}
+          {!still && aiMarkers.map((marker) => (
+            <button
+              key={`ai-${marker.id}`}
+              type="button"
+              className={`rvp-ai-marker is-${marker.band} ${marker.selected ? "is-selected" : ""}`}
+              style={{ left: pct(marker.startMs), width: `max(6px, calc(${pct(marker.endMs)} - ${pct(marker.startMs)}))` }}
+              title={`AI QA · ${marker.label} · ${timeRangeLabel({ start_time_ms: marker.startMs, end_time_ms: marker.endMs })}`}
+              aria-label={`AI finding “${marker.label}” at ${timecode(marker.startMs)}. Jump there.`}
+              data-testid="ai-qa-marker"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => { event.stopPropagation(); userSeek(marker.startMs); onAiMarker?.(marker.id); }}
+            />
+          ))}
           {markers.map((note) => (
             <button
               key={note.id}

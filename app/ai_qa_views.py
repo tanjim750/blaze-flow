@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .ai_qa.service import (
-    AIQAError, add_glossary_term, create_comment_from_finding, decide_finding, is_supported,
+    AIQAError, add_glossary_term, cancel_review, create_comment_from_finding, decide_finding, is_supported,
     retry_review, start_review,
 )
 from .models import AIFinding, AIReview, GlossaryTerm, MediaVersion, Project, Workspace
@@ -58,6 +58,7 @@ def ai_review_list_create(request, workspace_id, project_id, media_version_id):
         return Response({
             'supported': is_supported(media_version), 'can_run': can_run,
             'engine': settings.AI_QA_ENGINE,
+            'max_video_seconds': settings.AI_QA_MAX_VIDEO_SECONDS,
             'latest': AIReviewSerializer(latest).data if latest else None,
         })
     serializer = AIReviewStartSerializer(data=request.data)
@@ -89,6 +90,17 @@ def ai_review_retry(request, workspace_id, project_id, media_version_id, review_
     except AIQAError as exc:
         return _error(exc)
     return Response(AIReviewSerializer(review).data, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def ai_review_cancel(request, workspace_id, project_id, media_version_id, review_id):
+    _, _, media_version = _media(request, workspace_id, project_id, media_version_id, write=True)
+    try:
+        review = cancel_review(review=_review(media_version, review_id), user=request.user)
+    except AIQAError as exc:
+        return _error(exc)
+    return Response(AIReviewSerializer(review).data)
 
 
 @api_view(['GET'])
