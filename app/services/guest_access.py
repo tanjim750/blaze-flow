@@ -1,0 +1,252 @@
+import hashlib
+import secrets
+import uuid
+from datetime import timedelta
+
+from django.db import transaction
+from django.utils import timezone
+
+from app.models import (
+    AuditLog, GuestInvite, GuestInvitePermission, GuestReviewAccess,
+    GuestReviewAccessPermission, GuestSession,
+)
+from .audit import record_guest_audit, record_user_audit
+
+
+GUEST_ALLOWED_PERMISSIONS = frozenset({
+    'media.read', 'media.download', 'review.comment.read',
+    'review.comment.create', 'review.comment.edit', 'review.comment.delete',
+    'review.reaction.create',
+    'review.attachment.create', 'review.attachment.delete',
+    'annotation.read', 'annotation.create',
+    'annotation.edit', 'annotation.delete',
+    # "Allow decisions": approve or request changes on the cut the guest is viewing.
+    'review.decision.create',
+})
+GUEST_DECISION_PERMISSION = 'review.decision.create'
+
+
+class GuestAccessError(Exception):
+    pass
+
+
+# A guest polling or flipping between cuts is one visit, not hundreds: a version view is
+# audited at most once per access per this window.
+GUEST_VIEW_DEDUPE = timedelta(minutes=30)
+
+
+def _hash(value):
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+@transaction.atomic
+def create_guest_invite(*, project, membership, label, permissions, expires_in_hours=168, actor=None):
+    requested = set(permissions)
+    if not requested or not requested.issubset(GUEST_ALLOWED_PERMISSIONS):
+        raise GuestAccessError('Select one or more supported guest permissions.')
+    token = secrets.token_urlsafe(32)
+    now = timezone.now()
+    invite = GuestInvite.objects.create(
+        id=uuid.uuid4(), project=project, label=label or '', token_hash=_hash(token),
+        expires_at=now + timedelta(hours=expires_in_hours),
+        created_by_workspace_membership=membership, created_at=now, updated_at=now,
+    )
+    GuestInvitePermission.objects.bulk_create([
+        GuestInvitePermission(guest_invite=invite, permission_key=key, created_at=now)
+        for key in sorted(requested)
+    ])
+    record_user_audit(
+        user=actor or (membership.user if membership else None), workspace=project.workspace,
+        action='guest.invite.created', entity_type='guest_invite', entity_id=invite.id,
+        project=project, team_only=False,
+        metadata={'guest_invite_id': str(invite.id), 'label': invite.label, 'expires_at': invite.expires_at.isoformat()},
+    )
+    return invite, token
+
+
+@transaction.atomic
+def exchange_guest_invite(*, token, name, email):
+    now = timezone.now()
+    invite = GuestInvite.objects.select_for_update().select_related('project__workspace').filter(
+        token_hash=_hash(token), revoked_at__isnull=True,
+    ).first()
+    if invite is None or (invite.expires_at and invite.expires_at <= now):
+        raise GuestAccessError('This guest invitation is invalid or expired.')
+    access_key = secrets.token_urlsafe(40)
+    session = GuestSession.objects.create(
+        id=uuid.uuid4(), workspace=invite.project.workspace, name=name.strip(),
+        email=email.strip().lower(), access_key_hash=_hash(access_key),
+        last_seen_at=now, created_at=now, updated_at=now,
+    )
+    access = GuestReviewAccess.objects.create(
+        id=uuid.uuid4(), guest_invite=invite, guest_session=session,
+        last_accessed_at=now, created_at=now, updated_at=now,
+    )
+    permissions = list(GuestInvitePermission.objects.filter(guest_invite=invite).values_list('permission_key', flat=True))
+    GuestReviewAccessPermission.objects.bulk_create([
+        GuestReviewAccessPermission(guest_review_access=access, permission_key=key, created_at=now)
+        for key in permissions
+    ])
+    record_guest_audit(
+        guest_session=session, workspace=invite.project.workspace,
+        action='guest.link.opened', entity_type='guest_review_access', entity_id=access.id,
+        project=invite.project, team_only=False, at=now,
+        metadata={'guest_invite_id': str(invite.id), 'label': invite.label, 'guest_name': session.name},
+    )
+    return access, access_key
+
+
+def record_guest_view(*, access, media_version):
+    """Audit a guest looking at one cut through their link (deduplicated, see above)."""
+    now = timezone.now()
+    if AuditLog.objects.filter(
+        action='guest.media.viewed', actor_guest_session_id=access.guest_session_id,
+        entity_type='media_version', entity_id=str(media_version.id),
+        created_at__gte=now - GUEST_VIEW_DEDUPE,
+    ).exists():
+        return None
+    return record_guest_audit(
+        guest_session=access.guest_session, workspace=media_version.project.workspace,
+        action='guest.media.viewed', entity_type='media_version', entity_id=media_version.id,
+        project=media_version.project_id, team_only=False, at=now,
+        metadata={
+            'guest_invite_id': str(access.guest_invite_id), 'guest_review_access_id': str(access.id),
+            'guest_name': access.guest_session.name, 'media_version_id': str(media_version.id),
+            'version_number': media_version.version_number, 'title': media_version.title,
+        },
+    )
+
+
+def authenticate_guest_access(*, project, access_key, permission):
+    now = timezone.now()
+    access = GuestReviewAccess.objects.select_related(
+        'guest_session', 'guest_invite', 'guest_invite__project'
+    ).filter(
+        guest_session__access_key_hash=_hash(access_key or ''),
+        guest_invite__project=project, guest_invite__revoked_at__isnull=True,
+        revoked_at__isnull=True,
+    ).first()
+    if access is None or (access.guest_invite.expires_at and access.guest_invite.expires_at <= now):
+        raise GuestAccessError('Guest access is invalid or expired.')
+    if not GuestReviewAccessPermission.objects.filter(
+        guest_review_access=access, permission_key=permission,
+    ).exists():
+        raise GuestAccessError('This guest link does not grant that permission.')
+    GuestReviewAccess.objects.filter(id=access.id).update(last_accessed_at=now, updated_at=now)
+    GuestSession.objects.filter(id=access.guest_session_id).update(last_seen_at=now, updated_at=now)
+    return access
+
+
+@transaction.atomic
+def rotate_guest_access_key(*, project, access_key):
+    now = timezone.now()
+    session = GuestSession.objects.select_for_update().filter(
+        access_key_hash=_hash(access_key or ''), workspace=project.workspace,
+    ).first()
+    if session is None:
+        raise GuestAccessError('Guest access is invalid or expired.')
+    access = GuestReviewAccess.objects.select_related('guest_invite').filter(
+        guest_session=session, guest_invite__project=project,
+        guest_invite__revoked_at__isnull=True, revoked_at__isnull=True,
+    ).first()
+    if access is None or (access.guest_invite.expires_at and access.guest_invite.expires_at <= now):
+        raise GuestAccessError('Guest access is invalid or expired.')
+    new_key = secrets.token_urlsafe(40)
+    session.access_key_hash = _hash(new_key)
+    session.last_seen_at = now
+    session.updated_at = now
+    session.save(update_fields=['access_key_hash', 'last_seen_at', 'updated_at'])
+    GuestReviewAccess.objects.filter(id=access.id).update(last_accessed_at=now, updated_at=now)
+    record_guest_audit(
+        guest_session=session, workspace=project.workspace,
+        action='guest.access_key.rotated', entity_type='guest_review_access',
+        entity_id=access.id,
+    )
+    return access, new_key
+
+
+@transaction.atomic
+def revoke_guest_invite(*, invite, membership, user):
+    locked = GuestInvite.objects.select_for_update().select_related('project__workspace').get(id=invite.id)
+    if locked.revoked_at is not None:
+        raise GuestAccessError('This guest invitation is already revoked.')
+    now = timezone.now()
+    locked.revoked_at = now
+    locked.revoked_by_workspace_membership = membership
+    locked.updated_at = now
+    locked.save(update_fields=['revoked_at', 'revoked_by_workspace_membership', 'updated_at'])
+    GuestReviewAccess.objects.filter(guest_invite=locked, revoked_at__isnull=True).update(
+        revoked_at=now, revoked_by_workspace_membership=membership, updated_at=now,
+    )
+    record_user_audit(
+        user=user, workspace=locked.project.workspace, action='guest.invite.revoked',
+        entity_type='guest_invite', entity_id=locked.id, project=locked.project_id, team_only=False,
+        metadata={'guest_invite_id': str(locked.id), 'label': locked.label},
+    )
+    return locked
+
+
+@transaction.atomic
+def revoke_guest_review_access(*, access, membership, user):
+    locked = GuestReviewAccess.objects.select_for_update().select_related(
+        'guest_invite__project__workspace', 'guest_session',
+    ).get(id=access.id)
+    if locked.revoked_at is not None:
+        raise GuestAccessError('This guest access is already revoked.')
+    now = timezone.now()
+    locked.revoked_at = now
+    locked.revoked_by_workspace_membership = membership
+    locked.updated_at = now
+    locked.save(update_fields=['revoked_at', 'revoked_by_workspace_membership', 'updated_at'])
+    record_user_audit(
+        user=user, workspace=locked.guest_invite.project.workspace,
+        action='guest.access.revoked', entity_type='guest_review_access',
+        entity_id=locked.id, project=locked.guest_invite.project_id, team_only=False,
+        metadata={
+            'guest_invite_id': str(locked.guest_invite_id), 'label': locked.guest_invite.label,
+            'guest_name': locked.guest_session.name,
+        },
+    )
+    return locked
+
+
+def invite_allows_decisions(invite):
+    return GuestInvitePermission.objects.filter(
+        guest_invite=invite, permission_key=GUEST_DECISION_PERMISSION,
+    ).exists()
+
+
+@transaction.atomic
+def set_invite_allow_decisions(*, invite, allow, user):
+    """Turns "Allow decisions" on or off for a link and everyone already using it.
+
+    Unlike the other permissions, which are fixed when a link is made, this one can be
+    changed afterwards: links made before decisions existed start without it, and an owner
+    may want to stop a link from approving without revoking it for commenting.
+    """
+    locked = GuestInvite.objects.select_for_update().select_related('project__workspace').get(id=invite.id)
+    if locked.revoked_at is not None:
+        raise GuestAccessError('This link is revoked, so it cannot be changed.')
+    now = timezone.now()
+    accesses = list(GuestReviewAccess.objects.filter(guest_invite=locked, revoked_at__isnull=True))
+    if allow:
+        GuestInvitePermission.objects.get_or_create(
+            guest_invite=locked, permission_key=GUEST_DECISION_PERMISSION, defaults={'created_at': now},
+        )
+        for access in accesses:
+            GuestReviewAccessPermission.objects.get_or_create(
+                guest_review_access=access, permission_key=GUEST_DECISION_PERMISSION, defaults={'created_at': now},
+            )
+    else:
+        GuestInvitePermission.objects.filter(guest_invite=locked, permission_key=GUEST_DECISION_PERMISSION).delete()
+        GuestReviewAccessPermission.objects.filter(
+            guest_review_access__guest_invite=locked, permission_key=GUEST_DECISION_PERMISSION,
+        ).delete()
+    locked.updated_at = now
+    locked.save(update_fields=['updated_at'])
+    record_user_audit(
+        user=user, workspace=locked.project.workspace, action='guest.invite.updated',
+        entity_type='guest_invite', entity_id=locked.id, project=locked.project_id, team_only=False,
+        metadata={'guest_invite_id': str(locked.id), 'label': locked.label, 'allow_decisions': bool(allow)},
+    )
+    return locked

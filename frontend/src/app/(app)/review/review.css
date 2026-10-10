@@ -1,0 +1,1055 @@
+/*
+ * The review workspace.
+ *
+ * This route is `flush` in the shell (see `app-shell.tsx`), so it owns the whole area
+ * below the topbar and sizes itself to the viewport rather than the document: the video
+ * must never push the comment panel off screen, and the panel scrolls on its own.
+ *
+ * Colours come from the app's existing tokens. The one deviation is the video surround,
+ * which is pinned to near-black regardless of theme — a review environment is judged
+ * against the frame, and a lighter surround shifts how the grade reads.
+ */
+.rv {
+  --rv-canvas: #08080a;
+  --rv-chrome: #0f0f12;
+  --rv-line: #26262c;
+  --rv-marker: #ffcf5a;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--rv-chrome);
+  color: var(--text);
+}
+
+/* Top bar ----------------------------------------------------------------- */
+.rv-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--rv-line);
+  background: #0c0c0f;
+}
+.rv-back {
+  display: grid; place-items: center;
+  width: 30px; height: 30px; flex: none;
+  border-radius: 8px; color: var(--muted);
+  transition: background .15s, color .15s;
+}
+.rv-back:hover { background: #1c1c22; color: var(--text); }
+
+.rv-crumbs { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
+.rv-crumbs span { display: flex; align-items: center; gap: 6px; color: var(--muted); white-space: nowrap; }
+.rv-crumbs span i { font-style: normal; color: #45454f; }
+.rv-crumbs strong {
+  font-size: 13px; font-weight: 600; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The name is the one part worth keeping when the bar runs out of room. */
+@media (max-width: 900px) { .rv-crumbs span { display: none; } }
+
+.rv-version {
+  flex: none; height: 28px; padding: 0 24px 0 9px;
+  border: 1px solid var(--rv-line); border-radius: 7px;
+  background: #17171c; color: var(--text);
+  font: 600 11px var(--font-geist-mono), monospace; cursor: pointer;
+}
+.rv-stage {
+  flex: none; padding: 4px 9px;
+  border: 1px solid #55418f; border-radius: 999px;
+  background: #211b38; color: #c8baff;
+  font: 600 10px var(--font-geist-mono), monospace;
+  text-transform: uppercase; letter-spacing: .05em; white-space: nowrap;
+}
+
+.rv-actions { display: flex; align-items: center; gap: 7px; margin-left: auto; flex: none; }
+.rv-actions button, .rv-actions .rv-icon {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 11px;
+  border: 1px solid var(--rv-line); border-radius: 8px;
+  background: #17171c; color: var(--text);
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: background .15s, border-color .15s, opacity .15s;
+}
+.rv-actions .rv-icon { padding: 0; width: 30px; justify-content: center; }
+.rv-actions button:hover:not(:disabled), .rv-actions .rv-icon:hover { background: #23232a; }
+.rv-actions button:disabled { opacity: .45; cursor: not-allowed; }
+/* `.rv-approve` colour: app/ui.css (one primary variant). */
+/* Labels collapse per group further down ("Review header, grouped"). */
+
+/* Banners ----------------------------------------------------------------- */
+.rv-banner {
+  display: flex; align-items: flex-start; gap: 9px; flex: none;
+  margin: 0; padding: 9px 16px;
+  border-bottom: 1px solid #5a4a1e;
+  background: #2a2213; color: #f0d9a1; font-size: 12px; line-height: 1.5;
+}
+.rv-banner svg { flex: none; margin-top: 1px; }
+.rv-banner.is-local { border-bottom-color: #2e3f57; background: #14202e; color: #a9c8ea; }
+.rv-blank { margin: auto; padding: 40px; color: var(--muted); font-size: 13px; text-align: center; max-width: 420px; }
+
+/* Two-pane body ----------------------------------------------------------- */
+.rv-body { display: grid; grid-template-columns: minmax(0, 1fr) 380px; flex: 1; min-height: 0; }
+
+/*
+ * Stacked, the page scrolls instead of the panel. `height: auto` matters: with the fixed
+ * viewport height the flex row divides what is left between the video and the comments,
+ * which squeezed the player down to a strip. The stage keeps a share of the width so the
+ * frame stays watchable.
+ */
+@media (max-width: 1080px) {
+  .rv { height: auto; min-height: 100vh; }
+  .rv-body { grid-template-columns: 1fr; }
+  .rvp-stage { min-height: min(56vw, 420px); }
+}
+
+/* Player ------------------------------------------------------------------ */
+.rvp { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--rv-canvas); }
+.rvp-stage {
+  position: relative; flex: 1; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--rv-canvas); overflow: hidden;
+}
+.rvp-stage.is-drawing { cursor: crosshair; }
+
+/*
+ * Sized to the media, not to the stage: `aspect-ratio` comes from the loaded video and the
+ * two maxima shrink the frame to fit whichever edge runs out first. Portrait, square and
+ * anamorphic all keep their proportions, and the annotation layers — which fill this box —
+ * line up with the picture instead of the surrounding black.
+ */
+.rvp-frame {
+  position: relative;
+  max-width: 100%; max-height: 100%;
+  aspect-ratio: 16 / 9;
+  display: flex; align-items: center; justify-content: center;
+}
+/* Until the media reports its shape — and when there is none — the frame fills the stage,
+   so a loading clip is still letterboxed by `object-fit` and the empty state is not
+   squeezed into a 16:9 box in the middle of it. */
+.rvp-frame.is-unsized { width: 100%; height: 100%; aspect-ratio: auto; }
+.rvp-stage video { display: block; width: 100%; height: 100%; object-fit: contain; cursor: pointer; }
+.rvp-empty { display: grid; justify-items: center; gap: 12px; padding: 24px; color: var(--muted); text-align: center; }
+.rvp-empty p { margin: 0; max-width: 320px; font-size: 12px; line-height: 1.6; }
+/* A failed source keeps its element (so Retry can reload it) but hides the black frame. */
+.rvp-stage video.is-failed { visibility: hidden; }
+.rvp-error { position: absolute; inset: 0; z-index: 6; align-content: center; background: var(--rv-canvas); }
+.rvp-error strong { color: var(--text); font-size: 13px; font-weight: 600; }
+.rvp-retry {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 12px;
+  border: 1px solid var(--rv-line); border-radius: 7px;
+  background: #17171c; color: var(--text); font-size: 12px; font-weight: 550; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.rvp-retry:hover { background: var(--primary); border-color: var(--primary); }
+.rvp-retry:focus-visible { outline: 2px solid var(--primary-2); outline-offset: 2px; }
+/* Waiting on data after a seek or a stall. Pointer-transparent so a click still toggles play. */
+.rvp-buffering {
+  position: absolute; inset: 0; z-index: 3;
+  display: grid; place-items: center; pointer-events: none;
+}
+.rvp-buffering svg {
+  padding: 10px; width: 48px; height: 48px; border-radius: 50%;
+  background: #000000a6; color: var(--primary-2);
+  animation: rvp-spin .8s linear infinite;
+}
+@keyframes rvp-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .rvp-buffering svg { animation-duration: 2.4s; } }
+.rvp-badge {
+  position: absolute; left: 12px; top: 12px;
+  max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 4px 9px; border-radius: 6px;
+  background: #000000a6; color: #d8d8e0;
+  font: 500 10px var(--font-geist-mono), monospace;
+  opacity: 0; transition: opacity .2s;
+}
+.rvp-stage:hover .rvp-badge { opacity: 1; }
+
+.rvp-overlay { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 4; overflow: visible; pointer-events: none; }
+.rvp-overlay .rvp-shape { pointer-events: stroke; cursor: pointer; }
+.rvp-draw { position: absolute; inset: 0; z-index: 5; background: #ffcf5a0a; cursor: crosshair; }
+
+/* Timeline ---------------------------------------------------------------- */
+.rvp-timeline { flex: none; padding: 14px 16px 0; background: var(--rv-chrome); }
+.rvp-scrub {
+  position: relative; height: 4px; border-radius: 999px;
+  background: #2b2b33; cursor: pointer; touch-action: none;
+}
+/* A taller invisible hit area, so the 4px bar is easy to grab. */
+.rvp-scrub::before { content: ""; position: absolute; inset: -6px 0; }
+.rvp-scrub.is-dragging .rvp-head { transform: translateY(-50%) scale(1.2); }
+/* What the browser has fetched, under the played bar. */
+.rvp-buffered { position: absolute; top: 0; bottom: 0; border-radius: 999px; background: #ffffff38; pointer-events: none; }
+.rvp-played { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--primary); }
+.rvp-head {
+  position: absolute; top: 50%; width: 11px; height: 11px;
+  margin-left: -5.5px; border-radius: 50%;
+  background: #fff; transform: translateY(-50%);
+  box-shadow: 0 0 0 3px #583be855;
+}
+/* Markers sit above the bar so a dense cluster stays clickable. */
+.rvp-marker {
+  position: absolute; bottom: 10px; transform: translateX(-50%);
+  display: grid; place-items: center;
+  width: 20px; height: 20px; padding: 0;
+  border: 1px solid #4a3a1c; border-radius: 50%;
+  background: #2a2214; color: var(--rv-marker);
+  font: 600 8px var(--font-geist-mono), monospace;
+  cursor: pointer; transition: transform .12s, background .12s;
+}
+.rvp-marker::after {
+  content: ""; position: absolute; top: 100%; left: 50%;
+  width: 1px; height: 7px; background: #4a3a1c; transform: translateX(-50%);
+}
+.rvp-marker:hover { transform: translateX(-50%) scale(1.15); background: #3a2e17; }
+.rvp-marker.is-resolved { opacity: .45; }
+.rvp-marker i { font-style: normal; }
+
+/* Transport --------------------------------------------------------------- */
+.rvp-transport {
+  display: flex; align-items: center; gap: 12px; flex: none;
+  padding: 12px 16px; background: var(--rv-chrome);
+}
+.rvp-group { display: flex; align-items: center; gap: 2px; }
+.rvp-transport button {
+  display: grid; place-items: center;
+  width: 30px; height: 30px; padding: 0;
+  border: 0; border-radius: 7px;
+  background: none; color: var(--muted); cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.rvp-transport button:hover:not(:disabled) { background: #22222a; color: var(--text); }
+.rvp-transport button:disabled { opacity: .35; cursor: not-allowed; }
+.rvp-transport .rvp-play { width: 34px; height: 34px; background: #22222a; color: var(--text); }
+.rvp-transport .rvp-play:hover:not(:disabled) { background: var(--primary); color: #fff; }
+.rvp-transport svg { width: 15px; height: 15px; }
+
+.rvp-clock { display: flex; align-items: baseline; gap: 5px; font: 12px var(--font-geist-mono), monospace; }
+.rvp-clock strong { font-weight: 600; }
+.rvp-clock.is-seeking strong { color: var(--muted); }
+.rvp-clock span { color: var(--muted); font-size: 11px; }
+
+.rvp-volume { gap: 5px; }
+.rvp-volume input { width: 66px; accent-color: var(--primary); cursor: pointer; }
+
+.rvp-select { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+.rvp-select svg { width: 14px; height: 14px; }
+.rvp-select select {
+  height: 28px; padding: 0 20px 0 6px;
+  border: 1px solid var(--rv-line); border-radius: 7px;
+  background: #17171c; color: var(--text); font-size: 11px; cursor: pointer;
+}
+
+.rvp-tools { display: flex; margin-left: auto; border: 1px solid var(--rv-line); border-radius: 8px; overflow: hidden; }
+.rvp-tools button { width: 28px; height: 28px; border-radius: 0; }
+.rvp-tools button.is-active { background: #3b3118; color: var(--rv-marker); }
+.rvp-fullscreen { flex: none; }
+@media (max-width: 1080px) { .rvp-tools { margin-left: 0; } .rvp-transport { flex-wrap: wrap; } }
+
+.rvp-annotation-list {
+  display: flex; flex-wrap: wrap; gap: 6px; flex: none;
+  margin: 0; padding: 0 16px 12px; list-style: none;
+}
+.rvp-annotation-list li {
+  display: flex; align-items: center;
+  border: 1px solid var(--rv-line); border-radius: 7px; background: #17171c;
+}
+.rvp-annotation-list button {
+  border: 0; background: none; color: var(--muted);
+  padding: 4px 7px; font-size: 10px; cursor: pointer;
+}
+.rvp-annotation-list button:hover { color: var(--text); }
+.rvp-annotation-list button:last-child { padding-left: 0; }
+.rvp-annotation-list svg { width: 11px; height: 11px; }
+
+/* Right panel ------------------------------------------------------------- */
+.rv-panel {
+  display: flex; flex-direction: column; min-height: 0;
+  border-left: 1px solid var(--rv-line); background: #0c0c0f;
+}
+@media (max-width: 1080px) { .rv-panel { border-left: 0; border-top: 1px solid var(--rv-line); min-height: 70vh; } }
+
+.rv-tabs { display: flex; flex: none; border-bottom: 1px solid var(--rv-line); }
+.rv-tabs button {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  flex: 1; padding: 12px 0;
+  border: 0; border-bottom: 2px solid transparent;
+  background: none; color: var(--muted);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.rv-tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--primary); }
+.rv-panel-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+/* Comments ---------------------------------------------------------------- */
+.rvc { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.rvc-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: none;
+  padding: 12px 14px; border-bottom: 1px solid var(--rv-line);
+}
+.rvc-head h2 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; font-weight: 600; }
+.rvc-head > div { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 11px; }
+.rvc-head button {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 7px; border: 1px solid var(--rv-line); border-radius: 6px;
+  background: #17171c; color: var(--muted); font-size: 10px; cursor: pointer;
+}
+.rvc-head button:hover { color: var(--text); }
+
+.rvc-feed { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 0; }
+.rvc-empty { margin: 0; padding: 40px 24px; color: var(--muted); font-size: 12px; line-height: 1.6; text-align: center; }
+
+.rvc-note {
+  padding: 12px 14px;
+  border-left: 2px solid transparent;
+  transition: background .18s, border-color .18s;
+}
+.rvc-note + .rvc-note { border-top: 1px solid #1b1b21; }
+.rvc-note:hover { background: #111116; }
+.rvc-note.is-focused { background: #15131f; border-left-color: var(--primary); }
+.rvc-note.is-resolved { opacity: .5; }
+
+.rvc-meta { display: flex; align-items: center; gap: 7px; }
+.rvc-avatar {
+  display: grid; place-items: center; flex: none;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #2c2444; color: #cbbcff;
+  font: 600 9px var(--font-geist-mono), monospace;
+}
+.rvc-meta strong { font-size: 12px; font-weight: 600; }
+.rvc-meta small { color: var(--muted); font-size: 10px; }
+.rvc-meta em {
+  margin-left: auto; padding: 2px 6px; border-radius: 4px;
+  background: #1b2836; color: #8fb4d8;
+  font: 500 9px var(--font-geist-mono), monospace; font-style: normal;
+}
+
+.rvc-body { margin: 7px 0 0; font-size: 12px; line-height: 1.6; color: #d6d5dd; overflow-wrap: anywhere; }
+.rvc-note.is-resolved .rvc-body { text-decoration: line-through; text-decoration-color: #55525f; }
+.rvc-stamp {
+  display: inline-block; margin-right: 6px; padding: 1px 5px;
+  border: 0; border-radius: 4px;
+  background: #3a2e17; color: var(--rv-marker);
+  font: 600 10px var(--font-geist-mono), monospace; cursor: pointer;
+  vertical-align: baseline;
+}
+.rvc-stamp:hover { background: #4a3a1c; }
+.rvc-mention { color: #a99bff; font-weight: 600; }
+
+.rvc-recording { margin-top: 9px; }
+.rvc-recording audio { width: 100%; height: 34px; }
+.rvc-recording video { width: 100%; max-height: 180px; border-radius: 8px; background: #000; }
+
+.rvc-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.rvc-attachments span, .rvc-attachments a {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 7px; border: 1px solid var(--rv-line); border-radius: 6px;
+  background: #17171c; color: var(--muted); font-size: 10px;
+}
+.rvc-attachments a:hover { color: var(--text); border-color: var(--primary); }
+.rvc-attachments svg { width: 11px; height: 11px; }
+
+.rvc-reply { display: flex; gap: 7px; margin: 9px 0 0 6px; padding-left: 9px; border-left: 1px solid var(--rv-line); }
+.rvc-reply svg { flex: none; margin-top: 4px; color: var(--muted); }
+.rvc-reply .rvc-body { margin-top: 3px; }
+
+.rvc-actions { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+.rvc-actions button {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 0; border: 0; background: none;
+  color: var(--muted); font-size: 11px; cursor: pointer;
+}
+.rvc-actions button:hover { color: var(--text); }
+.rvc-actions .rvc-resolve:hover { color: #7fd6a0; }
+.rvc-actions .rvc-delete:hover { color: var(--danger); }
+.rvc-reactions { display: flex; gap: 5px; margin-left: auto; }
+.rvc-reactions button {
+  padding: 2px 6px; border: 1px solid var(--rv-line); border-radius: 999px;
+  background: #17171c; font-size: 10px;
+}
+
+/* Composer ---------------------------------------------------------------- */
+.rvc-composer {
+  position: relative; display: grid; gap: 8px; flex: none;
+  padding: 12px 14px; border-top: 1px solid var(--rv-line); background: #0a0a0d;
+}
+.rvc-composer textarea {
+  min-height: 62px; padding: 9px 10px; resize: vertical;
+  border: 1px solid var(--rv-line); border-radius: 9px;
+  background: #131318; color: var(--text);
+  font: inherit; font-size: 12px; line-height: 1.5; outline: 0;
+}
+.rvc-composer textarea:focus { border-color: var(--primary); }
+.rvc-composer textarea:disabled { opacity: .55; }
+
+.rvc-replying, .rvc-chip {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 9px; border: 1px solid var(--rv-line); border-radius: 7px;
+  background: #16161c; color: var(--muted); font-size: 11px;
+}
+.rvc-replying button, .rvc-chip button {
+  display: grid; place-items: center; border: 0; background: none;
+  color: var(--muted); cursor: pointer;
+}
+.rvc-replying button:hover, .rvc-chip button:hover { color: var(--danger); }
+
+.rvc-mentions {
+  position: absolute; left: 14px; right: 14px; bottom: calc(100% - 4px); z-index: 10;
+  list-style: none; margin: 0; padding: 5px;
+  border: 1px solid var(--rv-line); border-radius: 10px;
+  background: #16161c; box-shadow: 0 14px 34px #000a;
+}
+.rvc-mentions button {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  padding: 7px 8px; border: 0; border-radius: 7px;
+  background: none; color: var(--text); font-size: 12px; text-align: left; cursor: pointer;
+}
+.rvc-mentions button:hover { background: #22222a; }
+.rvc-mentions small { margin-left: auto; color: var(--muted); font-size: 10px; }
+
+.rvc-send { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rvc-send small, .rvc-pin { color: var(--muted); font-size: 10px; }
+.rvc-pin { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.rvc-pin input { accent-color: var(--primary); }
+.rvc-send button[type="submit"] {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; flex: none;
+  border: 0; border-radius: 9px;
+  cursor: pointer; /* colour: app/ui.css */
+  transition: background .15s, opacity .15s;
+}
+.rvc-send button[type="submit"]:disabled { opacity: .4; cursor: not-allowed; }
+
+.rvc-revision {
+  display: grid; gap: 9px; flex: none;
+  margin: 0; padding: 14px 16px;
+  border-bottom: 1px solid var(--rv-line); background: #131318;
+}
+.rvc-revision label { font-size: 11px; font-weight: 600; color: var(--muted); }
+.rvc-revision textarea {
+  min-height: 70px; padding: 9px 10px; resize: vertical;
+  border: 1px solid var(--rv-line); border-radius: 8px;
+  background: #0c0c10; color: var(--text); font: inherit; font-size: 12px; outline: 0;
+}
+.rvc-revision > div { display: flex; justify-content: flex-end; gap: 7px; }
+.rvc-revision > div button {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 12px;
+  border: 1px solid var(--rv-line); border-radius: 8px;
+  background: #1b1b22; color: var(--text); font-size: 12px; cursor: pointer;
+}
+.rvc-revision > div button[type="submit"] { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+/* Recorder ---------------------------------------------------------------- */
+.rvr { display: grid; gap: 7px; }
+.rvr-modes { display: flex; gap: 5px; }
+.rvr-modes button {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 8px; border: 1px solid var(--rv-line); border-radius: 7px;
+  background: #16161c; color: var(--muted); font-size: 10px; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.rvr-modes button:hover:not(:disabled) { background: #22222a; color: var(--text); border-color: #3a3a44; }
+.rvr-modes button:disabled { opacity: .4; cursor: not-allowed; }
+.rvr-modes svg { width: 12px; height: 12px; }
+.rvr-dot { display: none; }
+@media (max-width: 1240px) { .rvr-modes button span { display: none; } }
+
+.rvr-live {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border: 1px solid #6b2733; border-radius: 8px;
+  background: #2a1419; color: #ffb0bb; font-size: 11px;
+}
+.rvr-live i { width: 8px; height: 8px; border-radius: 50%; background: #ff5c6e; animation: rv-pulse 1.4s ease-in-out infinite; }
+.rvr-live button {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
+  padding: 4px 8px; border: 0; border-radius: 6px;
+  background: #ff5c6e; color: #2a1419; font-size: 10px; font-weight: 600; cursor: pointer;
+}
+.rvr-live svg { width: 9px; height: 9px; }
+@keyframes rv-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .rvr-live i { animation: none; } }
+
+.rvr-preview { padding: 9px; border: 1px solid var(--rv-line); border-radius: 9px; background: #16161c; }
+.rvr-preview audio { width: 100%; height: 32px; }
+.rvr-preview video { width: 100%; max-height: 150px; border-radius: 7px; background: #000; }
+.rvr-preview > div { display: flex; align-items: center; gap: 8px; margin-top: 7px; color: var(--muted); font-size: 10px; }
+.rvr-preview > div button {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 8px; border: 1px solid var(--rv-line); border-radius: 6px;
+  background: #1b1b22; color: var(--muted); font-size: 10px; cursor: pointer;
+}
+.rvr-preview > div button:first-of-type { margin-left: auto; }
+.rvr-preview .rvr-attach { background: var(--primary); border-color: var(--primary); color: #fff; }
+.rvr-preview svg { width: 11px; height: 11px; }
+
+/* Fields ------------------------------------------------------------------ */
+.rvf { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0 16px; }
+.rvf section { padding: 14px; border-bottom: 1px solid #1b1b21; }
+.rvf h3 {
+  margin: 0 0 10px; color: var(--muted);
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+}
+.rvf-note { margin: 0 0 9px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.rvf-rows { display: grid; gap: 7px; margin: 0; }
+.rvf-rows > div { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.rvf-rows dt { flex: none; color: var(--muted); font-size: 11px; }
+.rvf-rows dd {
+  margin: 0; min-width: 0; font-size: 11px; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rvf-rows dd em { color: #5f5d6b; font-style: normal; }
+
+.rvf select {
+  width: 100%; height: 32px; padding: 0 10px;
+  border: 1px solid var(--rv-line); border-radius: 8px;
+  background: #16161c; color: var(--text); font-size: 12px; cursor: pointer;
+}
+.rvf select:disabled { opacity: .5; cursor: not-allowed; }
+
+.rvf-tasks, .rvf-versions { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rvf-tasks li { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
+.rvf-tasks a { display: inline-flex; align-items: center; gap: 5px; color: var(--text); }
+.rvf-tasks a:hover { color: var(--primary-2, #a99bff); }
+
+.rvf-versions a {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px; border: 1px solid var(--rv-line); border-radius: 8px;
+  background: #131318; font-size: 11px;
+}
+.rvf-versions a:hover { border-color: #3a3a44; }
+.rvf-versions li.is-current a { border-color: var(--primary); background: #1a1630; }
+.rvf-versions strong { font: 600 11px var(--font-geist-mono), monospace; }
+.rvf-versions span { color: var(--muted); }
+.rvf-versions small { margin-left: auto; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
+
+/* Share panel ------------------------------------------------------------
+   Carried over unchanged from the previous review stylesheet; only the outer
+   margin is new, to sit the panel inside the flush layout. */
+.rv > .rv-share { margin: 14px 16px; }
+.rv-share-open{padding:7px 11px;font-size:12px}
+.rv-share-open svg{width:13px}
+.rv-share{display:grid;gap:14px;margin:0 0 14px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:11px}
+.rv-share>header{display:flex;align-items:center;justify-content:space-between}
+.rv-share>header>div{display:flex;align-items:center;gap:8px}
+.rv-share>header button{border:0;background:none;color:var(--muted);cursor:pointer}
+.rv-share-form{display:grid;grid-template-columns:1.4fr 1.6fr .7fr auto;align-items:end;gap:10px}
+.rv-share-form label{display:grid;gap:6px;font-size:11px;font-weight:600;color:var(--muted)}
+.rv-share-form input,.rv-share-form select{height:38px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:#0c0c10;color:var(--text);outline:0;max-width:100%}
+.rv-share-form input:focus,.rv-share-form select:focus{border-color:var(--primary)}
+.rv-share-form>.form-error{grid-column:1/-1;margin:0}
+.rv-share-form>button{height:38px;background:var(--primary);border-color:var(--primary);color:#fff}
+.rv-share-token{display:grid;gap:8px;padding:12px;border:1px solid #6b5424;border-radius:9px;background:#332a14}
+.rv-share-token p{display:flex;align-items:center;gap:6px;margin:0;color:#ffd278;font-size:11px}
+.rv-share-token>div{display:flex;gap:7px}
+.rv-share-token input{flex:1;min-width:0;height:36px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:#0c0c10;color:var(--text);font:11px var(--font-geist-mono)}
+.rv-share-token>div button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);cursor:pointer}
+.rv-share-list{list-style:none;display:grid;gap:9px;margin:0;padding:0}
+.rv-share-list>li{padding:11px 12px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2)}
+.rv-share-empty{margin:0;color:var(--muted);font-size:12px}
+.rv-share-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.rv-share-row strong{display:block;font-size:12px}
+.rv-share-row small{display:block;margin-top:3px;color:var(--muted);font-size:10px}
+.rv-share-row small.is-ended{color:var(--danger)}
+.rv-share-row small.rv-share-activity{display:flex;align-items:center;gap:5px;margin-top:4px;color:var(--text);font-size:10.5px}
+.rv-share-row small.rv-share-activity svg{flex:none;color:var(--muted)}
+.rv-share-row small.rv-share-activity.is-approved{color:var(--success,#71e6b5)}
+.rv-share-row small.rv-share-activity.is-changes_requested{color:var(--warning,#f1c55b)}
+.rv-share-row button{padding:6px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--muted);font-size:11px;cursor:pointer}
+.rv-share-row button:hover:not(:disabled){color:var(--danger);border-color:var(--danger)}
+.rv-share-guests{list-style:none;display:grid;gap:6px;margin:10px 0 0;padding:10px 0 0;border-top:1px solid var(--border)}
+.rv-share-guests li{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.rv-share-guests span{font-size:11px}
+.rv-share-guests small{display:block;color:var(--muted);font-size:10px}
+.rv-share-guests button{display:grid;place-items:center;width:26px;height:26px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--muted);cursor:pointer}
+.rv-share-guests button:hover:not(:disabled){color:var(--danger)}
+@media(max-width:850px){.rv-share-form{grid-template-columns:1fr}}
+
+/* Versions -----------------------------------------------------------------
+   The compare control sits beside the version selector, because choosing what to look at
+   and choosing to look at two things are the same decision. */
+.rv-compare-toggle {
+  flex: none; height: 28px; padding: 0 10px;
+  border: 1px solid var(--rv-line); border-radius: 7px;
+  background: #17171c; color: var(--muted);
+  font-size: 11px; font-weight: 500; cursor: pointer;
+}
+.rv-compare-toggle:hover { background: #23232a; color: var(--text); }
+.rv-compare-toggle.is-on { display: inline-flex; align-items: center; gap: 5px; border-color: var(--primary); color: var(--text); }
+
+.rv-compare { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--rv-canvas); }
+
+.rv-compare-grid { display: grid; grid-template-columns: 1fr 1fr; flex: 1; min-height: 0; }
+.rv-compare-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.rv-compare-pane + .rv-compare-pane { border-left: 1px solid var(--rv-line); }
+.rv-compare-pane > header { display: flex; align-items: baseline; gap: 8px; flex: none; padding: 9px 12px; }
+.rv-compare-pane > header strong { font: 600 11px var(--font-geist-mono), monospace; color: #cbbcff; }
+.rv-compare-pane > header span { min-width: 0; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.rv-compare-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
+/* Sized to the media, exactly as `.rvp-frame` is in the single player: `height: 100%` on
+   the video alone never resolves here — the stage is not a definite height from the item's
+   side — so it fell back to its intrinsic ratio at full width and was clipped. */
+.rv-compare-frame { position: relative; max-width: 100%; max-height: 100%; aspect-ratio: 16 / 9; display: flex; align-items: center; justify-content: center; }
+.rv-compare-frame.is-unsized { width: 100%; height: 100%; aspect-ratio: auto; }
+.rv-compare-stage video { display: block; width: 100%; height: 100%; object-fit: contain; cursor: pointer; }
+.rv-compare-empty { margin: 0; padding: 20px; color: var(--muted); font-size: 12px; text-align: center; }
+
+
+/* Two feeds, never merged. */
+.rvc-toggles { display: flex; gap: 8px; flex: none; padding: 10px 14px; border-bottom: 1px solid var(--rv-line); }
+.rvc-toggles label {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 9px; border: 1px solid var(--rv-line); border-radius: 999px;
+  background: #17171c; font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.rvc-toggles input { accent-color: var(--primary); }
+.rvc-toggles small { color: var(--muted); font-weight: 500; }
+.rvc-side + .rvc-side { border-top: 1px solid var(--rv-line); }
+.rvc-side h3 {
+  position: sticky; top: 0; z-index: 1; margin: 0;
+  padding: 8px 14px; background: #0c0c0fe8; color: #cbbcff;
+  font: 600 10px var(--font-geist-mono), monospace; letter-spacing: .06em; text-transform: uppercase;
+}
+.rvf-latest { margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #1f3a2c; color: #7fd6a0; font: 600 8px var(--font-geist-mono), monospace; }
+
+/* ---- Trust fixes: approval state, team notes, client preview, drafts ------------------ */
+.rv { --rv-success: oklch(0.78 0.14 158); --rv-team: oklch(0.82 0.15 80); }
+.rv-panel-body[hidden] { display: none; }
+
+/* Approved: the stage pill turns success-green and says who signed off, and when. */
+.rv-stage.is-approved {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-color: color-mix(in oklch, var(--rv-success) 45%, transparent);
+  background: color-mix(in oklch, var(--rv-success) 12%, transparent);
+  color: var(--rv-success); text-transform: none; letter-spacing: 0;
+  font: 600 11px var(--font-geist-sans), sans-serif;
+}
+.rv-stage.is-approved small { color: color-mix(in oklch, var(--rv-success) 75%, var(--muted)); font-size: 11px; font-weight: 500; }
+
+/* The approve confirmation reuses the Tasks ConfirmDialog; these are its review extras. */
+.rv-confirm-notes { display: grid; gap: 8px; margin-top: 14px; }
+.rv-confirm-warn {
+  display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 9px 11px;
+  border: 1px solid oklch(0.82 0.15 80 / 30%); border-radius: 8px;
+  background: oklch(0.82 0.15 80 / 9%); color: oklch(0.88 0.11 85); font-size: 12.5px; line-height: 1.45;
+}
+.rv-confirm-warn svg { flex: none; margin-top: 2px; }
+.tb-dialog-confirm strong { color: var(--text); font-weight: 600; }
+
+/* Team-only notes: amber lock badge and a quiet left rule, so they read as internal. */
+.rvc-meta em.rvc-team {
+  display: inline-flex; align-items: center; gap: 3px; margin-left: auto;
+  background: color-mix(in oklch, var(--rv-team) 14%, transparent); color: var(--rv-team);
+}
+.rvc-reply .rvc-meta em.rvc-team { margin-left: 6px; }
+.rvc-note.is-team { box-shadow: inset 2px 0 0 color-mix(in oklch, var(--rv-team) 55%, transparent); }
+
+.rvc-visibility { display: inline-flex; justify-self: start; padding: 2px; border: 1px solid var(--rv-line); border-radius: 7px; background: #121217; }
+.rvc-visibility button {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px;
+  border: 0; border-radius: 5px; background: none; color: var(--muted); font-size: 11px; cursor: pointer;
+}
+.rvc-visibility button:hover { color: var(--text); }
+.rvc-visibility button.is-on { background: #23232b; color: var(--text); }
+.rvc-visibility button.is-on.is-team { background: color-mix(in oklch, var(--rv-team) 16%, transparent); color: var(--rv-team); }
+.rvc-visibility button:focus-visible, .rvc-preview:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.rvc-visibility-locked { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--rv-team); font-size: 11px; }
+.rvc-composer.is-team textarea { border-color: color-mix(in oklch, var(--rv-team) 40%, var(--rv-line)); }
+
+/* "See what the client sees" */
+.rvc-preview-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 14px; border-bottom: 1px solid var(--rv-line); color: var(--muted); font-size: 11px;
+}
+.rvc-preview {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px;
+  border: 1px solid var(--rv-line); border-radius: 999px; background: none; color: var(--muted);
+  font-size: 11px; cursor: pointer;
+}
+.rvc-preview:hover { color: var(--text); }
+.rvc-preview.is-on { border-color: color-mix(in oklch, var(--primary) 60%, transparent); background: color-mix(in oklch, var(--primary) 16%, transparent); color: var(--primary-2); }
+.rvc-preview-note { margin: 0; padding: 12px 14px; border-top: 1px solid var(--rv-line); color: var(--muted); font-size: 11.5px; }
+
+.rvc-chip.is-restored { border-color: color-mix(in oklch, var(--primary) 40%, var(--rv-line)); color: var(--primary-2); }
+.rvc-revision-note { margin: 0; color: var(--muted); font-size: 11px; }
+/* Brief & Specs mismatch: the cut's real aspect or length differs from the project's specs. */
+.rv-spec-warn { display: inline-flex; flex: none; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #f1c55b66; border-radius: 999px; background: #f1c55b14; color: #f6d78a; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: help; }
+
+/* Client decision record (proof of delivery) ------------------------------ */
+.rv-proof {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; flex: none;
+  margin: 0; padding: 8px 16px;
+  border-bottom: 1px solid #1f4a37;
+  background: #10241b; color: #9fdcbf; font-size: 12px; line-height: 1.5;
+}
+.rv-proof svg { flex: none; }
+.rv-proof strong { color: #c9f2dc; font-weight: 600; }
+.rv-proof span { color: #7fb79c; }
+.rv-proof.is-changes_requested { border-bottom-color: #5a4a1e; background: #2a2213; color: #f0d9a1; }
+.rv-proof.is-changes_requested strong { color: #f7e6bd; }
+.rv-proof.is-changes_requested span { color: #c9b27a; }
+
+/* Share panel: decisions per link */
+.rv-share-form>label.rv-share-check{grid-column:1/-1;order:5;display:flex;align-items:flex-start;gap:9px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer}
+.rv-share-form>.form-error{order:6}
+.rv-share-form label.rv-share-check input{width:15px;height:15px;margin:1px 0 0;padding:0;accent-color:var(--primary)}
+.rv-share-check small{display:block;margin-top:2px;color:var(--muted);font-size:11px;font-weight:400}
+.rv-share-row-actions{display:flex;align-items:center;gap:10px;flex:none}
+.rv-share-toggle{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px;cursor:pointer}
+.rv-share-toggle input{width:14px;height:14px;margin:0;accent-color:var(--primary)}
+
+/* Open in review ----------------------------------------------------------
+   Back says where it goes; it carries the label on wide screens and shrinks to the arrow
+   when the bar runs out of room. */
+.rv-back { display: inline-flex; align-items: center; gap: 4px; width: auto; min-width: 30px; padding: 0 8px 0 4px; font-size: 12px; font-weight: 500; text-decoration: none; }
+@media (max-width: 1100px) { .rv-back-label { display: none; } .rv-back { padding: 0; justify-content: center; } }
+
+/* The picture never collapses. The stage used to be free to shrink to nothing when the
+   column above it ran out of height (a narrow split pane did exactly that, leaving a 12px
+   strip of video); it now always keeps a watchable floor, and on stacked layouts a share
+   of the width so 16:9 stays letterboxed rather than squeezed. */
+.rvp-stage { min-height: 240px; }
+/* The file's name is the part worth keeping; the client and project go first. */
+@media (max-width: 1240px) { .rv-crumbs span { display: none; } }
+@media (max-width: 1080px) {
+  .rvp-stage { min-height: clamp(220px, 56vw, 560px); }
+  .rv-top { flex-wrap: wrap; row-gap: 8px; }
+  .rv-crumbs { flex: 1 1 160px; }
+  .rv-actions { margin-left: auto; }
+}
+@media (max-width: 600px) {
+  .rv-top { padding: 8px 10px; gap: 8px; }
+  .rv-version, .rv-compare-toggle { max-width: 46vw; }
+  .rv-spec-warn { order: 10; }
+  .rvp-transport { gap: 6px; padding: 8px 10px; }
+  .rvp-volume input, .rvp-select:has(select[aria-label="Playback quality"]) { display: none; }
+  .rv-panel { min-height: 60vh; }
+}
+
+/* Stills and documents. */
+.rvp-still { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; }
+.rvp-still.is-failed { visibility: hidden; }
+.rvp-audio { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; color: #b9a6ff; pointer-events: none; }
+.rvp-audio span { max-width: 80%; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.rvp-stage.is-document { align-items: stretch; justify-content: stretch; padding: 0; }
+.rvp-doc { flex: 1; width: 100%; height: 100%; min-height: 0; border: 0; background: #1b1b20; }
+@media (max-width: 1080px) { .rvp-stage.is-document { min-height: 70vh; } }
+.rvp-transport.is-document, .rvp-transport.is-still { min-height: 48px; }
+.rvp-doc-label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.rvp-spacer { flex: 1; }
+.rvp-doc-link { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--rv-line); border-radius: 8px; color: var(--text); font-size: 12px; text-decoration: none; }
+.rvp-doc-link:hover { border-color: #66558e; background: #1d1828; }
+
+/* The task this review was opened from. */
+.rv-task { flex: none; display: grid; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--rv-line); background: linear-gradient(180deg, #17122a 0%, #0f0d17 100%); }
+.rv-task header { display: flex; align-items: center; gap: 8px; }
+.rv-task-eyebrow { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; color: #b9a6ff; font-size: 11px; font-weight: 600; letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
+.rv-task-details { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; height: 26px; padding: 0 9px; border: 1px solid #3a3150; border-radius: 7px; color: #d7c9ff; font-size: 12px; text-decoration: none; white-space: nowrap; }
+.rv-task-details:hover { border-color: #8d72ff; background: #241d38; }
+.rv-task h2 { margin: 0; overflow: hidden; font-size: 14px; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.rv-task dl { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 6px 12px; margin: 0; font-size: 12px; }
+.rv-task dt { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
+.rv-task dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-task dd.is-overdue { color: #ff8a8a; }
+.rv-task select { width: 100%; max-width: 220px; height: 28px; padding: 0 8px; border: 1px solid #3a3150; border-radius: 7px; background: #120f1c; color: var(--text); font-size: 12px; }
+.rv-task-muted { color: var(--muted); }
+.rv-task-note { display: flex; align-items: center; gap: 6px; margin: 0; color: #f0d9a1; font-size: 11px; }
+.rv-task-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.rv-task-files button { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; height: 26px; padding: 0 8px; border: 1px solid #3a3150; border-radius: 7px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+.rv-task-files button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+.rv-task-files button[aria-current="true"] { border-color: #8d72ff; color: var(--text); background: #241d38; }
+
+/* Publish to project (library file → review version) ----------------------------------- */
+.rv-actions .rv-publish-btn { border-color: color-mix(in oklab, var(--primary) 55%, transparent); color: #d7c9ff; }
+.rv-actions .rv-publish-btn:hover:not(:disabled) { background: color-mix(in oklab, var(--primary) 18%, transparent); }
+.rv-banner-action { flex: none; margin-left: auto; height: 26px; padding: 0 10px; border: 1px solid #3a5577; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.rv-banner-action:hover { background: #1b2b3e; }
+.rv-publish-mode { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 0; border: 0; color: var(--tb-muted-fg, #a1a1aa); font-size: 12px; }
+.rv-publish-mode legend { width: 100%; margin-bottom: 6px; font-weight: 500; }
+.rv-publish-mode label { display: inline-flex; align-items: center; gap: 6px; color: var(--tb-fg, #fafafa); font-size: 13px; cursor: pointer; }
+.rv-publish-mode input { accent-color: var(--primary); }
+.rv-publish-carry { margin: 0; padding: 10px 12px; border: 1px solid var(--tb-border, #27272a); border-radius: 8px; color: var(--tb-muted-fg, #a1a1aa); font-size: 12px; line-height: 1.5; }
+
+/* Read-only role on a project cut: say so where the composer would be. */
+.rvc-viewonly { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 12px 14px; border-top: 1px solid var(--rv-line); color: var(--muted); font-size: 12px; line-height: 1.45; }
+.rvc-viewonly svg { flex: none; margin-top: 2px; }
+.rvc-viewonly strong { color: var(--foreground); font-weight: 600; }
+.rv-task dt label { display: inline-flex; align-items: center; gap: inherit; }
+
+/* Drawing display windows ------------------------------------------------ */
+/* Every drawing stays mounted; its window sets its opacity, and this eases it in and out. */
+.rvp-drawing { transition: opacity .28s linear; }
+.rvp-drawing:not(.is-shown) .rvp-shape { pointer-events: none; }
+/* The span a held drawing or range note covers, as a thin strip just above the bar. */
+.rvp-span {
+  position: absolute; bottom: calc(100% + 3px); height: 3px; min-width: 3px;
+  border-radius: 2px; pointer-events: none;
+  background: color-mix(in oklch, var(--rv-marker) 55%, transparent);
+}
+.rvp-span.is-range { background: color-mix(in oklch, var(--rv-marker) 80%, transparent); }
+.rvp-span.is-pending {
+  background: repeating-linear-gradient(90deg, var(--primary-2, #a99bff) 0 6px, transparent 6px 9px);
+  height: 4px;
+}
+
+.rvc-stamp { display: inline-flex; align-items: center; gap: 4px; }
+.rvc-stamp svg { width: 10px; height: 10px; flex: none; }
+.rvc-stamp small { font: inherit; font-weight: 500; opacity: .7; }
+.rvc-stamp.is-range { background: #45361a; }
+.rvc-note.is-live { border-left-color: var(--rv-marker); }
+.rvc-note.is-live.is-focused { border-left-color: var(--primary); }
+.rvc-note.is-live .rvc-stamp { box-shadow: 0 0 0 1px color-mix(in oklch, var(--rv-marker) 60%, transparent); }
+
+.rvc-hold {
+  display: grid; gap: 7px; padding: 8px 9px;
+  border: 1px solid var(--rv-line); border-radius: 8px; background: #121217;
+}
+.rvc-hold-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.rvc-hold-label { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.rvc-hold-options { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--rv-line); border-radius: 7px; background: #0d0d11; }
+.rvc-hold-options button {
+  min-width: 36px; min-height: 26px; padding: 3px 8px; border: 0; border-radius: 5px;
+  background: none; color: var(--muted); font: 600 11px var(--font-geist-mono), monospace; cursor: pointer;
+}
+.rvc-hold-options button:hover { color: var(--text); }
+.rvc-hold-options button.is-on { background: #3a2e17; color: var(--rv-marker); }
+.rvc-hold-options button:focus-visible, .rvc-hold-range button:focus-visible, .rvc-hold-range input:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.rvc-hold-range { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--muted); font-size: 11px; }
+.rvc-hold-range b { color: var(--text); font: 600 11px var(--font-geist-mono), monospace; }
+.rvc-hold-range label { display: inline-flex; align-items: center; gap: 5px; }
+.rvc-hold-range input {
+  width: 58px; padding: 3px 6px; border: 1px solid var(--rv-line); border-radius: 5px;
+  background: #0d0d11; color: var(--text); font: 600 11px var(--font-geist-mono), monospace;
+}
+.rvc-hold-range input[aria-invalid="true"] { border-color: var(--danger); }
+.rvc-hold-range button {
+  padding: 3px 8px; border: 1px solid var(--rv-line); border-radius: 5px;
+  background: #17171c; color: var(--text); font-size: 11px; cursor: pointer;
+}
+.rvc-hold-range button:disabled { opacity: .5; cursor: default; }
+.rvc-hold-summary { color: var(--muted); font-size: 10.5px; }
+.rvc-hold-summary.is-error { color: var(--danger); }
+@media (max-width: 600px) {
+  .rvc-hold-options { display: grid; grid-template-columns: repeat(5, 1fr); width: 100%; }
+  .rvc-hold-options button { min-height: 32px; padding: 3px 0; }
+}
+@media (prefers-reduced-motion: reduce) { .rvp-drawing { transition: none; } }
+
+/* Review header, grouped ------------------------------------------------------
+   Three groups: where you are (back + title), what is on screen (version, compare, stage)
+   and what you can do (the decision, then tools with everything else under More). Wide,
+   they sit on one row; at tablet the version group drops to its own row; on a phone the
+   decision buttons get a full-width row of their own and Share, Download and Compare move
+   into More. */
+.rv-top-id { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
+.rv-top-cut { display: flex; align-items: center; gap: 8px; flex: none; }
+/* The cut's own name outlasts the client and project in front of it. */
+.rv-top-id .rv-crumbs { flex: 1 1 auto; }
+.rv-top-id .rv-crumbs strong { flex: 0 1 auto; }
+/* With the app rail beside it the bar is ~250px narrower than the viewport, so the client and
+   project crumbs (also in Back's label and the title tooltip) give way before the name does. */
+@media (max-width: 1600px) { .rv-top-id .rv-crumbs span { display: none; } .rv-spec-detail { display: none; } }
+.rv-actions { gap: 10px; }
+.rv-actions-decide, .rv-actions-tools { display: flex; align-items: center; gap: 6px; }
+.rv-actions-tools { padding-left: 10px; border-left: 1px solid var(--rv-line); }
+.rv-actions-decide:empty { display: none; }
+.rv-actions-decide:empty + .rv-actions-tools { padding-left: 0; border-left: 0; }
+.rv-actions button[aria-pressed="true"] { border-color: #8b6cff88; background: #221d38; }
+.rv-actions .rv-more { color: var(--muted); }
+.rv-actions .rv-more[data-state="open"] { border-color: var(--primary); color: var(--text); }
+.rv-menu { min-width: 236px; background: #15141b; border-color: #2f2944; box-shadow: 0 18px 44px #000c; }
+.rv-menu [role="menuitem"] { gap: 9px; }
+.rv-menu-key { margin-left: auto; padding: 1px 6px; border: 1px solid var(--tb-border-strong, #34343c); border-radius: 4px; color: var(--muted); font: 600 10px var(--font-geist-mono), monospace; }
+/* Items that duplicate a button only appear once that button has been folded away. */
+@media (min-width: 768px) { .rv-menu .rv-menu-narrow { display: none; } }
+@media (max-width: 1240px) { .rv-share-btn span { display: none; } .rv-actions .rv-share-btn { padding: 0; width: 30px; justify-content: center; } }
+
+@media (max-width: 1080px) {
+  .rv-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "id actions" "cut cut"; align-items: center; }
+  .rv-top-id { grid-area: id; }
+  .rv-actions { grid-area: actions; margin-left: 0; }
+  .rv-top-cut { grid-area: cut; flex-wrap: wrap; }
+}
+@media (max-width: 767px) {
+  .rv-top { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "id tools" "cut cut" "decide decide"; row-gap: 8px; }
+  .rv-actions { display: contents; }
+  .rv-actions-tools { grid-area: tools; padding-left: 0; border-left: 0; }
+  .rv-actions-decide { grid-area: decide; }
+  .rv-actions-decide button { flex: 1 1 0; justify-content: center; height: 34px; }
+  .rv-actions .rv-share-btn, .rv-actions .rv-download-btn, .rv-top-cut select.rv-compare-toggle { display: none; }
+  .rv-crumbs strong { font-size: 14px; }
+  .rv-version { max-width: none; }
+  .rv-stage-by { display: none; }
+}
+@media (max-width: 600px) { .rv-spec-text { display: none; } }
+
+/* Comment filters --------------------------------------------------------- */
+.rvc-filters { display: grid; gap: 8px; flex: none; padding: 10px 14px; border-bottom: 1px solid var(--rv-line); }
+.rvc-search {
+  display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 10px;
+  border: 1px solid var(--rv-line); border-radius: 8px; background: #131318; color: var(--muted);
+}
+.rvc-search:focus-within { border-color: var(--primary); }
+.rvc-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--text); font: inherit; font-size: 12px; }
+.rvc-search input::-webkit-search-cancel-button { filter: invert(.6); }
+.rvc-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rvc-status { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--rv-line); border-radius: 8px; background: #0d0d11; }
+.rvc-status button, .rvc-chips button {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 26px; padding: 3px 8px;
+  border: 0; border-radius: 6px; background: none; color: var(--muted);
+  font-size: 11px; font-weight: 550; cursor: pointer; white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.rvc-status button small, .rvc-chips button small { color: inherit; opacity: .65; font: 600 10px var(--font-geist-mono), monospace; }
+.rvc-status button:hover, .rvc-chips button:hover { color: var(--text); }
+.rvc-status button.is-on { background: #2a2342; color: #e3dbff; }
+.rvc-chips { display: inline-flex; flex-wrap: wrap; gap: 5px; }
+.rvc-chips button { border: 1px solid var(--rv-line); background: #121217; }
+.rvc-chips button.is-on { border-color: #8b6cff88; background: #221d38; color: #e3dbff; }
+.rvc-status button:focus-visible, .rvc-chips button:focus-visible, .rvc-clear:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.rvc-clear { border: 0; background: none; color: #b9a6ff; font-size: 11px; font-weight: 600; cursor: pointer; padding: 3px 4px; }
+.rvc-chips .rvc-clear { border: 0; background: none; color: #b9a6ff; }
+.rvc-empty .rvc-clear { margin-top: 8px; padding: 5px 10px; border: 1px solid #3a3150; border-radius: 7px; }
+.rvc-empty p { margin: 0; }
+
+/* Edit, delete, edited, optimistic ---------------------------------------- */
+.rvc-meta .rvc-edited { color: #8d8a99; font-style: italic; }
+.rvc-note.is-pending, .rvc-reply.is-pending { opacity: .68; }
+.rvc-note.is-pending .rvc-meta small:first-of-type, .rvc-reply.is-pending .rvc-meta small:first-of-type { color: #b9a6ff; }
+.rvc-edit { display: grid; gap: 6px; margin-top: 7px; }
+.rvc-edit textarea {
+  min-height: 58px; padding: 8px 9px; resize: vertical;
+  border: 1px solid var(--primary); border-radius: 8px; background: #131318; color: var(--text);
+  font: inherit; font-size: 12px; line-height: 1.5; outline: 0;
+}
+.rvc-edit > div { display: flex; justify-content: flex-end; gap: 6px; }
+.rvc-edit button {
+  height: 28px; padding: 0 10px; border: 1px solid var(--rv-line); border-radius: 7px;
+  background: #17171c; color: var(--text); font-size: 11px; font-weight: 550; cursor: pointer;
+}
+.rvc-edit button.is-primary { border-color: var(--primary); background: var(--primary); color: #fff; }
+.rvc-edit button:disabled { opacity: .45; cursor: not-allowed; }
+.rvc-actions button:disabled { opacity: .4; cursor: not-allowed; }
+.rvc-actions.is-reply { margin-top: 4px; }
+.rvc-confirm { display: inline-flex; align-items: center; gap: 8px; padding: 2px 8px; border: 1px solid #5a2a33; border-radius: 6px; background: #2a1418; color: #f3c3cb; font-size: 11px; }
+.rvc-actions .rvc-confirm button { font-weight: 600; }
+.rvc-actions .rvc-delete.is-danger { color: #ff8a9a; }
+.rvc-loop {
+  display: inline-grid; place-items: center; width: 18px; height: 17px; margin-right: 6px; padding: 0;
+  border: 0; border-radius: 4px; background: #2a2342; color: #cbbcff; cursor: pointer; vertical-align: -3px;
+}
+.rvc-loop svg { width: 10px; height: 10px; }
+.rvc-loop:hover { background: var(--primary); color: #fff; }
+.rvc-hold.is-inline { margin-top: 8px; }
+.rvc-hold-close { margin-left: auto; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--muted); cursor: pointer; }
+.rvc-hold-close:hover { color: var(--text); background: #22222a; }
+
+/* Range composing --------------------------------------------------------- */
+.rvc-chip.is-range { border-color: #8b6cff66; background: #19152a; color: #cbbcff; }
+.rvc-chip.is-range > span { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; }
+.rvc-chip.is-range b { color: #fff; font: 600 11px var(--font-geist-mono), monospace; }
+.rvc-chip.is-range button:hover { color: var(--text); }
+.rvc-pin-row { display: inline-flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.rvc-range-btn {
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px;
+  border: 1px solid var(--rv-line); border-radius: 6px; background: #16161c; color: var(--muted);
+  font-size: 10px; font-weight: 600; cursor: pointer;
+}
+.rvc-range-btn:hover { color: var(--text); border-color: #8b6cff88; }
+
+/* Timeline range + loop --------------------------------------------------- */
+.rvp-mark {
+  position: absolute; top: -3px; bottom: -3px; border-radius: 3px; pointer-events: none;
+  background: color-mix(in oklch, var(--primary) 34%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--primary-2, #a99bff) 70%, transparent);
+}
+.rvp-loop { position: absolute; top: calc(100% + 3px); height: 3px; border-radius: 2px; background: #7fd6a0; pointer-events: none; }
+.rvp-handle {
+  position: absolute; top: 50%; z-index: 2; width: 10px; height: 20px; margin-left: -5px; padding: 0;
+  border: 1px solid #fff; border-radius: 3px; background: var(--primary);
+  transform: translateY(-50%); cursor: ew-resize; touch-action: none;
+}
+.rvp-handle.is-in { border-radius: 4px 1px 1px 4px; }
+.rvp-handle.is-out { border-radius: 1px 4px 4px 1px; }
+.rvp-handle:focus-visible { outline: 2px solid var(--primary-2, #a99bff); outline-offset: 2px; }
+.rvp-scrub.is-marking { cursor: ew-resize; }
+@media (pointer: coarse) { .rvp-handle { width: 16px; height: 26px; margin-left: -8px; } }
+.rvp-loop-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px 0 9px;
+  border: 1px solid #2f5a44; border-radius: 999px; background: #10241b; color: #9fdcbf;
+  font: 600 11px var(--font-geist-mono), monospace; white-space: nowrap;
+}
+.rvp-loop-chip svg { width: 12px; height: 12px; }
+.rvp-transport .rvp-loop-chip button { width: 22px; height: 22px; border-radius: 50%; color: #9fdcbf; }
+.rvp-transport .rvp-loop-chip button svg { width: 11px; height: 11px; }
+
+/* Keyboard shortcuts overlay ---------------------------------------------- */
+.rv-keys-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: #05050899; backdrop-filter: blur(3px); }
+.rv-keys {
+  width: min(760px, 100%); max-height: calc(100vh - 32px); overflow: auto;
+  border: 1px solid #2f2944; border-radius: 14px; background: #101014; color: var(--text);
+  box-shadow: 0 30px 80px #000c;
+}
+.rv-keys header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--rv-line); }
+.rv-keys h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; }
+.rv-keys header button { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
+.rv-keys header button:hover { background: #22222a; color: var(--text); }
+.rv-keys-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding: 16px 18px; }
+.rv-keys-group h3 { margin: 0 0 8px; color: #b9a6ff; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.rv-keys-group dl { display: grid; gap: 7px; margin: 0; }
+.rv-keys-group dl > div { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 10px; }
+.rv-keys-group dt { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 64px; }
+.rv-keys-group dt i { margin: 0 2px; color: var(--muted); font-style: normal; font-size: 10px; }
+.rv-keys-group dd { margin: 0; color: #c9c7d3; font-size: 12px; line-height: 1.4; }
+.rv-keys kbd {
+  display: inline-grid; place-items: center; min-width: 22px; height: 21px; padding: 0 6px;
+  border: 1px solid #3a3450; border-bottom-width: 2px; border-radius: 5px; background: #1a1726;
+  color: #e3dbff; font: 600 10.5px var(--font-geist-mono), monospace;
+}
+.rv-keys-foot { margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--rv-line); color: var(--muted); font-size: 11px; }
+@media (max-width: 900px) { .rv-keys-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .rv-keys-groups { grid-template-columns: 1fr; } .rv-keys-backdrop { align-items: end; padding: 0; } .rv-keys { border-radius: 14px 14px 0 0; max-height: 86vh; } }
+
+/* Compare: one transport for both cuts ------------------------------------ */
+.rv-compare-pane > header em { margin-left: auto; display: grid; place-items: center; color: #55525f; }
+.rv-compare-pane > header em.is-on { color: #7fd6a0; }
+.rv-compare-ended { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); padding: 4px 9px; border-radius: 6px; background: #000000b0; color: #d8d8e0; font: 500 10px var(--font-geist-mono), monospace; white-space: nowrap; }
+.rv-compare-transport {
+  display: flex; align-items: center; gap: 12px; flex: none;
+  padding: 10px 16px; border-top: 1px solid var(--rv-line); background: var(--rv-chrome);
+}
+.rv-compare-buttons { display: flex; align-items: center; gap: 2px; }
+.rv-compare-buttons button, .rv-compare-audio .rv-compare-mute {
+  display: grid; place-items: center; width: 30px; height: 30px; padding: 0;
+  border: 0; border-radius: 7px; background: none; color: var(--muted); cursor: pointer;
+}
+.rv-compare-buttons button:hover:not(:disabled), .rv-compare-audio .rv-compare-mute:hover { background: #22222a; color: var(--text); }
+.rv-compare-buttons .rv-compare-play { width: 34px; height: 34px; background: #22222a; color: var(--text); }
+.rv-compare-buttons .rv-compare-play:hover:not(:disabled) { background: var(--primary); color: #fff; }
+.rv-compare-buttons button:disabled { opacity: .35; cursor: not-allowed; }
+.rv-compare-clock { flex: none; color: var(--muted); font: 11px var(--font-geist-mono), monospace; }
+.rv-compare-clock strong { color: var(--text); font-size: 12px; font-weight: 600; }
+.rv-compare-scrub { position: relative; flex: 1; min-width: 80px; height: 4px; border-radius: 999px; background: #2b2b33; cursor: pointer; touch-action: none; }
+.rv-compare-scrub::before { content: ""; position: absolute; inset: -8px 0; }
+.rv-compare-scrub i { position: absolute; inset: 0 auto 0 0; display: block; border-radius: 999px; background: var(--primary); }
+.rv-compare-scrub b { position: absolute; top: 50%; width: 11px; height: 11px; margin-left: -5.5px; border-radius: 50%; background: #fff; transform: translateY(-50%); box-shadow: 0 0 0 3px #583be855; }
+.rv-compare-scrub:focus-visible { outline: 2px solid var(--primary); outline-offset: 6px; }
+.rv-compare-audio { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--rv-line); border-radius: 8px; background: #0d0d11; }
+.rv-compare-audio [role="radio"] {
+  min-height: 26px; padding: 2px 8px; border: 0; border-radius: 6px; background: none; color: var(--muted);
+  font: 600 11px var(--font-geist-mono), monospace; cursor: pointer;
+}
+.rv-compare-audio [role="radio"].is-on { background: #2a2342; color: #e3dbff; }
+@media (max-width: 1080px) { .rv-compare-stage { min-height: clamp(160px, 30vw, 420px); } }
+/* A phone stacks the cuts, one above the other, still under the one transport. */
+@media (max-width: 640px) {
+  .rv-compare-grid { grid-template-columns: 1fr; }
+  .rv-compare-pane + .rv-compare-pane { border-left: 0; border-top: 1px solid var(--rv-line); }
+  .rv-compare-stage { min-height: 52vw; }
+  .rv-compare-transport { flex-wrap: wrap; gap: 8px 10px; padding: 8px 10px; }
+  .rv-compare-scrub { order: -1; flex: 1 1 100%; margin: 8px 0 4px; }
+  .rv-compare-audio { margin-left: auto; }
+}

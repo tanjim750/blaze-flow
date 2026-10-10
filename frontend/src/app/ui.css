@@ -1,0 +1,73 @@
+/*
+ * Shared UI primitives that every screen uses the same way. Values come from tokens.css.
+ */
+
+/* ---- Primary button: one variant.
+ * `<Button variant="primary">` (`.ui-button-primary`) is the component; the other names
+ * are the screens' own button classes, which keep their size and layout rules but take
+ * their colour from here, so a primary action looks the same on every screen. */
+.ui-button-primary,
+.button.primary,
+.fx-btn.is-primary,
+.tb-button.is-primary,
+.money-button.is-primary,
+.pb-primary-button,
+.onboarding-primary,
+.rv-actions .rv-approve,
+.rvc-send button[type="submit"] {
+  border-color: transparent;
+  background: var(--bf-primary);
+  color: var(--bf-primary-foreground);
+  box-shadow: none;
+}
+.ui-button-primary:hover:not(:disabled),
+.button.primary:hover:not(:disabled),
+.fx-btn.is-primary:hover:not(:disabled),
+.tb-button.is-primary:hover:not(:disabled),
+.money-button.is-primary:hover:not(:disabled),
+.pb-primary-button:hover:not(:disabled),
+.onboarding-primary:hover:not(:disabled),
+.rv-actions .rv-approve:hover:not(:disabled),
+.rvc-send button[type="submit"]:hover:not(:disabled) {
+  background: var(--bf-primary-hover);
+  filter: none;
+}
+
+/* ---- Focus: a visible violet ring on anything reachable by keyboard.
+ * `:focus-visible` only, so mouse clicks stay clean. Controls and links get an outline
+ * (it survives `overflow: hidden` parents better than a shadow and wins over the old
+ * `outline: 0` resets); text fields keep their own border change and get the ring inset. */
+:is(a, button, summary, [role=button], [role=tab], [role=row], [role=gridcell], [role=option], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], [role=radio], [role=switch], [role=checkbox], [role=link], [role=treeitem], [tabindex]:not([tabindex="-1"])):not(input, textarea, select, .fx-resizer):focus-visible {
+  outline: var(--bf-focus-width) solid var(--bf-ring) !important;
+  outline-offset: var(--bf-focus-offset);
+}
+:is(input, textarea, select):focus-visible {
+  outline: var(--bf-focus-width) solid color-mix(in oklch, var(--bf-ring) 70%, transparent) !important;
+  outline-offset: -1px;
+}
+input[type=checkbox]:focus-visible, input[type=radio]:focus-visible, input[type=range]:focus-visible {
+  outline-offset: var(--bf-focus-offset);
+}
+
+/* ---- Stage pill: one component (components/ui/stage-pill.tsx), one size.
+ * `--pill-tone` is the stage's colour; a custom stage is neutral with its colour as a dot. */
+.bf-stage-pill {
+  --pill-tone: var(--bf-muted-foreground);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bf-space-1-5);
+  max-width: 100%;
+  height: var(--bf-pill-height);
+  padding: 0 var(--bf-space-2);
+  overflow: hidden;
+  border: 1px solid color-mix(in oklch, var(--pill-tone) 28%, transparent);
+  border-radius: var(--bf-radius-pill);
+  background: color-mix(in oklch, var(--pill-tone) 14%, transparent);
+  color: var(--pill-tone);
+  font: var(--bf-weight-medium) var(--bf-text-2xs)/1 var(--bf-font-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bf-stage-pill > svg { flex: none; width: 14px; height: 14px; margin-left: -2px; }
+.bf-stage-pill > i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--pill-dot, currentColor); }
+.bf-stage-pill.is-custom { border-color: var(--bf-border-strong); background: var(--bf-muted); color: var(--bf-muted-foreground); }

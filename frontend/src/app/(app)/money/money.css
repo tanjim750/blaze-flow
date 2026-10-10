@@ -1,0 +1,128 @@
+/* Money (billing demo). Page parts sit inside .studio-shell and use --shell-* tokens; the
+   dialogs portal to <body>, so they use the :root palette (see frontend/AGENTS.md). */
+.money-page { max-width: 1240px; margin: 0 auto; display: grid; gap: 18px; font-size: 13px; }
+.money-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+.money-heading h1 { margin: 4px 0 6px; font-size: 30px; letter-spacing: -.035em; line-height: 1.1; }
+.money-heading p { margin: 0; color: var(--shell-outline); }
+.money-eyebrow { font: 600 10px var(--font-geist-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--shell-primary) !important; }
+.money-page svg { width: 15px; height: 15px; flex: none; }
+
+.money-button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 7px 12px; border: 1px solid var(--border, #2d2c35); border-radius: 9px; background: var(--surface-2, #1f1f24); color: var(--text, #e4e1e6); font: 600 12px var(--font-geist-sans), sans-serif; cursor: pointer; white-space: nowrap; }
+.money-button:hover:not(:disabled) { border-color: #4a4656; background: #29282f; }
+.money-button:disabled { opacity: .5; cursor: not-allowed; }
+/* `.money-button.is-primary` colour: app/ui.css (one primary variant). */
+.money-button.is-ghost { background: transparent; color: var(--shell-variant, #c9c4d8); }
+.money-button.is-sm { min-height: 28px; padding: 4px 9px; font-size: 11px; }
+.money-button.is-sm svg { width: 13px; height: 13px; }
+
+.money-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.money-total { position: relative; display: grid; gap: 4px; padding: 16px 18px; border: 1px solid var(--shell-highest); border-radius: 12px; background: var(--shell-container); overflow: hidden; }
+.money-total::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; background: var(--tone-color, #4a4656); }
+.money-total > span { color: var(--shell-outline); font-size: 12px; }
+.money-total > strong { font: 600 26px/1.15 var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.money-total > small { color: var(--shell-outline); font-size: 11px; }
+.tone-danger { --tone-color: #ff7b8a; } .tone-warning { --tone-color: #ffc95c; } .tone-success { --tone-color: #5bd295; }
+.tone-accent { --tone-color: #9b7dff; } .tone-blue { --tone-color: #7fa4ff; } .tone-neutral { --tone-color: #4a4656; }
+.money-total.tone-danger > small { color: #ffa3af; }
+
+.money-columns { display: grid; grid-template-columns: 1.1fr 1fr; gap: 18px; }
+.money-columns.is-single { grid-template-columns: 1fr; }
+.money-panel { border: 1px solid var(--shell-highest); border-radius: 12px; background: var(--shell-container); overflow: hidden; }
+.money-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 16px; border-bottom: 1px solid var(--shell-highest); }
+.money-panel h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; }
+.money-panel h2 svg { color: var(--shell-outline); }
+.money-panel > header > small { color: var(--shell-outline); font-size: 11px; }
+.money-count { font: 11px var(--font-geist-mono), monospace; padding: 2px 7px; border-radius: 999px; background: #2a2149; color: #c8baff; }
+.money-muted { margin: 0; padding: 22px 16px; color: var(--shell-outline); }
+.money-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.money-table th { padding: 9px 16px; text-align: left; color: var(--shell-outline); font: 500 10px var(--font-geist-mono), monospace; letter-spacing: .05em; text-transform: uppercase; }
+.money-table td { padding: 11px 16px; border-top: 1px solid #2a2a2f; vertical-align: middle; font-family: var(--font-geist-mono), monospace; font-size: 12px; }
+.money-table td:first-child, .money-table td:nth-child(2) { font-family: var(--font-geist-sans), sans-serif; }
+.money-table td strong { display: block; font-size: 13px; font-weight: 600; }
+.money-table td small { display: block; margin-top: 3px; color: var(--shell-outline); font: 11px var(--font-geist-sans), sans-serif; }
+.money-table b { font-weight: 600; }
+.money-table b.is-due { color: #ffd0a3; } .money-table b.is-owed { color: #ffd35c; }
+.money-table td > .money-badge { margin-left: 8px; }
+.money-row-action { text-align: right; white-space: nowrap; }
+.money-row-action .money-button + .money-button { margin-left: 6px; }
+.money-invoice-link { display: inline-flex; align-items: center; gap: 3px; color: var(--shell-primary); font: 600 12px var(--font-geist-mono), monospace; }
+.money-invoice-link svg { width: 12px; height: 12px; }
+.money-badges { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+.money-badge { display: inline-flex; align-items: center; width: fit-content; padding: 3px 6px; border: 1px solid #34313e; border-radius: 4px; background: #212029; color: #b7b3c8; font: 9px var(--font-geist-mono), monospace; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.money-badge.tone-danger { color: #ffa3af; background: #361d24; border-color: #60303e; }
+.money-badge.tone-warning { color: #ffd35c; background: #392c11; border-color: #655022; }
+.money-badge.tone-success { color: #7de9bd; background: #183e31; border-color: #2d6550; }
+.money-badge.tone-blue { color: #b7c5ff; background: #242b46; border-color: #3c486e; }
+.money-badge.tone-accent { color: #d9c5ff; background: #302449; border-color: #574173; }
+.money-tabs { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--shell-highest); border-radius: 9px; background: var(--shell-rail); }
+.money-tabs button { display: inline-flex; gap: 6px; align-items: center; padding: 5px 10px; border: 0; border-radius: 6px; background: none; color: var(--shell-outline); font-size: 12px; cursor: pointer; }
+.money-tabs button span { font: 10px var(--font-geist-mono), monospace; color: #77738a; }
+.money-tabs button.selected { background: #292143; color: #fff; box-shadow: inset 0 0 0 1px #55418f; }
+.money-footnote { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--shell-outline); font-size: 11px; }
+.money-empty { display: grid; justify-items: center; gap: 8px; padding: 60px 20px; text-align: center; border: 1px dashed var(--shell-highest); border-radius: 14px; }
+.money-empty svg { width: 26px; height: 26px; color: var(--shell-primary); }
+.money-empty h1 { margin: 6px 0 0; font-size: 20px; }
+.money-empty p { margin: 0; max-width: 460px; color: var(--shell-outline); }
+.money-empty a { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--shell-primary); }
+.money-spacer { flex: 1; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Invoice */
+.invoice-page { max-width: 900px; }
+.invoice-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.invoice-due { color: var(--shell-outline); font-size: 12px; }
+.invoice-paper { display: grid; gap: 26px; padding: 40px 44px; border: 1px solid var(--shell-highest); border-radius: 14px; background: linear-gradient(180deg, #1c1b21, #18171c); }
+.invoice-head { display: flex; justify-content: space-between; gap: 24px; }
+.invoice-head > div:first-child, .invoice-meta > div { display: grid; gap: 3px; color: var(--shell-variant); font-size: 12px; }
+.invoice-from { color: var(--shell-on); font-size: 16px; margin-bottom: 4px; }
+.invoice-title { text-align: right; }
+.invoice-title h1 { margin: 0; font-size: 28px; letter-spacing: -.03em; text-transform: uppercase; color: var(--shell-primary); }
+.invoice-title span { font: 600 13px var(--font-geist-mono), monospace; color: var(--shell-variant); }
+.invoice-meta { display: flex; justify-content: space-between; gap: 24px; padding: 18px 0; border-block: 1px solid var(--shell-highest); }
+.invoice-meta small { color: var(--shell-outline); font: 10px var(--font-geist-mono), monospace; text-transform: uppercase; letter-spacing: .06em; }
+.invoice-meta strong { color: var(--shell-on); font-size: 14px; }
+.invoice-meta dl { display: grid; grid-template-columns: auto auto; gap: 6px 22px; margin: 0; font-size: 12px; }
+.invoice-meta dl div { display: contents; }
+.invoice-meta dt { color: var(--shell-outline); }
+.invoice-meta dd { margin: 0; text-align: right; font-family: var(--font-geist-mono), monospace; }
+.invoice-lines { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.invoice-lines th, .invoice-lines td { padding: 11px 0; text-align: left; }
+.invoice-lines thead th { color: var(--shell-outline); font: 500 10px var(--font-geist-mono), monospace; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--shell-highest); }
+.invoice-lines tbody td { border-bottom: 1px solid #2a2a2f; }
+.invoice-lines td small { display: block; margin-top: 2px; color: var(--shell-outline); font-size: 11px; }
+.invoice-lines :is(th, td):last-child { text-align: right; font-family: var(--font-geist-mono), monospace; }
+.invoice-lines tfoot th { font-weight: 500; color: var(--shell-variant); text-align: right; padding-right: 24px; }
+.invoice-lines tfoot tr.is-balance :is(th, td) { padding-top: 14px; font-size: 16px; font-weight: 700; color: var(--shell-on); border-top: 1px solid var(--shell-highest); }
+.invoice-payments h2 { margin: 0 0 8px; font-size: 13px; }
+.invoice-payments ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.invoice-payments li { display: grid; grid-template-columns: 120px 1fr auto; gap: 12px; color: var(--shell-variant); font-size: 12px; }
+.invoice-payments b { font-family: var(--font-geist-mono), monospace; color: #7de9bd; }
+.invoice-notes { margin: 0; color: var(--shell-outline); font-size: 12px; }
+
+/* Dialogs (portalled: :root palette only) */
+.ui-dialog-content.money-dialog { width: min(calc(100% - 32px), 520px); padding: 20px; }
+.money-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.money-form .is-wide, .money-dialog-head { grid-column: 1 / -1; }
+.money-dialog-head h2 { margin: 0 0 4px; font-size: 17px; }
+.money-dialog-head p { margin: 0; color: var(--muted); font-size: 12px; padding-right: 30px; }
+.money-form label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
+.money-form input, .money-form select { min-height: 36px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+.money-form small { color: var(--muted); font-size: 11px; }
+.money-form footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.money-demo-chip { margin-right: auto; padding: 3px 7px; border: 1px dashed #574173; border-radius: 6px; color: #d9c5ff; font: 10px var(--font-geist-mono), monospace; }
+.money-error { margin: 0; color: #ff9ba3; font-size: 12px; }
+
+@media (max-width: 960px) { .money-columns { grid-template-columns: 1fr; } .money-heading { flex-direction: column; align-items: stretch; } }
+
+@media print {
+  .studio-sidebar, .studio-mobilebar, .invoice-toolbar, nextjs-portal, .studio-rail-toggle { display: none !important; }
+  .studio-shell, .studio-main, .studio-main main { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  .invoice-paper { border: 0; background: #fff !important; color: #111; padding: 0; }
+  .invoice-paper * { color: #111 !important; border-color: #ccc !important; }
+  .invoice-title h1 { color: #4b2fc9 !important; }
+}
+/* Narrow screens: the tables scroll inside their panel instead of widening the page. */
+@media (max-width: 900px) { .money-panel { position: relative; overflow-x: auto; min-width: 0; max-width: 100%; } .money-columns, .money-page { min-width: 0; } .money-columns > *, .money-page > * { min-width: 0; } .money-table td, .money-table th { white-space: nowrap; } }
+/* At any width a wide table scrolls inside its panel; `relative` keeps its sr-only text inside too. */
+.money-panel { position: relative; overflow-x: auto; min-width: 0; }
+.money-columns > * { min-width: 0; }

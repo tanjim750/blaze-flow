@@ -1,0 +1,49 @@
+/* Shared chrome for the pre-session pages. The split-screen shell, fields, and buttons
+   live in globals.css as .auth-*; this file adds only what the account flows need. */
+.auth-form > header { display: grid; gap: 7px; }
+.auth-form > header h2 { font-size: 28px; letter-spacing: -.035em; margin: 0; }
+.auth-form > header p { margin: 0; }
+
+/* First name / last name side by side, stacking on a narrow viewport. */
+.auth-row { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+
+.auth-hint { color: var(--muted); font-size: 11px; margin: 7px 0 0; font-weight: 400; }
+
+/* Confirmation panel: a reset email sent, a password changed, an address verified. */
+.auth-note {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: #16241c; border: 1px solid #2c5340; color: #a7e3c0;
+  padding: 12px 13px; border-radius: 9px; font-size: 12px; line-height: 1.55;
+}
+.auth-note svg { flex: none; margin-top: 1px; }
+.auth-note strong { display: block; color: #d5f5e2; margin-bottom: 3px; }
+
+/* Token pages open on a single centred state rather than a form. */
+.auth-status { display: grid; justify-items: center; text-align: center; gap: 14px; }
+.auth-status > span {
+  display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--primary-2);
+}
+.auth-status.is-good > span { background: #16241c; border-color: #2c5340; color: #8fdcb0; }
+.auth-status.is-bad > span { background: #3b171d; border-color: #792932; color: #ff9ba3; }
+.auth-status h2 { font-size: 22px; letter-spacing: -.03em; margin: 0; }
+.auth-status p { margin: 0; color: var(--muted); line-height: 1.6; max-width: 34ch; }
+
+.auth-actions { display: grid; gap: 10px; width: 100%; }
+.auth-actions .button { justify-content: center; height: 45px; }
+
+/* Back to sign-in, shown under the secondary flows. */
+.auth-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--muted); font-size: 12px; justify-self: center;
+}
+.auth-back:hover { color: var(--text); }
+
+.auth-spin { animation: auth-spin 1s linear infinite; }
+@keyframes auth-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .auth-spin { animation: none; } }
+
+@media (max-width: 480px) {
+  .auth-row { grid-template-columns: 1fr; }
+}
+.google-auth { display: grid; gap: 8px; }.google-button { min-height: 44px; display: flex; justify-content: center; overflow: hidden; }.google-disabled { margin: 0; text-align: center; }.auth-divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 11px; }.auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }.auth-divider span { white-space: nowrap; }

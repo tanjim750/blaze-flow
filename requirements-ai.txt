@@ -1,0 +1,5 @@
+# Optional: the self-hosted OCR engine for AI Visual QA (AI_QA_ENGINE=paddleocr).
+# Kept out of requirements.txt so the base install and CI stay light; CI uses the fake engine.
+-r requirements.txt
+paddlepaddle==3.3.1
+paddleocr==3.7.0
