@@ -64,7 +64,7 @@ class UploadedCutsAreListedTests(WorkspaceAccessSetupMixin, TestCase):
         version = self.upload()
         ProjectFile.objects.filter(file_id=version.original_file_id).delete()  # as uploads were before the fix
         self.assertEqual(self.project_files(), [])
-        migration = importlib.import_module('app.migrations.0043_project_files_for_uploaded_cuts')
+        migration = importlib.import_module('app.migrations.0044_project_files_for_uploaded_cuts')
         migration.backfill(django_apps, None)
         migration.backfill(django_apps, None)  # idempotent
         self.assertEqual(ProjectFile.objects.filter(file_id=version.original_file_id).count(), 1)
@@ -78,7 +78,7 @@ class UploadedCutsAreListedTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual((a.version_number, b.version_number), (1, 2))
         self.assertNotEqual(c.media_asset_id, a.media_asset_id)
         ProjectFile.objects.all().delete()
-        importlib.import_module('app.migrations.0043_project_files_for_uploaded_cuts').backfill(django_apps, None)
+        importlib.import_module('app.migrations.0044_project_files_for_uploaded_cuts').backfill(django_apps, None)
         rows = {r.file_id: r for r in ProjectFile.objects.all()}
         self.assertEqual(rows[first.original_file_id].media_asset_id, rows[second.original_file_id].media_asset_id)
         self.assertEqual(rows[second.original_file_id].version_number, 2)
