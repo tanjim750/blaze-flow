@@ -137,6 +137,26 @@ def _finish_findings(review, rows):
     return created
 
 
+def _write_partial(review, rows):
+    """Findings so far, shown read-only while the run continues. Replaced wholesale each time
+    and by the final write, which is the only one that carries comments over."""
+    _check_cancelled(review)
+    best = {}
+    for row in rows:
+        if row['key'] not in best or BAND_RANK[row['band']] > BAND_RANK[best[row['key']]['band']]:
+            best[row['key']] = row
+    carried = dict(AIFinding.objects.filter(
+        media_version=review.media_version, dedupe_key__in=list(best), status__in=CARRIED,
+    ).exclude(ai_review=review).values_list('dedupe_key', 'status'))
+    with transaction.atomic():
+        AIFinding.objects.filter(ai_review=review).delete()
+        AIFinding.objects.bulk_create([
+            AIFinding(workspace=review.workspace, ai_review=review, media_version=review.media_version, dedupe_key=key,
+                      status=carried.get(key, AIFindingStatus.PENDING), **{k: v for k, v in row.items() if k != 'key'})
+            for key, row in best.items()
+        ])
+
+
 def _run_image(review, engine, file, workdir, glossary):
     source = Path(workdir) / 'source'
     try:
@@ -162,7 +182,7 @@ def _line_box(line):
     return {'x': min(xs), 'y': min(ys), 'width': max(xs) - min(xs), 'height': max(ys) - min(ys)}
 
 
-def analyse_video(source, workdir, *, engine, glossary, file_metadata=None, on_progress=lambda **_: None):
+def analyse_video(source, workdir, *, engine, glossary, file_metadata=None, on_progress=lambda **_: None, on_partial=lambda rows: None):
     """Sample, OCR, track and decide for one video file. No database access (the eval uses it).
 
     Returns (rows, observed, usage): finding rows, {time_ms: [OcrLine]} and counters.
@@ -180,31 +200,65 @@ def analyse_video(source, workdir, *, engine, glossary, file_metadata=None, on_p
         raise PipelineFailure('ai_qa_unreadable_video', 'No frames could be read from this video.')
 
     observed = {}  # time_ms -> lines
-    stats = {'frames_sampled': 0, 'frames_ocr': 0, 'frames_duplicate': 0}
-    state = {'hash': None, 'lines': []}
+    stats = {'frames_sampled': len(baseline), 'frames_ocr': 0, 'frames_duplicate': 0, 'frames_skipped': 0}
+    reader = engine.frame_reader()
+    prints = {t: vid.fingerprint(path) for t, path in baseline}
+    state = {'print': None, 'lines': [], 'since_partial': 0}
+    cache = {}  # time_ms -> spelling candidates, so partial updates don't re-check old frames
 
-    def ocr_frames(frames, done_before, total, stage):
-        for index, (time_ms, path) in enumerate(frames):
-            if time_ms in observed:
+    def read(time_ms, path, print_):
+        if (settings.AI_QA_DEDUPE_FRAMES and state['print'] is not None
+                and vid.changed_fraction(print_, state['print']) <= settings.AI_QA_DUP_MAX_CHANGED):
+            stats['frames_duplicate'] += 1
+            lines = state['lines']
+        else:
+            from PIL import Image
+            with Image.open(path) as image:
+                width, height = image.size
+            lines = reader.read(path, width=width, height=height, time_ms=time_ms, file_metadata=file_metadata)
+            stats['frames_ocr'] += 1
+            state['print'], state['lines'] = print_, lines
+        observed[time_ms] = lines
+        return lines
+
+    def maybe_partial(done, total, stage):
+        state['since_partial'] += 1
+        if state['since_partial'] >= settings.AI_QA_PARTIAL_EVERY_FRAMES:
+            state['since_partial'] = 0
+            on_partial(_decide(observed, glossary, cache))
+        on_progress(stage=stage, frames_done=done, frames_total=total)
+
+    # Adaptive baseline. Frames are taken every 0.5 s, but the in-between ones (odd index)
+    # are only read when a neighbour has text, so a text-free stretch is read once a second
+    # while text is still followed every 0.5 s (and every 0.125 s where it changes). Order: 0, 2, 1, 4, 3, … so each odd
+    # frame's next neighbour is already known, and everything before it is done (partial
+    # results stay in time order).
+    order = []
+    for i in range(0, len(baseline), 2):
+        order.append(i)
+        if i - 1 >= 1:
+            order.append(i - 1)
+    if len(baseline) % 2 == 0 and len(baseline) >= 2:
+        order.append(len(baseline) - 1)
+    total = len(baseline)
+    for done, i in enumerate(order, start=1):
+        t, path = baseline[i]
+        if i % 2 == 1:
+            neighbours = [baseline[j][0] for j in (i - 1, i + 1) if 0 <= j < len(baseline)]
+            if not any(observed.get(n) for n in neighbours):
+                stats['frames_skipped'] += 1
+                observed[t] = []
+                maybe_partial(done, total, 'reading')
                 continue
-            stats['frames_sampled'] += 1
-            digest = vid.fingerprint(path)
-            if (settings.AI_QA_DEDUPE_FRAMES and state['hash'] is not None
-                    and vid.changed_fraction(digest, state['hash']) <= settings.AI_QA_DUP_MAX_CHANGED):
-                lines = state['lines']
-                stats['frames_duplicate'] += 1
-            else:
-                from PIL import Image
-                with Image.open(path) as image:
-                    width, height = image.size
-                lines = engine.read(path, width=width, height=height, time_ms=time_ms, file_metadata=file_metadata)
-                stats['frames_ocr'] += 1
-                state['hash'], state['lines'] = digest, lines
-            observed[time_ms] = lines
-            if index % 5 == 0 or index == len(frames) - 1:
-                on_progress(stage=stage, frames_done=done_before + index + 1, frames_total=total)
+            previous = baseline[i - 1][0]
+        else:
+            previous = baseline[i - 2][0] if i >= 2 else None
+        # Dedupe against the frame just before in time, not just before in processing order.
+        state['print'] = prints[previous] if previous is not None and previous in observed else None
+        state['lines'] = observed.get(previous, []) if previous is not None else []
+        read(t, path, prints[t])
+        maybe_partial(done, total, 'reading')
 
-    ocr_frames(baseline, 0, len(baseline), 'reading')
     signatures = [(t, vid.text_signature(observed[t])) for t, _ in baseline]
     windows = vid.dense_windows(signatures)
     dense = []
@@ -215,13 +269,29 @@ def analyse_video(source, workdir, *, engine, glossary, file_metadata=None, on_p
             dense = vid.sample_windows(source, Path(workdir) / 'dense', windows, max_frames=room)
         except vid.VideoError:
             dense = []  # the baseline still stands; refinement is best effort
-        state['hash'] = None
-        ocr_frames(sorted(dense), len(baseline), len(baseline) + len(dense), 'refining')
+        stats['frames_sampled'] += len(dense)
+        state['print'] = None
+        total = len(baseline) + len(dense)
+        for index, (t, path) in enumerate(sorted(dense), start=1):
+            if t not in observed:
+                read(t, path, vid.fingerprint(path))
+            maybe_partial(len(baseline) + index, total, 'refining')
     total = len(baseline) + len(dense)
     on_progress(stage='checking', frames_done=total, frames_total=total)
+    rows = _decide(observed, glossary, cache)
+    usage = {**stats, **reader.stats, 'duration_ms_media': info['duration_ms'], 'frames_total': len(observed),
+             'dense_windows': len(windows), 'lines': sum(len(v) for v in observed.values())}
+    return rows, observed, usage
 
+
+def _decide(observed, glossary, cache=None):
+    """Spelling + tracking over everything read so far -> finding rows."""
+    cache = {} if cache is None else cache
     times = sorted(observed)
-    frames = [(t, [c for line in observed[t] for c in check_line(line, glossary=glossary)]) for t in times]
+    for t in times:
+        if t not in cache:
+            cache[t] = [c for line in observed[t] for c in check_line(line, glossary=glossary)]
+    frames = [(t, cache[t]) for t in times]
     frame_regions = [(t, [_line_box(line) for line in observed[t]]) for t in times]
     rows = []
     for track in vid.build_tracks(frames):
@@ -243,9 +313,7 @@ def analyse_video(source, workdir, *, engine, glossary, file_metadata=None, on_p
         path = [{'t': s.time_ms, **s.candidate.region} for s in track.sightings][:200]
         rows.append(_row(None, cand, key=key, start_ms=start, end_ms=end, track=path,
                          category=category, band=band, explanation=explanation))
-    usage = {**stats, 'duration_ms_media': info['duration_ms'], 'frames_total': len(times),
-             'dense_windows': len(windows), 'lines': sum(len(v) for v in observed.values())}
-    return rows, observed, usage
+    return rows
 
 
 def _run_video(review, engine, file, workdir, glossary):
@@ -262,6 +330,7 @@ def _run_video(review, engine, file, workdir, glossary):
 
     rows, observed, usage = analyse_video(
         source, workdir, engine=engine, glossary=glossary, file_metadata=file.metadata or {}, on_progress=on_progress,
+        on_partial=lambda rows: _write_partial(review, rows),
     )
     review.stage = 'checking'
     AIFrameObservation.objects.bulk_create([

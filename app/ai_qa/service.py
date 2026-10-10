@@ -193,8 +193,15 @@ DECIDABLE = {AIFindingStatus.PENDING, AIFindingStatus.ACCEPTED, AIFindingStatus.
 
 
 @transaction.atomic
+def _require_finished(finding):
+    """Findings streamed during a run are a preview: they are rewritten until the run ends."""
+    if AIReview.objects.filter(id=finding.ai_review_id, status__in=AI_REVIEW_ACTIVE_STATUSES).exists():
+        raise AIQAError('ai_qa_still_running', 'This check is still running. You can act on findings once it finishes.', 409)
+
+
 def decide_finding(*, finding, user, status=None, edited_suggestion=None, add_to_glossary=None):
     finding = AIFinding.objects.select_for_update().get(id=finding.id)
+    _require_finished(finding)
     if status is not None:
         if status not in DECIDABLE:
             raise AIQAError('ai_qa_bad_status', 'Choose accept, dismiss, not an error or pending.')
@@ -235,6 +242,7 @@ def _padded(region, pad=0.01):
 def create_comment_from_finding(*, finding, user, visibility=ReviewCommentVisibility.TEAM, text=None):
     """Idempotent: the same finding (or the same issue on a re-run) never gets two comments."""
     finding = AIFinding.objects.select_for_update().select_related('media_version__project__workspace').get(id=finding.id)
+    _require_finished(finding)
     if finding.comment_id and finding.comment.deleted_at is None:
         return finding.comment, False
     sibling = AIFinding.objects.filter(
