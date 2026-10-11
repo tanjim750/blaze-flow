@@ -178,12 +178,18 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     player.current?.seek(pendingSeek.current);
     pendingSeek.current = null;
   }, [meta]);
+  // Every note still on the page, replies included. A drawing whose note has been deleted
+  // (here, optimistically, or before deletes cascaded on the server) must not stay on the frame.
+  const liveNoteIds = useMemo(() => new Set(allNotes.flatMap((note) => [note.id, ...note.replies.map((reply) => reply.id)])), [allNotes]);
   const annotations: DrawnAnnotation[] = useMemo(() => [
     ...view.annotations
+      .filter((item) => !item.review_comment_id || liveNoteIds.has(item.review_comment_id))
       .filter((item) => !clientPreview || !item.review_comment_id || !teamNoteIds.has(item.review_comment_id))
       .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: endOf(item.id, item.end_time_ms), noteId: item.review_comment_id })),
-    ...local.annotations.map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: item.end_time_ms, noteId: item.review_comment_id })),
-  ], [clientPreview, endOf, local.annotations, teamNoteIds, view.annotations]);
+    ...local.annotations
+      .filter((item) => !item.review_comment_id || liveNoteIds.has(item.review_comment_id))
+      .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: item.end_time_ms, noteId: item.review_comment_id })),
+  ], [clientPreview, endOf, liveNoteIds, local.annotations, teamNoteIds, view.annotations]);
   // A library file with no review version yet can be published into a project from here.
   const canPublish = Boolean(!view.target && view.publish && view.workspaceId);
   const canWriteTeam = Boolean(view.target && userId && view.members.some((member) => member.id === userId));
@@ -191,7 +197,12 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const sources: PlayerSource[] = useMemo(() => {
     if (!version) return [];
     const list: PlayerSource[] = [];
-    if (version.target && version.src) list.push({ id: "proxy", label: "Review proxy", src: version.src });
+    if (version.target && version.src) {
+      // 1080p first when it exists (the player starts on the first source unless the viewer
+      // picked another before); 720p stays as the lighter fallback.
+      if (version.qualities?.includes("hq")) list.push({ id: "hq", label: "HD 1080p", src: `${version.src}?quality=hq` });
+      list.push({ id: "proxy", label: version.qualities?.includes("hq") ? "SD 720p" : "Review proxy", src: version.src });
+    }
     if (version.assetFileId && view.workspaceId) {
       const original = `/api/workspaces/${view.workspaceId}/asset-files/${version.assetFileId}/download/`;
       if (!list.some((item) => item.src === original)) list.push({ id: "original", label: "Original file", src: original });

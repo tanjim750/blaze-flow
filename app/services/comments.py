@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from app.models import (
+    Annotation,
     MediaVersionStageEntry,
     ReviewComment,
     ReviewCommentContent,
@@ -420,6 +421,10 @@ def delete_review_comment_tree(*, comment, user):
         deleted_at=now,
         deleted_by_user=user,
         updated_at=now,
+    )
+    # A drawing is part of its note: deleting the note must take it off the frame too.
+    Annotation.objects.filter(review_comment_id__in=comment_ids, deleted_at__isnull=True).update(
+        deleted_at=now, deleted_by_user=user, updated_at=now,
     )
     record_user_audit(
         user=user,

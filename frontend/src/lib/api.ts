@@ -65,7 +65,7 @@ export type MediaVersion = {
   priority: string; allow_download: boolean; status: string; file: MediaFile;
   /** `entered_at` / `changed_by` say who moved the cut into this stage, and when. */
   current_stage: (WorkflowStageRef & { entered_at?: string | null; changed_by?: { id: string | null; name: string; type?: "user" | "guest" } | null }) | null;
-  preview_status: string; created_at: string;
+  preview_status: string; preview_qualities?: ("hq" | "sd")[]; created_at: string;
   /** A video's poster frame or an image's thumbnail, once generated. Absent on older backends. */
   poster?: { url: string; width: number | null; height: number | null } | null;
 };

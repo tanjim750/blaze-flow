@@ -193,7 +193,7 @@ from .permissions import (
     memberships_with_permission,
     workspace_ids_with_permission,
 )
-from app.services.file_processing import POSTER_VARIANT_TYPE, PREVIEW_VARIANT_TYPES
+from app.services.file_processing import HQ_PROXY_VARIANT_TYPE, POSTER_VARIANT_TYPE, PREVIEW_VARIANT_TYPES
 from app.services.task_stages import is_client_review_stage, stage_for_status
 from .services.comments import can_see_team_notes, client_visible_comments
 from .services import billing
@@ -1979,7 +1979,14 @@ def media_version_preview(request, workspace_id, project_id, media_version_id):
         raise PermissionDenied('You do not have permission to view this media version.')
     # Narrowed to the playable types: a video also carries a poster now, and serving that
     # to the player would hand it a JPEG where it expects a proxy.
-    variant = FileVariant.objects.filter(
+    # `?quality=hq` asks for the 1080p proxy; without it (or before it exists) the 720p one.
+    variant = None
+    if request.query_params.get('quality') == 'hq':
+        variant = FileVariant.objects.filter(
+            file=media_version.original_file, status=FileStatus.READY, deleted_at__isnull=True,
+            metadata__variant_type=HQ_PROXY_VARIANT_TYPE,
+        ).order_by('-created_at').first()
+    variant = variant or FileVariant.objects.filter(
         file=media_version.original_file, status=FileStatus.READY, deleted_at__isnull=True,
         metadata__variant_type__in=PREVIEW_VARIANT_TYPES,
     ).order_by('-created_at').first()
@@ -2581,7 +2588,10 @@ def annotation_list_create(request, workspace_id, project_id, media_version_id):
 
 
 def _annotations_visible_to(user, workspace, media_version):
-    items = Annotation.objects.filter(media_version=media_version, deleted_at__isnull=True)
+    items = Annotation.objects.filter(media_version=media_version, deleted_at__isnull=True).exclude(
+        # Drawings left behind by notes deleted before deletes cascaded to them.
+        review_comment__deleted_at__isnull=False,
+    )
     if can_see_team_notes(user=user, workspace=workspace):
         return items
     # A drawing saved with a team note belongs to that note.
