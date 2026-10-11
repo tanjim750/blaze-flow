@@ -158,6 +158,8 @@ class AuditActorType(models.TextChoices):
     USER = 'USER'
     GUEST = 'GUEST'
     SYSTEM = 'SYSTEM'
+    # A Blaze Flow employee acting through the platform admin (/platform).
+    PLATFORM_STAFF = 'PLATFORM_STAFF'
 
 
 class NotificationKind(models.TextChoices):
@@ -1693,6 +1695,10 @@ class UserSubscription(models.Model):
     current_period_end = models.DateTimeField(null=True, blank=True)
     cancel_at_period_end = models.BooleanField(default=False)
     cancelled_at = models.DateTimeField(null=True, blank=True)
+    # Set while (and after) a PRO free trial: an ACTIVE PRO row whose trial_ends_at is still
+    # in the future is "trialing" and earns no revenue yet. Kept as a timestamp rather than a
+    # new status so the one-current-subscription constraint does not change.
+    trial_ends_at = models.DateTimeField(null=True, blank=True)
     provider = models.CharField(max_length=100, null=True, blank=True)
     provider_subscription_id = models.CharField(max_length=255, null=True, blank=True)
     created_at = models.DateTimeField()
@@ -2319,3 +2325,65 @@ class GlossaryTerm(models.Model):
                 name='glossary_terms_project_term_uniq',
             ),
         ]
+
+
+# --- Platform support -----------------------------------------------------------------------
+# Tickets come from the in-app "Report a problem" dialog and are worked in the staff-only
+# platform admin. See services/support.py and platform_views.py.
+
+class SupportTicketCategory(models.TextChoices):
+    BUG = 'BUG'
+    BILLING = 'BILLING'
+    ACCOUNT = 'ACCOUNT'
+    QUESTION = 'QUESTION'
+    OTHER = 'OTHER'
+
+
+class SupportTicketStatus(models.TextChoices):
+    NEW = 'NEW'
+    OPEN = 'OPEN'
+    WAITING = 'WAITING'
+    SOLVED = 'SOLVED'
+
+
+class SupportMessageKind(models.TextChoices):
+    CUSTOMER = 'CUSTOMER'
+    REPLY = 'REPLY'
+    NOTE = 'NOTE'
+
+
+class SupportTicket(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    number = models.PositiveIntegerField(unique=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='+')
+    workspace = models.ForeignKey(Workspace, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    category = models.CharField(max_length=20, choices=SupportTicketCategory.choices, default=SupportTicketCategory.BUG)
+    subject = models.CharField(max_length=200)
+    status = models.CharField(max_length=20, choices=SupportTicketStatus.choices, default=SupportTicketStatus.NEW)
+    assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    # Captured at submission: page URL, browser, plan, request id. Never edited afterwards.
+    context = models.JSONField(default=dict, blank=True)
+    is_demo = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'support_tickets'
+        ordering = ('-created_at',)
+        indexes = [models.Index(fields=['status', 'created_at']), models.Index(fields=['user'])]
+        # The platform admin gate. Deliberately not is_staff (that only opens Django admin).
+        permissions = [('access_platform_admin', 'Can use the Blaze Flow platform admin')]
+
+
+class SupportTicketMessage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name='messages')
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    kind = models.CharField(max_length=20, choices=SupportMessageKind.choices)
+    body = models.TextField()
+    email_sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'support_ticket_messages'
+        ordering = ('created_at',)

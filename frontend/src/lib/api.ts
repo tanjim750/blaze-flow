@@ -74,6 +74,8 @@ export type CurrentUser = {
   id: string; email: string; first_name: string; last_name: string;
   avatar_url: string | null; timezone: string; status: string;
   email_verified_at: string | null; created_at: string;
+  /** Only `/auth/me/` fills this in: may this person open the staff-only `/platform` admin. */
+  is_platform_staff?: boolean;
 };
 export type CommentAuthor = { id: string; email: string; name: string; type: "user" | "guest" };
 /** One review note. `text` is null when the comment carries only attachments. */

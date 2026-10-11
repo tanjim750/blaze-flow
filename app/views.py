@@ -424,7 +424,8 @@ def logout_user(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def current_user(request):
-    return Response(UserSerializer(request.user).data)
+    from .platform.access import is_platform_staff
+    return Response({**UserSerializer(request.user).data, 'is_platform_staff': is_platform_staff(request.user)})
 
 
 def _subscription_response(subscription):
