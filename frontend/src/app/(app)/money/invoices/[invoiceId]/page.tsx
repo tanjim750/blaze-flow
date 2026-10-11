@@ -1,3 +1,4 @@
+import { guardRoute } from "@/lib/route-guard";
 import Link from "next/link";
 import { ArrowLeft, FileX2 } from "lucide-react";
 import { InvoiceView } from "@/components/money/invoice-view";
@@ -11,6 +12,7 @@ import "../../money.css";
  * billing.view see any invoice; a client-team member sees their own client's once sent.
  */
 export default async function InvoicePage({ params }: PageProps<"/money/invoices/[invoiceId]">) {
+  await guardRoute("/money/invoices");
   const { invoiceId } = await params;
   const context = await loadWorkspaceContext();
   const workspace = context.ok ? context.data.selected : null;

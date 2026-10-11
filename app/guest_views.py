@@ -94,6 +94,8 @@ def _guest_comments(media):
 def _guest_annotations(media):
     # A drawing saved with a team note is part of that note.
     return Annotation.objects.filter(media_version=media, deleted_at__isnull=True).exclude(
+        review_comment__deleted_at__isnull=False,
+    ).exclude(
         review_comment__visibility='team',
     ).exclude(review_comment__parent_comment__visibility='team')
 

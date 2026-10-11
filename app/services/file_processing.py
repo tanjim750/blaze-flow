@@ -330,7 +330,10 @@ def _mp3_waveform(file):
         )
 
 
-def _video_proxy(file):
+HQ_PROXY_VARIANT_TYPE = 'VIDEO_PROXY_HQ'
+
+
+def _encode_proxy(file, *, max_width, max_height, crf, variant_type, maxrate=None):
     executable = shutil.which(settings.FFMPEG_COMMAND)
     if not executable:
         raise OSError('Video proxy encoder is unavailable.')
@@ -338,14 +341,19 @@ def _video_proxy(file):
         source = Path(directory) / 'source'
         output = Path(directory) / 'proxy.mp4'
         _copy_private_object(file, source, max_bytes=settings.VIDEO_PROXY_MAX_INPUT_BYTES)
+        # The box turns with the picture: a 9:16 cut gets 720x1280, not a 404x720 sliver
+        # of the landscape box.
         scale = (
-            f"scale='min({settings.VIDEO_PROXY_MAX_WIDTH},iw)':'min({settings.VIDEO_PROXY_MAX_HEIGHT},ih)'"
-            ":force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2"
+            f"scale='if(gt(ih,iw),min({max_height},iw),min({max_width},iw))'"
+            f":'if(gt(ih,iw),min({max_width},ih),min({max_height},ih))'"
+            ":force_original_aspect_ratio=decrease:flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2"
         )
+        rate = ['-maxrate', maxrate, '-bufsize', _double(maxrate)] if maxrate else []
         subprocess.run(
             [executable, '-v', 'error', '-y', '-i', str(source),
-             '-vf', scale, '-c:v', 'libx264', '-preset', 'veryfast',
-             '-crf', str(settings.VIDEO_PROXY_CRF), '-pix_fmt', 'yuv420p',
+             '-vf', scale, '-c:v', 'libx264', '-preset', settings.VIDEO_PROXY_PRESET,
+             '-crf', str(crf), *rate, '-pix_fmt', 'yuv420p', '-profile:v', 'high',
+             '-force_key_frames', f'expr:gte(t,n_forced*{settings.VIDEO_PROXY_KEYFRAME_SECONDS})',
              '-movflags', '+faststart', '-c:a', 'aac', '-b:a', settings.VIDEO_PROXY_AUDIO_BITRATE,
              '-ac', '2', str(output)],
             check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -355,11 +363,61 @@ def _video_proxy(file):
             raise ValueError('Video proxy encoder returned no usable output.')
         if output.stat().st_size > settings.VIDEO_PROXY_MAX_OUTPUT_BYTES:
             raise ValueError('Video proxy output exceeds its configured limit.')
-        return output.read_bytes(), 'video/mp4', 'mp4', 'VIDEO_PROXY', {
-            'max_width': settings.VIDEO_PROXY_MAX_WIDTH,
-            'max_height': settings.VIDEO_PROXY_MAX_HEIGHT,
-            'crf': settings.VIDEO_PROXY_CRF,
+        return output.read_bytes(), 'video/mp4', 'mp4', variant_type, {
+            'max_width': max_width, 'max_height': max_height, 'crf': crf,
+            'preset': settings.VIDEO_PROXY_PRESET, **({'maxrate': maxrate} if maxrate else {}),
         }
+
+
+def _double(rate):
+    """'12M' -> '24M': a VBV buffer of two seconds at the cap."""
+    number, unit = rate[:-1], rate[-1]
+    return f'{int(float(number) * 2)}{unit}' if unit.isalpha() else str(int(rate) * 2)
+
+
+def _video_proxy(file):
+    return _encode_proxy(
+        file, max_width=settings.VIDEO_PROXY_MAX_WIDTH, max_height=settings.VIDEO_PROXY_MAX_HEIGHT,
+        crf=settings.VIDEO_PROXY_CRF, variant_type='VIDEO_PROXY', maxrate=settings.VIDEO_PROXY_MAXRATE,
+    )
+
+
+def _video_proxy_hq(file):
+    return _encode_proxy(
+        file, max_width=settings.VIDEO_PROXY_HQ_MAX_WIDTH, max_height=settings.VIDEO_PROXY_HQ_MAX_HEIGHT,
+        crf=settings.VIDEO_PROXY_HQ_CRF, variant_type=HQ_PROXY_VARIANT_TYPE, maxrate=settings.VIDEO_PROXY_HQ_MAXRATE,
+    )
+
+
+def _video_size(file):
+    """(width, height) as displayed, or None when it cannot be read."""
+    executable = shutil.which(settings.FFPROBE_COMMAND)
+    if not executable:
+        return None
+    with tempfile.TemporaryDirectory(prefix='blazeflow-probe-') as directory:
+        source = Path(directory) / 'source'
+        _copy_private_object(file, source, max_bytes=settings.VIDEO_PROXY_MAX_INPUT_BYTES)
+        result = subprocess.run(
+            [executable, '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height',
+             '-of', 'csv=p=0', str(source)],
+            capture_output=True, text=True, timeout=60,
+        )
+    try:
+        width, height = (int(v) for v in result.stdout.strip().split(',')[:2])
+    except ValueError:
+        return None
+    return width, height
+
+
+def wants_hq_proxy(file):
+    if not (settings.VIDEO_PROXY_HQ_ENABLED and (file.mime_type or '').startswith('video/')):
+        return False
+    size = _video_size(file)
+    if not size:
+        return False
+    # Worth a second encode only when the source has more detail than the 720p proxy keeps.
+    long_side, short_side = max(size), min(size)
+    return long_side > settings.VIDEO_PROXY_MAX_WIDTH or short_side > settings.VIDEO_PROXY_MAX_HEIGHT
 
 
 def _video_poster(file):
@@ -464,7 +522,7 @@ def _store_variant(file, produce, *, types):
         return existing
     content, mime_type, extension, variant_type, metadata = produce(file)
     digest = hashlib.sha256(content).hexdigest()
-    suffix = '' if variant_type in PREVIEW_VARIANT_TYPES else '.poster'
+    suffix = '' if variant_type in PREVIEW_VARIANT_TYPES else '.hq' if variant_type == HQ_PROXY_VARIANT_TYPE else '.poster'
     object_key = f'{Path(file.object_key).parent}/previews/{file.id}{suffix}.{extension}'
     stored_key = default_storage.save(object_key, ContentFile(content))
     now = timezone.now()
@@ -527,7 +585,15 @@ def generate_preview(*, file_id):
                 updated_at=timezone.now(),
             )
 
-    return _store_variant(file, _preview_content, types=PREVIEW_VARIANT_TYPES)
+    preview = _store_variant(file, _preview_content, types=PREVIEW_VARIANT_TYPES)
+    # The 1080p proxy comes after the 720p one, so a cut is playable as soon as possible,
+    # and is best effort: without it the player simply offers 720p.
+    try:
+        if wants_hq_proxy(file):
+            _store_variant(file, _video_proxy_hq, types=(HQ_PROXY_VARIANT_TYPE,))
+    except Exception:
+        logger.warning('HQ proxy generation failed for file %s', file.id, exc_info=True)
+    return preview
 
 
 def handle_security_scan_event(event):

@@ -8,3 +8,4 @@ google-auth==2.50.0
 requests==2.32.3
 symspellpy==6.10.0
 spylls==0.1.7
+sentry-sdk==2.71.0

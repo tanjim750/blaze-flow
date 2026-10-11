@@ -5,10 +5,10 @@
  * client component. The app shell renders the signed-in user's name and initials, so these
  * live here instead — the same reason `lib/timecode` is its own module.
  */
-export type NamedUser = { first_name: string; last_name: string; email: string };
+export type NamedUser = { first_name: string; last_name: string; email: string; is_platform_staff?: boolean };
 
 /** What the app shell needs to render an account menu: strings, no API types. */
-export type ShellUser = { name: string; email: string; initials: string };
+export type ShellUser = { name: string; email: string; initials: string; isPlatformStaff?: boolean };
 
 export const displayName = (user: NamedUser) =>
   `${user.first_name} ${user.last_name}`.trim() || user.email;
@@ -23,4 +23,5 @@ export const toShellUser = (user: NamedUser): ShellUser => ({
   name: displayName(user),
   email: user.email,
   initials: initialsFor(user),
+  isPlatformStaff: Boolean(user.is_platform_staff),
 });

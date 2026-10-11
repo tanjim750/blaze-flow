@@ -30,6 +30,8 @@ type Props = {
   positionMs: number;
   focusedId: string | null;
   pendingAnnotation: AnnotationElement | null;
+  /** Where the playhead was when the pending drawing was made; the note is pinned there. */
+  drawnAtMs?: number | null;
   onClearAnnotation: () => void;
   /** How long the pending drawing stays on screen once posted. */
   hold?: HoldChoice;
@@ -130,7 +132,7 @@ function CompareFeeds({ view, writer, compareWriter, clientPreview, onSeek, row 
 }
 
 export function Comments({
-  view, writer, compareWriter, notes, positionMs, focusedId, pendingAnnotation, onClearAnnotation, hold = DEFAULT_HOLD, onHold = noop, durationMs = 0, liveNoteIds,
+  view, writer, compareWriter, notes, positionMs, focusedId, pendingAnnotation, drawnAtMs = null, onClearAnnotation, hold = DEFAULT_HOLD, onHold = noop, durationMs = 0, liveNoteIds,
   onSeek, onCompareSeek, canWriteTeam, clientPreview, hiddenTeamNotes, onClientPreview, onComposerChange, timed = true,
   viewerId = null, mark = null, onMark, onPlayRange, onRestoreAnnotation,
 }: Props) {
@@ -256,6 +258,7 @@ export function Comments({
           canWriteTeam={canWriteTeam}
           onCancelReply={() => setReplyTo(null)}
           pendingAnnotation={pendingAnnotation}
+          drawnAtMs={drawnAtMs}
           onClearAnnotation={onClearAnnotation}
           hold={hold}
           onHold={onHold}
@@ -638,10 +641,10 @@ function Mentioned({ text, mentions }: { text: string; mentions: { id: string; n
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWriteTeam, onCancelReply, pendingAnnotation, onClearAnnotation, hold, onHold, durationMs, onChange: report, timed = true, mark = null, onMark, onPlayRange, onRestoreAnnotation }: {
+function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWriteTeam, onCancelReply, pendingAnnotation, drawnAtMs = null, onClearAnnotation, hold, onHold, durationMs, onChange: report, timed = true, mark = null, onMark, onPlayRange, onRestoreAnnotation }: {
   timed?: boolean; view: ReviewView; writer: ReviewWriter; positionMs: number; replyTo: ReviewNote | null;
   onReplyTo: (note: ReviewNote) => void; notes: ReviewNote[]; canWriteTeam: boolean;
-  onCancelReply: () => void; pendingAnnotation: AnnotationElement | null; onClearAnnotation: () => void;
+  onCancelReply: () => void; pendingAnnotation: AnnotationElement | null; drawnAtMs?: number | null; onClearAnnotation: () => void;
   hold: HoldChoice; onHold: (choice: HoldChoice) => void; durationMs: number;
   onChange: (state: ComposerState) => void;
   mark?: MarkRange | null; onMark?: (range: MarkRange | null) => void;
@@ -667,7 +670,9 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
   // A marked range wins over the pin: the note starts at its in point and ends at its out.
   const ranged = Boolean(mark && timed && !replyTo);
   const markOut = ranged ? rangeOut(mark) : null;
-  const startMs = replyTo ? null : ranged && mark ? mark.inMs : pinned ? anchor ?? positionMs : null;
+  // A drawing pins the note to the frame it was drawn on: seeking afterwards used to drag the
+  // note (and the drawing's window) along with the playhead.
+  const startMs = replyTo ? null : ranged && mark ? mark.inMs : pinned ? anchor ?? (pendingAnnotation ? drawnAtMs : null) ?? positionMs : null;
   // A reply in a team thread is team-only whatever the toggle says; the API enforces the same.
   const teamThread = replyTo?.visibility === "team";
   const effectiveVisibility: CommentVisibility = !view.target ? "client" : teamThread ? "team" : canWriteTeam ? visibility : "client";
@@ -778,7 +783,7 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
 
   /** The Range button: a range from the pinned time, for touch screens with no I/O keys. */
   const startMark = () => {
-    const inMs = Math.round(anchor ?? positionMs);
+    const inMs = Math.round(anchor ?? (pendingAnnotation ? drawnAtMs : null) ?? positionMs);
     const outMs = Math.round(durationMs > 0 ? Math.min(durationMs, inMs + DEFAULT_RANGE_MS) : inMs + DEFAULT_RANGE_MS);
     onMark?.({ inMs, outMs: outMs > inMs ? outMs : null });
   };

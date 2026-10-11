@@ -1,3 +1,4 @@
+from django.utils import timezone
 import shutil
 import tempfile
 
@@ -224,6 +225,40 @@ class ReviewCommentApiTests(WorkspaceAccessSetupMixin, TestCase):
         audit = AuditLog.objects.get(action='review.comment.deleted')
         self.assertEqual(audit.metadata['deleted_comment_count'], 2)
         self.assertTrue(ReviewComment.objects.filter(id=reply.json()['id']).exists())
+
+    def test_deleting_a_note_takes_its_drawing_off_the_frame(self):
+        """A drawing saved with a note used to outlive it, and stayed on the player."""
+        from .models import Annotation
+        annotations_url = reverse('api-annotations', args=[self.workspace.id, self.project_id, self.media_id])
+        note_id = self.create_comment(start_time_ms=1000).json()['id']
+        drawn = self.client.post(annotations_url, {
+            'review_comment_id': note_id, 'start_time_ms': 1000,
+            'elements': [{'element_type': 'POINT', 'geometry': {'x': 0.5, 'y': 0.5}}],
+        }, format='json')
+        self.assertEqual(drawn.status_code, 201)
+        loose = self.client.post(annotations_url, {
+            'elements': [{'element_type': 'POINT', 'geometry': {'x': 0.2, 'y': 0.2}}],
+        }, format='json')
+        self.assertEqual(loose.status_code, 201)
+
+        self.assertEqual(self.client.delete(self.detail_url(note_id)).status_code, 204)
+
+        self.assertIsNotNone(Annotation.objects.get(id=drawn.json()['id']).deleted_at)
+        listed = [item['id'] for item in self.client.get(annotations_url).json()]
+        self.assertEqual(listed, [loose.json()['id']])
+
+    def test_drawings_of_notes_deleted_before_the_cascade_are_not_listed(self):
+        from .models import Annotation
+        annotations_url = reverse('api-annotations', args=[self.workspace.id, self.project_id, self.media_id])
+        note_id = self.create_comment().json()['id']
+        self.client.post(annotations_url, {
+            'review_comment_id': note_id,
+            'elements': [{'element_type': 'POINT', 'geometry': {'x': 0.5, 'y': 0.5}}],
+        }, format='json')
+        # How existing data looks: the note deleted, its drawing never touched.
+        ReviewComment.objects.filter(id=note_id).update(deleted_at=timezone.now())
+        self.assertIsNone(Annotation.objects.get(review_comment_id=note_id).deleted_at)
+        self.assertEqual(self.client.get(annotations_url).json(), [])
 
     def detail_url(self, comment_id):
         return reverse(

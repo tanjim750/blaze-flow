@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, Clapperboard, MessageSquareText, Users } from "lucide-react";
+import { CheckCircle2, Clapperboard, MessageSquareText, MessagesSquare, Users } from "lucide-react";
 import { DashboardPoster } from "@/components/dashboard-poster";
 import type { LayoutChoice } from "@/lib/dashboard-role";
 import type { EditorDashboard as EditorView, EditorTask } from "@/lib/role-dashboard-view";
@@ -32,6 +32,8 @@ function TaskGroup({ title, tasks, tone }: { title: string; tasks: EditorTask[];
 
 export function EditorDashboard({ view, choice }: { view: EditorView; choice: LayoutChoice }) {
   const { tasks } = view;
+  // Client-side notes (guests and client-team members), newest first.
+  const feedback = view.notes.filter((note) => note.client).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 4);
   const extra = [tasks.later ? `${tasks.later} later` : "", tasks.undated ? `${tasks.undated} undated` : ""].filter(Boolean).join(" · ");
   return <div className="home-shell role-editor">
     <DashboardHeading workspaceName={view.workspaceName} today={view.today} greetingName={view.greetingName} subline={subline(view)} choice={choice} />
@@ -53,7 +55,7 @@ export function EditorDashboard({ view, choice }: { view: EditorView; choice: La
         <FooterLink href={view.membershipId ? `/tasks?assignee=${view.membershipId}` : "/tasks"}>All my tasks</FooterLink>
       </section>
 
-      <section className="panel" aria-labelledby="notes-title">
+      <section className="panel" id="notes" aria-labelledby="notes-title">
         <div className="panel-title"><h2 id="notes-title"><MessageSquareText size={16} />Notes to address</h2><small>{view.notesTotal} unresolved on your cuts</small></div>
         <div className="note-list">
           {view.problems.notes && <InlineProblem>{view.problems.notes}</InlineProblem>}
@@ -70,7 +72,21 @@ export function EditorDashboard({ view, choice }: { view: EditorView; choice: La
       </section>
     </div>
 
-    {view.earnings && <EarningsPanel earnings={view.earnings} />}
+    {feedback.length > 0 && <section className="panel" id="client-feedback" aria-labelledby="feedback-title">
+      <div className="panel-title"><h2 id="feedback-title"><MessagesSquare size={16} />Recent client feedback</h2><small>Newest first</small></div>
+      <div className="note-list">
+        {feedback.map((note) => <Link href={note.href} className="note-row" key={note.id} aria-label={`Open client note on ${note.cut}`}>
+          <Avatar initials={note.initials} url={note.avatarUrl} tone="blue" />
+          <div className="note-body">
+            <p className="note-meta"><strong>{note.author}</strong><span className="home-badge blue">Client</span><time>{note.age}</time></p>
+            <p className="note-text">{note.text}</p>
+            <p className="note-cut">{note.timecode && <span className="timecode-chip">{note.timecode}</span>}<span>{note.cut}</span></p>
+          </div>
+        </Link>)}
+      </div>
+    </section>}
+
+    {view.earnings && <div id="earnings"><EarningsPanel earnings={view.earnings} /></div>}
 
     <div className="dashboard-bottom">
       <section className="panel" aria-labelledby="my-cuts-title">
@@ -87,6 +103,7 @@ export function EditorDashboard({ view, choice }: { view: EditorView; choice: La
             <time title="In this stage since">{cut.age}</time>
           </Link>)}
         </div>
+        <FooterLink href="/projects">Upload a new version</FooterLink>
       </section>
       <ActivityPanel
         items={view.activity}

@@ -3,44 +3,30 @@
 import Link from "next/link";
 import { LinkPending } from "@/components/nav-progress";
 import { usePathname } from "next/navigation";
-import { Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, MessagesSquare, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "lucide-react";
+import { BadgeCheck, Clapperboard, Inbox, ReceiptText, Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, MessagesSquare, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
 import type { ShellUser } from "@/lib/user";
 import type { Workspace } from "@/lib/api";
+import { navFor, type NavIcon } from "@/lib/role-nav";
 import { UniversalReviewLayout } from "@/components/universal-review";
 import { NotificationBell } from "@/components/notifications/bell";
 import { fetchUnread, unreadLabel } from "@/lib/messages";
 import "@/components/messages/messages.css";
 import { mobileTitle } from "@/lib/mobile-title";
-import { Plus, Upload } from "lucide-react";
+import { LifeBuoy, Plus, ShieldCheck, Upload } from "lucide-react";
+import { REPORT_EVENT, ReportProblemDialog } from "@/components/report-problem";
 
 type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { severity: string; code: string; count: number }[] };
 
-const primaryLinks = [
-  { href: "/", label: "Home", icon: House },
-  { href: "/projects", label: "Projects", icon: SquareKanban },
-  { href: "/chat", label: "Chat", icon: MessagesSquare },
-  { href: "/tasks", label: "Tasks", icon: CheckCircle2 },
-  { href: "/files", label: "Files", icon: FolderOpen },
-  { href: "/clients", label: "Clients", icon: Building2 },
-  { href: "/team", label: "Team & Roles", icon: Users },
-];
-
-/** Billing demo: only for people whose role holds billing.view in the selected workspace. */
-const moneyLink = { href: "/money", label: "Money", icon: Wallet };
-
-/**
- * Render Queue and Deliverables had pages but no way to reach them (Help even tells people
- * to use Deliverables), so they sit with Settings and Help rather than in the main list.
- */
-const secondaryLinks = [
-  { href: "/render-queue", label: "Render Queue", icon: ListVideo },
-  { href: "/deliverables", label: "Deliverables", icon: PackageCheck },
-  { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/help", label: "Help", icon: CircleHelp },
-];
+/** Lucide icons for the role nav (see `lib/role-nav.ts` for who sees which link). */
+const ICONS: Record<NavIcon, typeof House> = {
+  home: House, projects: SquareKanban, chat: MessagesSquare, tasks: CheckCircle2, files: FolderOpen,
+  clients: Building2, team: Users, money: Wallet, render: ListVideo, deliverables: PackageCheck,
+  settings: Settings, help: CircleHelp, review: Clapperboard, approvals: BadgeCheck, requests: Inbox,
+  invoices: ReceiptText, upload: Upload, pay: Wallet,
+};
 
 /** Mirrors the cookie the layout reads, so a reload opens at the width you left it. */
 const RAIL_COOKIE = "blazeflow_rail";
@@ -59,8 +45,16 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   const [unread, setUnread] = useState<{ workspace: string | null; count: number }>({ workspace: null, count: 0 });
   const messagesUnread = unread.workspace === selectedWorkspaceId ? unread.count : 0;
   const selected = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? workspaces[0];
-  const navLinks = selected?.billing?.view ? [...primaryLinks, moneyLink] : primaryLinks;
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  // Owners get the whole studio; editors their own work; clients the portal. Same source as
+  // the route guards, so nothing here links to a page that would bounce them.
+  const nav = navFor(selected);
+  const navLinks = nav.primary.map((link) => ({ ...link, icon: ICONS[link.icon] }));
+  const secondaryLinks = nav.secondary.map((link) => ({ ...link, icon: ICONS[link.icon] }));
+  const isActive = (href: string) => {
+    if (href.includes("#")) return false;
+    const path = href.split("?")[0];
+    return path === "/" ? pathname === "/" : pathname.startsWith(path);
+  };
   // Projects lays out its own full-bleed browser, so it opts out of the standard page padding.
   // Full-bleed routes: the projects tree and the review workspace both own their own
   // chrome and fill the viewport, so the shell gives them the frame without the padding.
@@ -69,13 +63,16 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   useEffect(() => {
     let active = true;
     if (!selectedWorkspaceId) { queueMicrotask(() => active && setHealth(null)); return () => { active = false; }; }
+    // Only owners may read operations health; asking anyway put a 403 in the console of
+    // every editor and client on every page load.
+    if (nav.role !== "owner") { queueMicrotask(() => active && setHealth("restricted")); return () => { active = false; }; }
     void fetch(`/api/workspaces/${selectedWorkspaceId}/operations/health/`, { credentials: "include" }).then(async (response) => {
       if (!active) return;
       if (response.ok) setHealth(await response.json() as OperationsHealth);
       else setHealth(response.status === 403 ? "restricted" : "unavailable");
     }).catch(() => active && setHealth("unavailable"));
     return () => { active = false; };
-  }, [selectedWorkspaceId]);
+  }, [nav.role, selectedWorkspaceId]);
 
   // The Messages badge: unread across every project thread this person can read. Polled
   // (no websockets), paused while the tab is hidden, and refreshed on navigation.
@@ -134,6 +131,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
           {narrow && <AccountMenu user={user} />}
         </div>
       </header>
+      <ReportProblemDialog workspaceId={selectedWorkspaceId} />
       {open && <button type="button" className="studio-scrim" aria-label="Close navigation" tabIndex={-1} onClick={() => setOpen(false)} />}
 
       <aside className={open ? "studio-sidebar open" : "studio-sidebar"}>
@@ -153,16 +151,16 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
           <div className="studio-brand"><span><Flame size={17} /></span><strong>Blaze Flow</strong></div>
           <WorkspacePicker workspaces={workspaces} selectedWorkspaceId={selectedWorkspaceId} pathname={pathname} />
 
-          <form className="studio-rail-search" action="/projects">
+          {nav.role !== "client" && <form className="studio-rail-search" action="/projects">
             <Search size={14} />
-            <input name="q" type="search" aria-label="Search clients and projects" placeholder="Search clients & projects" />
-          </form>
+            <input name="q" type="search" aria-label="Search clients and projects" placeholder={nav.role === "owner" ? "Search clients & projects" : "Search projects"} />
+          </form>}
 
           <nav aria-label="Main navigation">
             {navLinks.map(({ href, label, icon: Icon }) => (
               <Link key={label} href={href} onClick={() => setOpen(false)} title={label} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}>
                 <Icon size={20} /><span>{label}</span>
-                {href === "/chat" && messagesUnread > 0 && <b className="studio-nav-badge" aria-label={`${messagesUnread} unread messages`}>{unreadLabel(messagesUnread)}</b>}
+                {(href === "/chat" || href === "/portal/chat") && messagesUnread > 0 && <b className="studio-nav-badge" aria-label={`${messagesUnread} unread messages`}>{unreadLabel(messagesUnread)}</b>}
                 <LinkPending />
               </Link>
             ))}
@@ -178,11 +176,11 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
               </Link>
             ))}
           </nav>
-          <div className="render-engine">
+          {nav.role === "owner" && <div className="render-engine">
             <i className={typeof health === "object" && health ? health.status : undefined} />
             <div><small>Operations</small><span>{healthLabel(health)}</span></div>
             {typeof health === "object" && health && health.alerts.length > 0 && <b>{health.alerts.reduce((sum, alert) => sum + alert.count, 0)} alerts</b>}
-          </div>
+          </div>}
 
           <div className="studio-rail-account">
             {!narrow && <AccountMenu user={user} />}
@@ -273,6 +271,12 @@ function AccountMenu({ user }: { user: ShellUser | null }) {
           <Link href="/settings" role="menuitem" onClick={() => setOpen(false)}>
             <Settings size={15} />Settings
           </Link>
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); window.dispatchEvent(new Event(REPORT_EVENT)); }}>
+            <LifeBuoy size={15} />Report a problem
+          </button>
+          {user.isPlatformStaff && <Link href="/platform" role="menuitem" onClick={() => setOpen(false)}>
+            <ShieldCheck size={15} />Platform admin
+          </Link>}
           {/* A form, not a fetch: the action clears the session cookies server-side. */}
           <form action={signOutAction}>
             <button type="submit" role="menuitem" className="studio-sign-out">

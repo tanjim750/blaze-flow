@@ -20,6 +20,8 @@ import {
 } from "./player-state";
 
 export type DrawTool = "POINT" | "RECTANGLE" | "ELLIPSE" | "ARROW" | "PATH" | "TEXT";
+const QUALITY_KEY = "bf.review.quality";
+
 export type PlayerHandle = {
   seek: (ms: number) => void;
   position: () => number;
@@ -134,7 +136,14 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
   const [imageFailed, setImageFailed] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const stage = useRef<HTMLDivElement>(null);
+  // The viewer's last quality choice wins when this cut offers it; otherwise the first source.
   const [sourceId, setSourceId] = useState(sources[0]?.id ?? "");
+  useEffect(() => {
+    // Read after mount, so the server render and hydration agree on the first source.
+    const saved = window.localStorage.getItem(QUALITY_KEY);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of a stored preference
+    if (saved) setSourceId(saved);
+  }, []);
   const [positionMs, setPositionMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -166,10 +175,14 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
   }, [still, imageLoaded]);
   const [tool, setTool] = useState<DrawTool | null>(null);
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
+  const toolRef = useRef<DrawTool | null>(null);
+  useEffect(() => { toolRef.current = tool; }, [tool]);
   const [path, setPath] = useState<{ x: number; y: number }[]>([]);
   const fps = useRef(DEFAULT_FPS);
   // A seek requested before the metadata arrived, applied as soon as it does.
   const queuedSeek = useRef<number | null>(null);
+  // Set by a quality switch: carry on playing once the new source has loaded.
+  const resumePlay = useRef(false);
   // The seek in flight, compared against where the element actually lands.
   const inFlight = useRef<number | null>(null);
   const bufferingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -276,6 +289,10 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
         inFlight.current = queued;
         element.currentTime = clampSeekMs(queued, element.duration * 1000) / 1000;
       }
+      if (resumePlay.current) {
+        resumePlay.current = false;
+        void element.play().catch(() => undefined);
+      }
     };
     const fail = () => {
       clearBuffering();
@@ -325,6 +342,18 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
     };
   }, [onMeta, source?.src]);
 
+  /**
+   * Changes quality without losing the place: the new source starts where the old one
+   * was, playing if it was playing. The choice is remembered for the next cut.
+   */
+  const switchSource = useCallback((id: string) => {
+    const element = video.current;
+    queuedSeek.current = element ? element.currentTime * 1000 : positionMs;
+    resumePlay.current = Boolean(element && !element.paused);
+    try { window.localStorage.setItem(QUALITY_KEY, id); } catch { /* private mode */ }
+    setSourceId(id);
+  }, [positionMs]);
+
   /** Reloads a failed source and puts the playhead back where it was. */
   const retry = useCallback(() => {
     const element = video.current;
@@ -368,8 +397,9 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
 
   useEffect(() => {
     const element = video.current;
-    if (element) { element.volume = volume; element.muted = muted; element.playbackRate = speed; }
-  }, [muted, speed, volume]);
+    // Re-applied when the source changes: loading a new src resets the rate to 1.
+    if (element) { element.volume = volume; element.muted = muted; element.defaultPlaybackRate = speed; element.playbackRate = speed; }
+  }, [muted, speed, volume, source?.src]);
 
   /** Moves by whole seconds without changing whether it plays. */
   const jump = useCallback((seconds: number) => {
@@ -386,6 +416,12 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
    */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      // Escape puts the pen down: an armed tool otherwise stays over the frame, swallowing
+      // clicks, until another shape is drawn.
+      if (event.key === "Escape" && toolRef.current) {
+        setTool(null); setDrawStart(null); setPath([]);
+        return;
+      }
       if (playerShouldIgnoreKey(event)) return;
       const element = video.current;
       const keys: Record<string, () => void> = {
@@ -479,6 +515,10 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
   // The AI highlight uses the same display-window rule as a held drawing, and follows a
   // moving word along its track.
   const aiWindow = highlight && !still ? findingWindow(highlight) : null;
+  // The drawing being composed belongs to the moment it was drawn at, like a posted one:
+  // seeking or playing away from its window hides it instead of leaving it over every frame.
+  const pendingOpacity = pending && !still && pendingWindow
+    ? windowOpacity(displayWindow(pendingWindow.startMs, pendingWindow.endMs), positionMs, playing) : 1;
   const aiOpacity = highlight ? windowOpacity(aiWindow ? displayWindow(aiWindow.startMs, aiWindow.endMs) : null, positionMs, playing) : 0;
   const aiRegion = highlight ? regionAt(highlight, positionMs) : null;
   // Timeline spans: each held drawing and each range note, so the reviewer can see what
@@ -588,7 +628,11 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
               ))}
             </g>
           ))}
-          {pending && <Shape element={pending} onActivate={() => undefined} />}
+          {pending && (
+            <g className="rvp-pending" data-shown={pendingOpacity > 0 ? "true" : "false"} style={{ opacity: pendingOpacity }}>
+              <Shape element={pending} onActivate={() => undefined} />
+            </g>
+          )}
           {aiRegion && (
             <rect
               className="aiqa-highlight" data-testid="ai-qa-highlight" data-shown={aiOpacity > 0 ? "true" : "false"}
@@ -697,7 +741,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
             <button
               key={`ai-${marker.id}`}
               type="button"
-              className={`rvp-ai-marker is-${marker.band} ${marker.selected ? "is-selected" : ""}`}
+              data-tap-exempt className={`rvp-ai-marker is-${marker.band} ${marker.selected ? "is-selected" : ""}`}
               style={{ left: pct(marker.startMs), width: `max(6px, calc(${pct(marker.endMs)} - ${pct(marker.startMs)}))` }}
               title={`AI QA · ${marker.label} · ${timeRangeLabel({ start_time_ms: marker.startMs, end_time_ms: marker.endMs })}`}
               aria-label={`AI finding “${marker.label}” at ${timecode(marker.startMs)}. Jump there.`}
@@ -710,7 +754,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
             <button
               key={note.id}
               type="button"
-              className={`rvp-marker ${note.resolved ? "is-resolved" : ""}`}
+              data-tap-exempt className={`rvp-marker ${note.resolved ? "is-resolved" : ""}`}
               style={{ left: durationMs ? `${(note.startMs! / durationMs) * 100}%` : "0%" }}
               title={`${note.timecode} — ${note.author}`}
               aria-label={`Jump to ${note.timecode} by ${note.author}`}
@@ -768,7 +812,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
         {!still && sources.length > 1 && (
           <label className="rvp-select" title="Playback source">
             <MonitorPlay />
-            <select value={sourceId} aria-label="Playback quality" onChange={(event) => setSourceId(event.target.value)}>
+            <select value={source?.id ?? sourceId} aria-label="Playback quality" onChange={(event) => switchSource(event.target.value)}>
               {sources.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
             </select>
           </label>
@@ -784,7 +828,11 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
                 aria-pressed={tool === value}
                 aria-label={`Draw ${label.toLowerCase()}`}
                 title={`${label} annotation`}
-                onClick={() => setTool(tool === value ? null : value)}
+                onClick={() => {
+                  // A drawing belongs to one frame, so arming a tool stops playback there.
+                  if (tool !== value) video.current?.pause();
+                  setTool(tool === value ? null : value);
+                }}
               >
                 <Icon />
               </button>
