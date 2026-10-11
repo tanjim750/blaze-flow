@@ -4,9 +4,10 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Load
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
-  cancelUpload, clearFinished, dismissUpload, etaSeconds, formatEta, formatRate, isActive, percent, retryUpload, trayCounts, useUploads,
+  cancelUpload, clearFinished, dismissUpload, etaSeconds, formatEta, formatRate, isActive, percent, retryUpload, trayCounts,
   type UploadItem,
 } from "@/lib/upload-store";
+import { useUploads } from "@/lib/use-uploads";
 import "./upload-tray.css";
 
 function size(bytes: number) {

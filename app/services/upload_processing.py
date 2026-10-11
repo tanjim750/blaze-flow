@@ -24,15 +24,17 @@ def processing_state(file: File):
     label = 'Making proxy' if kind == 'proxy' else 'Making preview'
     variants = list(FileVariant.objects.filter(
         file=file, deleted_at__isnull=True, metadata__variant_type__in=PREVIEW_VARIANT_TYPES,
-    ).values_list('status', flat=True))
-    if any(status == FileStatus.READY for status in variants):
+    ).values_list('metadata__variant_type', 'status'))
+    # A video is ready for review once its playback proxy is; a thumbnail alone is not enough.
+    wanted = [status for variant, status in variants if kind != 'proxy' or variant == 'VIDEO_PROXY']
+    if any(status == FileStatus.READY for status in wanted):
         return {'stage': 'ready', 'label': 'Ready', 'ready': True}
-    if variants and all(status == FileStatus.FAILED for status in variants):
-        return {'stage': 'ready', 'label': 'Ready (no preview)', 'ready': True}
     event = OutboxEvent.objects.filter(topic='file.preview.requested', aggregate_id=str(file.id)).order_by('-created_at').first()
     if event is None and not variants:
         # Nothing queued: either previews are off here or this type gets none.
         return {'stage': 'ready', 'label': 'Ready', 'ready': True}
-    if event is not None and event.status in ('DEAD_LETTER', 'FAILED'):
+    if (event is not None and event.status == 'DEAD_LETTER') or (wanted and all(status == FileStatus.FAILED for status in wanted)):
         return {'stage': 'ready', 'label': 'Ready (no preview)', 'ready': True}
+    if event is not None and event.status == 'PUBLISHED' and not wanted:
+        return {'stage': 'ready', 'label': 'Ready', 'ready': True}
     return {'stage': kind, 'label': label, 'ready': False}

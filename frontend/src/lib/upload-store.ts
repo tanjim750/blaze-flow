@@ -3,10 +3,9 @@
  * portal Send files, public upload links, chat attachments) goes through `startUpload`, and
  * the floating tray reads it. It lives at module level, so it survives client-side
  * navigation (the fast-routes setup never reloads the page) and keeps sending while you move
- * between pages. Framework-free apart from the `useUploads` hook, so the store is unit-tested
+ * between pages. Framework-free (the React hook is in use-uploads.ts), so the store is unit-tested
  * with a fake transport.
  */
-import { useSyncExternalStore } from "react";
 
 export type UploadStatus = "queued" | "uploading" | "processing" | "ready" | "failed" | "cancelled";
 export type UploadSource = "files" | "project" | "portal" | "public" | "chat" | "review";
@@ -83,10 +82,6 @@ export function subscribe(listener: () => void) {
   return () => { listeners.delete(listener); };
 }
 export const getUploads = () => snapshot;
-const empty: UploadItem[] = [];
-export function useUploads(): UploadItem[] {
-  return useSyncExternalStore(subscribe, getUploads, () => empty);
-}
 
 export const isActive = (item: UploadItem) => item.status === "queued" || item.status === "uploading";
 export const hasActiveUploads = () => snapshot.some(isActive);

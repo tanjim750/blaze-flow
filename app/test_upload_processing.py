@@ -1,11 +1,13 @@
 """The upload tray's processing endpoint: scan → preview/proxy → ready, members only."""
 import shutil
+import uuid
 import tempfile
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import File, FileSecurityScan, FileSecurityScanStatus, FileStatus, OutboxEvent
 from .services.upload_processing import processing_state
@@ -42,6 +44,12 @@ class UploadProcessingTests(WorkspaceAccessSetupMixin, TestCase):
         self.file.refresh_from_db()
         OutboxEvent.objects.filter(aggregate_id=str(self.file.id)).delete()
         self.assertEqual(processing_state(self.file)['stage'], 'ready')  # nothing queued
+        event = OutboxEvent.objects.create(id=uuid.uuid4(), topic='file.preview.requested', aggregate_type='file', aggregate_id=str(self.file.id),
+                                           payload={}, status='PENDING', available_at=timezone.now(), created_at=timezone.now(), updated_at=timezone.now(),
+                                           deduplication_key=f'tray-test:{self.file.id}')
+        self.assertEqual(processing_state(self.file), {'stage': 'proxy', 'label': 'Making proxy', 'ready': False})
+        OutboxEvent.objects.filter(id=event.id).update(status='DEAD_LETTER')
+        self.assertEqual(processing_state(self.file)['label'], 'Ready (no preview)')
         File.objects.filter(id=self.file.id).update(status=FileStatus.FAILED)
         self.file.refresh_from_db()
         self.assertEqual(processing_state(self.file)['stage'], 'failed')
