@@ -96,6 +96,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'app.middleware.RequestIdMiddleware',
 ]
 
 ROOT_URLCONF = 'blazeflow.urls'
@@ -219,6 +220,13 @@ PLAN_LIMITS = {
         'max_storage_bytes': int(os.environ.get('PLAN_PRO_MAX_STORAGE_BYTES', str(2 * 1024 * 1024 * 1024 * 1024))),
     },
 }
+# Platform admin revenue estimate until Stripe is connected: what one PRO seat is assumed to
+# pay per month, in minor units of PLATFORM_CURRENCY. Purely for the /platform dashboard.
+PLATFORM_PRO_PRICE_MINOR = int(os.environ.get('PLATFORM_PRO_PRICE_MINOR', '2900'))
+PLATFORM_CURRENCY = os.environ.get('PLATFORM_CURRENCY', 'GBP')
+SUBSCRIPTION_TRIAL_DAYS = int(os.environ.get('SUBSCRIPTION_TRIAL_DAYS', '14'))
+# Where support replies come from (falls back to DEFAULT_FROM_EMAIL).
+SUPPORT_FROM_EMAIL = os.environ.get('SUPPORT_FROM_EMAIL', '')
 SUBSCRIPTION_PRO_PERIOD_DAYS = int(os.environ.get('SUBSCRIPTION_PRO_PERIOD_DAYS', '30'))
 if SUBSCRIPTION_PRO_PERIOD_DAYS < 1:
     raise ImproperlyConfigured('SUBSCRIPTION_PRO_PERIOD_DAYS must be at least 1.')
@@ -351,6 +359,8 @@ REST_FRAMEWORK = {
         'email_verification': os.environ.get('EMAIL_VERIFICATION_THROTTLE_RATE', '5/hour'),
         # Public upload links: page loads plus one request per file, per client IP.
         'upload_link': os.environ.get('UPLOAD_LINK_THROTTLE_RATE', '240/hour'),
+        # "Report a problem" submissions, per signed-in user.
+        'support_ticket': os.environ.get('SUPPORT_TICKET_THROTTLE_RATE', '20/hour'),
     },
 }
 
@@ -387,3 +397,17 @@ AI_QA_CPU_THREADS = int(os.environ.get('AI_QA_CPU_THREADS', str(os.cpu_count() o
 AI_QA_VIDEO_DET_MODEL = os.environ.get('AI_QA_VIDEO_DET_MODEL', 'PP-OCRv5_mobile_det')
 # Partial video findings are written after this many frames, so the panel fills in as it runs.
 AI_QA_PARTIAL_EVERY_FRAMES = int(os.environ.get('AI_QA_PARTIAL_EVERY_FRAMES', '12'))
+
+
+# Optional error tracking. Inactive unless SENTRY_DSN is set, so no account is needed to run.
+SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
+if SENTRY_DSN:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=os.environ.get('SENTRY_ENVIRONMENT', 'development' if DEBUG else 'production'),
+        traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0')),
+        # GDPR: no cookies, IPs or user emails unless explicitly turned on.
+        send_default_pii=os.environ.get('SENTRY_SEND_DEFAULT_PII', 'false').lower() == 'true',
+    )
