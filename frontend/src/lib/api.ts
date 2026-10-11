@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { describeErrorBody } from "./errors";
 import type { ActivityPage, GuestLinkActivity } from "./activity";
 import type { DecisionKind, DecisionViewer, ReviewDecision } from "./review-decisions";
@@ -172,7 +173,12 @@ const jsonBody = (payload: unknown): RequestInit => ({
   headers: { "Content-Type": "application/json" },
 });
 
-export const listWorkspaces = () => request<Workspace[]>("/workspaces/");
+/**
+ * Deduplicated per server request with React `cache`: the app layout, the page and helpers
+ * such as route guards all ask for the workspace list and the current user, and each ask
+ * used to be its own round trip to Django on every navigation.
+ */
+export const listWorkspaces = cache(() => request<Workspace[]>("/workspaces/"));
 /** The viewer's effective permission keys here (and on one project). See lib/permissions.ts. */
 export const getWorkspacePermissions = (workspaceId: string, projectId?: string | null) =>
   request<import("./permissions").PermissionsAnswer>(`/workspaces/${workspaceId}/permissions/${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ""}`);
@@ -184,7 +190,8 @@ export const updateWorkspaceProfile = (workspaceId: string, payload: Partial<Omi
   request<WorkspaceProfile>(`/workspaces/${workspaceId}/profile/`, {
     ...jsonBody(payload), method: "PATCH",
   });
-export const listClientTeams = (workspaceId: string) => request<ClientTeam[]>(`/workspaces/${workspaceId}/client-teams/`);
+// Per-request dedupe (React `cache`): several loaders on one page ask for this.
+export const listClientTeams = cache((workspaceId: string) => request<ClientTeam[]>(`/workspaces/${workspaceId}/client-teams/`));
 export const listClientTeamMembers = (workspaceId: string, clientTeamId: string) => request<ClientTeamMember[]>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/members/`);
 export const addClientTeamMember = (workspaceId: string, clientTeamId: string, payload: { email: string; title?: string }) => request<ClientTeamMember>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/members/`, jsonBody(payload));
 export const removeClientTeamMember = (workspaceId: string, clientTeamId: string, memberId: string) => request<void>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/members/${memberId}/`, { method: "DELETE" });
@@ -198,7 +205,8 @@ export const getClientPortalData = (workspaceId: string) => request<import("./cl
 export const getClientProjectOverview = (workspaceId: string, projectId: string) => request<import("./portal").ProjectOverview>(`/workspaces/${workspaceId}/client-portal/projects/${projectId}/`);
 export const listProjectRequests = (workspaceId: string, status?: string) => request<import("./portal").ProjectRequestList>(`/workspaces/${workspaceId}/project-requests/${status ? `?status=${encodeURIComponent(status)}` : ""}`);
 export const getBranding = (workspaceId: string) => request<import("./portal").Branding>(`/workspaces/${workspaceId}/branding/`);
-export const listProjects = (workspaceId: string) => request<Project[]>(`/workspaces/${workspaceId}/projects/`);
+// Per-request dedupe (React `cache`): several loaders on one page ask for this.
+export const listProjects = cache((workspaceId: string) => request<Project[]>(`/workspaces/${workspaceId}/projects/`));
 export const getProject = (workspaceId: string, projectId: string) => request<Project>(`/workspaces/${workspaceId}/projects/${projectId}/`);
 export const listFolders = (workspaceId: string, projectId: string) => request<ProjectFolder[]>(`/workspaces/${workspaceId}/projects/${projectId}/folders/`);
 export const listProjectFiles = (workspaceId: string, projectId: string) => request<ProjectFile[]>(`/workspaces/${workspaceId}/projects/${projectId}/files/`);
@@ -210,7 +218,8 @@ export const listWorkflowStages = (workspaceId: string) => request<WorkflowStage
 export const listRoles = (workspaceId: string) => request<Role[]>(`/workspaces/${workspaceId}/roles/`);
 export const createRole = (workspaceId: string, payload: { name: string; description?: string; permission_keys: string[] }) =>
   request<Role>(`/workspaces/${workspaceId}/roles/`, jsonBody(payload));
-export const listWorkspaceMembers = (workspaceId: string) => request<WorkspaceMembership[]>(`/workspaces/${workspaceId}/members/`);
+// Per-request dedupe (React `cache`): several loaders on one page ask for this.
+export const listWorkspaceMembers = cache((workspaceId: string) => request<WorkspaceMembership[]>(`/workspaces/${workspaceId}/members/`));
 export const updateWorkspaceMember = (workspaceId: string, membershipId: string, payload: { role_id?: string; project_access_mode?: string; status?: string }) =>
   request<WorkspaceMembership>(`/workspaces/${workspaceId}/members/${membershipId}/`, { ...jsonBody(payload), method: "PATCH" });
 export const createWorkspaceInvite = (workspaceId: string, payload: { email: string; role_id: string; project_access_mode: string; expires_in_days: number }) =>
@@ -260,7 +269,7 @@ export const uploadMediaVersion = (workspaceId: string, projectId: string, paylo
     method: "POST", body: payload,
   });
 
-export const getCurrentUser = () => request<CurrentUser>("/auth/me/");
+export const getCurrentUser = cache(() => request<CurrentUser>("/auth/me/"));
 
 /**
  * Ends the Django session. Session-authenticated, so unlike the public auth endpoints this
@@ -277,7 +286,8 @@ export const requestEmailVerification = (email: string) =>
 export const listTasks = (workspaceId: string) => request<Task[]>(`/workspaces/${workspaceId}/tasks/`);
 export const getTask = (workspaceId: string, taskId: string) => request<Task>(`/workspaces/${workspaceId}/tasks/${taskId}/`);
 export const listTaskAttachments = (workspaceId: string, taskId: string) => request<TaskAttachment[]>(`/workspaces/${workspaceId}/tasks/${taskId}/attachments/`);
-export const listTaskStages = (workspaceId: string) => request<TaskWorkflow>(`/workspaces/${workspaceId}/task-stages/`);
+// Per-request dedupe (React `cache`): several loaders on one page ask for this.
+export const listTaskStages = cache((workspaceId: string) => request<TaskWorkflow>(`/workspaces/${workspaceId}/task-stages/`));
 export const createTask = (workspaceId: string, payload: { title: string; client_team_id?: string | null; project_id?: string | null; assignee_id?: string | null; task_stage_id?: string | null; description?: string; priority?: string; status?: string; due_at?: string | null; sort_order?: number }) =>
   request<Task>(`/workspaces/${workspaceId}/tasks/`, jsonBody(payload));
 export const updateTask = (workspaceId: string, taskId: string, payload: Partial<Pick<Task, "title" | "description" | "status" | "priority" | "start_at" | "due_at" | "sort_order" | "client_team_id" | "project_id" | "task_stage_id">> & { assignee_id?: string | null }) =>

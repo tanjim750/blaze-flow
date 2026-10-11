@@ -19,6 +19,12 @@ const nextConfig: NextConfig = {
   devIndicators: { position: "bottom-right" },
   experimental: {
     /**
+     * Revisiting a page within 30 s reuses the rendered page instead of a fresh server
+     * round trip (sidebar back-and-forth was the most common "laggy" path). Mutations call
+     * `router.refresh()` / revalidate, which clears this cache, so edits still show at once.
+     */
+    staleTimes: { dynamic: 30 },
+    /**
      * Every browser-side call reaches Django through the rewrite below, uploads included,
      * and Next caps a proxied request body at 10 MiB by default. Past that the rewrite
      * answered 500 before Django ever saw the request, so any video over ~10 MB failed

@@ -2,7 +2,9 @@ import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./interactions.css";
 import { NavProgress } from "@/components/nav-progress";
+import { SubmitFeedback } from "@/components/submit-feedback";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,6 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <Suspense fallback={null}><NavProgress /></Suspense>
+        <SubmitFeedback />
         {children}
       </body>
     </html>
