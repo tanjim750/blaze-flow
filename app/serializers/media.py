@@ -2,7 +2,7 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from app.models import FileStatus, FileVariant, MediaVersion, MediaVersionStageEntry, OutboxEvent, PriorityLevel, WorkflowStageStatus
-from app.services.file_processing import POSTER_VARIANT_TYPE, PREVIEW_VARIANT_TYPES
+from app.services.file_processing import HQ_PROXY_VARIANT_TYPE, POSTER_VARIANT_TYPE, PREVIEW_VARIANT_TYPES
 
 # The stills a list may show for a cut: the frame pulled from a video, or an image's own
 # thumbnail. Shared with the poster route so the URL is only ever offered when it resolves.
@@ -29,13 +29,15 @@ class MediaVersionSerializer(serializers.ModelSerializer):
     file = serializers.SerializerMethodField()
     current_stage = serializers.SerializerMethodField()
     preview_status = serializers.SerializerMethodField()
+    # Which proxies the player can choose between: ['hq', 'sd'], ['sd'] or [].
+    preview_qualities = serializers.SerializerMethodField()
     poster = serializers.SerializerMethodField()
 
     class Meta:
         model = MediaVersion
         fields = (
             'id', 'project_id', 'version_number', 'title', 'note', 'priority',
-            'allow_download', 'status', 'file', 'current_stage', 'preview_status', 'poster', 'created_at',
+            'allow_download', 'status', 'file', 'current_stage', 'preview_status', 'preview_qualities', 'poster', 'created_at',
         )
 
     def get_poster(self, media):
@@ -89,6 +91,18 @@ class MediaVersionSerializer(serializers.ModelSerializer):
                 'id': None, 'name': guest.name or 'Guest reviewer', 'type': 'guest',
             } if guest else None,
         }
+
+    def get_preview_qualities(self, media):
+        types = set(FileVariant.objects.filter(
+            file=media.original_file, deleted_at__isnull=True, status=FileStatus.READY,
+            metadata__variant_type__in=[*PREVIEW_VARIANT_TYPES, HQ_PROXY_VARIANT_TYPE],
+        ).values_list('metadata__variant_type', flat=True))
+        qualities = []
+        if HQ_PROXY_VARIANT_TYPE in types:
+            qualities.append('hq')
+        if types & set(PREVIEW_VARIANT_TYPES):
+            qualities.append('sd')
+        return qualities
 
     def get_preview_status(self, media):
         variant = FileVariant.objects.filter(file=media.original_file, deleted_at__isnull=True, metadata__variant_type__in=PREVIEW_VARIANT_TYPES).order_by('-created_at').values_list('status', flat=True).first()

@@ -4,7 +4,8 @@ export const credentialsAvailable = Boolean(process.env.E2E_EMAIL && process.env
 export async function signIn(page: Page) {
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(process.env.E2E_EMAIL!);
-  await page.getByLabel("Password").fill(process.env.E2E_PASSWORD!);
+  // Exact: the sign-in form also has a "Show password" toggle labelled with the word.
+  await page.locator("input[name=password]").fill(process.env.E2E_PASSWORD!);
   await page.getByRole("button", { name: /sign in/i }).click();
   await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
 }

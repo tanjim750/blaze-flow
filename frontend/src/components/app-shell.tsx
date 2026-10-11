@@ -15,7 +15,8 @@ import { NotificationBell } from "@/components/notifications/bell";
 import { fetchUnread, unreadLabel } from "@/lib/messages";
 import "@/components/messages/messages.css";
 import { mobileTitle } from "@/lib/mobile-title";
-import { Plus, Upload } from "lucide-react";
+import { LifeBuoy, Plus, ShieldCheck, Upload } from "lucide-react";
+import { REPORT_EVENT, ReportProblemDialog } from "@/components/report-problem";
 
 type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { severity: string; code: string; count: number }[] };
 
@@ -62,8 +63,9 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   useEffect(() => {
     let active = true;
     if (!selectedWorkspaceId) { queueMicrotask(() => active && setHealth(null)); return () => { active = false; }; }
-    // Only owners see (or may read) operations health.
-    if (nav.role !== "owner") return () => { active = false; };
+    // Only owners may read operations health; asking anyway put a 403 in the console of
+    // every editor and client on every page load.
+    if (nav.role !== "owner") { queueMicrotask(() => active && setHealth("restricted")); return () => { active = false; }; }
     void fetch(`/api/workspaces/${selectedWorkspaceId}/operations/health/`, { credentials: "include" }).then(async (response) => {
       if (!active) return;
       if (response.ok) setHealth(await response.json() as OperationsHealth);
@@ -129,6 +131,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
           {narrow && <AccountMenu user={user} />}
         </div>
       </header>
+      <ReportProblemDialog workspaceId={selectedWorkspaceId} />
       {open && <button type="button" className="studio-scrim" aria-label="Close navigation" tabIndex={-1} onClick={() => setOpen(false)} />}
 
       <aside className={open ? "studio-sidebar open" : "studio-sidebar"}>
@@ -268,6 +271,12 @@ function AccountMenu({ user }: { user: ShellUser | null }) {
           <Link href="/settings" role="menuitem" onClick={() => setOpen(false)}>
             <Settings size={15} />Settings
           </Link>
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); window.dispatchEvent(new Event(REPORT_EVENT)); }}>
+            <LifeBuoy size={15} />Report a problem
+          </button>
+          {user.isPlatformStaff && <Link href="/platform" role="menuitem" onClick={() => setOpen(false)}>
+            <ShieldCheck size={15} />Platform admin
+          </Link>}
           {/* A form, not a fetch: the action clears the session cookies server-side. */}
           <form action={signOutAction}>
             <button type="submit" role="menuitem" className="studio-sign-out">

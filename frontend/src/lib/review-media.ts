@@ -45,6 +45,8 @@ export type ReviewVersion = {
   mimeType: string;
   /** Streams through the Next rewrite; null while the file is still being ingested. */
   src: string | null;
+  /** The proxies the API has for this cut ("hq" = 1080p, "sd" = 720p); absent for library-only files. */
+  qualities?: ("hq" | "sd")[];
   stageName: string | null;
   /** Non-null only for a project media version — the thing review data attaches to. */
   target: ReviewTarget | null;
@@ -221,6 +223,9 @@ export function buildCatalogue(input: CatalogueInput): ReviewAsset[] {
         // Same bytes, so the same cut: give the library version somewhere to keep review data.
         known.target = target;
         known.src = previewSrc(target);
+        known.qualities = media.preview_qualities ?? [];
+        // The review version's own title ("Cold brew spot") reads better than the file name.
+        if (media.title) known.title = media.title;
         known.stageName = media.current_stage?.name ?? known.stageName;
         known.allowDownload = media.allow_download;
         known.workflowStage = workflowPosition(media);
@@ -236,6 +241,7 @@ export function buildCatalogue(input: CatalogueInput): ReviewAsset[] {
         sizeBytes: media.file.size_bytes,
         mimeType: media.file.mime_type,
         src: previewSrc(target),
+        qualities: media.preview_qualities ?? [],
         stageName: media.current_stage?.name ?? null,
         uploadedBy: null,
         target,

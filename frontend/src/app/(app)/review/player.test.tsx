@@ -1,5 +1,5 @@
 import { createRef } from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReviewNote } from "@/lib/review-notes";
 import { Player, type DrawnAnnotation, type PlayerHandle } from "./player";
@@ -207,5 +207,53 @@ describe("Player drawing windows", () => {
     const span = container.querySelector<HTMLElement>(".rvp-span.is-drawing");
     expect(span?.style.left).toBe("10%");
     expect(span?.title).toContain("00:02–00:07");
+  });
+});
+
+describe("Review page QA fixes", () => {
+  const rect = { element_type: "RECTANGLE" as const, geometry: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 }, style: {}, payload: {} };
+
+  function mount(extra: Partial<Parameters<typeof Player>[0]> = {}) {
+    const handle = createRef<PlayerHandle>();
+    const utils = render(
+      <Player
+        handle={handle} sources={[{ id: "hq", label: "HD 1080p", src: "/p/?quality=hq" }, { id: "proxy", label: "SD 720p", src: "/p/" }]} title="Cut"
+        notes={[]} annotations={[]} pending={null} canDraw
+        onTime={() => undefined} onMeta={() => undefined} onDraw={() => undefined}
+        onDeleteAnnotation={() => undefined} onFocusNote={() => undefined}
+        {...extra}
+      />,
+    );
+    const element = utils.container.querySelector("video")!;
+    return { ...utils, handle, element, media: fakeMedia(element) };
+  }
+
+  it("Escape puts an armed drawing tool down", () => {
+    const { container } = mount();
+    fireEvent.click(within(container).getByRole("button", { name: /rectangle/i }));
+    expect(container.querySelector(".rvp-draw")).not.toBeNull();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(container.querySelector(".rvp-draw")).toBeNull();
+  });
+
+  it("hides a pending drawing away from the moment it was drawn at", () => {
+    const { container, media } = mount({ pending: rect, pendingWindow: { startMs: 1000, endMs: 3000 } });
+    act(() => media.loadMetadata());
+    act(() => media.playTo(2));
+    expect(container.querySelector("g.rvp-pending")!.getAttribute("data-shown")).toBe("true");
+    act(() => media.playTo(9));
+    expect(container.querySelector("g.rvp-pending")!.getAttribute("data-shown")).toBe("false");
+  });
+
+  it("switching quality keeps the playhead and remembers the choice", () => {
+    const { container, element, media } = mount();
+    act(() => media.loadMetadata());
+    act(() => media.playTo(7));
+    fireEvent.change(within(container).getByRole("combobox", { name: "Playback quality" }), { target: { value: "proxy" } });
+    expect(element.getAttribute("src")).toBe("/p/");
+    expect(window.localStorage.getItem("bf.review.quality")).toBe("proxy");
+    act(() => media.loadMetadata());
+    expect(element.currentTime).toBe(7);
+    window.localStorage.removeItem("bf.review.quality");
   });
 });

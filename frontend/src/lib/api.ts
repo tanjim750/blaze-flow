@@ -65,7 +65,7 @@ export type MediaVersion = {
   priority: string; allow_download: boolean; status: string; file: MediaFile;
   /** `entered_at` / `changed_by` say who moved the cut into this stage, and when. */
   current_stage: (WorkflowStageRef & { entered_at?: string | null; changed_by?: { id: string | null; name: string; type?: "user" | "guest" } | null }) | null;
-  preview_status: string; created_at: string;
+  preview_status: string; preview_qualities?: ("hq" | "sd")[]; created_at: string;
   /** A video's poster frame or an image's thumbnail, once generated. Absent on older backends. */
   poster?: { url: string; width: number | null; height: number | null } | null;
 };
@@ -74,6 +74,8 @@ export type CurrentUser = {
   id: string; email: string; first_name: string; last_name: string;
   avatar_url: string | null; timezone: string; status: string;
   email_verified_at: string | null; created_at: string;
+  /** Only `/auth/me/` fills this in: may this person open the staff-only `/platform` admin. */
+  is_platform_staff?: boolean;
 };
 export type CommentAuthor = { id: string; email: string; name: string; type: "user" | "guest" };
 /** One review note. `text` is null when the comment carries only attachments. */

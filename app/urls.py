@@ -121,8 +121,22 @@ from .activity_views import (
 from . import billing_views
 from .publish_views import asset_file_publish
 from .permission_views import workspace_permissions
+from .platform import views as platform_views
 
 urlpatterns = [
+    path('platform/overview/', platform_views.platform_overview, name='api-platform-overview'),
+    path('platform/workspaces/', platform_views.platform_workspaces, name='api-platform-workspaces'),
+    path('platform/workspaces/<uuid:workspace_id>/', platform_views.platform_workspace_detail, name='api-platform-workspace-detail'),
+    path('platform/users/', platform_views.platform_users, name='api-platform-users'),
+    path('platform/users/<uuid:user_id>/', platform_views.platform_user_detail, name='api-platform-user-detail'),
+    path('platform/users/<uuid:user_id>/<slug:action>/', platform_views.platform_user_action, name='api-platform-user-action'),
+    path('platform/jobs/', platform_views.platform_jobs, name='api-platform-jobs'),
+    path('platform/jobs/retry/', platform_views.platform_jobs_retry, name='api-platform-jobs-retry'),
+    path('platform/tickets/', platform_views.platform_tickets, name='api-platform-tickets'),
+    path('platform/tickets/<uuid:ticket_id>/', platform_views.platform_ticket_detail, name='api-platform-ticket-detail'),
+    path('platform/tickets/<uuid:ticket_id>/messages/', platform_views.platform_ticket_messages, name='api-platform-ticket-messages'),
+    path('platform/audit/', platform_views.platform_audit, name='api-platform-audit'),
+    path('support/tickets/', platform_views.support_tickets, name='api-support-tickets'),
     path('health/', health_check, name='api-health'),
     path('auth/register/', register, name='api-register'),
     path('auth/login/', login_user, name='api-login'),
