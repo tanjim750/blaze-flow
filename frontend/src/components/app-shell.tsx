@@ -14,7 +14,8 @@ import { NotificationBell } from "@/components/notifications/bell";
 import { fetchUnread, unreadLabel } from "@/lib/messages";
 import "@/components/messages/messages.css";
 import { mobileTitle } from "@/lib/mobile-title";
-import { Plus, Upload } from "lucide-react";
+import { LifeBuoy, Plus, ShieldCheck, Upload } from "lucide-react";
+import { REPORT_EVENT, ReportProblemDialog } from "@/components/report-problem";
 
 type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { severity: string; code: string; count: number }[] };
 
@@ -134,6 +135,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
           {narrow && <AccountMenu user={user} />}
         </div>
       </header>
+      <ReportProblemDialog workspaceId={selectedWorkspaceId} />
       {open && <button type="button" className="studio-scrim" aria-label="Close navigation" tabIndex={-1} onClick={() => setOpen(false)} />}
 
       <aside className={open ? "studio-sidebar open" : "studio-sidebar"}>
@@ -273,6 +275,12 @@ function AccountMenu({ user }: { user: ShellUser | null }) {
           <Link href="/settings" role="menuitem" onClick={() => setOpen(false)}>
             <Settings size={15} />Settings
           </Link>
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); window.dispatchEvent(new Event(REPORT_EVENT)); }}>
+            <LifeBuoy size={15} />Report a problem
+          </button>
+          {user.isPlatformStaff && <Link href="/platform" role="menuitem" onClick={() => setOpen(false)}>
+            <ShieldCheck size={15} />Platform admin
+          </Link>}
           {/* A form, not a fetch: the action clears the session cookies server-side. */}
           <form action={signOutAction}>
             <button type="submit" role="menuitem" className="studio-sign-out">
