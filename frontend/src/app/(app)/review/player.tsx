@@ -741,7 +741,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
             <button
               key={`ai-${marker.id}`}
               type="button"
-              className={`rvp-ai-marker is-${marker.band} ${marker.selected ? "is-selected" : ""}`}
+              data-tap-exempt className={`rvp-ai-marker is-${marker.band} ${marker.selected ? "is-selected" : ""}`}
               style={{ left: pct(marker.startMs), width: `max(6px, calc(${pct(marker.endMs)} - ${pct(marker.startMs)}))` }}
               title={`AI QA · ${marker.label} · ${timeRangeLabel({ start_time_ms: marker.startMs, end_time_ms: marker.endMs })}`}
               aria-label={`AI finding “${marker.label}” at ${timecode(marker.startMs)}. Jump there.`}
@@ -754,7 +754,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
             <button
               key={note.id}
               type="button"
-              className={`rvp-marker ${note.resolved ? "is-resolved" : ""}`}
+              data-tap-exempt className={`rvp-marker ${note.resolved ? "is-resolved" : ""}`}
               style={{ left: durationMs ? `${(note.startMs! / durationMs) * 100}%` : "0%" }}
               title={`${note.timecode} — ${note.author}`}
               aria-label={`Jump to ${note.timecode} by ${note.author}`}

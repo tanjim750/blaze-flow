@@ -18,6 +18,10 @@ test.describe("authenticated review", () => {
     }
     await page.getByRole("button", { name: "Draw rectangle" }).click();
     await expect(page.getByRole("button", { name: "Draw rectangle" })).toHaveAttribute("aria-pressed", "true");
+    // Escape puts the pen down instead of leaving the drawing layer over the frame.
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "Draw rectangle" })).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator(".rvp-draw")).toHaveCount(0);
 
     // The details panel reads duration and resolution off the loaded file.
     await page.getByRole("tab", { name: "Fields" }).click();

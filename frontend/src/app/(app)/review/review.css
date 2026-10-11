@@ -206,6 +206,11 @@
 .rvp-marker:hover { transform: translateX(-50%) scale(1.15); background: #3a2e17; }
 .rvp-marker.is-resolved { opacity: .45; }
 .rvp-marker i { font-style: normal; }
+/* On touch the 20px dots get an invisible 32px hit area instead of the shell's 44px minimum,
+   which made them grow over the picture and onto each other. */
+@media (pointer: coarse), (max-width: 900px) {
+  .rvp-marker::before { content: ""; position: absolute; inset: -6px; }
+}
 
 /* Transport --------------------------------------------------------------- */
 .rvp-transport {
