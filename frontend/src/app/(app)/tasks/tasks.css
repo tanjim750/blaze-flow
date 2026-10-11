@@ -394,3 +394,12 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
   .tb-stage-strip button { flex: 0 0 auto; }
   .tb-chips { flex-wrap: wrap; }
 }
+
+/* A task made from a review note: the note, and a link back to its moment in the cut. */
+.tb-source-note { display: grid; gap: 6px; }
+.tb-source-note > span { font-size: 12px; color: var(--muted); }
+.tb-source-note a { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid #8b6cff44; border-radius: 10px; background: #8b6cff12; color: var(--text); text-decoration: none; }
+.tb-source-note a:hover { border-color: #8b6cff99; }
+.tb-source-note b { font-variant-numeric: tabular-nums; color: var(--bf-violet-300, #b69aff); font-size: 12px; }
+.tb-source-note q { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; quotes: none; }
+.tb-source-note small { color: var(--muted); font-size: 12px; }

@@ -119,6 +119,17 @@ function SheetBody({ task, stage, stages, view, locked: approvedLock, canEdit = 
           onChange={(event) => { setDescription(event.target.value); schedule(title, event.target.value); }} onBlur={() => flushText()} />
       </label>
 
+      {task.source_note && (
+        <section className="tb-source-note" aria-label="Source review note" data-testid="task-source-note">
+          <span>From review note{task.source_note.resolved ? " · resolved" : ""}</span>
+          <a href={task.source_note.href}>
+            {task.source_note.timecode && <b>{task.source_note.timecode}</b>}
+            <q>{task.source_note.text}</q>
+            <small>v{task.source_note.version_number}{task.source_note.version_title ? ` · ${task.source_note.version_title}` : ""} · Jump to {task.source_note.timecode ? "timecode" : "note"} →</small>
+          </a>
+        </section>
+      )}
+
       {/* Re-keyed on stage and assignee so approval (which freezes pay) and reassignment refetch it. */}
       <TaskMoney key={`${task.task_stage_id}:${task.assignees.map((item) => item.id).join(",")}`} workspaceId={view.workspaceId} taskId={task.id} />
 

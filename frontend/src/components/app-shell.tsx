@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CommandPalette, openQuickSearch } from "@/components/command-palette";
 import { LinkPending } from "@/components/nav-progress";
 import { usePathname } from "next/navigation";
 import { BadgeCheck, Clapperboard, Inbox, ReceiptText, Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, MessagesSquare, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "lucide-react";
@@ -127,11 +128,13 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
         <h1 className="studio-mobilebar-title">{mobileTitle(pathname)}</h1>
         <div className="studio-mobilebar-actions">
           {primary && <button type="button" className="studio-mobilebar-btn is-primary" onClick={runPrimary} aria-label={primary}>{/upload/i.test(primary) ? <Upload size={18} /> : <Plus size={18} />}</button>}
+          <button type="button" className="studio-mobilebar-btn" onClick={openQuickSearch} aria-label="Search"><Search size={19} /></button>
           {narrow && <div className="studio-notifications"><NotificationBell workspaceId={selectedWorkspaceId} /></div>}
           {narrow && <AccountMenu user={user} />}
         </div>
       </header>
       <ReportProblemDialog workspaceId={selectedWorkspaceId} />
+      <CommandPalette workspace={selected ?? null} />
       {open && <button type="button" className="studio-scrim" aria-label="Close navigation" tabIndex={-1} onClick={() => setOpen(false)} />}
 
       <aside className={open ? "studio-sidebar open" : "studio-sidebar"}>
@@ -151,10 +154,12 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
           <div className="studio-brand"><span><Flame size={17} /></span><strong>Blaze Flow</strong></div>
           <WorkspacePicker workspaces={workspaces} selectedWorkspaceId={selectedWorkspaceId} pathname={pathname} />
 
-          {nav.role !== "client" && <form className="studio-rail-search" action="/projects">
+          {/* Opens the ⌘K palette (everyone, clients included: it is scoped to what they can see). */}
+          <button type="button" className="studio-rail-search" onClick={openQuickSearch} aria-label="Search (⌘K)" aria-keyshortcuts="Meta+K Control+K">
             <Search size={14} />
-            <input name="q" type="search" aria-label="Search clients and projects" placeholder={nav.role === "owner" ? "Search clients & projects" : "Search projects"} />
-          </form>}
+            <span>{nav.role === "client" ? "Search" : "Search everything"}</span>
+            <kbd>⌘K</kbd>
+          </button>
 
           <nav aria-label="Main navigation">
             {navLinks.map(({ href, label, icon: Icon }) => (

@@ -1,8 +1,10 @@
 "use client";
+import { NoteTaskDialog } from "./note-task-dialog";
+import type { TaskStage } from "@/lib/api";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, CircleHelp, Clock3, Loader2, MessageSquarePlus, Pencil, RotateCcw, Sparkles, Square, X, FileCheck2 } from "lucide-react";
+import { AlertTriangle, Check, CircleHelp, Clock3, Loader2, MessageSquarePlus, Pencil, RotateCcw, Sparkles, Square, X, FileCheck2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import {
@@ -132,11 +134,14 @@ type Props = {
   /** Bumped by the header's "Run AI Visual QA" button to open the run dialog here. */
   runRequest?: number;
   video?: boolean;
+  /** Team members who can create tasks get "Make task" on each finding. */
+  taskTools?: { workspaceId: string; stages: TaskStage[]; assignees: { id: string; name: string }[] } | null;
 };
 
 const STEPS = ["Queued", "Reading text", "Checking spelling", "Done"];
 
-export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelect, runRequest = 0, video = false }: Props) {
+export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelect, runRequest = 0, video = false, taskTools = null }: Props) {
+  const [taskFor, setTaskFor] = useState<{ id: string; text: string; timecode: string | null } | null>(null);
   const router = useRouter();
   const [runOpen, setRunOpen] = useState(false);
   const [language, setLanguage] = useState("en-GB");
@@ -192,6 +197,23 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
     qa.update(result.data.finding);
     if (!quiet) { toast.success("Added to comments as a team-only note."); router.refresh(); }
     return true;
+  };
+
+  // "Make task" on a finding: it becomes a (team-only) note first if it is not one yet, so
+  // the task has a note to link back to and the usual chip shows in Comments.
+  const makeTask = async (finding: AiFinding) => {
+    let commentId = finding.comment_id;
+    if (!commentId) {
+      const result = await aiQaApi.comment(target, finding.id);
+      if (!result.ok) { toast.error(result.detail); return; }
+      qa.update(result.data.finding);
+      commentId = result.data.finding.comment_id;
+      router.refresh();
+    }
+    if (!commentId) return;
+    const stamp = finding.start_time_ms !== null ? `${Math.floor(finding.start_time_ms / 60000)}:${String(Math.floor(finding.start_time_ms / 1000) % 60).padStart(2, "0")}` : null;
+    const fix = finding.edited_suggestion || finding.suggested_text;
+    setTaskFor({ id: commentId, text: fix ? `Fix “${finding.detected_text}” → “${fix}”` : `Check “${finding.detected_text}”`, timecode: stamp });
   };
 
   const addBatch = async () => {
@@ -309,6 +331,7 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
                 onSelect={() => onSelect(selectedId === finding.id ? null : finding)}
                 onUpdate={qa.update}
                 onComment={() => void addComment(finding)}
+                onMakeTask={taskTools ? () => void makeTask(finding) : undefined}
               />
             ))}
           </div>
@@ -320,6 +343,15 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
             </div>
           )}
         </>
+      )}
+
+      {taskFor && taskTools && (
+        <NoteTaskDialog
+          workspaceId={taskTools.workspaceId} notes={[taskFor]} stages={taskTools.stages} assignees={taskTools.assignees}
+          versionLabel={`${title} ${versionLabel}`.trim()}
+          onClose={() => setTaskFor(null)}
+          onCreated={() => { setTaskFor(null); toast.success("Task created and linked to the note."); router.refresh(); }}
+        />
       )}
 
       <ConfirmDialog
@@ -401,9 +433,9 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
   );
 }
 
-function FindingCard({ finding, target, selected, canAct, onSelect, onUpdate, onComment }: {
+function FindingCard({ finding, target, selected, canAct, onSelect, onUpdate, onComment, onMakeTask }: {
   finding: AiFinding; target: AiTarget; selected: boolean; canAct: boolean;
-  onSelect: () => void; onUpdate: (finding: AiFinding) => void; onComment: () => void;
+  onSelect: () => void; onUpdate: (finding: AiFinding) => void; onComment: () => void; onMakeTask?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(suggestion(finding));
@@ -449,11 +481,12 @@ function FindingCard({ finding, target, selected, canAct, onSelect, onUpdate, on
       {canAct && !editing && (
         <div className="aiqa-actions">
           {finding.status === "COMMENT_CREATED"
-            ? <span className="aiqa-done"><Check size={12} />Added to comments</span>
+            ? <><span className="aiqa-done"><Check size={12} />Added to comments</span>{onMakeTask && <button type="button" onClick={onMakeTask} data-testid="ai-qa-make-task"><ListChecks size={12} />Make task</button>}</>
             : closed
               ? <><span className="aiqa-done is-muted">{finding.status === "NOT_AN_ERROR" ? "Marked not an error" : "Dismissed"}</span><button type="button" onClick={() => void decide({ status: "PENDING" })} disabled={saving}>Undo</button></>
               : <>
                   <button type="button" className="is-primary" onClick={onComment} disabled={saving} data-testid="ai-qa-add-comment"><MessageSquarePlus size={12} />Add comment</button>
+                  {onMakeTask && <button type="button" onClick={onMakeTask} disabled={saving} data-testid="ai-qa-make-task"><ListChecks size={12} />Make task</button>}
                   <button type="button" onClick={() => setEditing(true)} disabled={saving}><Pencil size={12} />Edit</button>
                   {finding.status !== "ACCEPTED"
                     ? <button type="button" onClick={() => void decide({ status: "ACCEPTED" }, "Marked as a real mistake.")} disabled={saving}><Check size={12} />Accept</button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, AtSign, CornerDownRight, Sparkles, Eye, Lock, MessageSquareText, Paperclip, Pencil, PencilLine, Repeat, RotateCcw, Search, Send, SmilePlus, Timer, Trash2, Users, X } from "lucide-react";
+import { ArrowLeftRight, AtSign, CheckSquare, History, ListChecks, CornerDownRight, Sparkles, Eye, Lock, MessageSquareText, Paperclip, Pencil, PencilLine, Repeat, RotateCcw, Search, Send, SmilePlus, Timer, Trash2, Users, X } from "lucide-react";
 import {
   DEFAULT_HOLD, HOLD_PRESETS_MS, displayWindow, drawingEndMs, holdLabel, noteEndMs, parseTime, rangeLabel, rememberHold, validChoice, type HoldChoice,
 } from "@/lib/annotation-window";
@@ -14,6 +14,9 @@ import { timecode } from "@/lib/timecode";
 import type { AnnotationElement, CommentVisibility } from "@/lib/api";
 import { clearDraft, loadDraft, patchDraft } from "@/lib/review-drafts";
 import { Recorder } from "./recorder";
+import { NoteTaskDialog } from "./note-task-dialog";
+import { chipLabel, noteTasksApi, useNoteTasks, type NoteTaskLink } from "@/lib/note-tasks";
+import { useRouter } from "next/navigation";
 import type { RecordedClip, ReviewWriter } from "./writer";
 
 const noop = () => undefined;
@@ -152,6 +155,29 @@ export function Comments({
     [context, filter, notes],
   );
   const filtering = activeFilters(filter) > 0;
+
+  // Notes → tasks: the studio team only. Clients (and the client preview) never see any of it.
+  const router = useRouter();
+  const taskTeam = Boolean(view.target && view.workspaceId) && canWriteTeam && view.role !== "client" && Boolean(view.taskAccess?.create) && !view.taskAccess?.client;
+  const noteTasks = useNoteTasks(view.target, taskTeam);
+  const teamTools = taskTeam && !clientPreview;
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [taskNotes, setTaskNotes] = useState<ReviewNote[] | null>(null);
+  const [carrying, setCarrying] = useState(false);
+  const selectable = (note: ReviewNote) => !note.resolved && !note.pending && !note.local && !noteTasks.links[note.id];
+  const toggle = (id: string) => setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const stopSelecting = () => { setSelecting(false); setSelected(new Set()); };
+  const afterResolve = () => { window.setTimeout(() => void noteTasks.refresh(), 900); };
+  async function carryOver() {
+    if (!view.target) return;
+    setCarrying(true);
+    await noteTasksApi.carryOver(view.target);
+    setCarrying(false);
+    await noteTasks.refresh();
+    router.refresh();
+  }
+  const versionLabel = view.version ? `${view.version.title} ${view.version.label}`.trim() : "this cut";
   // "Client" and "Team" only mean something on a project cut whose members are known.
   const sides = Boolean(view.target) && view.members.length > 0;
 
@@ -201,11 +227,24 @@ export function Comments({
         <h2><MessageSquareText size={15} />Comments</h2>
         <div>
           <span>{notes.length ? `${open} open · ${notes.length - open} resolved` : "None yet"}</span>
+          {teamTools && open > 0 && (
+            <button type="button" className={`rvc-select-toggle ${selecting ? "is-on" : ""}`} aria-pressed={selecting} onClick={() => (selecting ? stopSelecting() : setSelecting(true))} title="Select open notes to turn into tasks">
+              <CheckSquare size={12} aria-hidden="true" />{selecting ? "Done" : "Select"}
+            </button>
+          )}
         </div>
       </header>
 
       {notes.length > 0 && (
         <FilterBar filter={filter} onChange={setFilter} counts={counts} sides={sides} filtering={filtering} />
+      )}
+
+      {teamTools && noteTasks.carry && noteTasks.carry.available > 0 && noteTasks.carry.previous && (
+        <div className="rvc-carry" data-testid="carry-over">
+          <History aria-hidden="true" />
+          <p>{noteTasks.carry.available} open {noteTasks.carry.available === 1 ? "note" : "notes"} from v{noteTasks.carry.previous.version_number}. Carry {noteTasks.carry.available === 1 ? "it" : "them"} over as a team checklist?</p>
+          <button type="button" onClick={() => void carryOver()} disabled={carrying} aria-busy={carrying}>{carrying ? "Carrying…" : "Carry over"}</button>
+        </div>
       )}
 
       <div className="rvc-feed" ref={feed}>
@@ -233,9 +272,35 @@ export function Comments({
             onSeek={onSeek}
             onReply={clientPreview || viewOnly ? undefined : setReplyTo}
             row={row}
+            task={teamTools ? noteTasks.links[note.id] ?? null : null}
+            onMakeTask={teamTools && !note.local && !note.pending ? () => setTaskNotes([note]) : undefined}
+            select={teamTools && selecting && selectable(note) ? { checked: selected.has(note.id), onToggle: () => toggle(note.id) } : undefined}
+            onAfterResolve={teamTools ? afterResolve : undefined}
           />
         ))}
       </div>
+
+      {teamTools && selecting && (
+        <div className="rvc-bulk" role="toolbar" aria-label="Bulk actions">
+          <span>{selected.size ? `${selected.size} selected` : "Pick open notes"}</span>
+          <button type="button" onClick={() => setSelected(new Set(ordered.filter(selectable).map((note) => note.id)))}>All open</button>
+          <button type="button" className="is-primary" disabled={!selected.size} onClick={() => setTaskNotes(notes.filter((note) => selected.has(note.id)))}>
+            <ListChecks size={13} aria-hidden="true" /> Create {selected.size || ""} {selected.size === 1 ? "task" : "tasks"}
+          </button>
+        </div>
+      )}
+
+      {taskNotes && view.workspaceId && (
+        <NoteTaskDialog
+          workspaceId={view.workspaceId}
+          notes={taskNotes}
+          stages={view.taskStages}
+          assignees={view.assignees}
+          versionLabel={versionLabel}
+          onClose={() => setTaskNotes(null)}
+          onCreated={() => { setTaskNotes(null); stopSelecting(); void noteTasks.refresh(); }}
+        />
+      )}
 
       {viewOnly ? (
         <p className="rvc-viewonly" role="note">
@@ -436,7 +501,13 @@ function DrawingDuration({ drawing, noteEndMs, durationMs, writer, onDone }: {
   );
 }
 
-function Note({ note, view, target, writer, focused, live = false, onSeek, onReply, timed = true, row }: {
+function Note({ note, view, target, writer, focused, live = false, onSeek, onReply, timed = true, row, task = null, onMakeTask, select, onAfterResolve }: {
+  /** The task made from this note, shown as a chip; team only. */
+  task?: NoteTaskLink | null;
+  onMakeTask?: () => void;
+  /** Present while bulk-selecting and this note can still become a task. */
+  select?: { checked: boolean; onToggle: () => void };
+  onAfterResolve?: () => void;
   timed?: boolean; note: ReviewNote; view: ReviewView; target: ReviewView["target"]; writer: ReviewWriter; focused: boolean;
   /** Its drawing or range covers the playhead: lit while the cut plays through it. */
   live?: boolean;
@@ -499,6 +570,7 @@ function Note({ note, view, target, writer, focused, live = false, onSeek, onRep
   return (
     <article className={`rvc-note ${note.resolved ? "is-resolved" : ""} ${focused ? "is-focused" : ""} ${live ? "is-live" : ""} ${note.visibility === "team" ? "is-team" : ""} ${note.pending ? "is-pending" : ""}`} data-note={note.id}>
       <div className="rvc-meta">
+        {select && <input type="checkbox" className="rvc-select" checked={select.checked} onChange={select.onToggle} aria-label={`Select note${note.timecode ? ` at ${note.timecode}` : ""}`} />}
         <span className="rvc-avatar">{note.initials}</span>
         {note.aiSuggested
           ? <strong className="rvc-ai-author" data-testid="ai-suggested-author"><span className="rvc-ai-badge"><Sparkles size={11} aria-hidden="true" />AI-suggested</span> · added by {note.author}</strong>
@@ -537,6 +609,12 @@ function Note({ note, view, target, writer, focused, live = false, onSeek, onRep
           )}
           <Mentioned text={note.text} mentions={note.mentions} />
         </p>
+      )}
+
+      {task && (
+        <a className={`rvc-task-chip ${task.done ? "is-done" : ""}`} href={task.href} data-testid="note-task-chip" title="Open the task">
+          <ListChecks aria-hidden="true" /><span>{chipLabel(task)}</span>
+        </a>
       )}
 
       {durationOpen && ownDrawing && (
@@ -594,10 +672,15 @@ function Note({ note, view, target, writer, focused, live = false, onSeek, onRep
           {canResolve && <button
             type="button"
             className={note.resolved ? "" : "rvc-resolve"}
-            onClick={() => writer.setResolved(note, !note.resolved)}
+            onClick={() => { writer.setResolved(note, !note.resolved); onAfterResolve?.(); }}
           >
             {note.resolved ? "Reopen" : "Resolve"}
           </button>}
+          {onMakeTask && !task && (
+            <button type="button" className="rvc-make-task" onClick={onMakeTask} title="Turn this note into a task">
+              <ListChecks size={12} aria-hidden="true" />Make task
+            </button>
+          )}
           {ownDrawing && (
             <button type="button" onClick={() => setDurationOpen(!durationOpen)} aria-expanded={durationOpen} aria-label="Change drawing duration" title="Change how long the drawing stays on screen">
               <Timer size={12} />

@@ -86,7 +86,7 @@ def create_task(*, workspace, created_by_membership, project=None, actor=None, *
 
 
 @transaction.atomic
-def update_task(*, task, actor=None, **fields):
+def update_task(*, task, actor=None, sync_note=True, **fields):
     before_stage = task.task_stage if task.task_stage_id else None
     before_due = task.due_at
     if 'task_stage' in fields and fields['task_stage'] is not None:
@@ -110,6 +110,10 @@ def update_task(*, task, actor=None, **fields):
         record_task_stage_move(task=task, actor=actor, from_stage=before_stage, to_stage=task.task_stage, at=task.updated_at)
     if task.due_at != before_due:
         _task_audit(actor=actor, task=task, action='task.due_date.changed', at=task.updated_at, before=_iso(before_due), after=_iso(task.due_at))
+    if sync_note and task.source_review_comment_id:
+        # A task made from a review note resolves (or reopens) that note as it is finished.
+        from .note_tasks import after_task_saved
+        after_task_saved(task=task, actor=actor, was_done=was_completed)
     return task
 
 

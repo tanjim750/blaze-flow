@@ -9,7 +9,7 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('app', '0045_platform_admin_support'),
+        ('app', '0046_note_tasks'),
     ]
 
     operations = [

@@ -58,3 +58,13 @@ def dashboard_workload(request, workspace_id):
     if dashboard_role(user=request.user, workspace=workspace) != ROLE_OWNER:
         raise PermissionDenied('Only workspace owners and admins can see team workload.')
     return Response(team_workload(user=request.user, workspace=workspace, now=timezone.now()))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def workspace_quick_search(request, workspace_id):
+    """The ⌘K palette: grouped matches across the workspace, scoped to what the viewer may see."""
+    from .services.search import quick_search
+
+    workspace = _workspace(request, workspace_id)
+    return Response(quick_search(user=request.user, workspace=workspace, query=request.query_params.get('q', '')))

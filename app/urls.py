@@ -1,5 +1,6 @@
 from django.urls import path
 from . import ai_qa_views
+from . import note_task_views
 
 from .views import (
     asset_file_detail,
@@ -114,7 +115,7 @@ from .guest_views import (
 )
 
 from .decision_views import media_version_decisions
-from .dashboard_views import dashboard_my_cuts, dashboard_notes_to_address, dashboard_workload
+from .dashboard_views import dashboard_my_cuts, dashboard_notes_to_address, dashboard_workload, workspace_quick_search
 from .activity_views import (
     project_activity, project_activity_export, workspace_activity, workspace_activity_export,
 )
@@ -199,6 +200,10 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/invites/<uuid:invite_id>/', client_team_invite_detail, name='api-client-team-invite-detail'),
     path('client-team-invitations/accept/', accept_client_team_invitation, name='api-client-team-invite-accept'),
     path('workspaces/<uuid:workspace_id>/tasks/', task_list_create, name='api-tasks'),
+    path('workspaces/<uuid:workspace_id>/note-tasks/', note_task_views.note_tasks_create, name='api-note-tasks'),
+    path('workspaces/<uuid:workspace_id>/note-tasks/defaults/', note_task_views.note_task_defaults, name='api-note-task-defaults'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:version_id>/note-tasks/', note_task_views.version_note_tasks, name='api-version-note-tasks'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:version_id>/carry-over/', note_task_views.version_carry_over, name='api-version-carry-over'),
     path('workspaces/<uuid:workspace_id>/task-stages/', task_stage_list_create, name='api-task-stages'),
     path('workspaces/<uuid:workspace_id>/task-stages/settings/', task_workflow_settings, name='api-task-stage-settings'),
     path('workspaces/<uuid:workspace_id>/task-stages/<uuid:stage_id>/', task_stage_detail, name='api-task-stage-detail'),
@@ -223,6 +228,7 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/dashboard/notes-to-address/', dashboard_notes_to_address, name='api-dashboard-notes-to-address'),
     path('workspaces/<uuid:workspace_id>/dashboard/my-cuts/', dashboard_my_cuts, name='api-dashboard-my-cuts'),
     path('workspaces/<uuid:workspace_id>/dashboard/workload/', dashboard_workload, name='api-dashboard-workload'),
+    path('workspaces/<uuid:workspace_id>/search/', workspace_quick_search, name='api-workspace-search'),
     path('workspaces/<uuid:workspace_id>/billing/settings/', billing_views.billing_settings, name='api-billing-settings'),
     path('workspaces/<uuid:workspace_id>/billing/summary/', billing_views.billing_summary, name='api-billing-summary'),
     path('workspaces/<uuid:workspace_id>/billing/invoices/', billing_views.invoice_list_create, name='api-billing-invoices'),
