@@ -48,3 +48,15 @@ describe("UploadTray", () => {
     expect(getUploads()).toHaveLength(0);
   });
 });
+
+describe("UploadTray summary", () => {
+  it("shows transferred / remaining MB for the whole tray while sending", () => {
+    let report: ((loaded: number, total: number) => void) | null = null;
+    __test.setTransport((_request, progress) => { report = progress; return new Promise(() => {}); });
+    render(<UploadTray />);
+    act(() => { startUpload({ url: "/u", file: new File([new Uint8Array(4 * 1024 * 1024)], "cut.mp4"), source: "files" }); });
+    act(() => { report!(1024 * 1024, 4 * 1024 * 1024); });
+    expect(screen.getByTestId("upload-tray-summary")).toHaveTextContent("1.0 MB of 4.0 MB · 3.0 MB remaining");
+    expect(screen.getByText(/25% · 1.0 MB of 4.0 MB/)).toBeInTheDocument();
+  });
+});

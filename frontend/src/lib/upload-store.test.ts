@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   __test, CONCURRENCY, cancelUpload, clearFinished, dismissUpload, etaSeconds, formatEta, formatRate, getUploads, hasActiveUploads,
-  percent, retryUpload, startUpload, trayCounts, type Transport, type UploadResult,
+  formatBytes, percent, registerTransport, retryUpload, startUpload, trayCounts, trayTotals, type Transport, type UploadResult,
 } from "./upload-store";
 
 type Call = { file: File; progress: (loaded: number, total: number) => void; resolve: (result: UploadResult) => void; signal: AbortSignal };
@@ -115,5 +115,55 @@ describe("upload store", () => {
     expect(formatRate(2048)).toBe("2 KB/s");
     expect(formatEta(42)).toBe("42s left");
     expect(formatEta(125)).toBe("2m 5s left");
+  });
+});
+
+describe("pluggable transports", () => {
+  it("uses a registered transport that supports the request, else the fallback", async () => {
+    const seen: string[] = [];
+    __test.setTransport({ id: "fallback", supports: () => true, send: async () => { seen.push("fallback"); return { ok: true, data: {} }; } });
+    registerTransport({ id: "r2", supports: (request) => request.file.size > 100, send: async (job, progress) => { seen.push("r2"); progress(job.file.size, job.file.size); return { ok: true, data: {} }; } });
+    startUpload({ url: "/u", file: file("big", 1000), source: "files" });
+    startUpload({ url: "/u", file: file("small", 10), source: "files" });
+    await flush();
+    expect(seen).toEqual(["r2", "fallback"]);
+    expect(getUploads().map((item) => item.transport)).toEqual(["r2", "fallback"]);
+  });
+
+  it("keeps resume state and part counts across a retry", async () => {
+    const resumes: unknown[] = [];
+    let attempt = 0;
+    registerTransport({ id: "parts", supports: () => true, send: async (job, progress) => {
+      resumes.push(job.resume); attempt += 1;
+      job.reportParts({ done: 1, total: 2 });
+      progress(500, 1000);
+      if (attempt === 1) { job.saveResume({ completed: [1] }); return { ok: false, status: 0, error: "Network" }; }
+      job.reportParts({ done: 2, total: 2 });
+      return { ok: true, data: {} };
+    } });
+    const { id } = startUpload({ url: "/u", file: file("v.mov", 1000), source: "files" });
+    await flush();
+    expect(getUploads()[0].status).toBe("failed");
+    expect(getUploads()[0].parts).toEqual({ done: 1, total: 2 });
+    retryUpload(id);
+    await flush();
+    expect(resumes).toEqual([undefined, { completed: [1] }]);
+    expect(getUploads()[0].status).toBe("ready");
+  });
+
+  it("treats a throwing transport as a failed upload", async () => {
+    registerTransport({ id: "boom", supports: () => true, send: async () => { throw new Error("Init refused"); } });
+    startUpload({ url: "/u", file: file("x"), source: "files" });
+    await flush();
+    expect(getUploads()[0]).toMatchObject({ status: "failed", error: "Init refused" });
+  });
+
+  it("totals bytes moved, remaining, combined speed and ETA", () => {
+    startUpload({ url: "/u", file: file("a", 10_000), source: "files" });
+    startUpload({ url: "/u", file: file("b", 10_000), source: "files" });
+    clock += 1000; calls[0].progress(4000, 10_000); calls[1].progress(1000, 10_000);
+    const totals = trayTotals(getUploads());
+    expect(totals).toMatchObject({ size: 20_000, loaded: 5000, remaining: 15_000, speed: 5000, eta: 3, percent: 25 });
+    expect(formatBytes(5 * 1024 * 1024)).toBe("5.0 MB");
   });
 });

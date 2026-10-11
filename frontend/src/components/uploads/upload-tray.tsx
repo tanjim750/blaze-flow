@@ -4,25 +4,24 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Load
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
-  cancelUpload, clearFinished, dismissUpload, etaSeconds, formatEta, formatRate, isActive, percent, retryUpload, trayCounts,
+  cancelUpload, clearFinished, dismissUpload, etaSeconds, formatBytes, formatEta, formatRate, isActive, percent, retryUpload, trayCounts, trayTotals,
   type UploadItem,
 } from "@/lib/upload-store";
 import { useUploads } from "@/lib/use-uploads";
 import "./upload-tray.css";
 
-function size(bytes: number) {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${bytes} B`;
-}
+const size = formatBytes;
 
 function statusLine(item: UploadItem) {
   switch (item.status) {
-    case "queued": return "Waiting…";
+    case "queued": return item.loaded > 0 ? `Queued · ${size(item.loaded)} of ${size(item.size)} kept` : "Queued";
     case "uploading": {
       const eta = etaSeconds(item);
-      return [`${percent(item)}%`, item.speed > 0 ? formatRate(item.speed) : null, eta !== null ? formatEta(eta) : null].filter(Boolean).join(" · ");
+      return [
+        `${percent(item)}%`, `${size(item.loaded)} of ${size(item.size)}`,
+        item.parts && item.parts.total > 1 ? `part ${Math.min(item.parts.done + 1, item.parts.total)}/${item.parts.total}` : null,
+        item.speed > 0 ? formatRate(item.speed) : null, eta !== null ? formatEta(eta) : null,
+      ].filter(Boolean).join(" · ");
     }
     case "processing": return `${item.processing?.label ?? "Processing"}…`;
     case "ready": return item.processing?.label ?? "Done";
@@ -53,7 +52,8 @@ export function UploadTray() {
   const title = busy
     ? `Uploading ${counts.active} ${counts.active === 1 ? "file" : "files"}`
     : counts.processing ? `Processing ${counts.processing}` : counts.failed ? `${counts.failed} upload${counts.failed === 1 ? "" : "s"} failed` : "Uploads complete";
-  const overall = items.length ? Math.round(items.reduce((sum, item) => sum + percent(item), 0) / items.length) : 0;
+  const totals = trayTotals(items);
+  const overall = totals.percent;
 
   return (
     <section className={`ut ${collapsed ? "is-collapsed" : ""}`} aria-label="Uploads" data-testid="upload-tray">
@@ -72,6 +72,16 @@ export function UploadTray() {
         )}
       </header>
       {collapsed && busy && <i className="ut-overall" style={{ width: `${overall}%` }} aria-hidden="true" />}
+      {!collapsed && busy && totals.size > 0 && (
+        <div className="ut-summary" data-testid="upload-tray-summary">
+          <div className="ut-summary-top">
+            <span>{size(totals.loaded)} of {size(totals.size)} · <b>{size(totals.remaining)} remaining</b></span>
+            <strong>{totals.percent}%</strong>
+          </div>
+          <div className="ut-bar" role="progressbar" aria-label="Total upload progress" aria-valuenow={totals.percent} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${totals.percent}%` }} /></div>
+          <small>{[totals.speed > 0 ? formatRate(totals.speed) : "Starting…", totals.eta !== null ? formatEta(totals.eta) : null].filter(Boolean).join(" · ")}</small>
+        </div>
+      )}
       {!collapsed && (
         <ul className="ut-list" id="ut-list">
           {items.map((item) => (

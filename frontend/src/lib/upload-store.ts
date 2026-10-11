@@ -31,6 +31,10 @@ export type UploadItem = {
   /** Link to the result once it is ready (set from the server's answer). */
   href: string | null;
   attempts: number;
+  /** Which transport moved (or is moving) the bytes. */
+  transport: string | null;
+  /** Part progress for multipart transports. */
+  parts: { done: number; total: number } | null;
 };
 
 export type UploadRequest = {
@@ -45,12 +49,40 @@ export type UploadRequest = {
   onSuccess?: (data: unknown) => void;
   /** Fraction 0..1 for callers that also draw their own bar. */
   onProgress?: (fraction: number) => void;
+  /** Prefer a specific transport id (falls back to the first that supports the request). */
+  transport?: string;
 };
 
+/** What a transport is handed for one attempt. */
+export type TransportJob = {
+  url: string;
+  file: File;
+  fields: Record<string, string>;
+  source: UploadSource;
+  /** Whatever this transport saved on an earlier attempt of the same item (e.g. finished parts). */
+  resume: unknown;
+  /** Persist resume state so a retry can continue instead of starting over. */
+  saveResume: (state: unknown) => void;
+  /** Multipart transports report part counts so the tray can show "part 3 of 12". */
+  reportParts: (parts: { done: number; total: number }) => void;
+};
+
+/**
+ * A pluggable way of moving bytes. The XHR multipart/form-data POST is the default; a direct
+ * object-storage transport (presigned PUT / multipart parts straight to R2) registers itself
+ * and claims the requests it can handle. `send` reports *aggregate* bytes for the file.
+ */
+export interface UploadTransport {
+  id: string;
+  supports: (request: UploadRequest) => boolean;
+  send: (job: TransportJob, onProgress: (loaded: number, total: number) => void, signal: AbortSignal) => Promise<UploadResult>;
+}
+
+/** Legacy function form (still accepted by the test seam). */
 export type Transport = (request: { url: string; file: File; fields: Record<string, string> }, onProgress: (loaded: number, total: number) => void, signal: AbortSignal) => Promise<UploadResult>;
 export type ProcessingFetcher = (workspaceId: string, fileId: string) => Promise<Processing | null>;
 
-type Entry = { item: UploadItem; request: UploadRequest; controller: AbortController | null; waiters: ((result: UploadResult) => void)[]; lastTick: { at: number; loaded: number } | null };
+type Entry = { item: UploadItem; request: UploadRequest; controller: AbortController | null; waiters: ((result: UploadResult) => void)[]; lastTick: { at: number; loaded: number } | null; resume: unknown };
 
 export const CONCURRENCY = 3;
 export const PROCESSING_POLL_MS = 2500;
@@ -60,7 +92,23 @@ const entries = new Map<string, Entry>();
 let order: string[] = [];
 let snapshot: UploadItem[] = [];
 const listeners = new Set<() => void>();
-let transport: Transport = xhrTransport;
+const xhr: UploadTransport = { id: "xhr", supports: () => true, send: (job, progress, signal) => xhrTransport(job, progress, signal) };
+let transports: UploadTransport[] = [];
+let fallback: UploadTransport = xhr;
+
+/** Add a transport; later registrations are tried first. XHR always remains the fallback. */
+export function registerTransport(next: UploadTransport) {
+  transports = [next, ...transports.filter((item) => item.id !== next.id)];
+  return () => { transports = transports.filter((item) => item !== next); };
+}
+
+export function pickTransport(request: UploadRequest): UploadTransport {
+  if (request.transport) {
+    const named = transports.find((item) => item.id === request.transport);
+    if (named && named.supports(request)) return named;
+  }
+  return transports.find((item) => item.supports(request)) ?? fallback;
+}
 let fetchProcessing: ProcessingFetcher = defaultFetchProcessing;
 let now = () => Date.now();
 let counter = 0;
@@ -93,9 +141,10 @@ export function startUpload(request: UploadRequest): { id: string; done: Promise
   const item: UploadItem = {
     id, name: request.file.name, size: request.file.size, source: request.source, destination: request.destination ?? null,
     status: "queued", loaded: 0, speed: 0, startedAt: null, finishedAt: null, error: null, processing: null, href: null, attempts: 0,
+    transport: null, parts: null,
   };
   const done = new Promise<UploadResult>((resolve) => {
-    entries.set(id, { item, request, controller: null, waiters: [resolve], lastTick: null });
+    entries.set(id, { item, request, controller: null, waiters: [resolve], lastTick: null, resume: undefined });
   });
   order = [...order, id];
   emit();
@@ -114,13 +163,25 @@ async function send(id: string) {
   if (!entry) return;
   const controller = new AbortController();
   entry.controller = controller;
-  entry.lastTick = { at: now(), loaded: 0 };
-  patch(id, { status: "uploading", loaded: 0, speed: 0, error: null, startedAt: now(), attempts: entry.item.attempts + 1 });
-  const result = await transport(
-    { url: entry.request.url, file: entry.request.file, fields: entry.request.fields ?? {} },
-    (loaded) => onProgress(id, loaded),
-    controller.signal,
-  );
+  // A resumed attempt starts part-way; its first progress report becomes the speed baseline.
+  entry.lastTick = entry.resume === undefined ? { at: now(), loaded: 0 } : null;
+  const transport = pickTransport(entry.request);
+  patch(id, { status: "uploading", loaded: 0, speed: 0, error: null, startedAt: now(), attempts: entry.item.attempts + 1, transport: transport.id });
+  let result: UploadResult;
+  try {
+    result = await transport.send(
+      {
+        url: entry.request.url, file: entry.request.file, fields: entry.request.fields ?? {}, source: entry.request.source,
+        resume: entry.resume,
+        saveResume: (state) => { const current = entries.get(id); if (current) current.resume = state; },
+        reportParts: (parts) => patch(id, { parts }),
+      },
+      (loaded) => onProgress(id, loaded),
+      controller.signal,
+    );
+  } catch (error) {
+    result = { ok: false, status: 0, error: error instanceof Error && error.message ? error.message : uploadError(0, null) };
+  }
   const current = entries.get(id);
   if (!current) return;
   current.controller = null;
@@ -132,6 +193,7 @@ async function send(id: string) {
     return;
   }
   const info = current.request.describe?.(result.data) ?? {};
+  current.resume = undefined;
   patch(id, { loaded: current.item.size, href: info.href ?? null, finishedAt: now() });
   current.request.onSuccess?.(result.data);
   settle(current, result);
@@ -149,7 +211,8 @@ function settle(entry: Entry, result: UploadResult) {
 function onProgress(id: string, loaded: number) {
   const entry = entries.get(id);
   if (!entry || entry.item.status !== "uploading") return;
-  const tick = entry.lastTick ?? { at: now(), loaded: 0 };
+  if (!entry.lastTick) { entry.lastTick = { at: now(), loaded }; patch(id, { loaded: Math.min(loaded, entry.item.size) }); return; }
+  const tick = entry.lastTick;
   const elapsed = (now() - tick.at) / 1000;
   let speed = entry.item.speed;
   if (elapsed >= 0.25) {
@@ -193,7 +256,7 @@ export function cancelUpload(id: string) {
 export function retryUpload(id: string) {
   const entry = entries.get(id);
   if (!entry || (entry.item.status !== "failed" && entry.item.status !== "cancelled")) return;
-  patch(id, { status: "queued", error: null, loaded: 0, processing: null, finishedAt: null });
+  patch(id, { status: "queued", error: null, processing: null, finishedAt: null });
   pump();
 }
 
@@ -239,6 +302,23 @@ export function formatEta(seconds: number) {
   return minutes < 60 ? `${minutes}m ${seconds % 60}s left` : `${Math.floor(minutes / 60)}h ${minutes % 60}m left`;
 }
 
+/** Whole-tray numbers: bytes moved and left, combined speed, overall ETA (only sending items). */
+export function trayTotals(items: UploadItem[]) {
+  const sending = items.filter((item) => item.status === "queued" || item.status === "uploading");
+  const size = sending.reduce((sum, item) => sum + item.size, 0);
+  const loaded = sending.reduce((sum, item) => sum + Math.min(item.loaded, item.size), 0);
+  const speed = sending.filter((item) => item.status === "uploading").reduce((sum, item) => sum + item.speed, 0);
+  const remaining = Math.max(0, size - loaded);
+  return { size, loaded, remaining, speed, eta: speed > 0 ? Math.round(remaining / speed) : null, percent: size ? Math.min(100, Math.round((loaded / size) * 100)) : 0 };
+}
+
+export function formatBytes(bytes: number) {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
 export function trayCounts(items: UploadItem[]) {
   return {
     active: items.filter(isActive).length,
@@ -267,7 +347,7 @@ export function uploadError(status: number, data: unknown): string {
 }
 
 /** XHR, because fetch cannot report upload progress. */
-function xhrTransport(request: { url: string; file: File; fields: Record<string, string> }, onProgress: (loaded: number, total: number) => void, signal: AbortSignal): Promise<UploadResult> {
+export function xhrTransport(request: { url: string; file: File; fields: Record<string, string> }, onProgress: (loaded: number, total: number) => void, signal: AbortSignal): Promise<UploadResult> {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     const body = new FormData();
@@ -300,8 +380,11 @@ async function defaultFetchProcessing(workspaceId: string, fileId: string): Prom
 
 /** Test seams. */
 export const __test = {
-  setTransport(next: Transport) { transport = next; },
+  /** Replace the fallback transport (function form or a full transport). */
+  setTransport(next: Transport | UploadTransport) {
+    fallback = typeof next === "function" ? { id: "test", supports: () => true, send: (job, progress, signal) => next(job, progress, signal) } : next;
+  },
   setProcessing(next: ProcessingFetcher) { fetchProcessing = next; },
   setClock(next: () => number) { now = next; },
-  reset() { entries.clear(); order = []; snapshot = []; counter = 0; transport = xhrTransport; fetchProcessing = defaultFetchProcessing; now = () => Date.now(); },
+  reset() { entries.clear(); order = []; snapshot = []; counter = 0; fallback = xhr; transports = []; fetchProcessing = defaultFetchProcessing; now = () => Date.now(); },
 };
