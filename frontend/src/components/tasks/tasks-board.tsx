@@ -8,6 +8,7 @@
  * → reconcile, with an 8-second Undo toast and a Retry toast on failure.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDoParam } from "@/lib/do-param";
 import { toast } from "sonner";
 import { Columns3, Eye, LayoutList, Plus, Settings2, TriangleAlert, X } from "lucide-react";
 import type { ProjectFile, Task, TaskAttachment } from "@/lib/api";
@@ -252,6 +253,7 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
 
   // --- Shortcuts -----------------------------------------------------------------------
   const firstOpenStage = stages.find((stage) => stage.kind !== "client_review" && !stage.isDone);
+  useDoParam("new-task", () => { if (firstOpenStage && access.create) { setMode("board"); setQuickAddStage(firstOpenStage.id); } });
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
