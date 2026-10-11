@@ -14,6 +14,7 @@
  * `lib/files-panel.ts` and the presentational pieces in `components/files/`.
  */
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useDoParam } from "@/lib/do-param";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
@@ -477,6 +478,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   };
 
   // Page-level shortcuts: N new folder, U upload, / search, ] details panel.
+  useDoParam("upload", () => setDialog("upload"));
   useEffect(() => { const shortcuts = (event: KeyboardEvent) => { const target = event.target; if ((target instanceof Element && target.matches("input, select, textarea, [contenteditable=true]")) || event.metaKey || event.ctrlKey || event.altKey) return; if (target instanceof Element && target.closest("[role=dialog], [role=menu]")) return; const key = event.key.toLowerCase(); if (key === "u") { event.preventDefault(); setDialog("upload"); } if (key === "n") { event.preventDefault(); setDialog("folder"); } if (key === "/") { event.preventDefault(); searchRef.current?.focus(); } if (key === "]") { event.preventDefault(); document.dispatchEvent(new CustomEvent("bf-files-toggle-inspector")); } }; window.addEventListener("keydown", shortcuts); return () => window.removeEventListener("keydown", shortcuts); }, []);
   const toggleRef = useRef(toggleInspector);
   useEffect(() => { toggleRef.current = toggleInspector; });

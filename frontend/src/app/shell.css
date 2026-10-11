@@ -72,13 +72,16 @@
 
 .studio-rail-search { position: relative; display: flex; align-items: center; margin: 0 16px 10px; }
 .studio-rail-search > svg { position: absolute; left: 10px; color: var(--shell-outline); pointer-events: none; }
-.studio-rail-search input {
-  width: 100%; padding: 8px 10px 8px 31px;
-  border: 1px solid #35343899; border-radius: 8px;
-  background: var(--shell-low); color: var(--shell-on); font-size: 12px; outline: 0;
+/* The rail search is a button that opens the ⌘K palette; it keeps the old field's look. */
+button.studio-rail-search {
+  width: calc(100% - 32px); height: 34px; padding: 0 8px 0 31px; gap: 8px;
+  border: 1px solid #35343899; border-radius: 8px; background: var(--shell-low);
+  color: var(--shell-outline); font-size: 12px; text-align: left; cursor: pointer;
+  transition: background-color var(--bf-duration-fast) var(--bf-ease-out), border-color var(--bf-duration-fast) var(--bf-ease-out);
 }
-.studio-rail-search input::placeholder { color: var(--shell-outline); }
-.studio-rail-search input:focus { background: var(--shell-container); border-color: var(--shell-outline); }
+button.studio-rail-search > span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+button.studio-rail-search > kbd { font: 500 10px/1 var(--font-sans, system-ui); padding: 3px 5px; border: 1px solid #35343899; border-radius: 4px; }
+button.studio-rail-search:hover, button.studio-rail-search:focus-visible { background: var(--shell-container); border-color: var(--shell-outline); }
 
 .studio-rail-account { display: flex; align-items: center; gap: 9px; margin-top: 10px; padding: 0 4px; }
 .studio-rail-account .studio-account { flex: none; }

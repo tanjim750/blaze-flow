@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useDoParam } from "@/lib/do-param";
 import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
@@ -300,6 +301,7 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
 function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onToggle }: { view: ProjectsView; initialFilter: string; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void }) {
   const [filter, setFilter] = useState(initialFilter);
   const [creating, setCreating] = useState(false);
+  useDoParam("new", () => setCreating(true));
   const reduceMotion = useReducedMotion();
 
   const rows = filterClientTree(view.clients, filter);
