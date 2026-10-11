@@ -328,6 +328,8 @@ def guest_media_stream(request, project_id, media_version_id):
     return ranged_file_response(
         request, variant.object_key, filename=variant.original_name if kind == 'preview' else None,
         content_type=variant.mime_type, checksum=variant.checksum,
+        object_size=variant.size_bytes,
+        cache_control='private, max-age=300' if kind == 'preview' else None,
     )
 
 

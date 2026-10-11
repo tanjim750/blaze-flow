@@ -1,16 +1,18 @@
+import io
 import shutil
 import tempfile
 import uuid
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.files.storage import FileSystemStorage, default_storage
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .http_range import RangeNotSatisfiable, parse_range
+from .http_range import RangeNotSatisfiable, parse_range, ranged_file_response
 from .models import AuditLog, FileStatus, FileVariant, MediaVersion, Project
 from .test_access_projects import WorkspaceAccessSetupMixin
 
@@ -39,6 +41,59 @@ class ParseRangeTests(SimpleTestCase):
                 parse_range(header, 100)
         with self.assertRaises(RangeNotSatisfiable):
             parse_range('bytes=-1', 0)
+
+
+class R2StreamingTests(SimpleTestCase):
+    """The R2 path must never use django-storages' whole-object temporary file."""
+
+    def setUp(self):
+        self.requests = RequestFactory()
+        self.client = Mock()
+        self.storage = SimpleNamespace(
+            bucket_name='private-assets',
+            connection=SimpleNamespace(meta=SimpleNamespace(client=self.client)),
+            open=Mock(side_effect=AssertionError('R2 playback must not call storage.open().')),
+            size=Mock(side_effect=AssertionError('The recorded object size should avoid an R2 HEAD.')),
+        )
+
+    def response(self, range_header=None):
+        headers = {'HTTP_RANGE': range_header} if range_header else {}
+        request = self.requests.get('/preview/', **headers)
+        return ranged_file_response(
+            request, 'previews/cut.mp4', content_type='video/mp4', storage=self.storage,
+            object_size=len(PAYLOAD), checksum='proxy-etag',
+            cache_control='private, max-age=300',
+        )
+
+    @staticmethod
+    def body(response):
+        return b''.join(response.streaming_content)
+
+    def test_range_is_forwarded_to_r2_and_streamed_without_opening_the_whole_file(self):
+        self.client.get_object.return_value = {'Body': io.BytesIO(PAYLOAD[1000:2024])}
+
+        response = self.response('bytes=1000-2023')
+
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(self.body(response), PAYLOAD[1000:2024])
+        self.client.get_object.assert_called_once_with(
+            Bucket='private-assets', Key='previews/cut.mp4', Range='bytes=1000-2023',
+        )
+        self.storage.open.assert_not_called()
+        self.storage.size.assert_not_called()
+        self.assertEqual(response['Cache-Control'], 'private, max-age=300')
+
+    def test_full_response_also_streams_from_r2_without_a_temporary_file(self):
+        self.client.get_object.return_value = {'Body': io.BytesIO(PAYLOAD)}
+
+        response = self.response()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.body(response), PAYLOAD)
+        self.client.get_object.assert_called_once_with(
+            Bucket='private-assets', Key='previews/cut.mp4',
+        )
+        self.storage.open.assert_not_called()
 
 
 class RangedMediaEndpointTests(WorkspaceAccessSetupMixin, TestCase):
