@@ -60,6 +60,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   const [unread, setUnread] = useState<{ workspace: string | null; count: number }>({ workspace: null, count: 0 });
   const messagesUnread = unread.workspace === selectedWorkspaceId ? unread.count : 0;
   const selected = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? workspaces[0];
+  const selectedRole = selected?.dashboard_role ?? null;
   const navLinks = selected?.billing?.view ? [...primaryLinks, moneyLink] : primaryLinks;
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   // Projects lays out its own full-bleed browser, so it opts out of the standard page padding.
@@ -70,13 +71,16 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   useEffect(() => {
     let active = true;
     if (!selectedWorkspaceId) { queueMicrotask(() => active && setHealth(null)); return () => { active = false; }; }
+    // Only owners may read operations health; asking anyway put a 403 in the console of
+    // every editor and client on every page load.
+    if (selectedRole && selectedRole !== "owner") { queueMicrotask(() => active && setHealth("restricted")); return () => { active = false; }; }
     void fetch(`/api/workspaces/${selectedWorkspaceId}/operations/health/`, { credentials: "include" }).then(async (response) => {
       if (!active) return;
       if (response.ok) setHealth(await response.json() as OperationsHealth);
       else setHealth(response.status === 403 ? "restricted" : "unavailable");
     }).catch(() => active && setHealth("unavailable"));
     return () => { active = false; };
-  }, [selectedWorkspaceId]);
+  }, [selectedRole, selectedWorkspaceId]);
 
   // The Messages badge: unread across every project thread this person can read. Polled
   // (no websockets), paused while the tab is hidden, and refreshed on navigation.
