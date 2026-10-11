@@ -157,7 +157,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
             {navLinks.map(({ href, label, icon: Icon }) => (
               <Link key={label} href={href} onClick={() => setOpen(false)} title={label} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}>
                 <Icon size={20} /><span>{label}</span>
-                {href === "/chat" && messagesUnread > 0 && <b className="studio-nav-badge" aria-label={`${messagesUnread} unread messages`}>{unreadLabel(messagesUnread)}</b>}
+                {(href === "/chat" || href === "/portal/chat") && messagesUnread > 0 && <b className="studio-nav-badge" aria-label={`${messagesUnread} unread messages`}>{unreadLabel(messagesUnread)}</b>}
                 <LinkPending />
               </Link>
             ))}
