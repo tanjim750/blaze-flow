@@ -278,6 +278,14 @@ class NotesToAddressTests(DashboardBase, TestCase):
         self.assertEqual(editor_view['count'], 2)
         self.assertEqual(next(row for row in editor_view['results'] if row['id'] == client_note['id'])['reply_count'], 1)
 
+    def test_notes_say_whether_they_came_from_the_client_side(self):
+        client = self.add_client_member()
+        cut = self.upload(self.editor, 'Hero 30s')
+        studio = self.note(self.reviewer, cut['id'], 'Studio note')
+        from_client = self.note(client, cut['id'], 'Logo bigger please')
+        rows = {row['id']: row['from_client'] for row in self.notes(self.editor)['results']}
+        self.assertEqual(rows, {studio['id']: False, from_client['id']: True})
+
     def test_outsiders_and_anonymous_get_nothing(self):
         outsider = _user('outsider@example.com')
         self.assertEqual(self.get('api-dashboard-notes-to-address', outsider).status_code, 403)

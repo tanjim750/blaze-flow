@@ -35,6 +35,7 @@ export function ClientDashboard({ view, choice }: { view: ClientView; choice: La
 
     <div className="dashboard-columns">
       <ReviewQueuePanel
+        id="approvals"
         items={view.waiting.slice(0, 6)}
         total={view.waiting.length}
         problem={view.problems.reviews}
@@ -42,7 +43,7 @@ export function ClientDashboard({ view, choice }: { view: ClientView; choice: La
         totalLabel="to review"
         empty={{ title: "You're all caught up", body: "When the studio sends a cut for review, it shows up here." }}
       />
-      <section className="panel" aria-labelledby="delivered-title">
+      <section className="panel" id="deliveries" aria-labelledby="delivered-title">
         <div className="panel-title"><h2 id="delivered-title"><CheckCheck size={16} />Recently approved</h2><small>Delivered and signed off</small></div>
         <div className="review-list">
           {view.delivered.length === 0 && <EmptyState title="Nothing approved yet" body="Approved cuts and deliverables show up here." />}
@@ -61,7 +62,7 @@ export function ClientDashboard({ view, choice }: { view: ClientView; choice: La
     </div>
 
     {(view.portal || view.activity) && <div className={`dashboard-columns client-portal-row${view.portal && view.activity ? "" : " is-single"}`}>
-      {view.portal && <ClientUploadPanel workspaceId={view.portal.workspaceId} projects={view.portal.projects} recent={view.portal.recent} maxBytes={view.portal.maxBytes} accept={view.portal.accept} />}
+      {view.portal && <div id="send-files" className="client-send-files"><ClientUploadPanel workspaceId={view.portal.workspaceId} projects={view.portal.projects} recent={view.portal.recent} maxBytes={view.portal.maxBytes} accept={view.portal.accept} /></div>}
       {view.activity && <ActivityPanel
         items={view.activity}
         problem={view.problems.activity ?? null}
@@ -70,7 +71,7 @@ export function ClientDashboard({ view, choice }: { view: ClientView; choice: La
       />}
     </div>}
 
-    {view.messages && view.messages.summary.projects.length > 0 && <section className="panel pt-home-messages" aria-labelledby="messages-title">
+    {view.messages && view.messages.summary.projects.length > 0 && <section className="panel pt-home-messages" id="messages" aria-labelledby="messages-title">
       <div className="panel-title"><h2 id="messages-title"><MessagesSquare size={16} />Messages with the studio</h2><small>{view.messages.summary.total_unread ? `${view.messages.summary.total_unread} unread` : "All caught up"}</small></div>
       <MessagesInbox workspaceId={view.messages.workspaceId} initial={view.messages.summary} limit={4} emptyText="No messages yet. Open a project to write to the studio." />
       {view.messages.summary.projects.length > 4 && <Link className="pt-back" href="/portal/chat">All conversations<ArrowRight size={14} /></Link>}
@@ -82,9 +83,9 @@ export function ClientDashboard({ view, choice }: { view: ClientView; choice: La
       {view.requests.items.length > 3 && <Link className="pt-back" href="/portal/requests">See all {view.requests.items.length} requests<ArrowRight size={14} /></Link>}
     </section>}
 
-    {view.invoices && <ClientInvoicesPanel invoices={view.invoices} />}
+    {view.invoices && <div id="invoices"><ClientInvoicesPanel invoices={view.invoices} /></div>}
 
-    <section className="section-block active-projects">
+    <section className="section-block active-projects" id="projects">
       <div className="section-heading"><h2><FolderKanban size={16} />Your projects <span>{view.projects.length}</span></h2></div>
       {view.problems.reviews && <InlineProblem>Some counts may be missing.</InlineProblem>}
       {view.projects.length === 0

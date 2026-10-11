@@ -217,6 +217,8 @@ export type NoteRow = {
   id: string; author: string; initials: string; avatarUrl: string | null; guest: boolean;
   text: string; cut: string; project: string; timecode: string | null; age: string;
   replies: number; team: boolean; href: string;
+  /** From the client side (guest or client-team member), for "Recent client feedback". */
+  client: boolean; createdAt: string;
 };
 
 export function buildNotes(notes: NoteToAddress[], now: Date): NoteRow[] {
@@ -234,6 +236,8 @@ export function buildNotes(notes: NoteToAddress[], now: Date): NoteRow[] {
     replies: note.reply_count,
     team: note.visibility === "team",
     href: note.href,
+    client: note.from_client ?? note.author.type === "guest",
+    createdAt: note.created_at,
   }));
 }
 

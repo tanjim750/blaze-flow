@@ -318,3 +318,8 @@ a.activity-row:hover p { color: var(--text); }
 @media (max-width: 720px) { .earnings-figures { grid-template-columns: 1fr 1fr; } }
 .home-shell .money-strip { margin-top: 14px; }
 .home-shell .earnings-panel, .home-shell .client-invoices { margin-top: 24px; }
+
+/* A route guard sent the viewer here; one calm line, not an error. */
+.role-guard-notice { margin: 16px auto 0; max-width: 1180px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--muted); font-size: 13px; }
+@media (max-width: 900px) { .role-guard-notice { margin: 12px 16px 0; } }
+.home-shell [id] { scroll-margin-top: 72px; }

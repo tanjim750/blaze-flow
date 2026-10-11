@@ -1,3 +1,4 @@
+import { guardRoute } from "@/lib/route-guard";
 import Link from "next/link";
 import { LockKeyhole } from "lucide-react";
 import { MoneyBoard } from "@/components/money/money-board";
@@ -12,6 +13,7 @@ import "./money.css";
  * Needs billing.view; the API enforces that too, this page just explains a 403 nicely.
  */
 export default async function MoneyPage() {
+  await guardRoute("/money");
   const context = await loadWorkspaceContext();
   const workspace = context.ok ? context.data.selected : null;
   if (!workspace) return <MoneyProblem title="No workspace selected" body={context.ok ? "Pick a workspace from the sidebar." : context.error.detail} />;

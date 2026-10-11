@@ -410,6 +410,8 @@ export type NoteToAddress = {
   id: string; text: string | null; start_time_ms: number | null; end_time_ms: number | null;
   visibility: CommentVisibility; author: DashboardPerson; reply_count: number; created_at: string;
   reasons: CutReason[]; media: DashboardCutRef;
+  /** A guest on a review link, or someone in only through a client team. Absent on older backends. */
+  from_client?: boolean;
   /** `/review?media=<file>&comment=<id>&t=<ms>`: opens the cut at the note. */
   href: string;
 };
