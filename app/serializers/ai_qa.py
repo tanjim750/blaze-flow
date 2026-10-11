@@ -13,8 +13,16 @@ class AIReviewSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'media_version_id', 'status', 'stage', 'progress', 'mode', 'language', 'engine',
             'engine_version', 'pipeline_version', 'error_code', 'error_message', 'requested_by',
-            'summary', 'usage', 'started_at', 'completed_at', 'created_at', 'updated_at',
+            'summary', 'usage', 'approved_copy', 'started_at', 'completed_at', 'created_at', 'updated_at',
         )
+
+    approved_copy = serializers.SerializerMethodField()
+
+    def get_approved_copy(self, review):
+        copy = review.approved_copy
+        if copy is None:
+            return None
+        return {'id': str(copy.id), 'title': copy.title, 'version': copy.version, 'source': copy.source, 'text': copy.text}
 
     def get_requested_by(self, review):
         user = review.requested_by
@@ -47,6 +55,30 @@ class AIFindingSerializer(serializers.ModelSerializer):
 
 class AIReviewStartSerializer(serializers.Serializer):
     language = serializers.ChoiceField(choices=('en-GB', 'en-US'), default='en-GB')
+    mode = serializers.ChoiceField(choices=('PROOFREAD', 'COMPARE', 'BOTH'), default='PROOFREAD')
+    approved_copy_text = serializers.CharField(required=False, allow_blank=True, trim_whitespace=False, max_length=20000)
+    approved_copy_id = serializers.UUIDField(required=False, allow_null=True)
+    save_copy = serializers.BooleanField(required=False, default=False)
+    copy_title = serializers.CharField(required=False, max_length=200, default='Approved copy')
+
+
+class ApprovedCopySerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    version = serializers.IntegerField()
+    text = serializers.CharField()
+    source = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    created_by = serializers.SerializerMethodField()
+
+    def get_created_by(self, copy):
+        user = copy.created_by
+        return (user.get_full_name() or user.email) if user else None
+
+
+class ApprovedCopyWriteSerializer(serializers.Serializer):
+    text = serializers.CharField(max_length=20000)
+    title = serializers.CharField(max_length=200, required=False, default='Approved copy')
 
 
 class AIFindingUpdateSerializer(serializers.Serializer):

@@ -15,6 +15,7 @@ from app.models import (
 )
 from app.services.file_processing import _copy_private_object
 
+from . import copy_compare
 from . import video as vid
 from .engines import get_engine
 from .service import effective_glossary, notify_review_finished
@@ -173,7 +174,7 @@ def _run_image(review, engine, file, workdir, glossary):
     review.stage = 'checking'
     _progress(review, frames_done=1, lines=len(lines))
     rows = [_row(review, cand, key=cand.dedupe_key) for line in lines for cand in check_line(line, glossary=glossary)]
-    return rows, {'lines': len(lines), 'image_px': list(original_size), 'frames_ocr': 1}
+    return rows, {'lines': len(lines), 'image_px': list(original_size), 'frames_ocr': 1}, copy_compare.image_units(lines)
 
 
 def _line_box(line):
@@ -330,7 +331,8 @@ def _run_video(review, engine, file, workdir, glossary):
 
     rows, observed, usage = analyse_video(
         source, workdir, engine=engine, glossary=glossary, file_metadata=file.metadata or {}, on_progress=on_progress,
-        on_partial=lambda rows: _write_partial(review, rows),
+        # Compare-only runs stream nothing: partial spelling rows would vanish at the end.
+        on_partial=(lambda rows: None) if review.mode == 'COMPARE' else (lambda rows: _write_partial(review, rows)),
     )
     review.stage = 'checking'
     AIFrameObservation.objects.bulk_create([
@@ -338,7 +340,7 @@ def _run_video(review, engine, file, workdir, glossary):
                            confidence=line.confidence, polygon=line.polygon, engine=engine.name)
         for i, t in enumerate(sorted(observed)) for line in observed[t]
     ], batch_size=500)
-    return rows, usage
+    return rows, usage, copy_compare.video_units(observed)
 
 
 def run_review(review_id):
@@ -361,9 +363,16 @@ def run_review(review_id):
         _set(review, engine=engine.name, engine_version=str(engine.version or ''))
         glossary = effective_glossary(workspace=review.workspace, project=review.media_version.project)
         AIFrameObservation.objects.filter(ai_review=review).delete()
+        approved = review.approved_copy.text if review.approved_copy_id and review.mode in ('COMPARE', 'BOTH') else None
+        if approved:
+            # Words in the signed-off copy are never "spelling mistakes" (brand names, slogans).
+            glossary = frozenset(glossary) | copy_compare.approved_vocabulary(approved)
         with tempfile.TemporaryDirectory(prefix='aiqa-') as workdir:
             runner = _run_video if mime.startswith('video/') else _run_image
-            rows, usage = runner(review, engine, file, workdir, glossary)
+            rows, usage, units = runner(review, engine, file, workdir, glossary)
+        if approved:
+            rows = merge_compare(rows, copy_compare.compare(approved, units), compare_only=review.mode == 'COMPARE')
+            usage = {**usage, 'approved_copy_words': len(copy_compare.tokens(approved))}
         _check_cancelled(review)
         findings = _finish_findings(review, rows)
         elapsed = int((time.monotonic() - started) * 1000)
@@ -394,6 +403,14 @@ def run_review(review_id):
              error_message='The check could not finish. Try again.', completed_at=timezone.now())
         notify_review_finished(review)
         return review
+
+
+def merge_compare(spelling_rows, copy_rows, *, compare_only):
+    """Compare findings plus (in Proofread + Compare) spelling findings not already covered."""
+    if compare_only:
+        return copy_rows
+    flagged = {copy_compare.norm_word(r['detected_text']) for r in copy_rows if r['category'] in (copy_compare.TYPO, copy_compare.MISMATCH)}
+    return copy_rows + [r for r in spelling_rows if copy_compare.norm_word(r['detected_text']) not in flagged]
 
 
 def handle_run_event(event):

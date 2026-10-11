@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from app.models import (
+    ApprovedCopy,
     AI_REVIEW_ACTIVE_STATUSES, AIFinding, AIFindingCategory, AIFindingStatus, AIReview,
     AIReviewStatus, GlossaryTerm, OutboxEvent, OutboxEventStatus, ReviewCommentSource,
     ReviewCommentVisibility,
@@ -53,8 +54,29 @@ def _enqueue(review):
     )
 
 
+COPY_MAX_CHARS = 20000
+
+
+def save_approved_copy(*, project, user, text, title='Approved copy', source='project'):
+    """A new immutable version of the project's approved copy (or a one-off pasted copy)."""
+    text = (text or '').strip()
+    if not text:
+        raise AIQAError('ai_qa_copy_empty', 'Paste the approved copy to compare against.')
+    if len(text) > COPY_MAX_CHARS:
+        raise AIQAError('ai_qa_copy_too_long', f'Approved copy can be up to {COPY_MAX_CHARS:,} characters.')
+    title = (title or 'Approved copy').strip()[:200]
+    latest = ApprovedCopy.objects.filter(project=project, title=title, source='project').order_by('-version').first() if source == 'project' else None
+    if latest and latest.text == text:
+        return latest  # saving the same text again is not a new version
+    return ApprovedCopy.objects.create(
+        workspace=project.workspace, project=project, title=title, text=text, source=source,
+        version=(latest.version + 1) if latest else 1, created_by=user,
+    )
+
+
 @transaction.atomic
-def start_review(*, media_version, user, language='en-GB'):
+def start_review(*, media_version, user, language='en-GB', mode='PROOFREAD', approved_copy_text=None,
+                 approved_copy_id=None, save_copy=False, copy_title='Approved copy'):
     """Returns (review, created). Joins an identical active run instead of starting another."""
     if language not in LANGUAGES:
         raise AIQAError('ai_qa_bad_language', 'Choose English (UK) or English (US).')
@@ -74,7 +96,20 @@ def start_review(*, media_version, user, language='en-GB'):
     elif file.size_bytes > settings.AI_QA_MAX_IMAGE_BYTES:
         raise AIQAError('ai_qa_too_large', 'This image is too large to check.')
     workspace = media_version.project.workspace
-    options = {'mode': 'PROOFREAD', 'language': language, 'engine': settings.AI_QA_ENGINE}
+    if mode not in ('PROOFREAD', 'COMPARE', 'BOTH'):
+        raise AIQAError('ai_qa_bad_mode', 'Choose Proofread, Compare with approved copy, or both.')
+    copy = None
+    if mode != 'PROOFREAD':
+        if approved_copy_id:
+            copy = ApprovedCopy.objects.filter(id=approved_copy_id, project=media_version.project).first()
+            if copy is None:
+                raise AIQAError('ai_qa_copy_missing', 'That approved copy is not on this project.', 404)
+        else:
+            copy = save_approved_copy(project=media_version.project, user=user, text=approved_copy_text,
+                                      title=copy_title, source='project' if save_copy else 'paste')
+    options = {'mode': mode, 'language': language, 'engine': settings.AI_QA_ENGINE}
+    if copy is not None:
+        options['approved_copy'] = hashlib.sha256(copy.text.encode()).hexdigest()
     digest = options_hash(options)
     existing = AIReview.objects.select_for_update().filter(
         media_version=media_version, options_hash=digest, pipeline_version=PIPELINE_VERSION,
@@ -90,7 +125,7 @@ def start_review(*, media_version, user, language='en-GB'):
         raise AIQAError('ai_qa_quota', 'This workspace has used today’s AI Visual QA checks. Try again tomorrow.', 429)
     review = AIReview.objects.create(
         workspace=workspace, media_version=media_version, file_checksum=file.checksum,
-        requested_by=user, language=language, options=options, options_hash=digest,
+        requested_by=user, language=language, options=options, options_hash=digest, mode=mode, approved_copy=copy,
         pipeline_version=PIPELINE_VERSION, engine=settings.AI_QA_ENGINE,
         progress={'kind': 'video' if is_video(media_version) else 'image'},
     )
@@ -219,8 +254,18 @@ def decide_finding(*, finding, user, status=None, edited_suggestion=None, add_to
     return finding
 
 
+COPY_COMMENT = {
+    'COPY_TYPO': lambda d, s: f'AI-suggested (approved copy): “{d}” looks like a typo — the approved copy says “{s}”.',
+    'COPY_MISMATCH': lambda d, s: f'AI-suggested (approved copy): reads “{d}” but the approved copy says “{s}”.',
+    'COPY_MISSING': lambda d, s: f'AI-suggested (approved copy): “{s}” is in the approved copy but was not found here.',
+    'COPY_UNEXPECTED': lambda d, s: f'AI-suggested (approved copy): “{d}” is not in the approved copy.',
+}
+
+
 def comment_text(finding):
     suggestion = finding.edited_suggestion or finding.suggested_text
+    if finding.category in COPY_COMMENT:
+        return COPY_COMMENT[finding.category](finding.detected_text, suggestion)
     if finding.category == AIFindingCategory.OCR_UNCERTAIN:
         line = f'AI-suggested: check “{finding.detected_text}”'
         return line + (f' — it may read “{suggestion}”.' if suggestion else ' — the text was hard to read here.')
