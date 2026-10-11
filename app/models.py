@@ -2426,3 +2426,55 @@ class SupportTicketMessage(models.Model):
     class Meta:
         db_table = 'support_ticket_messages'
         ordering = ('created_at',)
+
+
+class DirectUploadState(models.TextChoices):
+    INITIALIZED = 'INITIALIZED', 'Initialized'
+    FINALIZING = 'FINALIZING', 'Finalizing'
+    COMPLETED = 'COMPLETED', 'Completed'
+    FAILED = 'FAILED', 'Failed'
+    CANCELLED = 'CANCELLED', 'Cancelled'
+    EXPIRED = 'EXPIRED', 'Expired'
+
+
+class DirectUploadMode(models.TextChoices):
+    SINGLE = 'SINGLE', 'Single presigned PUT'
+    MULTIPART = 'MULTIPART', 'Multipart'
+
+
+class DirectUpload(models.Model):
+    """A browser-to-object-storage upload in flight (presigned PUT or multipart).
+
+    Holds the generated object key and a quota reservation until ``complete`` verifies the
+    object and creates the usual File/ProjectFile records, or until it is cancelled/expires.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    created_by_user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by_user_id', related_name='+')
+    membership = models.ForeignKey(WorkspaceMembership, on_delete=models.SET_NULL, db_column='workspace_membership_id', null=True, blank=True, related_name='+')
+    client_team = models.ForeignKey(ClientTeam, on_delete=models.SET_NULL, db_column='client_team_id', null=True, blank=True, related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, db_column='project_id', null=True, blank=True, related_name='+')
+    folder = models.ForeignKey(ProjectFolder, on_delete=models.SET_NULL, db_column='folder_id', null=True, blank=True, related_name='+')
+    task_stage = models.ForeignKey('TaskStage', on_delete=models.SET_NULL, db_column='task_stage_id', null=True, blank=True, related_name='+')
+    object_key = models.CharField(max_length=1024, unique=True)
+    original_name = models.CharField(max_length=512)
+    declared_mime_type = models.CharField(max_length=255)
+    expected_size = models.BigIntegerField()
+    reserved_bytes = models.BigIntegerField()
+    mode = models.CharField(max_length=16, choices=DirectUploadMode.choices)
+    multipart_upload_id = models.CharField(max_length=1024, blank=True, default='')
+    part_size = models.BigIntegerField(null=True, blank=True)
+    client_sha256 = models.CharField(max_length=64, blank=True, default='')
+    state = models.CharField(max_length=16, choices=DirectUploadState.choices, default=DirectUploadState.INITIALIZED)
+    error = models.TextField(blank=True, default='')
+    project_file = models.ForeignKey(ProjectFile, on_delete=models.SET_NULL, db_column='project_file_id', null=True, blank=True, related_name='+')
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'direct_uploads'
+        indexes = [
+            models.Index(fields=['workspace', 'state']),
+            models.Index(fields=['state', 'expires_at']),
+        ]

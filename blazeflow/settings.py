@@ -344,6 +344,14 @@ if PREVIEW_DECODER_TIMEOUT_SECONDS < 1 or PREVIEW_DECODER_MAX_INPUT_BYTES < 1 or
     raise ImproperlyConfigured('Preview decoder limits must be positive integers.')
 if CLAMAV_PORT < 1 or CLAMAV_TIMEOUT_SECONDS <= 0 or CLAMAV_MAX_STREAM_BYTES < 1:
     raise ImproperlyConfigured('ClamAV port, timeout, and stream limit must be positive.')
+# Direct browser-to-bucket uploads (presigned PUT / multipart). Off unless explicitly enabled,
+# and only ever active with STORAGE_DRIVER=s3; the bucket needs a narrow CORS rule first.
+DIRECT_UPLOADS_ENABLED = os.environ.get('DIRECT_UPLOADS_ENABLED', 'false').lower() in {'1', 'true', 'yes'}
+DIRECT_UPLOAD_SINGLE_PUT_MAX_BYTES = int(os.environ.get('DIRECT_UPLOAD_SINGLE_PUT_MAX_BYTES', str(64 * 1024 * 1024)))
+DIRECT_UPLOAD_PART_SIZE = int(os.environ.get('DIRECT_UPLOAD_PART_SIZE', str(16 * 1024 * 1024)))
+DIRECT_UPLOAD_URL_EXPIRE_SECONDS = int(os.environ.get('DIRECT_UPLOAD_URL_EXPIRE_SECONDS', '900'))
+DIRECT_UPLOAD_TTL_SECONDS = int(os.environ.get('DIRECT_UPLOAD_TTL_SECONDS', str(24 * 3600)))
+
 if STORAGE_DRIVER == 's3' and AWS_QUERYSTRING_EXPIRE < 1:
     raise ImproperlyConfigured('AWS_QUERYSTRING_EXPIRE must be at least 1 second.')
 

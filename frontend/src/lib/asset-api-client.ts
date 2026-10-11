@@ -39,6 +39,8 @@ export function uploadAssetFileTracked(workspaceId: string, file: File, relation
   let first = true;
   const { done } = startUpload({
     url: `/api/workspaces/${workspaceId}/asset-files/`, file, fields, source: "files", destination,
+    // Straight to R2 when the server has direct uploads on; otherwise the same form POST.
+    direct: { workspaceId },
     describe: (data) => { const saved = data as ProjectFile; return { workspaceId, fileId: saved.file.id, href: reviewHref({ mediaId: saved.file.id }) }; },
     onSuccess: (data) => { if (!first) onRetried?.(data as ProjectFile); },
   });

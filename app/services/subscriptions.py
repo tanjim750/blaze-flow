@@ -185,13 +185,28 @@ def workspace_storage_bytes_used(*, workspace):
     )['total'] or 0
 
 
-def enforce_workspace_storage_limit(*, workspace, additional_bytes, lock=False):
+def workspace_reserved_upload_bytes(*, workspace, exclude_id=None):
+    """Bytes held by direct-to-storage uploads that are still in flight (not yet File rows)."""
+    from django.utils import timezone
+    from app.models import DirectUpload, DirectUploadState
+    rows = DirectUpload.objects.filter(
+        workspace=workspace, state__in=[DirectUploadState.INITIALIZED, DirectUploadState.FINALIZING],
+        expires_at__gt=timezone.now(),
+    )
+    if exclude_id is not None:
+        rows = rows.exclude(id=exclude_id)
+    return rows.aggregate(total=Sum('reserved_bytes'))['total'] or 0
+
+
+def enforce_workspace_storage_limit(*, workspace, additional_bytes, lock=False, exclude_reservation_id=None):
     if lock:
         workspace = Workspace.objects.select_for_update().get(id=workspace.id)
     owner = _primary_owner_user(workspace=workspace)
     plan = get_effective_plan(user=owner) if owner else SubscriptionPlan.FREE
     limit = get_plan_limit(plan, 'max_storage_bytes')
-    used = workspace_storage_bytes_used(workspace=workspace)
+    used = workspace_storage_bytes_used(workspace=workspace) + workspace_reserved_upload_bytes(
+        workspace=workspace, exclude_id=exclude_reservation_id,
+    )
     if used + additional_bytes > limit:
         raise SubscriptionError(
             f"The workspace owner's {plan} plan allows up to {limit} bytes of storage. "
