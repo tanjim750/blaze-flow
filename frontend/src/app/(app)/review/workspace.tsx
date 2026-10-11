@@ -1,7 +1,8 @@
 "use client";
 
+import { useAppRouter } from "@/lib/app-router";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { BadgeCheck, Sparkles, Check, ChevronLeft, Columns2, HardDriveDownload, Info, Keyboard, Link2, MessageSquareText, MoreHorizontal, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, UploadCloud, X } from "lucide-react";
@@ -53,7 +54,7 @@ const stamp = (iso: string | null) => iso
 const shortDate = (iso: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(iso));
 
 export function ReviewWorkspace({ view, author, userId = null, initialShareOpen = false, initialPanel = null, embedded = false, initialCommentId = null, initialTimeMs = null, returnTo = null }: Props) {
-  const router = useRouter();
+  const router = useAppRouter();
   const reduced = useReducedMotion();
   const player = useRef<PlayerHandle>(null);
   const compare = useRef<CompareHandle>(null);

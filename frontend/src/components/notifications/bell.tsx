@@ -1,8 +1,9 @@
 "use client";
 
+import { useAppRouter } from "@/lib/app-router";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+
 import { Bell, Settings2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { openUniversalReview } from "@/components/universal-review";
@@ -16,7 +17,7 @@ import "./notifications.css";
  * the full list. Polls every 45s while the tab is visible (see `useNotifications`).
  */
 export function NotificationBell({ workspaceId }: { workspaceId: string | null }) {
-  const router = useRouter();
+  const router = useAppRouter();
   const [open, setOpen] = useState(false);
   const feed = useNotifications({ workspaceId, pageSize: 15 });
   const rows = useMemo(() => feed.items.map(describeNotification), [feed.items]);

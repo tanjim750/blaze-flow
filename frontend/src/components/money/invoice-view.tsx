@@ -1,12 +1,13 @@
 "use client";
-/**
+
+import { useAppRouter } from "@/lib/app-router";/**
  * One invoice as a printable page: studio and client addresses, the priced items, payments
  * received and the balance. Managers get Send / Record payment / Mark as paid (demo); a
  * client sees the same page read-only. Print uses the browser (print-to-PDF), with the app
  * chrome hidden by `@media print` in money.css.
  */
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import { useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Banknote, CircleDollarSign, Printer, Send, Trash2 } from "lucide-react";
@@ -17,7 +18,7 @@ import { markInvoicePaid } from "./money-board";
 import { PaymentDialog } from "./payment-dialog";
 
 export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: { workspaceId: string; invoice: InvoiceDetail; canManage: boolean; backHref: string; now: string }) {
-  const router = useRouter();
+  const router = useAppRouter();
   const [paying, setPaying] = useState(false);
   const [busy, setBusy] = useState(false);
   const badge = invoiceBadge(invoice);

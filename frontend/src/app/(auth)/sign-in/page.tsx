@@ -1,14 +1,15 @@
 "use client";
 
+import { useAppRouter } from "@/lib/app-router";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { signIn } from "@/lib/auth-client";
 import { GoogleSignIn } from "@/components/google-sign-in";
 
 export default function SignIn() {
-  const router = useRouter();
+  const router = useAppRouter();
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

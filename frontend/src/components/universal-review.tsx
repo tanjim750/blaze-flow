@@ -1,7 +1,8 @@
 "use client";
 
+import { useAppRouter } from "@/lib/app-router";
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+
 import { safeReturnPath, withReturnPath } from "@/lib/open-in-review";
 
 const OPEN_REVIEW_EVENT = "blazeflow:open-review";
@@ -38,7 +39,7 @@ function remember(from: string | null) {
 }
 
 export function UniversalReviewLayout({ children, pathname }: { children: React.ReactNode; pathname: string }) {
-  const router = useRouter();
+  const router = useAppRouter();
 
   useEffect(() => {
     const onOpen = (event: Event) => {

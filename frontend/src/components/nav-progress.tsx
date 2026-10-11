@@ -3,6 +3,7 @@
 import { useLinkStatus } from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { NAV_START_EVENT } from "@/lib/app-router";
 
 /**
  * A progress bar for in-app navigation.
@@ -41,8 +42,17 @@ export function NavProgress() {
       window.setTimeout(() => setStartedAt((current) => (current === from ? null : current)), 15000);
     };
 
-    document.addEventListener("click", onClick);
-    return () => document.removeEventListener("click", onClick);
+    // Programmatic navigations (useAppRouter) announce themselves the same way.
+    const onStart = () => {
+      const from = `${window.location.pathname}?${new URLSearchParams(window.location.search)}`;
+      setStartedAt(from);
+      window.setTimeout(() => setStartedAt((current) => (current === from ? null : current)), 15000);
+    };
+    // Capture phase: Next's <Link> calls preventDefault in its own (bubbling) handler, so a
+    // bubbling listener saw every link click as already handled and the bar never showed.
+    document.addEventListener("click", onClick, true);
+    window.addEventListener(NAV_START_EVENT, onStart);
+    return () => { document.removeEventListener("click", onClick, true); window.removeEventListener(NAV_START_EVENT, onStart); };
   }, []);
 
   if (!active) return null;

@@ -1,8 +1,9 @@
 "use client";
 
+import { useAppRouter } from "@/lib/app-router";
 import Link from "next/link";
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
+
 import { Bell, CheckCheck, ChevronLeft, ChevronRight, Settings2 } from "lucide-react";
 import { NotificationRow } from "@/components/notifications/notification-row";
 import { useNotifications } from "@/components/notifications/use-notifications";
@@ -14,7 +15,7 @@ const PAGE_SIZE = 25;
 export function NotificationsList({ workspaceId, workspaceName, filter, page }: {
   workspaceId: string | null; workspaceName: string | null; filter: "all" | "unread"; page: number;
 }) {
-  const router = useRouter();
+  const router = useAppRouter();
   const feed = useNotifications({ workspaceId, page, pageSize: PAGE_SIZE, unreadOnly: filter === "unread" });
   const rows = useMemo(() => feed.items.map(describeNotification), [feed.items]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read the clock whenever the rows change
