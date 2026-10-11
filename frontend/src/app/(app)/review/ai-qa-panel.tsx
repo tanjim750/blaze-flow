@@ -436,7 +436,7 @@ function FindingCard({ finding, target, selected, canAct, onSelect, onUpdate, on
             : <><s>{finding.detected_text}</s>{fix && <><span aria-hidden="true">→</span><strong>{fix}</strong></>}</>}
         </span>
         <span className="aiqa-why">{finding.explanation}</span>
-        <span className="aiqa-meta">{readability(finding.ocr_confidence)}{finding.context_text && finding.context_text !== finding.detected_text ? <> · “{finding.context_text.slice(0, 60)}”</> : null}</span>
+        {finding.category !== "COPY_MISSING" && <span className="aiqa-meta">{readability(finding.ocr_confidence)}{finding.context_text && finding.context_text !== finding.detected_text ? <> · “{finding.context_text.slice(0, 60)}”</> : null}</span>}
       </button>
       {editing && (
         <form className="aiqa-edit" onSubmit={(event) => { event.preventDefault(); void decide({ edited_suggestion: draft }).then(() => setEditing(false)); }}>

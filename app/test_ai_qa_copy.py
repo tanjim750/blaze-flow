@@ -37,7 +37,7 @@ class AlignmentTests(SimpleTestCase):
         units = [Unit('SUMER SALE', 0.97), Unit('Up to 50% off everything', 0.95),
                  Unit('Cold brew coffee from £4.50', 0.95), Unit('Download our app', 0.95)]
         found = kinds(compare(COPY, units))
-        self.assertIn((TYPO, 'sumer', 'summer'), found)
+        self.assertIn((TYPO, 'sumer', 'summer'), found)  # casefolded by kinds()
         self.assertIn((MISMATCH, '£4.50', '£3.50'), found)
         self.assertIn((UNEXPECTED, 'download our app', ''), found)
         self.assertIn((MISSING, '', 'terms and conditions apply offer ends 31 august 2027'), found)

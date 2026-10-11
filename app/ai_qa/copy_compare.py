@@ -200,6 +200,14 @@ def _row(category, band, detected, suggested, unit, explanation, decision):
     }
 
 
+def _as_written(unit, word):
+    """The unit's own spelling of a normalised word ("PREMUIM", not "premuim")."""
+    for norm, shown in pairs(unit.text):
+        if norm == word:
+            return shown
+    return word
+
+
 def _diff_unit(approved, unit, start, end):
     """Findings inside one matched unit, plus the approved indices it covers."""
     window = approved.words[start:end]
@@ -220,7 +228,7 @@ def _diff_unit(approved, unit, start, end):
         if tag == 'insert':
             if unit.video and j1 == len(words) - 1 and len(b) == 1 and len(b[0]) <= 2:
                 continue  # half-revealed word on a typewriter animation
-            rows.append(_row(UNEXPECTED, 'medium' if unit.confidence >= 0.85 else 'low', ' '.join(b), '', unit,
+            rows.append(_row(UNEXPECTED, 'medium' if unit.confidence >= 0.85 else 'low', ' '.join(_as_written(unit, w) for w in b), '', unit,
                              'Not in the approved copy here. Check it was meant to be added.', 0.6))
             continue
         seen.update(range(start + i1, start + i2))
@@ -234,20 +242,20 @@ def _diff_unit(approved, unit, start, end):
                 if _confusable_only(wb, wa) and (len(wa) <= 3 or (any(c.isdigit() for c in wb) and not any(c.isdigit() for c in wa))):
                     continue  # "0FF" for "OFF", "T0" for "TO": the OCR, not the artwork
                 if legal:
-                    rows.append(_row(MISMATCH, 'medium', wb, shown, unit,
+                    rows.append(_row(MISMATCH, 'medium', _as_written(unit, wb), shown, unit,
                                      'Legal / small-print wording differs from the approved copy. It must match exactly.', 0.7))
                 elif _close(wb, wa):
                     shaky = _confusable_only(wb, wa) or unit.confidence < 0.85
-                    rows.append(_row(TYPO, 'low' if shaky else 'high', wb, shown, unit,
+                    rows.append(_row(TYPO, 'low' if shaky else 'high', _as_written(unit, wb), shown, unit,
                                      ('Could be a reading slip (similar-looking letters). ' if shaky else '') +
                                      f'Approved copy says “{shown}”.', 0.55 if shaky else 0.9))
                 else:
                     numeric = any(ch.isdigit() for ch in wa + wb)
-                    rows.append(_row(MISMATCH, 'high' if unit.confidence >= 0.8 else 'medium', wb, shown, unit,
+                    rows.append(_row(MISMATCH, 'high' if unit.confidence >= 0.8 else 'medium', _as_written(unit, wb), shown, unit,
                                      ('A number, price or date differs from the approved copy.' if numeric
                                       else 'A different word from the approved copy.'), 0.85))
         else:
-            rows.append(_row(MISMATCH, 'medium', ' '.join(b), ' '.join(approved.shown[start + i1:start + i2]), unit,
+            rows.append(_row(MISMATCH, 'medium', ' '.join(_as_written(unit, w) for w in b), ' '.join(approved.shown[start + i1:start + i2]), unit,
                              'This wording differs from the approved copy.', 0.7))
     return rows, seen
 
