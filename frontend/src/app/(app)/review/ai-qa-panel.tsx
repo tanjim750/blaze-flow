@@ -4,11 +4,11 @@ import type { TaskStage } from "@/lib/api";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, CircleHelp, Clock3, Loader2, MessageSquarePlus, Pencil, RotateCcw, Sparkles, Square, X, ListChecks } from "lucide-react";
+import { AlertTriangle, Check, CircleHelp, Clock3, Loader2, MessageSquarePlus, Pencil, RotateCcw, Sparkles, Square, X, FileCheck2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import {
-  BAND_LABEL, CATEGORY_LABEL, FILTERS, aiQaApi, batchable, filterCounts, hasRegion, isActive, matchesFilter,
+  BAND_LABEL, CATEGORY_LABEL, FILTERS, aiQaApi, batchable, commentPreview, isCopyCategory, type AiMode, type ApprovedCopy, type CopyChoice, filterCounts, hasRegion, isActive, matchesFilter,
   pollDelay, progressLabel, readability, sortFindings, stageLabel, stageStep, suggestion, timeRangeLabel,
   type AiFinding, type AiQaState, type AiRegion, type AiReview, type AiTarget, type FindingFilter,
 } from "@/lib/ai-qa";
@@ -21,7 +21,7 @@ export type AiQa = {
   review: AiReview | null;
   findings: AiFinding[];
   error: string | null;
-  start: (language: string) => Promise<boolean>;
+  start: (language: string, mode?: AiMode, copy?: CopyChoice) => Promise<boolean>;
   retry: () => Promise<void>;
   cancel: () => Promise<void>;
   update: (finding: AiFinding) => void;
@@ -91,10 +91,10 @@ export function useAiQa(target: AiTarget | null): AiQa {
     return () => { stopped = true; if (timer) clearTimeout(timer); };
   }, [active, reviewId, loadFindings]);
 
-  const start = useCallback(async (language: string) => {
+  const start = useCallback(async (language: string, mode: AiMode = "PROOFREAD", copy: CopyChoice = {}) => {
     const t = targetRef.current; if (!t) return false;
     setError(null);
-    const result = await aiQaApi.start(t, language);
+    const result = await aiQaApi.start(t, language, mode, copy);
     if (!result.ok) { setError(result.detail); return false; }
     startedAt.current = Date.now();
     setFindings([]);
@@ -145,6 +145,26 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
   const router = useRouter();
   const [runOpen, setRunOpen] = useState(false);
   const [language, setLanguage] = useState("en-GB");
+  // Approved-copy compare: proofread and/or compare, with copy pasted or picked from the project.
+  const [proofread, setProofread] = useState(true);
+  const [compareCopy, setCompareCopy] = useState(false);
+  const [copies, setCopies] = useState<ApprovedCopy[] | null>(null);
+  const [copyId, setCopyId] = useState<string>("");
+  const [copyText, setCopyText] = useState("");
+  const [saveCopy, setSaveCopy] = useState(true);
+  useEffect(() => {
+    if (!runOpen || copies !== null) return;
+    let alive = true;
+    void aiQaApi.copies(target).then((result) => {
+      if (!alive) return;
+      const list = result.ok ? result.data : [];
+      setCopies(list);
+      if (list.length) { setCopyId(list[0].id); }
+    });
+    return () => { alive = false; };
+  }, [runOpen, copies, target]);
+  const mode: AiMode = compareCopy ? (proofread ? "BOTH" : "COMPARE") : "PROOFREAD";
+  const copyReady = !compareCopy || Boolean(copyId) || copyText.trim().length > 0;
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState<FindingFilter>("open");
   const [batchOpen, setBatchOpen] = useState(false);
@@ -166,9 +186,9 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
 
   const run = async () => {
     setBusy(true);
-    const ok = await qa.start(language);
+    const ok = await qa.start(language, mode, copyId ? { copyId } : { text: copyText, save: saveCopy });
     setBusy(false);
-    if (ok) setRunOpen(false);
+    if (ok) { setRunOpen(false); if (!copyId && saveCopy && copyText.trim()) setCopies(null); }
   };
 
   const addComment = async (finding: AiFinding, quiet = false) => {
@@ -284,8 +304,13 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
               <span className="aiqa-pill is-low">{review.summary.by_band.low ?? 0} low</span>
             </div>
           </div>
+          {review.approved_copy && (
+            <p className="aiqa-compared" data-testid="ai-qa-compared">
+              <FileCheck2 size={12} aria-hidden="true" /> {review.mode === "COMPARE" ? "Compared" : "Proofread and compared"} with {review.approved_copy.source === "project" ? `${review.approved_copy.title} v${review.approved_copy.version}` : "pasted approved copy"}
+            </p>
+          )}
           <div className="aiqa-filters" role="tablist" aria-label="Filter findings">
-            {FILTERS.map((item) => (
+            {FILTERS.filter((item) => item.id !== "copy" || review.approved_copy).map((item) => (
               <button key={item.id} type="button" role="tab" aria-selected={filter === item.id} onClick={() => setFilter(item.id)}>
                 {item.label}<span>{counts[item.id]}</span>
               </button>
@@ -293,7 +318,7 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
           </div>
           <div className="aiqa-list" data-testid="ai-qa-findings">
             {findings.length === 0 && (
-              <div className="aiqa-empty is-small"><Check size={18} /><p>No likely spelling mistakes found.</p><small>That isn’t a guarantee: stylised or very small text may not have been read.</small></div>
+              <div className="aiqa-empty is-small"><Check size={18} /><p>{review.approved_copy ? "Matches the approved copy, and no likely spelling mistakes." : "No likely spelling mistakes found."}</p><small>That isn’t a guarantee: stylised or very small text may not have been read.</small></div>
             )}
             {findings.length > 0 && shown.length === 0 && <p className="aiqa-none">Nothing here.</p>}
             {shown.map((finding) => (
@@ -334,13 +359,36 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
         title="Run AI Visual QA"
         body={<>Checking <strong>{title}</strong> · {versionLabel}. This version stays exactly as uploaded; results are suggestions you confirm.</>}
         confirmLabel={busy ? "Starting…" : "Run check"}
-        busy={busy}
+        busy={busy || !copyReady || (!proofread && !compareCopy)}
         onConfirm={() => void run()}
         onCancel={() => { setRunOpen(false); }}
       >
         <div className="aiqa-options">
-          <label className="aiqa-check"><input type="checkbox" checked readOnly /> Proofread visible text</label>
-          <label className="aiqa-check is-disabled" title="Coming next"><input type="checkbox" disabled /> Compare with approved copy <em>Soon</em></label>
+          <label className="aiqa-check"><input type="checkbox" checked={proofread} onChange={(event) => setProofread(event.target.checked)} /> Proofread visible text</label>
+          <label className="aiqa-check"><input type="checkbox" checked={compareCopy} onChange={(event) => setCompareCopy(event.target.checked)} data-testid="ai-qa-compare" /> Compare with approved copy</label>
+          {compareCopy && (
+            <div className="aiqa-copy" data-testid="ai-qa-copy">
+              {copies && copies.length > 0 && (
+                <label className="aiqa-field">Approved copy
+                  <select value={copyId} onChange={(event) => setCopyId(event.target.value)}>
+                    {copies.map((copy) => <option key={copy.id} value={copy.id}>{copy.title} · v{copy.version}{copy.created_by ? ` · ${copy.created_by}` : ""}</option>)}
+                    <option value="">Paste new copy…</option>
+                  </select>
+                </label>
+              )}
+              {copyId ? (
+                <pre className="aiqa-copy-preview">{copies?.find((copy) => copy.id === copyId)?.text}</pre>
+              ) : (
+                <>
+                  <label className="aiqa-field">Paste the approved copy
+                    <textarea rows={6} value={copyText} onChange={(event) => setCopyText(event.target.value)} placeholder={"SUMMER SALE\nUp to 50% off everything\nTerms and conditions apply."} maxLength={20000} />
+                  </label>
+                  <label className="aiqa-check"><input type="checkbox" checked={saveCopy} onChange={(event) => setSaveCopy(event.target.checked)} /> Save to this project as the approved copy{copies && copies.length ? " (new version)" : ""}</label>
+                </>
+              )}
+              <p className="aiqa-note">Line breaks, capitals, punctuation and the order text appears in don&rsquo;t count as differences. Typos, changed words or prices, missing and extra text are listed separately.</p>
+            </div>
+          )}
           <label className="aiqa-field">Language
             <select value={language} onChange={(event) => setLanguage(event.target.value)}>
               <option value="en-GB">English (UK)</option>
@@ -373,7 +421,12 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
         onCancel={() => setBatchOpen(false)}
       >
         <ul className="aiqa-batch-list">
-          {batch.map((finding) => <li key={finding.id}><s>{finding.detected_text}</s> → <strong>{suggestion(finding) || "?"}</strong></li>)}
+          {batch.map((finding) => (
+            <li key={finding.id}>
+              <span className="aiqa-batch-cat">{CATEGORY_LABEL[finding.category]}{timeRangeLabel(finding) ? ` · ${timeRangeLabel(finding)}` : ""}</span>
+              <span>{commentPreview(finding)}</span>
+            </li>
+          ))}
         </ul>
       </ConfirmDialog>
     </div>
@@ -405,16 +458,17 @@ function FindingCard({ finding, target, selected, canAct, onSelect, onUpdate, on
     >
       <button type="button" className="aiqa-card-main" onClick={onSelect} aria-pressed={selected} aria-label={timeRangeLabel(finding) ? `Jump to ${timeRangeLabel(finding)} and show “${finding.detected_text}”` : `Show “${finding.detected_text}” on the image`}>
         <span className="aiqa-card-top">
-          <span className="aiqa-cat">{finding.category === "OCR_UNCERTAIN" ? <CircleHelp size={12} /> : <Sparkles size={12} />}{CATEGORY_LABEL[finding.category]}</span>
+          <span className="aiqa-cat">{finding.category === "OCR_UNCERTAIN" ? <CircleHelp size={12} /> : isCopyCategory(finding.category) ? <FileCheck2 size={12} /> : <Sparkles size={12} />}{CATEGORY_LABEL[finding.category]}</span>
           <span className={`aiqa-pill is-${finding.band}`}>{BAND_LABEL[finding.band]}</span>
         </span>
         {timeRangeLabel(finding) && <span className="aiqa-time" data-testid="ai-qa-time"><Clock3 size={11} aria-hidden="true" />{timeRangeLabel(finding)}</span>}
         <span className="aiqa-fix">
-          <s>{finding.detected_text}</s>
-          {fix && <><span aria-hidden="true">→</span><strong>{fix}</strong></>}
+          {finding.category === "COPY_MISSING"
+            ? <><em className="aiqa-missing">Missing</em><strong>{fix}</strong></>
+            : <><s>{finding.detected_text}</s>{fix && <><span aria-hidden="true">→</span><strong>{fix}</strong></>}</>}
         </span>
         <span className="aiqa-why">{finding.explanation}</span>
-        <span className="aiqa-meta">{readability(finding.ocr_confidence)}{finding.context_text && finding.context_text !== finding.detected_text ? <> · “{finding.context_text.slice(0, 60)}”</> : null}</span>
+        {finding.category !== "COPY_MISSING" && <span className="aiqa-meta">{readability(finding.ocr_confidence)}{finding.context_text && finding.context_text !== finding.detected_text ? <> · “{finding.context_text.slice(0, 60)}”</> : null}</span>}
       </button>
       {editing && (
         <form className="aiqa-edit" onSubmit={(event) => { event.preventDefault(); void decide({ edited_suggestion: draft }).then(() => setEditing(false)); }}>
@@ -438,7 +492,9 @@ function FindingCard({ finding, target, selected, canAct, onSelect, onUpdate, on
                     ? <button type="button" onClick={() => void decide({ status: "ACCEPTED" }, "Marked as a real mistake.")} disabled={saving}><Check size={12} />Accept</button>
                     : <span className="aiqa-done"><Check size={12} />Accepted</span>}
                   <button type="button" onClick={() => void decide({ status: "DISMISSED" })} disabled={saving}><X size={12} />Dismiss</button>
-                  <button type="button" onClick={() => void decide({ status: "NOT_AN_ERROR", add_to_glossary: "project" }, `“${finding.detected_text}” added to this project’s glossary.`)} disabled={saving} title="Never flag this word again in this project">Not an error</button>
+                  {isCopyCategory(finding.category)
+                    ? <button type="button" onClick={() => void decide({ status: "NOT_AN_ERROR" }, "Marked as intended.")} disabled={saving} title="An intended difference from the approved copy">Intended</button>
+                    : <button type="button" onClick={() => void decide({ status: "NOT_AN_ERROR", add_to_glossary: "project" }, `“${finding.detected_text}” added to this project’s glossary.`)} disabled={saving} title="Never flag this word again in this project">Not an error</button>}
                 </>}
         </div>
       )}

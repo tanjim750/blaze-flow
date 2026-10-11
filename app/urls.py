@@ -293,6 +293,7 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/ai-findings/<uuid:finding_id>/comment/', ai_qa_views.ai_finding_comment, name='api-ai-finding-comment'),
     path('workspaces/<uuid:workspace_id>/ai-glossary/', ai_qa_views.glossary_list_create, name='api-ai-glossary'),
     path('workspaces/<uuid:workspace_id>/ai-glossary/<uuid:term_id>/', ai_qa_views.glossary_detail, name='api-ai-glossary-detail'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/approved-copy/', ai_qa_views.approved_copy_list_create, name='api-ai-approved-copy'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/', review_comment_list_create, name='api-review-comments'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/', review_comment_detail, name='api-review-comment-detail'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/resolution/', review_comment_resolution, name='api-review-comment-resolution'),

@@ -9,16 +9,16 @@ from rest_framework.response import Response
 
 from .ai_qa.service import (
     AIQAError, add_glossary_term, cancel_review, create_comment_from_finding, decide_finding, is_supported,
-    retry_review, start_review,
+    retry_review, save_approved_copy, start_review,
 )
-from .models import AIFinding, AIReview, GlossaryTerm, MediaVersion, Project, Workspace
+from .models import AIFinding, AIReview, ApprovedCopy, GlossaryTerm, MediaVersion, Project, Workspace
 from .pagination import paginated_response
 from .permissions import (
     REVIEW_COMMENT_CREATE, REVIEW_COMMENT_READ, has_project_permission, has_workspace_permission,
 )
 from .serializers.ai_qa import (
     AIFindingCommentSerializer, AIFindingSerializer, AIFindingUpdateSerializer,
-    AIReviewSerializer, AIReviewStartSerializer, GlossaryTermSerializer, GlossaryTermWriteSerializer,
+    AIReviewSerializer, AIReviewStartSerializer, ApprovedCopySerializer, ApprovedCopyWriteSerializer, GlossaryTermSerializer, GlossaryTermWriteSerializer,
 )
 from .serializers.comments import ReviewCommentSerializer
 from .services.comments import can_see_team_notes
@@ -152,6 +152,30 @@ def ai_finding_comment(request, workspace_id, project_id, media_version_id, find
         {'comment': ReviewCommentSerializer(comment).data, 'finding': AIFindingSerializer(finding).data},
         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
     )
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def approved_copy_list_create(request, workspace_id, project_id):
+    """The project's saved approved copy, every version newest first; POST saves a new version."""
+    _enabled()
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    project = get_object_or_404(Project, id=project_id, workspace=workspace)
+    write = request.method == 'POST'
+    key = REVIEW_COMMENT_CREATE if write else REVIEW_COMMENT_READ
+    if not (can_see_team_notes(user=request.user, workspace=workspace)
+            and has_project_permission(user=request.user, project=project, permission_key=key)):
+        raise Http404
+    if not write:
+        copies = ApprovedCopy.objects.filter(project=project, source='project').select_related('created_by').order_by('title', '-version')[:50]
+        return Response(ApprovedCopySerializer(copies, many=True).data)
+    serializer = ApprovedCopyWriteSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        copy = save_approved_copy(project=project, user=request.user, **serializer.validated_data)
+    except AIQAError as exc:
+        return _error(exc)
+    return Response(ApprovedCopySerializer(copy).data, status=status.HTTP_201_CREATED)
 
 
 def _glossary_workspace(request, workspace_id, *, write):

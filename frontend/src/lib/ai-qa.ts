@@ -9,7 +9,14 @@ export type AiRegion = { x: number; y: number; width: number; height: number };
 export type AiTrackPoint = AiRegion & { t: number };
 export type AiReviewStatus = "QUEUED" | "PROCESSING" | "SUCCEEDED" | "PARTIAL" | "FAILED" | "CANCELLED";
 export type AiFindingStatus = "PENDING" | "ACCEPTED" | "DISMISSED" | "NOT_AN_ERROR" | "COMMENT_CREATED";
-export type AiCategory = "POSSIBLE_SPELLING_ERROR" | "OCR_UNCERTAIN";
+export type AiCategory = "POSSIBLE_SPELLING_ERROR" | "OCR_UNCERTAIN" | CopyCategory;
+/** Approved-copy compare finding types (PR 3). */
+export type CopyCategory = "COPY_TYPO" | "COPY_MISMATCH" | "COPY_MISSING" | "COPY_UNEXPECTED";
+export type AiMode = "PROOFREAD" | "COMPARE" | "BOTH";
+export type ApprovedCopy = { id: string; title: string; version: number; text: string; source: string; created_at?: string; created_by?: string | null };
+/** How a run gets its approved copy: typed into the dialog, or a saved project version. */
+export type CopyChoice = { text?: string; copyId?: string; save?: boolean };
+export const isCopyCategory = (category: AiCategory): category is CopyCategory => category.startsWith("COPY_");
 export type AiBand = "high" | "medium" | "low";
 
 export type AiReview = {
@@ -20,6 +27,8 @@ export type AiReview = {
   requested_by: { id: string; name: string } | null;
   summary: { total: number; by_category: Record<string, number>; by_band: Record<string, number>; by_status: Record<string, number> };
   usage: { duration_ms?: number };
+  mode?: AiMode;
+  approved_copy?: ApprovedCopy | null;
   started_at: string | null; completed_at: string | null; created_at: string;
 };
 
@@ -68,7 +77,14 @@ async function call<T>(url: string, init: RequestInit = {}): Promise<ApiResult<T
 
 export const aiQaApi = {
   state: (t: AiTarget) => call<AiQaState>(`${base(t)}/ai-reviews/`),
-  start: (t: AiTarget, language: string) => call<AiReview>(`${base(t)}/ai-reviews/`, { method: "POST", body: JSON.stringify({ language }) }),
+  start: (t: AiTarget, language: string, mode: AiMode = "PROOFREAD", copy: CopyChoice = {}) => call<AiReview>(`${base(t)}/ai-reviews/`, {
+    method: "POST",
+    body: JSON.stringify({
+      language, mode,
+      ...(mode !== "PROOFREAD" ? (copy.copyId ? { approved_copy_id: copy.copyId } : { approved_copy_text: copy.text ?? "", save_copy: Boolean(copy.save) }) : {}),
+    }),
+  }),
+  copies: (t: AiTarget) => call<ApprovedCopy[]>(`/api/workspaces/${t.workspaceId}/projects/${t.projectId}/approved-copy/`),
   review: (t: AiTarget, id: string) => call<AiReview>(`${base(t)}/ai-reviews/${id}/`),
   retry: (t: AiTarget, id: string) => call<AiReview>(`${base(t)}/ai-reviews/${id}/retry/`, { method: "POST", body: "{}" }),
   cancel: (t: AiTarget, id: string) => call<AiReview>(`${base(t)}/ai-reviews/${id}/cancel/`, { method: "POST", body: "{}" }),
@@ -84,10 +100,11 @@ export function pollDelay(elapsedMs: number): number {
   return elapsedMs < 30_000 ? 2_000 : 5_000;
 }
 
-export type FindingFilter = "open" | "spelling" | "uncertain" | "commented" | "dismissed" | "all";
+export type FindingFilter = "open" | "copy" | "spelling" | "uncertain" | "commented" | "dismissed" | "all";
 
 export const FILTERS: { id: FindingFilter; label: string }[] = [
   { id: "open", label: "To review" },
+  { id: "copy", label: "Vs approved copy" },
   { id: "spelling", label: "Spelling" },
   { id: "uncertain", label: "OCR unsure" },
   { id: "commented", label: "Commented" },
@@ -102,6 +119,7 @@ const BAND_ORDER: Record<AiBand, number> = { high: 0, medium: 1, low: 2 };
 export function matchesFilter(finding: AiFinding, filter: FindingFilter): boolean {
   switch (filter) {
     case "open": return OPEN.includes(finding.status);
+    case "copy": return isCopyCategory(finding.category) && !CLOSED.includes(finding.status);
     case "spelling": return finding.category === "POSSIBLE_SPELLING_ERROR" && !CLOSED.includes(finding.status);
     case "uncertain": return finding.category === "OCR_UNCERTAIN" && !CLOSED.includes(finding.status);
     case "commented": return finding.status === "COMMENT_CREATED";
@@ -123,13 +141,16 @@ export function sortFindings(findings: AiFinding[]): AiFinding[] {
 }
 
 export function filterCounts(findings: AiFinding[]): Record<FindingFilter, number> {
-  const counts = { open: 0, spelling: 0, uncertain: 0, commented: 0, dismissed: 0, all: 0 } as Record<FindingFilter, number>;
+  const counts = { open: 0, copy: 0, spelling: 0, uncertain: 0, commented: 0, dismissed: 0, all: 0 } as Record<FindingFilter, number>;
   for (const finding of findings) for (const { id } of FILTERS) if (matchesFilter(finding, id)) counts[id] += 1;
   return counts;
 }
 
 export const BAND_LABEL: Record<AiBand, string> = { high: "High confidence", medium: "Medium", low: "Low" };
-export const CATEGORY_LABEL: Record<AiCategory, string> = { POSSIBLE_SPELLING_ERROR: "Possible spelling", OCR_UNCERTAIN: "OCR unsure" };
+export const CATEGORY_LABEL: Record<AiCategory, string> = {
+  POSSIBLE_SPELLING_ERROR: "Possible spelling", OCR_UNCERTAIN: "OCR unsure",
+  COPY_TYPO: "Typo vs approved", COPY_MISMATCH: "Differs from approved", COPY_MISSING: "Missing text", COPY_UNEXPECTED: "Not in approved copy",
+};
 
 /** Words, not a falsely precise percentage: OCR confidence is not a calibrated probability. */
 export function readability(ocr: number): string {
@@ -169,8 +190,23 @@ export function hasRegion(region: AiFinding["region"]): region is AiRegion {
   return typeof (region as AiRegion).x === "number" && typeof (region as AiRegion).width === "number";
 }
 
+/** What "Add N high-confidence as comments" takes: open, high-confidence spelling and copy findings. */
 export const batchable = (findings: AiFinding[]) =>
-  findings.filter((finding) => finding.band === "high" && OPEN.includes(finding.status) && finding.category === "POSSIBLE_SPELLING_ERROR");
+  findings.filter((finding) => finding.band === "high" && OPEN.includes(finding.status)
+    && (finding.category === "POSSIBLE_SPELLING_ERROR" || isCopyCategory(finding.category)));
+
+/** The comment the server will write for a finding (shown in the batch preview). */
+export function commentPreview(finding: AiFinding): string {
+  const d = finding.detected_text, s = suggestion(finding);
+  switch (finding.category) {
+    case "COPY_TYPO": return `“${d}” looks like a typo — the approved copy says “${s}”.`;
+    case "COPY_MISMATCH": return `Reads “${d}” but the approved copy says “${s}”.`;
+    case "COPY_MISSING": return `“${s}” is in the approved copy but was not found here.`;
+    case "COPY_UNEXPECTED": return `“${d}” is not in the approved copy.`;
+    case "OCR_UNCERTAIN": return `Check “${d}”${s ? ` — it may read “${s}”.` : "."}`;
+    default: return `“${d}” may be misspelt${s ? ` — suggest “${s}”.` : "."}`;
+  }
+}
 
 /** A brief sighting still gets a highlight you can see: held at least this long. */
 export const MIN_HOLD_MS = 1500;

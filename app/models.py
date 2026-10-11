@@ -2157,6 +2157,8 @@ class ReviewCommentSource(models.TextChoices):
 
 class AIReviewMode(models.TextChoices):
     PROOFREAD = 'PROOFREAD'
+    COMPARE = 'COMPARE'
+    BOTH = 'BOTH'
 
 
 class AIReviewStatus(models.TextChoices):
@@ -2174,6 +2176,11 @@ AI_REVIEW_ACTIVE_STATUSES = (AIReviewStatus.QUEUED, AIReviewStatus.PROCESSING)
 class AIFindingCategory(models.TextChoices):
     POSSIBLE_SPELLING_ERROR = 'POSSIBLE_SPELLING_ERROR'
     OCR_UNCERTAIN = 'OCR_UNCERTAIN'
+    # Approved-copy compare (PR 3)
+    COPY_TYPO = 'COPY_TYPO'
+    COPY_MISMATCH = 'COPY_MISMATCH'
+    COPY_MISSING = 'COPY_MISSING'
+    COPY_UNEXPECTED = 'COPY_UNEXPECTED'
 
 
 class AIFindingBand(models.TextChoices):
@@ -2199,6 +2206,25 @@ class GlossaryTermKind(models.TextChoices):
     OTHER = 'other'
 
 
+class ApprovedCopy(models.Model):
+    """The copy a client signed off for a project, versioned: an edit saves a new row."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name='+')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='+', null=True, blank=True)
+    title = models.CharField(max_length=200, default='Approved copy')
+    version = models.PositiveIntegerField(default=1)
+    text = models.TextField()
+    # paste: typed into the Run dialog for one check only; project: saved on the project.
+    source = models.CharField(max_length=20, default='project')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'ai_approved_copies'
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['project', 'title', 'version'])]
+
+
 class AIReview(models.Model):
     """One AI Visual QA run against one immutable media version."""
 
@@ -2222,6 +2248,7 @@ class AIReview(models.Model):
     error_code = models.CharField(max_length=60, blank=True, default='')
     error_message = models.CharField(max_length=500, blank=True, default='')
     usage = models.JSONField(default=dict, blank=True)
+    approved_copy = models.ForeignKey(ApprovedCopy, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

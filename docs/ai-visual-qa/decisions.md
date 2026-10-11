@@ -84,3 +84,12 @@ Measured on the 10-clip eval, 8 cores: **324 → 73 CPU-seconds per minute of vi
 
 ## Not yet (next PRs)
 Approved-copy compare, a cloud engine (Google Video Intelligence has native text tracking), an LLM verifier, a glossary management UI, GPU/parallel frame OCR, and partial results while a long video is still running.
+
+## PR 3: approved-copy compare
+
+- **Alignment is per text unit, not one long diff.** Each OCR line (image) or text track (video) is aligned on its own to the best window of the approved copy, so where text sits on the poster, line breaks and the order text animates on do not create differences. A repeated phrase prefers an occurrence not yet matched.
+- **Styling is normalised away:** case, punctuation around words, curly quotes, `&`/`and`, `£4.00`/`£4`, and words split or joined by spaces/hyphens ("COLDBREW" = "Cold-brew").
+- **Four finding types, not "everything is a typo":** `COPY_TYPO` (one word close in spelling), `COPY_MISMATCH` (different word, any number/price/date, several words), `COPY_MISSING` (approved words seen nowhere), `COPY_UNEXPECTED` (text not in the copy). Legal/small-print lines (terms, conditions, offer ends, ©…) are always mismatches, since the wording must be exact, and a missing legal line is high.
+- **OCR slips are not copy errors:** digit-for-letter misreads ("0FF", "T0") are ignored; other look-alike letters are a low-band typo. In video, a misread flicker of a track that also reads cleanly at the same time is dropped, as is a half-revealed word in a typewriter animation.
+- **Approved copy is versioned and immutable** (`ApprovedCopy`, one row per version per project title; saving identical text is a no-op). Pasted one-off copy is stored with the run (`source='paste'`) so a finding can always be traced to the text it was compared with.
+- **Proofread + Compare** adds every approved word to the glossary for the spelling pass and drops a spelling finding when compare already flagged that word.

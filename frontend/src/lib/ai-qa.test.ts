@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MIN_HOLD_MS, batchable, filterCounts, findingWindow, matchesFilter, pollDelay, progressLabel, readability, regionAt, sortFindings, stageLabel, stageStep, suggestion, timeRangeLabel, type AiFinding, type AiReview } from "./ai-qa";
+import { MIN_HOLD_MS, batchable, filterCounts, findingWindow, matchesFilter, pollDelay, progressLabel, readability, regionAt, sortFindings, stageLabel, stageStep, suggestion, timeRangeLabel, type AiFinding, type AiReview, commentPreview, isCopyCategory } from "./ai-qa";
 
 const finding = (over: Partial<AiFinding>): AiFinding => ({
   id: "f", category: "POSSIBLE_SPELLING_ERROR", band: "high", detected_text: "PREMUIM", suggested_text: "PREMIUM",
@@ -18,12 +18,24 @@ describe("ai-qa helpers", () => {
   it("filters by status and category", () => {
     const list = [finding({ id: "a" }), finding({ id: "b", category: "OCR_UNCERTAIN", band: "low" }), finding({ id: "c", status: "DISMISSED" }), finding({ id: "d", status: "COMMENT_CREATED" })];
     expect(list.filter((f) => matchesFilter(f, "open")).map((f) => f.id)).toEqual(["a", "b"]);
-    expect(filterCounts(list)).toEqual({ open: 2, spelling: 2, uncertain: 1, commented: 1, dismissed: 1, all: 4 });
+    expect(filterCounts(list)).toEqual({ open: 2, copy: 0, spelling: 2, uncertain: 1, commented: 1, dismissed: 1, all: 4 });
   });
 
   it("sorts high confidence first, then by position", () => {
     const list = [finding({ id: "low", band: "low" }), finding({ id: "lower", region: { x: 0, y: 0.9, width: 0.1, height: 0.1 } }), finding({ id: "top", region: { x: 0, y: 0.1, width: 0.1, height: 0.1 } })];
     expect(sortFindings(list).map((f) => f.id)).toEqual(["top", "lower", "low"]);
+  });
+
+  it("filters, batches and previews approved-copy findings", () => {
+    const list = [finding({ id: "t", category: "COPY_TYPO", detected_text: "Sumer", suggested_text: "Summer" }),
+      finding({ id: "m", category: "COPY_MISSING", detected_text: "", suggested_text: "Shop now", band: "medium" }),
+      finding({ id: "u", category: "COPY_UNEXPECTED", detected_text: "Now £9.99", status: "DISMISSED" })];
+    expect(list.filter((f) => matchesFilter(f, "copy")).map((f) => f.id)).toEqual(["t", "m"]);
+    expect(batchable(list).map((f) => f.id)).toEqual(["t"]);
+    expect(commentPreview(list[0])).toBe("“Sumer” looks like a typo — the approved copy says “Summer”.");
+    expect(commentPreview(list[1])).toBe("“Shop now” is in the approved copy but was not found here.");
+    expect(isCopyCategory("COPY_MISMATCH")).toBe(true);
+    expect(isCopyCategory("OCR_UNCERTAIN")).toBe(false);
   });
 
   it("only batches open, high-confidence spelling findings", () => {
