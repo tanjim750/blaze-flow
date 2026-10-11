@@ -26,6 +26,8 @@ import { filterClientTree } from "@/lib/client-filter";
 import "../tasks/tasks.css";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, renameCampaignAction, renameFolderAction, type ActionState } from "./actions";
+import { startUpload } from "@/lib/upload-store";
+import { reviewHref } from "@/lib/open-in-review";
 
 const initialState: ActionState = { error: null, savedAt: null };
 
@@ -204,7 +206,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
         )}
       </section>
       {uploading && view.workspaceId && view.selectedCampaign && (
-        <UploadDialog workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} onClose={() => setUploading(false)} onUploaded={() => { setUploading(false); router.refresh(); }} />
+        <UploadDialog workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} onClose={() => setUploading(false)} onUploaded={() => setUploading(false)} onLanded={() => router.refresh()} />
       )}
     </div>
   );
@@ -257,31 +259,33 @@ function ComingSoon({ tab, hasCampaign, briefFolder, onOpenFiles }: { tab: (type
   );
 }
 
-function csrfToken(): string {
-  const match = document.cookie.split("; ").find((item) => item.startsWith("csrftoken="));
-  return match ? decodeURIComponent(match.slice("csrftoken=".length)) : "";
-}
-
-function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded }: { workspaceId: string; projectId: string; projectName: string; onClose: () => void; onUploaded: () => void }) {
+function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded, onLanded }: { workspaceId: string; projectId: string; projectName: string; onClose: () => void; onUploaded: () => void; onLanded: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  /**
+   * Hands the cut to the global upload queue and closes: the tray shows progress, then the
+   * scan and proxy, and keeps going if you leave this page. Failures stay there with Retry.
+   */
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy(true); setError("");
     const form = new FormData(event.currentTarget);
-    try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/projects/${projectId}/media-versions/`, {
-        method: "POST", body: form, credentials: "include", headers: { "X-CSRFToken": csrfToken() },
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null) as Record<string, unknown> | null;
-        const detail = typeof body?.detail === "string" ? body.detail : Object.entries(body ?? {}).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(" ") : String(value)}`).join(" ");
-        setError(detail || `Upload failed (${response.status}).`); setBusy(false); return;
-      }
-      onUploaded();
-    } catch { setError("The upload could not reach Blaze Flow. Try again."); setBusy(false); }
+    const file = form.get("file");
+    if (!(file instanceof File) || !file.size) { setError("Choose a file to upload."); return; }
+    const fields: Record<string, string> = {};
+    form.forEach((value, key) => { if (key !== "file" && typeof value === "string") fields[key] = value; });
+    setBusy(true); setError("");
+    startUpload({
+      url: `/api/workspaces/${workspaceId}/projects/${projectId}/media-versions/`, file, fields, source: "project", destination: `${projectName} · new version`,
+      describe: (data) => {
+        const version = data as { id: string; file?: { id?: string } | null };
+        const fileId = version.file?.id ?? null;
+        return { workspaceId, fileId, href: fileId ? reviewHref({ mediaId: fileId }) : null };
+      },
+      onSuccess: () => onLanded(),
+    });
+    onUploaded();
   }
 
   return <dialog ref={dialog} open className="pb-upload-dialog" onCancel={onClose} onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.stopPropagation(); onClose(); } }} aria-modal="true" aria-labelledby="upload-title">

@@ -1,0 +1,52 @@
+/* Global upload tray: bottom-right card on desktop, bottom sheet on phones. */
+.ut { position: fixed; right: 20px; bottom: 20px; z-index: 90; width: 360px; max-height: min(70vh, 520px); display: flex; flex-direction: column;
+  border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: linear-gradient(160deg, rgba(33,32,39,.98), rgba(22,22,28,.98));
+  box-shadow: 0 18px 50px #0009; color: var(--text, #eee); overflow: hidden; animation: ut-in var(--bf-duration-normal, .2s) var(--bf-ease-out, ease-out); }
+@keyframes ut-in { from { opacity: 0; transform: translateY(10px); } }
+.ut-head { display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 12px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.ut.is-collapsed .ut-head { border-bottom: 0; }
+.ut-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.ut-toggle > svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.ut-icon svg { width: 18px; height: 18px; color: var(--bf-violet-300, #b69aff); }
+.ut-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 600; }
+.ut-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--bf-primary, #7c5cff); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.ut-clear { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.ut-clear:hover { background: rgba(255,255,255,.06); color: var(--text); }
+.ut-clear svg { width: 13px; height: 13px; }
+.ut-overall { display: block; height: 2px; background: var(--bf-primary, #7c5cff); transition: width .3s linear; }
+.ut-list { list-style: none; margin: 0; padding: 4px 0; overflow: auto; }
+.ut-row { padding: 8px 12px; display: grid; gap: 6px; }
+.ut-row + .ut-row { border-top: 1px solid rgba(255,255,255,.04); }
+.ut-row-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ut-file { width: 18px; height: 18px; flex: none; color: var(--muted); }
+.ut-name { flex: 1; min-width: 0; display: grid; }
+.ut-name strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 600; }
+.ut-name small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 11px; }
+.ut-actions { display: flex; gap: 2px; }
+.ut-actions :is(button, a) { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+.ut-actions :is(button, a):hover { background: rgba(255,255,255,.07); color: var(--text); }
+.ut-actions svg { width: 15px; height: 15px; }
+.ut-bar { height: 4px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+.ut-bar i { display: block; height: 100%; border-radius: inherit; background: var(--bf-primary, #7c5cff); transition: width .25s linear; }
+.ut-row.is-processing .ut-bar i { background: linear-gradient(90deg, #7c5cff, #b69aff, #7c5cff); background-size: 200% 100%; animation: ut-shimmer 1.4s linear infinite; }
+.ut-row.is-ready .ut-bar i { background: #3fb950; }
+.ut-row.is-failed .ut-bar i { background: #f85149; }
+.ut-row.is-cancelled { opacity: .6; }
+@keyframes ut-shimmer { to { background-position: -200% 0; } }
+.ut-status { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ut-status svg { width: 13px; height: 13px; flex: none; }
+.ut-status span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ut-row.is-ready .ut-status svg { color: #3fb950; }
+.ut-row.is-failed .ut-status { color: #ff9ba3; }
+.ut-retry, .ut-open { padding: 2px 8px; border: 1px solid rgba(255,255,255,.14); border-radius: 6px; background: transparent; color: var(--text); font-size: 12px; text-decoration: none; cursor: pointer; }
+.ut-spin { animation: ut-spin 1s linear infinite; }
+@keyframes ut-spin { to { transform: rotate(360deg); } }
+@media (max-width: 640px) {
+  .ut { left: 0; right: 0; bottom: 0; width: auto; max-height: 60vh; border-radius: 16px 16px 0 0; border-bottom: 0; padding-bottom: env(safe-area-inset-bottom); }
+  .ut-actions :is(button, a) { width: 40px; height: 40px; }
+  .ut-retry, .ut-open { min-height: 36px; padding: 0 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ut, .ut-bar i, .ut-overall { animation: none; transition: none; }
+  .ut-spin, .ut-row.is-processing .ut-bar i { animation: none; }
+}

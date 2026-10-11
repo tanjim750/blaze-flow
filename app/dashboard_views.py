@@ -1,4 +1,5 @@
 """Read routes behind the role-based dashboards (see ``services/dashboard.py``)."""
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
@@ -68,3 +69,18 @@ def workspace_quick_search(request, workspace_id):
 
     workspace = _workspace(request, workspace_id)
     return Response(quick_search(user=request.user, workspace=workspace, query=request.query_params.get('q', '')))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def workspace_file_processing(request, workspace_id, file_id):
+    """Scan / preview / proxy progress for one uploaded file (the upload tray polls this)."""
+    from .models import File
+    from .permissions import active_memberships_for_user
+    from .services.upload_processing import processing_state
+
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    if not active_memberships_for_user(user=request.user, workspace=workspace).exists():
+        raise Http404
+    file = get_object_or_404(File, id=file_id, workspace=workspace, deleted_at__isnull=True)
+    return Response({'file_id': str(file.id), **processing_state(file)})

@@ -353,6 +353,10 @@ function Composer({ ref, target, projectId, channel, viewer, people, replyTo, on
       setPending((current) => [...current, { key, name: file.name, progress: 0 }]);
       void sendFile(uploadUrl(target), file, {}, (progress) => {
         setPending((current) => current.map((item) => item.key === key ? { ...item, progress } : item));
+      }, undefined, {
+        source: "chat", destination: "Chat attachment",
+        // Retried from the upload tray: attach it once it lands.
+        onSuccess: (data) => setPending((current) => current.map((item) => item.key === key ? { ...item, progress: 1, error: undefined, id: (data as { id: string }).id } : item)),
       }).then((result) => {
         setPending((current) => current.map((item) => item.key === key
           ? result.ok ? { ...item, progress: 1, id: (result.data as { id: string }).id } : { ...item, error: result.error }

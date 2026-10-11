@@ -1,4 +1,6 @@
 import type { ProjectFile, ProjectFolder } from "./api";
+import { reviewHref } from "./open-in-review";
+import { startUpload } from "./upload-store";
 
 async function call<T>(path: string, init: RequestInit): Promise<T> {
   const csrf = decodeURIComponent(document.cookie.split("; ").find((item) => item.startsWith("csrftoken="))?.slice(10) ?? "");
@@ -25,3 +27,20 @@ export const duplicateAssetFile = (workspaceId: string, id: string) =>
 export const addAssetFileVersion = (workspaceId: string, targetId: string, sourceId: string) =>
   call<ProjectFile>(`/workspaces/${workspaceId}/asset-files/${targetId}/versions/`, json("POST", { file_id: sourceId }));
 export const deleteAssetFile = (workspaceId: string, id: string) => call<void>(`/workspaces/${workspaceId}/asset-files/${id}/`, { method: "DELETE" });
+
+/**
+ * `uploadAssetFile` through the global upload queue, so the tray shows it (progress, scan,
+ * preview) and it survives page changes. Rejects on failure like `call`. `onRetried` runs if
+ * the user retries a failed upload from the tray and it lands.
+ */
+export function uploadAssetFileTracked(workspaceId: string, file: File, relationships: { client_team_id: string | null; project_id: string | null; folder_id: string | null; task_stage_id?: string | null }, destination: string | null, onRetried?: (saved: ProjectFile) => void): Promise<ProjectFile> {
+  const fields: Record<string, string> = {};
+  Object.entries(relationships).forEach(([key, value]) => { if (value) fields[key] = value; });
+  let first = true;
+  const { done } = startUpload({
+    url: `/api/workspaces/${workspaceId}/asset-files/`, file, fields, source: "files", destination,
+    describe: (data) => { const saved = data as ProjectFile; return { workspaceId, fileId: saved.file.id, href: reviewHref({ mediaId: saved.file.id }) }; },
+    onSuccess: (data) => { if (!first) onRetried?.(data as ProjectFile); },
+  });
+  return done.then((result) => { first = false; if (result.ok) return result.data as ProjectFile; throw new Error(result.error); });
+}

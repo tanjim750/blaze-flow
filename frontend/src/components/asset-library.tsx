@@ -19,9 +19,10 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
 import { Archive, ChevronRight, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "lucide-react";
+import type { ProjectFile } from "@/lib/api";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
-import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, updateAssetFile, updateAssetFolder, uploadAssetFile } from "@/lib/asset-api-client";
+import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, updateAssetFile, updateAssetFolder, uploadAssetFileTracked } from "@/lib/asset-api-client";
 import { formatSize, groupSections, isMoveKey, libraryNavRows, moveIndex, nextSelection, pruneSelection, scopeItems, visibleOrder, type Density, type GroupBy, type LibraryNavRow, type SelectionState, type SortKey, type ViewMode } from "@/lib/files-panel";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
@@ -1143,7 +1144,7 @@ function FolderDialog({ view, folders, defaultProjectId, defaultClientId, parent
     close(); }; return <Modal title="Create folder" close={close}><form onSubmit={submit} className="al-form"><label>Folder name<input name="name" required autoFocus placeholder="Footage" /></label><RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={selectedProject} setProject={setSelectedProject} /><label>Inside folder<select name="parent" value={parentFolderId ?? ""} disabled><option value="">Root Files area</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label><button>Create folder</button></form></Modal>; }
 function UploadDialog({ view, folders, defaultProjectId, defaultClientId, currentFolderId, initialFiles = [], close }: { view?: FilesView; folders: LibraryFolder[]; defaultProjectId: string | null; defaultClientId: string | null; currentFolderId: string | null; initialFiles?: File[]; close: () => void }) {
   const write = useAssetWrite();
-  const [client, setClient] = useState(defaultClientId ?? ""); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const [uploads, setUploads] = useState<File[]>(() => initialFiles.filter((file) => file.size > 0)); const [stageId, setStageId] = useState(""); const [dragging, setDragging] = useState(false); const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle"); const [progress, setProgress] = useState(0); const [failure, setFailure] = useState<string | null>(null); const cancelled = useRef(false);
+  const [client, setClient] = useState(defaultClientId ?? ""); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const [uploads, setUploads] = useState<File[]>(() => initialFiles.filter((file) => file.size > 0)); const [stageId, setStageId] = useState(""); const [dragging, setDragging] = useState(false); const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle"); const [progress] = useState(0); const [failure, setFailure] = useState<string | null>(null); const cancelled = useRef(false);
   const projects = (view?.groups ?? []).filter((group) => !client || group.clientId === client); const availableFolders = folders.filter((folder) => !selectedProject || folder.projectId === selectedProject);
   const busy = status === "uploading"; const totalSize = uploads.reduce((sum, file) => sum + file.size, 0); const done = Math.min(uploads.length, Math.round((progress / 100) * uploads.length));
   const stage = (items: FileList | null) => setUploads((staged) => { const next = [...staged]; Array.from(items ?? []).filter((file) => file.size > 0).forEach((file) => { if (!next.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified)) next.push(file); }); return next; });
@@ -1162,50 +1163,41 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
    * Now the draft goes in as the write's own `optimistic` step, its `rollback` removes
    * precisely that row, and a failure keeps the dialog open and says which file and why.
    */
+  /**
+   * Hands every staged file to the global upload queue and closes. The tray shows progress,
+   * scan and preview, and keeps sending while you move to another page; a failure stays in
+   * the tray with Retry (and rolls back its optimistic row here, exactly as before).
+   */
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!uploads.length) return;
-    cancelled.current = false; setStatus("uploading"); setProgress(0); setFailure(null);
+    setStatus("uploading"); setFailure(null);
     const data = new FormData(event.currentTarget), project = String(data.get("project") || selectedProject || "") || null, folder = String(data.get("folder") || currentFolderId || "") || null, projectRow = view?.groups.find((item) => item.projectId === project);
+    const destination = [projectRow?.projectName ?? null, "Files"].filter(Boolean).join(" · ");
     try {
-      const remaining: File[] = [];
-      let failed: string | null = null;
-      for (const [index, file] of uploads.entries()) {
-        if (cancelled.current) { setStatus("idle"); setProgress(0); return; }
+      for (const file of uploads) {
         const preview = file.type.startsWith("image/") && file.size <= 1_000_000 ? await dataUrl(file) : null;
         const draft = { id: newId("file"), fileId: null, name: file.name, kind: kindFor(file), mimeType: file.type || "application/octet-stream", size: file.size, durationMs: null, status: "PENDING" as const, versioning: { assetId: null, assetName: file.name, versionNumber: 1, versionCount: 1, isLatest: true }, url: URL.createObjectURL(file), preview, uploadedBy: "You", uploadedAt: new Date().toISOString(), folderId: folder, clientId: (projectRow?.clientId ?? client) || null, projectId: project, stageId: stageId || null } satisfies LibraryFile;
+        const landed = (saved: ProjectFile) => ({ ...draft, id: saved.id, fileId: saved.file.id, uploadedAt: saved.created_at, url: null, preview: null });
 
         if (!view?.workspaceId) {
           updateLibrary((state) => ({ ...state, files: [...state.files, draft] }));
-        } else {
-          const error = await write({
-            ids: [draft.id],
-            describe: `Uploading ${file.name}`,
-            optimistic: (state) => ({ ...state, files: [...state.files, draft] }),
-            rollback: (state) => ({ ...state, files: state.files.filter((item) => item.id !== draft.id) }),
-            send: () => uploadAssetFile(view.workspaceId!, file, { client_team_id: draft.clientId, project_id: draft.projectId, folder_id: draft.folderId, task_stage_id: draft.stageId }),
-            onSaved: (saved) => updateLibrary((state) => ({ ...state, files: state.files.map((item) => item.id === draft.id ? { ...draft, id: saved.id, fileId: saved.file.id, uploadedAt: saved.created_at, url: null, preview: null } : item) })),
-          });
-          if (error) {
-            URL.revokeObjectURL(draft.url!);
-            failed = failed ?? error;
-            remaining.push(file);
-          }
+          continue;
         }
-        setProgress(Math.round(((index + 1) / uploads.length) * 100));
-      }
-
-      if (failed) {
-        // Keep the ones that did not make it staged, so the fix is one more click.
-        setUploads(remaining);
-        setFailure(failed);
-        setStatus("error");
-        setProgress(0);
-        return;
+        const relationships = { client_team_id: draft.clientId, project_id: draft.projectId, folder_id: draft.folderId, task_stage_id: draft.stageId };
+        void write({
+          ids: [draft.id],
+          describe: `Uploading ${file.name}`,
+          optimistic: (state) => ({ ...state, files: [...state.files, draft] }),
+          rollback: (state) => ({ ...state, files: state.files.filter((item) => item.id !== draft.id) }),
+          // Landing on a retry from the tray: the optimistic row was rolled back, so add it again.
+          send: () => uploadAssetFileTracked(view.workspaceId!, file, relationships, destination, (saved) => updateLibrary((state) => ({ ...state, files: [...state.files.filter((item) => item.id !== saved.id), landed(saved)] }))),
+          onSaved: (saved) => updateLibrary((state) => ({ ...state, files: state.files.map((item) => item.id === draft.id ? landed(saved) : item) })),
+        }).then((error) => { if (error) URL.revokeObjectURL(draft.url!); });
       }
       close();
     } catch (error) {
-      setFailure(error instanceof Error ? error.message : "The upload could not be completed.");
+      setFailure(error instanceof Error ? error.message : "The upload could not be started.");
       setStatus("error");
     }
   };

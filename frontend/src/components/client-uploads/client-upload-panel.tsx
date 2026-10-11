@@ -49,6 +49,7 @@ export function ClientUploadPanel({ workspaceId, projects, recent, maxBytes, acc
             key={projectId}
             compact
             url={projectId ? portalUploadUrl(workspaceId, projectId) : null}
+            trayLabel={projects.find((project) => project.id === projectId)?.name}
             fields={NO_FIELDS}
             accept={accept}
             maxBytes={maxBytes}
