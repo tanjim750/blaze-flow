@@ -26,8 +26,14 @@ def handle_ai_visual_qa_run(event):
     return handle_run_event(event)
 
 
+def handle_support_reply_email(event):
+    from app.platform.support import deliver_reply_email
+    return deliver_reply_email(message_id=event.payload['message_id'])
+
+
 subscribe('health.checked', handle_health_checked)
 subscribe('notification.created', handle_notification_created)
 subscribe('file.security-scan.requested', handle_file_security_scan)
 subscribe('file.preview.requested', handle_file_preview)
 subscribe('ai_visual_qa.run', handle_ai_visual_qa_run)
+subscribe('support.reply.email', handle_support_reply_email)
