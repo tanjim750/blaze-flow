@@ -10,6 +10,8 @@ class TaskSerializer(serializers.ModelSerializer):
     # Attached File ids in attach order. The board joins these to asset files for the card
     # thumbnail and review-note count, so no media fields are duplicated here.
     attachment_file_ids = serializers.SerializerMethodField()
+    # The review note this task was made from, with a jump-back link; null for other tasks.
+    source_note = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -31,8 +33,16 @@ class TaskSerializer(serializers.ModelSerializer):
             'updated_at',
             'assignees',
             'attachment_file_ids',
+            'source_note',
+            'sync_note_resolution',
         )
         read_only_fields = ('id', 'workspace_id', 'project_id', 'completed_at', 'created_at', 'updated_at')
+
+    def get_source_note(self, task):
+        if not task.source_review_comment_id:
+            return None
+        from app.services.note_tasks import source_note_data
+        return source_note_data(task)
 
     def get_attachment_file_ids(self, task):
         prefetched = self.context.get('attachment_file_ids')

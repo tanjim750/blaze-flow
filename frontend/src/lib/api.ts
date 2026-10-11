@@ -102,6 +102,10 @@ export type Notification = {
   payload: Record<string, unknown> | null;
   unread: boolean; read_at: string | null; created_at: string;
 };
+export type TaskSourceNote = {
+  comment_id: string; text: string; timecode: string | null; start_time_ms: number | null;
+  version_number: number; version_title: string; resolved: boolean; href: string; poster: string;
+};
 export type Task = {
   id: string; workspace_id: string; client_team_id: string | null; project_id: string | null; task_stage_id: string | null; title: string;
   description: string | null; status: string; priority: string;
@@ -110,6 +114,9 @@ export type Task = {
   assignees: { id: string; name: string; email: string }[];
   /** Attached `File` ids in attach order (joined to asset files for thumbnails). Older payloads omit it. */
   attachment_file_ids?: string[];
+  /** The review note this task was made from ("Make task"), with a link back to its moment. */
+  source_note?: TaskSourceNote | null;
+  sync_note_resolution?: boolean;
 };
 /**
  * A file attached to a task. `file.id` is the same `File` row a `ProjectFile` or a

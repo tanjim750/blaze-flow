@@ -1,5 +1,6 @@
 from django.urls import path
 from . import ai_qa_views
+from . import note_task_views
 
 from .views import (
     asset_file_detail,
@@ -199,6 +200,10 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/invites/<uuid:invite_id>/', client_team_invite_detail, name='api-client-team-invite-detail'),
     path('client-team-invitations/accept/', accept_client_team_invitation, name='api-client-team-invite-accept'),
     path('workspaces/<uuid:workspace_id>/tasks/', task_list_create, name='api-tasks'),
+    path('workspaces/<uuid:workspace_id>/note-tasks/', note_task_views.note_tasks_create, name='api-note-tasks'),
+    path('workspaces/<uuid:workspace_id>/note-tasks/defaults/', note_task_views.note_task_defaults, name='api-note-task-defaults'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:version_id>/note-tasks/', note_task_views.version_note_tasks, name='api-version-note-tasks'),
+    path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/media-versions/<uuid:version_id>/carry-over/', note_task_views.version_carry_over, name='api-version-carry-over'),
     path('workspaces/<uuid:workspace_id>/task-stages/', task_stage_list_create, name='api-task-stages'),
     path('workspaces/<uuid:workspace_id>/task-stages/settings/', task_workflow_settings, name='api-task-stage-settings'),
     path('workspaces/<uuid:workspace_id>/task-stages/<uuid:stage_id>/', task_stage_detail, name='api-task-stage-detail'),

@@ -356,7 +356,7 @@ def delete_guest_review_comment(*, comment, guest_session):
 
 
 @transaction.atomic
-def set_review_comment_resolution(*, comment, user, resolved):
+def set_review_comment_resolution(*, comment, user, resolved, sync_task=True):
     locked = ReviewComment.objects.select_for_update().get(id=comment.id)
     if locked.deleted_at is not None:
         raise ReviewCommentError('Deleted comments cannot be resolved or reopened.')
@@ -378,6 +378,10 @@ def set_review_comment_resolution(*, comment, user, resolved):
         entity_type='review_comment',
         entity_id=locked.id,
     )
+    if sync_task:
+        # A note made into a task (with sync on) finishes or reopens that task too.
+        from .note_tasks import after_note_resolution
+        after_note_resolution(comment=locked, user=user, resolved=resolved)
     return locked
 
 

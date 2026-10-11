@@ -1,0 +1,49 @@
+/* Make task dialog, note task chips, the bulk bar and the carry-over banner. */
+.ntd form { display: grid; gap: 14px; padding: 20px; }
+.ntd-head { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; padding-right: 36px; }
+.ntd-head > svg { width: 20px; height: 20px; margin-top: 3px; color: var(--bf-violet-300, #b69aff); }
+.ntd-head h2 { margin: 0; font-size: 17px; }
+.ntd-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.ntd-source { display: grid; grid-template-columns: 96px 1fr; gap: 12px; margin: 0; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2, #1f1e25); }
+.ntd-source img { width: 96px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; background: #000; }
+.ntd-source figcaption { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 12px; color: var(--muted); }
+.ntd-source figcaption b { color: var(--text); }
+.ntd-source figcaption span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: var(--text); font-size: 13px; }
+.ntd-list { display: grid; gap: 4px; max-height: 160px; overflow: auto; margin: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; list-style: none; font-size: 13px; }
+.ntd-list b { display: inline-block; min-width: 44px; margin-right: 8px; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+.ntd-field { display: grid; gap: 6px; min-width: 0; font-size: 12px; color: var(--muted); }
+.ntd-field input, .ntd-field textarea, .ntd-field select { width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field, #15141a); color: var(--text); font: inherit; font-size: 14px; }
+.ntd-field textarea { resize: vertical; }
+.ntd-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ntd-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--muted); }
+.ntd-check input { margin-top: 2px; }
+.ntd-note { margin: 0; font-size: 13px; color: var(--bf-violet-300, #b69aff); }
+.ntd-error { margin: 0; font-size: 13px; color: #ff9ba3; }
+.ntd-foot { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 640px) {
+  .ntd-row { grid-template-columns: 1fr 1fr; }
+  .ntd-row > :last-child { grid-column: 1 / -1; }
+  .ntd-field input, .ntd-field textarea, .ntd-field select { font-size: 16px; }
+  .ntd-foot { position: sticky; bottom: -20px; padding: 10px 0 0; background: inherit; }
+  .ntd-foot .ui-button { flex: 1; min-height: 44px; }
+}
+
+.rvc-task-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin: 6px 0 0; padding: 3px 9px; border: 1px solid #8b6cff55; border-radius: 999px; background: #8b6cff1a; color: var(--bf-violet-300, #b69aff); font-size: 12px; text-decoration: none; }
+.rvc-task-chip span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.rvc-task-chip svg { width: 12px; height: 12px; flex: none; }
+.rvc-task-chip.is-done { border-color: #3fb95055; background: #3fb9501a; color: #7ee2a8; }
+.rvc-task-chip:hover { border-color: currentColor; }
+.rvc-select { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 2px; accent-color: var(--bf-violet-400, #8b6cff); }
+.rvc-bulk { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--border); background: var(--surface, #18171c); font-size: 13px; }
+.rvc-bulk span { flex: 1; color: var(--muted); }
+.rvc-bulk button { min-height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text); cursor: pointer; }
+.rvc-bulk button.is-primary { border-color: transparent; background: var(--bf-primary, #7c5cff); color: #fff; }
+.rvc-bulk button:disabled { opacity: .5; cursor: not-allowed; }
+.rvc-carry { display: flex; align-items: center; gap: 10px; margin: 8px 10px 0; padding: 10px 12px; border: 1px dashed #8b6cff66; border-radius: 10px; font-size: 13px; color: var(--muted); }
+.rvc-carry svg { width: 16px; height: 16px; flex: none; color: var(--bf-violet-300, #b69aff); }
+.rvc-carry p { flex: 1; margin: 0; }
+.rvc-carry button { min-height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: #8b6cff26; color: var(--bf-violet-300, #b69aff); font-weight: 600; cursor: pointer; white-space: nowrap; }
+@media (max-width: 640px) { .rvc-bulk button, .rvc-carry button { min-height: 44px; } }
+.rvc-select-toggle, .rvc-make-task { display: inline-flex; align-items: center; gap: 5px; }
+.rvc-select-toggle { min-height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+.rvc-select-toggle.is-on { border-color: #8b6cff88; color: var(--bf-violet-300, #b69aff); }

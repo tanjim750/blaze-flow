@@ -814,6 +814,8 @@ class ReviewComment(models.Model):
     visibility = models.CharField(max_length=10, choices=ReviewCommentVisibility.choices, default=ReviewCommentVisibility.CLIENT)
     # 'ai_visual_qa' when it was added from an AI Visual QA finding (see AIFinding.comment).
     source = models.CharField(max_length=20, default='human')
+    # Carried over from the previous version's open notes (the "last round" checklist).
+    carried_from = models.ForeignKey('self', on_delete=models.DO_NOTHING, db_column='carried_from_id', null=True, blank=True, related_name='+')
     deleted_at = models.DateTimeField(null=True, blank=True)
     deleted_by_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='deleted_by_user_id', null=True, blank=True, related_name='+')
     deleted_by_guest_session = models.ForeignKey(GuestSession, on_delete=models.DO_NOTHING, db_column='deleted_by_guest_session_id', null=True, blank=True, related_name='+')
@@ -1067,11 +1069,21 @@ class Task(models.Model):
     # Kept out of TaskSerializer for the same reason as Project.client_fee.
     client_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     client_price_currency = models.CharField(max_length=3, null=True, blank=True)
+    # The review note this task was made from ("Make task"). One live task per note.
+    source_review_comment = models.ForeignKey('ReviewComment', on_delete=models.DO_NOTHING, db_column='source_review_comment_id', null=True, blank=True, related_name='+')
+    # Finishing the task resolves its note, and resolving the note finishes the task.
+    sync_note_resolution = models.BooleanField(default=True)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
     class Meta:
         db_table = 'tasks'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['source_review_comment'], condition=models.Q(deleted_at__isnull=True, source_review_comment__isnull=False),
+                name='tasks_one_live_task_per_note',
+            ),
+        ]
         indexes = [
             models.Index(fields=['workspace']),
             models.Index(fields=['project']),

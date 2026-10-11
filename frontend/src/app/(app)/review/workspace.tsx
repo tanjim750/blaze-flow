@@ -714,6 +714,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
                 onSelect={selectAi}
                 runRequest={aiRunRequest}
                 video={aiVideo}
+                taskTools={canWriteTeam && view.workspaceId && view.role !== "client" && view.taskAccess.create && !view.taskAccess.client
+                  ? { workspaceId: view.workspaceId, stages: view.taskStages, assignees: view.assignees } : null}
               />
             </div>
           )}
