@@ -1,11 +1,12 @@
 "use client";
-/**
+
+import { useAppRouter } from "@/lib/app-router";/**
  * Project "Pricing" tab (billing demo, billing.view only): the client fee, the per-task
  * prices on top, what is invoiced so far, and a shortcut to invoice the rest. Task prices
  * are edited in each task's detail sheet.
  */
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { FilePlus2, ReceiptText, Wallet } from "lucide-react";
@@ -15,7 +16,7 @@ import { createInvoice, getProjectPricing, setProjectFee } from "./billing-clien
 import "./project-pricing.css";
 
 export function ProjectPricing({ workspaceId, projectId }: { workspaceId: string; projectId: string }) {
-  const router = useRouter();
+  const router = useAppRouter();
   const [data, setData] = useState<Pricing | null>(null);
   const [problem, setProblem] = useState("");
   const [fee, setFee] = useState("");

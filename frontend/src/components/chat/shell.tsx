@@ -1,7 +1,8 @@
 "use client";
 
+import { useAppRouter } from "@/lib/app-router";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft, ChevronDown, ChevronRight, Hash, Lock, MessagesSquare, Search, Users, X,
@@ -24,7 +25,7 @@ type View = "all" | "unreads" | "mentions";
 export function ChatShell({ workspaceId, initialChannelId = null, initialSide = "client", variant = "studio" }: {
   workspaceId: string; initialChannelId?: string | null; initialSide?: Channel; variant?: "studio" | "portal";
 }) {
-  const router = useRouter();
+  const router = useAppRouter();
   const [list, setList] = useState<ChatList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>("all");

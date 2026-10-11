@@ -1,10 +1,11 @@
 "use client";
-/**
+
+import { useAppRouter } from "@/lib/app-router";/**
  * The Money page body: totals, receivables by client, payouts by editor, and invoices.
  * Server data comes in as props; actions call the billing routes and refresh the page.
  */
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Banknote, Building2, ChevronRight, CircleDollarSign, FilePlus2, HandCoins, Info, ReceiptText, Users } from "lucide-react";
@@ -28,7 +29,7 @@ export async function markInvoicePaid(workspaceId: string, invoice: Pick<Invoice
 export function MoneyBoard({ workspaceId, workspaceName, summary, access, projects, now }: {
   workspaceId: string; workspaceName: string; summary: MoneySummary; access: BillingAccess; projects: InvoiceableProject[]; now: string;
 }) {
-  const router = useRouter();
+  const router = useAppRouter();
   const today = useMemo(() => new Date(now), [now]);
   const [filter, setFilter] = useState<InvoiceFilter>("all");
   const [creating, setCreating] = useState(false);

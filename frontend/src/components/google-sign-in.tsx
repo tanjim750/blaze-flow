@@ -1,7 +1,8 @@
 "use client";
 
+import { useAppRouter } from "@/lib/app-router";
 import Script from "next/script";
-import { useRouter } from "next/navigation";
+
 import { useRef, useState } from "react";
 import { signInWithGoogle } from "@/lib/auth-client";
 
@@ -17,7 +18,7 @@ declare global {
 const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
 export function GoogleSignIn({ destination = "/" }: { destination?: string }) {
-  const router = useRouter();
+  const router = useAppRouter();
   const mount = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const initialized = useRef(false);
