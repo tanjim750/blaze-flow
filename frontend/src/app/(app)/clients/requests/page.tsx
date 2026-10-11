@@ -1,3 +1,4 @@
+import { guardRoute } from "@/lib/route-guard";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowLeft } from "lucide-react";
@@ -9,6 +10,7 @@ import "@/components/portal/portal.css";
 export const metadata: Metadata = { title: "Project requests · Clients · Blaze Flow" };
 
 export default async function ProjectRequestsPage() {
+  await guardRoute("/clients/requests");
   const context = await loadWorkspaceContext();
   const workspace = context.ok ? context.data.selected : null;
   const list = workspace ? await listProjectRequests(workspace.id) : null;

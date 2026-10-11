@@ -1,3 +1,4 @@
+import { guardRoute } from "@/lib/route-guard";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { ChatShell } from "@/components/chat/shell";
@@ -8,6 +9,7 @@ export const metadata: Metadata = { title: "Chat · Blaze Flow" };
 
 /** Slack-style chat: channels grouped by client, With client / Team only in each. */
 export default async function ChatPage({ searchParams }: PageProps<"/chat">) {
+  await guardRoute("/chat");
   await loadSession();
   const context = await loadWorkspaceContext();
   const workspace = context.ok ? context.data.selected : null;

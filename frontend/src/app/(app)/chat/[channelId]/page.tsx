@@ -1,3 +1,4 @@
+import { guardRoute } from "@/lib/route-guard";
 import type { Metadata } from "next";
 import { ChatShell } from "@/components/chat/shell";
 import { loadSession } from "@/lib/session";
@@ -6,6 +7,7 @@ import { loadWorkspaceContext } from "@/lib/workspace";
 export const metadata: Metadata = { title: "Chat · Blaze Flow" };
 
 export default async function ChatChannelPage({ params, searchParams }: PageProps<"/chat/[channelId]">) {
+  await guardRoute("/chat");
   await loadSession();
   const context = await loadWorkspaceContext();
   const workspace = context.ok ? context.data.selected : null;

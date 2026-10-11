@@ -199,10 +199,17 @@ def notes_to_address(*, user, workspace, limit=20):
     ).order_by('sort_order'):
         texts.setdefault(content.review_comment_id, content.text_content)
     stages = current_stages({row.media_version_id for row in rows})
+    # Feedback "from the client": a guest on a review link, or someone who is not a direct
+    # member of the studio (in only through a client team).
+    members = set(WorkspaceMembership.objects.filter(
+        workspace=workspace, status=WorkspaceMembershipStatus.ACTIVE, principal_type=WorkspacePrincipalType.USER,
+        user_id__in={row.author_user_id for row in rows if row.author_user_id},
+    ).values_list('user_id', flat=True))
     results = []
     for row in rows:
         results.append({
             'id': str(row.id),
+            'from_client': not row.author_user_id or row.author_user_id not in members,
             'text': texts.get(row.id),
             'start_time_ms': row.start_time_ms,
             'end_time_ms': row.end_time_ms,

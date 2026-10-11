@@ -27,7 +27,8 @@ const editorView: EditorView = {
   strip: [{ label: "My tasks due today", value: 0 }],
   tasks: { overdue: [{ id: "t1", name: "Cut hero", project: "Spring", priority: "High", when: "2 days overdue", tone: "danger", href: "/tasks?task=t1" }], dueSoon: [], later: 2, undated: 0, total: 3 },
   membershipId: "m1",
-  notes: [{ id: "n1", author: "Priya", initials: "P", avatarUrl: null, guest: false, text: "Pull saturation", cut: "Hero 30s · V2", project: "Spring", timecode: "00:05", age: "3h ago", replies: 1, team: true, href: "/review?media=f1&comment=n1&t=5200" }],
+  notes: [{ id: "n1", author: "Priya", initials: "P", avatarUrl: null, guest: false, text: "Pull saturation", cut: "Hero 30s · V2", project: "Spring", timecode: "00:05", age: "3h ago", replies: 1, team: true, href: "/review?media=f1&comment=n1&t=5200", client: false, createdAt: "2026-10-03T10:00:00Z" },
+    { id: "n2", author: "Rachel Kim", initials: "RK", avatarUrl: null, guest: false, text: "Logo bigger please", cut: "Hero 30s · V2", project: "Spring", timecode: "00:02", age: "1h ago", replies: 0, team: false, href: "/review?media=f1&comment=n2&t=2000", client: true, createdAt: "2026-10-03T12:00:00Z" }],
   notesTotal: 4, cuts: [], activity: [],
   problems: { tasks: null, notes: null, cuts: null, activity: null },
 };
@@ -95,6 +96,16 @@ describe("editor dashboard", () => {
     expect(within(noteLink).getByText("Team only")).toBeInTheDocument();
     expect(screen.getByText("4 unresolved on your cuts")).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "View dashboard as" })).not.toBeInTheDocument();
+  });
+});
+
+describe("editor dashboard: client feedback", () => {
+  it("lists client-side notes on their own and offers a new-version upload", () => {
+    render(<EditorDashboard view={editorView} choice={chooseLayout({ dashboard_role: "editor", my_membership_id: "m1" }, undefined)} />);
+    const panel = screen.getByRole("region", { name: "Recent client feedback" });
+    expect(panel.textContent).toContain("Logo bigger please");
+    expect(panel.textContent).not.toContain("Pull saturation");
+    expect(screen.getAllByRole("link", { name: /Upload a new version/ })[0].getAttribute("href")).toBe("/projects");
   });
 });
 

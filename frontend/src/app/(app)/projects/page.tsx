@@ -1,3 +1,4 @@
+import { guardRoute } from "@/lib/route-guard";
 import { loadProjectsView } from "@/lib/projects-view";
 import { loadSession } from "@/lib/session";
 import { ProjectsBrowser } from "./browser";
@@ -7,6 +8,7 @@ import { loadTasksView } from "@/lib/tasks-view";
 import "@/components/asset-library.css";
 
 export default async function ProjectsPage({ searchParams }: PageProps<"/projects">) {
+  await guardRoute("/projects");
   const params = await searchParams;
   const clientId = typeof params.client === "string" ? params.client : undefined;
   const campaignId = typeof params.campaign === "string" ? params.campaign : undefined;

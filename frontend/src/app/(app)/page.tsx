@@ -7,6 +7,7 @@ import { partOfDay } from "@/components/dashboards/parts";
 import { DashboardRetry } from "@/components/dashboard-retry";
 import { listWorkspaces } from "@/lib/api";
 import { chooseLayout } from "@/lib/dashboard-role";
+import { noticeFor } from "@/lib/role-nav";
 import { failureView, type DashboardFailure } from "@/lib/dashboard-view";
 import { loadClientDashboard, loadEditorDashboard, loadOwnerDashboard } from "@/lib/role-dashboard-view";
 import { loadSession } from "@/lib/session";
@@ -31,16 +32,20 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
   const workspace = await selectWorkspace(workspaces.data);
   if (!workspace) return <DashboardError view={failureView(greetingName, now, { status: 404, detail: "This account has no workspace yet." })} />;
 
-  const choice = chooseLayout(workspace, (await searchParams).view);
+  const params = await searchParams;
+  const choice = chooseLayout(workspace, params.view);
+  // Set by a route guard that sent the viewer here from a page their role doesn't use.
+  const notice = noticeFor(params.notice);
+  const banner = notice ? <p className="role-guard-notice" role="status">{notice}</p> : null;
   if (choice.layout === "editor") {
-    return <EditorDashboard view={await loadEditorDashboard(greetingName, workspace)} choice={choice} />;
+    return <>{banner}<EditorDashboard view={await loadEditorDashboard(greetingName, workspace)} choice={choice} /></>;
   }
   if (choice.layout === "client") {
     const view = await loadClientDashboard(greetingName, workspace);
-    return "status" in view ? <DashboardError view={view} /> : <ClientDashboard view={view} choice={choice} />;
+    return "status" in view ? <DashboardError view={view} /> : <>{banner}<ClientDashboard view={view} choice={choice} /></>;
   }
   const view = await loadOwnerDashboard(greetingName, workspace);
-  return "status" in view ? <DashboardError view={view} /> : <OwnerDashboard view={view} choice={choice} />;
+  return "status" in view ? <DashboardError view={view} /> : <>{banner}<OwnerDashboard view={view} choice={choice} /></>;
 }
 
 function DashboardError({ view }: { view: DashboardFailure }) {

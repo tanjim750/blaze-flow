@@ -100,11 +100,11 @@ export function ActivityPanel({ items, problem, title = "Recent activity", hint 
   </section>;
 }
 
-export function ReviewQueuePanel({ items, total, problem, title = "Review queue", totalLabel = "awaiting review", empty }: {
-  items: ReviewQueueItem[]; total: number; problem: string | null; title?: string; totalLabel?: string;
+export function ReviewQueuePanel({ items, total, problem, title = "Review queue", totalLabel = "awaiting review", empty, id }: {
+  items: ReviewQueueItem[]; total: number; problem: string | null; title?: string; totalLabel?: string; id?: string;
   empty?: { title: string; body: string; action?: { href: string; label: string } };
 }) {
-  return <section className="panel" aria-labelledby="review-queue-title">
+  return <section className="panel" id={id} aria-labelledby="review-queue-title">
     <div className="panel-title">
       <h2 id="review-queue-title"><Film size={16} />{title}</h2>
       <small>{total} {totalLabel}</small>
