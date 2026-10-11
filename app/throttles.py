@@ -1,4 +1,4 @@
-from rest_framework.throttling import AnonRateThrottle
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 
 class RegistrationThrottle(AnonRateThrottle):
@@ -23,3 +23,7 @@ class UploadLinkThrottle(AnonRateThrottle):
 
     def get_cache_key(self, request, view):
         return self.cache_format % {'scope': self.scope, 'ident': self.get_ident(request)}
+
+
+class SupportTicketThrottle(UserRateThrottle):
+    scope = 'support_ticket'
