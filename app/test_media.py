@@ -15,12 +15,12 @@ from .services.outbox import process_outbox_events
 from .test_access_projects import WorkspaceAccessSetupMixin
 
 
-def _make_test_clip():
+def _make_test_clip(size='320x240'):
     with tempfile.TemporaryDirectory(prefix='blazeflow-video-fixture-') as directory:
         output = Path(directory) / 'clip.mp4'
         subprocess.run(
             ['ffmpeg', '-v', 'error', '-y',
-             '-f', 'lavfi', '-i', 'testsrc=size=320x240:duration=1:rate=10',
+             '-f', 'lavfi', '-i', f'testsrc=size={size}:duration=1:rate=10',
              '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=1',
              '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', str(output)],
             check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30,
@@ -283,7 +283,11 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
         file_id = uploaded.json()['file']['id']
         variant = FileVariant.objects.get(file_id=file_id, metadata__variant_type='VIDEO_PROXY')
         self.assertEqual(variant.mime_type, 'video/mp4')
-        self.assertLessEqual(variant.metadata['max_width'], 960)
+        self.assertLessEqual(variant.metadata['max_width'], 1280)
+        # A 320x240 source has nothing for a 1080p proxy to keep.
+        self.assertFalse(FileVariant.objects.filter(file_id=file_id, metadata__variant_type='VIDEO_PROXY_HQ').exists())
+        detail = self.client.get(reverse('api-media-version-detail', args=[self.workspace.id, self.project.id, media_id]))
+        self.assertEqual(detail.json()['preview_qualities'], ['sd'])
 
         # A video carries two variants: the proxy to play, and a still to show in lists.
         poster = FileVariant.objects.get(file_id=file_id, metadata__variant_type='VIDEO_POSTER')
@@ -304,6 +308,26 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
         body = b''.join(response.streaming_content)
         self.assertGreater(len(body), 0)
         self.assertEqual(body[4:8], b'ftyp')
+
+    def test_a_1080p_source_gets_a_1080p_proxy_alongside_the_720p_one(self):
+        uploaded = self.upload(name='big.mp4', content=_make_test_clip(size='1920x1080'), content_type='video/mp4')
+        media_id = uploaded.json()['id']
+        file_id = uploaded.json()['file']['id']
+        process_outbox_events()
+        process_outbox_events()
+
+        sd = FileVariant.objects.get(file_id=file_id, metadata__variant_type='VIDEO_PROXY')
+        hq = FileVariant.objects.get(file_id=file_id, metadata__variant_type='VIDEO_PROXY_HQ')
+        self.assertEqual((sd.metadata['max_height'], hq.metadata['max_height']), (720, 1080))
+        self.assertNotEqual(sd.object_key, hq.object_key)
+
+        preview_url = reverse('api-media-version-preview', args=[self.workspace.id, self.project.id, media_id])
+        default = self.client.get(preview_url)
+        high = self.client.get(f'{preview_url}?quality=hq')
+        self.assertEqual(default['Content-Length'], str(sd.size_bytes))
+        self.assertEqual(high['Content-Length'], str(hq.size_bytes))
+        detail = self.client.get(reverse('api-media-version-detail', args=[self.workspace.id, self.project.id, media_id]))
+        self.assertEqual(detail.json()['preview_qualities'], ['hq', 'sd'])
 
     def test_preview_requires_project_membership_and_404s_before_processing(self):
         uploaded = self.upload(name='clip.mp4', content=_make_test_clip(), content_type='video/mp4')

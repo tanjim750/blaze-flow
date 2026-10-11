@@ -341,8 +341,11 @@ def _encode_proxy(file, *, max_width, max_height, crf, variant_type, maxrate=Non
         source = Path(directory) / 'source'
         output = Path(directory) / 'proxy.mp4'
         _copy_private_object(file, source, max_bytes=settings.VIDEO_PROXY_MAX_INPUT_BYTES)
+        # The box turns with the picture: a 9:16 cut gets 720x1280, not a 404x720 sliver
+        # of the landscape box.
         scale = (
-            f"scale='min({max_width},iw)':'min({max_height},ih)'"
+            f"scale='if(gt(ih,iw),min({max_height},iw),min({max_width},iw))'"
+            f":'if(gt(ih,iw),min({max_width},ih),min({max_height},ih))'"
             ":force_original_aspect_ratio=decrease:flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2"
         )
         rate = ['-maxrate', maxrate, '-bufsize', _double(maxrate)] if maxrate else []
@@ -375,7 +378,7 @@ def _double(rate):
 def _video_proxy(file):
     return _encode_proxy(
         file, max_width=settings.VIDEO_PROXY_MAX_WIDTH, max_height=settings.VIDEO_PROXY_MAX_HEIGHT,
-        crf=settings.VIDEO_PROXY_CRF, variant_type='VIDEO_PROXY',
+        crf=settings.VIDEO_PROXY_CRF, variant_type='VIDEO_PROXY', maxrate=settings.VIDEO_PROXY_MAXRATE,
     )
 
 
@@ -410,7 +413,11 @@ def wants_hq_proxy(file):
     if not (settings.VIDEO_PROXY_HQ_ENABLED and (file.mime_type or '').startswith('video/')):
         return False
     size = _video_size(file)
-    return bool(size and (size[0] > settings.VIDEO_PROXY_MAX_WIDTH or size[1] > settings.VIDEO_PROXY_MAX_HEIGHT))
+    if not size:
+        return False
+    # Worth a second encode only when the source has more detail than the 720p proxy keeps.
+    long_side, short_side = max(size), min(size)
+    return long_side > settings.VIDEO_PROXY_MAX_WIDTH or short_side > settings.VIDEO_PROXY_MAX_HEIGHT
 
 
 def _video_poster(file):

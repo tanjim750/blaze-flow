@@ -199,6 +199,8 @@ PREVIEW_AUDIO_MAX_SECONDS = int(os.environ.get('PREVIEW_AUDIO_MAX_SECONDS', '600
 VIDEO_PROXY_MAX_WIDTH = int(os.environ.get('VIDEO_PROXY_MAX_WIDTH', '1280'))
 VIDEO_PROXY_MAX_HEIGHT = int(os.environ.get('VIDEO_PROXY_MAX_HEIGHT', '720'))
 VIDEO_PROXY_CRF = int(os.environ.get('VIDEO_PROXY_CRF', '23'))
+# Caps the bitrate on noisy footage, where CRF alone can make a proxy larger than its source.
+VIDEO_PROXY_MAXRATE = os.environ.get('VIDEO_PROXY_MAXRATE', '5M')
 VIDEO_PROXY_PRESET = os.environ.get('VIDEO_PROXY_PRESET', 'medium')
 # A keyframe every second, so scrubbing and frame-stepping land quickly and exactly.
 VIDEO_PROXY_KEYFRAME_SECONDS = float(os.environ.get('VIDEO_PROXY_KEYFRAME_SECONDS', '1'))
@@ -207,7 +209,7 @@ VIDEO_PROXY_HQ_ENABLED = os.environ.get('VIDEO_PROXY_HQ_ENABLED', 'true').lower(
 VIDEO_PROXY_HQ_MAX_WIDTH = int(os.environ.get('VIDEO_PROXY_HQ_MAX_WIDTH', '1920'))
 VIDEO_PROXY_HQ_MAX_HEIGHT = int(os.environ.get('VIDEO_PROXY_HQ_MAX_HEIGHT', '1080'))
 VIDEO_PROXY_HQ_CRF = int(os.environ.get('VIDEO_PROXY_HQ_CRF', '20'))
-VIDEO_PROXY_HQ_MAXRATE = os.environ.get('VIDEO_PROXY_HQ_MAXRATE', '12M')
+VIDEO_PROXY_HQ_MAXRATE = os.environ.get('VIDEO_PROXY_HQ_MAXRATE', '10M')
 VIDEO_PROXY_AUDIO_BITRATE = os.environ.get('VIDEO_PROXY_AUDIO_BITRATE', '128k')
 VIDEO_PROXY_MAX_INPUT_BYTES = int(os.environ.get('VIDEO_PROXY_MAX_INPUT_BYTES', str(MAX_MEDIA_UPLOAD_BYTES)))
 VIDEO_PROXY_MAX_OUTPUT_BYTES = int(os.environ.get('VIDEO_PROXY_MAX_OUTPUT_BYTES', str(200 * 1024 * 1024)))

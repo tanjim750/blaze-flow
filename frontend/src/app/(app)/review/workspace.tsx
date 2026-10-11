@@ -180,16 +180,16 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   }, [meta]);
   // Every note still on the page, replies included. A drawing whose note has been deleted
   // (here, optimistically, or before deletes cascaded on the server) must not stay on the frame.
-  const liveNoteIds = useMemo(() => new Set(allNotes.flatMap((note) => [note.id, ...note.replies.map((reply) => reply.id)])), [allNotes]);
+  const existingNoteIds = useMemo(() => new Set(allNotes.flatMap((note) => [note.id, ...note.replies.map((reply) => reply.id)])), [allNotes]);
   const annotations: DrawnAnnotation[] = useMemo(() => [
     ...view.annotations
-      .filter((item) => !item.review_comment_id || liveNoteIds.has(item.review_comment_id))
+      .filter((item) => !item.review_comment_id || existingNoteIds.has(item.review_comment_id))
       .filter((item) => !clientPreview || !item.review_comment_id || !teamNoteIds.has(item.review_comment_id))
       .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: endOf(item.id, item.end_time_ms), noteId: item.review_comment_id })),
     ...local.annotations
-      .filter((item) => !item.review_comment_id || liveNoteIds.has(item.review_comment_id))
+      .filter((item) => !item.review_comment_id || existingNoteIds.has(item.review_comment_id))
       .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: item.end_time_ms, noteId: item.review_comment_id })),
-  ], [clientPreview, endOf, liveNoteIds, local.annotations, teamNoteIds, view.annotations]);
+  ], [clientPreview, endOf, existingNoteIds, local.annotations, teamNoteIds, view.annotations]);
   // A library file with no review version yet can be published into a project from here.
   const canPublish = Boolean(!view.target && view.publish && view.workspaceId);
   const canWriteTeam = Boolean(view.target && userId && view.members.some((member) => member.id === userId));
@@ -255,13 +255,21 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     return item.src;
   };
   const clearPending = useCallback(() => setPending(null), []);
+  // Where the playhead was when the pending drawing was made.
+  const [pendingAt, setPendingAt] = useState<number | null>(null);
+  const drawPending = useCallback((element: AnnotationElement | null) => {
+    setPending(element);
+    setPendingAt(element ? Math.round(player.current?.position() ?? positionMs) : null);
+  }, [positionMs]);
   // The drawing being composed, previewed on the timeline as the span it will cover.
   const pendingWindow = useMemo(() => {
     // A marked range is drawn by the player itself, with handles.
     if (mark?.outMs != null) return null;
-    if (!pending || composer.startMs === null || !(surface === "video" || surface === "audio")) return null;
-    return { startMs: composer.startMs, endMs: drawingEndMs(composer.startMs, hold, meta?.durationMs ?? 0) };
-  }, [composer.startMs, hold, mark?.outMs, meta?.durationMs, pending, surface]);
+    // Before the composer has a time of its own, the drawing sits where it was drawn.
+    const startMs = composer.startMs ?? pendingAt;
+    if (!pending || startMs === null || !(surface === "video" || surface === "audio")) return null;
+    return { startMs, endMs: drawingEndMs(startMs, hold, meta?.durationMs ?? 0) };
+  }, [composer.startMs, hold, mark?.outMs, meta?.durationMs, pending, pendingAt, surface]);
   // Notes whose drawing (or range) covers the playhead, lit in the feed as the cut plays.
   const liveNoteIds = useMemo(() => new Set(notes.flatMap((note) => {
     const window = note.drawingWindow ?? (note.startMs !== null && note.endMs ? displayWindow(note.startMs, note.endMs) : null);
@@ -658,7 +666,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           highlight={aiHighlight}
           aiMarkers={panel === "ai" ? aiMarkers : []}
           onAiMarker={(id) => { setPanel("ai"); setAiSelected(aiQa.findings.find((f) => f.id === id) ?? null); }}
-          onDraw={setPending}
+          onDraw={drawPending}
           onDeleteAnnotation={writer.eraseAnnotation}
           onFocusNote={setFocusedId}
           mark={mark}
@@ -720,6 +728,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
               positionMs={positionMs}
               focusedId={focusedId}
               pendingAnnotation={pending}
+              drawnAtMs={pendingAt}
               onClearAnnotation={clearPending}
               hold={hold}
               onHold={setHold}

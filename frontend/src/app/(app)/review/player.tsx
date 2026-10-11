@@ -515,6 +515,10 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
   // The AI highlight uses the same display-window rule as a held drawing, and follows a
   // moving word along its track.
   const aiWindow = highlight && !still ? findingWindow(highlight) : null;
+  // The drawing being composed belongs to the moment it was drawn at, like a posted one:
+  // seeking or playing away from its window hides it instead of leaving it over every frame.
+  const pendingOpacity = pending && !still && pendingWindow
+    ? windowOpacity(displayWindow(pendingWindow.startMs, pendingWindow.endMs), positionMs, playing) : 1;
   const aiOpacity = highlight ? windowOpacity(aiWindow ? displayWindow(aiWindow.startMs, aiWindow.endMs) : null, positionMs, playing) : 0;
   const aiRegion = highlight ? regionAt(highlight, positionMs) : null;
   // Timeline spans: each held drawing and each range note, so the reviewer can see what
@@ -624,7 +628,11 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
               ))}
             </g>
           ))}
-          {pending && <Shape element={pending} onActivate={() => undefined} />}
+          {pending && (
+            <g className="rvp-pending" data-shown={pendingOpacity > 0 ? "true" : "false"} style={{ opacity: pendingOpacity }}>
+              <Shape element={pending} onActivate={() => undefined} />
+            </g>
+          )}
           {aiRegion && (
             <rect
               className="aiqa-highlight" data-testid="ai-qa-highlight" data-shown={aiOpacity > 0 ? "true" : "false"}
