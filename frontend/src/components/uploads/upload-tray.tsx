@@ -19,7 +19,7 @@ function statusLine(item: UploadItem) {
       const eta = etaSeconds(item);
       return [
         `${percent(item)}%`, `${size(item.loaded)} of ${size(item.size)}`,
-        item.parts && item.parts.total > 1 ? `part ${Math.min(item.parts.done + 1, item.parts.total)}/${item.parts.total}` : null,
+        item.parts && item.parts.total > 1 ? `${item.parts.done}/${item.parts.total} parts` : null,
         item.speed > 0 ? formatRate(item.speed) : null, eta !== null ? formatEta(eta) : null,
       ].filter(Boolean).join(" · ");
     }
