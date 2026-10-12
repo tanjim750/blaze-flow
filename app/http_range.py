@@ -13,6 +13,10 @@ it may ask for ranges next time. ``HEAD`` gets the same headers and no body.
 It deliberately does nothing about permissions. Callers run every permission and
 existence check first and call this last, so no file I/O happens for a request that is
 going to be refused.
+
+For S3-compatible storage (including Cloudflare R2), it bypasses ``storage.open()`` and
+streams ``GetObject`` directly. ``django-storages`` implements seekability by downloading
+the complete object to a temporary file, which makes otherwise-correct byte ranges slow.
 """
 import re
 
@@ -95,7 +99,48 @@ def _iter_range(handle, start, length):
         handle.close()
 
 
-def _common_headers(response, *, etag, filename, as_attachment):
+def _iter_stream(handle, length):
+    """Streams an already-positioned remote body without trying to seek it.
+
+    ``django-storages`` makes an S3/R2 file seekable by downloading the complete object to
+    a temporary file first. That defeats HTTP Range for video: asking for one megabyte of
+    an 88 MB proxy waits for all 88 MB. An S3 ``GetObject`` body is already positioned at
+    the requested range, so it must be read directly.
+    """
+    try:
+        remaining = length
+        while remaining > 0:
+            chunk = handle.read(min(CHUNK_SIZE, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            yield chunk
+    finally:
+        handle.close()
+
+
+def _s3_object_body(storage, object_key, byte_range=None):
+    """Returns a streaming S3-compatible body, or ``None`` for non-S3 storage.
+
+    Cloudflare R2 exposes the S3 ``GetObject`` API. Duck-typing these two public storage
+    attributes keeps local ``FileSystemStorage`` and test storages on the existing path,
+    while avoiding a hard dependency from this generic response helper to one backend.
+    """
+    connection = getattr(storage, 'connection', None)
+    client = getattr(getattr(connection, 'meta', None), 'client', None)
+    bucket_name = getattr(storage, 'bucket_name', None)
+    get_object = getattr(client, 'get_object', None)
+    if not bucket_name or not callable(get_object):
+        return None
+    params = {'Bucket': bucket_name, 'Key': object_key}
+    if byte_range is not None:
+        start, end = byte_range
+        params['Range'] = f'bytes={start}-{end}'
+    result = get_object(**params)
+    return result['Body']
+
+
+def _common_headers(response, *, etag, filename, as_attachment, cache_control):
     response['Accept-Ranges'] = 'bytes'
     if etag:
         response['ETag'] = etag
@@ -103,11 +148,18 @@ def _common_headers(response, *, etag, filename, as_attachment):
         disposition = content_disposition_header(as_attachment, filename or '')
         if disposition:
             response['Content-Disposition'] = disposition
+    if cache_control:
+        response['Cache-Control'] = cache_control
 
 
-def ranged_file_response(request, object_key, *, content_type, filename=None, as_attachment=False, checksum=None, storage=None):
+def ranged_file_response(
+    request, object_key, *, content_type, filename=None, as_attachment=False,
+    checksum=None, storage=None, object_size=None, cache_control=None,
+):
     storage = storage or default_storage
-    size = storage.size(object_key)
+    # Every File/FileVariant row already records this. Supplying it avoids an extra R2
+    # HEAD request after the caller has checked that the private object still exists.
+    size = object_size if object_size is not None else storage.size(object_key)
     etag = _etag_for(checksum)
     content_type = content_type or 'application/octet-stream'
 
@@ -122,21 +174,36 @@ def ranged_file_response(request, object_key, *, content_type, filename=None, as
     except RangeNotSatisfiable:
         response = HttpResponse(status=416, content_type=content_type)
         response['Content-Range'] = f'bytes */{size}'
-        _common_headers(response, etag=etag, filename=None, as_attachment=False)
+        _common_headers(
+            response, etag=etag, filename=None, as_attachment=False,
+            cache_control=cache_control,
+        )
         return response
 
     if byte_range is None:
         if request.method == 'HEAD':
             response = HttpResponse(content_type=content_type)
             response['Content-Length'] = str(size)
-            _common_headers(response, etag=etag, filename=filename, as_attachment=as_attachment)
+            _common_headers(
+                response, etag=etag, filename=filename, as_attachment=as_attachment,
+                cache_control=cache_control,
+            )
             return response
-        response = FileResponse(
-            storage.open(object_key, 'rb'), as_attachment=as_attachment,
-            filename=filename or '', content_type=content_type,
-        )
+        remote_body = _s3_object_body(storage, object_key)
+        if remote_body is not None:
+            response = StreamingHttpResponse(
+                _iter_stream(remote_body, size), content_type=content_type,
+            )
+        else:
+            response = FileResponse(
+                storage.open(object_key, 'rb'), as_attachment=as_attachment,
+                filename=filename or '', content_type=content_type,
+            )
         response['Content-Length'] = str(size)
-        _common_headers(response, etag=etag, filename=None, as_attachment=False)
+        _common_headers(
+            response, etag=etag, filename=filename, as_attachment=as_attachment,
+            cache_control=cache_control,
+        )
         return response
 
     start, end = byte_range
@@ -144,11 +211,16 @@ def ranged_file_response(request, object_key, *, content_type, filename=None, as
     if request.method == 'HEAD':
         response = HttpResponse(status=206, content_type=content_type)
     else:
+        remote_body = _s3_object_body(storage, object_key, byte_range)
         response = StreamingHttpResponse(
-            _iter_range(storage.open(object_key, 'rb'), start, length),
+            _iter_stream(remote_body, length) if remote_body is not None
+            else _iter_range(storage.open(object_key, 'rb'), start, length),
             status=206, content_type=content_type,
         )
     response['Content-Length'] = str(length)
     response['Content-Range'] = f'bytes {start}-{end}/{size}'
-    _common_headers(response, etag=etag, filename=filename, as_attachment=as_attachment)
+    _common_headers(
+        response, etag=etag, filename=filename, as_attachment=as_attachment,
+        cache_control=cache_control,
+    )
     return response
