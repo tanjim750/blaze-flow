@@ -51,10 +51,13 @@ export type UploadRequest = {
   onProgress?: (fraction: number) => void;
   /** Prefer a specific transport id (falls back to the first that supports the request). */
   transport?: string;
+  /** Lets the direct-to-storage transport take this upload (Files library uploads only). */
+  direct?: { workspaceId: string };
 };
 
 /** What a transport is handed for one attempt. */
 export type TransportJob = {
+  direct?: { workspaceId: string };
   url: string;
   file: File;
   fields: Record<string, string>;
@@ -171,7 +174,7 @@ async function send(id: string) {
   try {
     result = await transport.send(
       {
-        url: entry.request.url, file: entry.request.file, fields: entry.request.fields ?? {}, source: entry.request.source,
+        url: entry.request.url, file: entry.request.file, fields: entry.request.fields ?? {}, source: entry.request.source, direct: entry.request.direct,
         resume: entry.resume,
         saveResume: (state) => { const current = entries.get(id); if (current) current.resume = state; },
         reportParts: (parts) => patch(id, { parts }),
@@ -330,7 +333,7 @@ export function trayCounts(items: UploadItem[]) {
 
 // -- transports ---------------------------------------------------------------------------
 
-function csrfToken() {
+export function csrfToken() {
   if (typeof document === "undefined") return "";
   return decodeURIComponent(document.cookie.split("; ").find((item) => item.startsWith("csrftoken="))?.slice(10) ?? "");
 }

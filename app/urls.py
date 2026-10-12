@@ -1,6 +1,7 @@
 from django.urls import path
 from . import ai_qa_views
 from . import note_task_views
+from . import direct_upload_views
 
 from .views import (
     asset_file_detail,
@@ -211,6 +212,11 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/asset-folders/<uuid:folder_id>/', asset_folder_detail, name='api-asset-folder-detail'),
     path('workspaces/<uuid:workspace_id>/permissions/', workspace_permissions, name='api-workspace-permissions'),
     path('workspaces/<uuid:workspace_id>/asset-files/', asset_file_list_create, name='api-asset-files'),
+    path('workspaces/<uuid:workspace_id>/uploads/', direct_upload_views.direct_upload_initialize, name='api-direct-upload-initialize'),
+    path('workspaces/<uuid:workspace_id>/uploads/config/', direct_upload_views.direct_upload_config, name='api-direct-upload-config'),
+    path('workspaces/<uuid:workspace_id>/uploads/<uuid:upload_id>/', direct_upload_views.direct_upload_cancel, name='api-direct-upload-cancel'),
+    path('workspaces/<uuid:workspace_id>/uploads/<uuid:upload_id>/parts/', direct_upload_views.direct_upload_parts, name='api-direct-upload-parts'),
+    path('workspaces/<uuid:workspace_id>/uploads/<uuid:upload_id>/complete/', direct_upload_views.direct_upload_complete, name='api-direct-upload-complete'),
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/', asset_file_detail, name='api-asset-file-detail'),
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/download/', asset_file_download, name='api-asset-file-download'),
     path('workspaces/<uuid:workspace_id>/asset-files/<uuid:file_id>/poster/', asset_file_poster, name='api-asset-file-poster'),

@@ -320,45 +320,64 @@ def upload_project_file(*, project, upload, membership, folder=None, workspace=N
         f'workspaces/{workspace.id}/assets/{uuid.uuid4()}/{clean_name}'
     )
     stored_key = default_storage.save(object_key, upload)
-    now = timezone.now()
     try:
-        with transaction.atomic():
-            enforce_workspace_storage_limit(
-                workspace=workspace,
-                additional_bytes=upload.size,
-                lock=True,
-            )
-            file_record = File.objects.create(
-                id=uuid.uuid4(), workspace=workspace, storage_backend=_storage_backend(now), object_key=stored_key,
-                original_name=clean_name, mime_type=mime_type, size_bytes=upload.size,
-                checksum=checksum, checksum_algorithm='sha256', metadata={},
-                status=FileStatus.PENDING, created_at=now, updated_at=now,
-            )
-            FileSecurityScan.objects.create(
-                file=file_record, engine=settings.FILE_SECURITY_SCANNER,
-            )
-            # Every upload starts as its own asset at V1. Dragging one onto another is what
-            # later merges two of these into one history.
-            asset = MediaAsset.objects.create(workspace=workspace, name=Path(clean_name).stem or clean_name)
-            project_file = ProjectFile(
-                id=uuid.uuid4(), workspace=workspace, client_team=client_team,
-                project=project,
-                folder=folder,
-                file=file_record,
-                media_asset=asset,
-                version_number=1,
-                task_stage=task_stage,
-                added_by_workspace_membership=membership,
-                created_at=now,
-                updated_at=now,
-            )
-            project_file.full_clean()
-            project_file.save()
-            enqueue_file_event(file=file_record, topic=SCAN_TOPIC)
-            return project_file
+        return create_project_file_records(
+            workspace=workspace, client_team=client_team, project=project, folder=folder,
+            membership=membership, task_stage=task_stage, object_key=stored_key,
+            name=clean_name, mime_type=mime_type, size=upload.size, checksum=checksum,
+        )
     except Exception:
         default_storage.delete(stored_key)
         raise
+
+
+def create_project_file_records(
+    *, workspace, client_team, project, folder, membership, task_stage, object_key, name,
+    mime_type, size, checksum, exclude_reservation_id=None,
+):
+    """File + scan + MediaAsset + ProjectFile + scan event for an object already in storage.
+
+    Shared by the multipart-form upload and the direct-to-storage finalize step. Re-checks the
+    quota under the workspace row lock. The caller owns cleanup of the object on failure.
+    """
+    clean_name = name
+    stored_key = object_key
+    now = timezone.now()
+    with transaction.atomic():
+        enforce_workspace_storage_limit(
+            workspace=workspace,
+            additional_bytes=size,
+            lock=True,
+            exclude_reservation_id=exclude_reservation_id,
+        )
+        file_record = File.objects.create(
+            id=uuid.uuid4(), workspace=workspace, storage_backend=_storage_backend(now), object_key=stored_key,
+            original_name=clean_name, mime_type=mime_type, size_bytes=size,
+            checksum=checksum, checksum_algorithm='sha256', metadata={},
+            status=FileStatus.PENDING, created_at=now, updated_at=now,
+        )
+        FileSecurityScan.objects.create(
+            file=file_record, engine=settings.FILE_SECURITY_SCANNER,
+        )
+        # Every upload starts as its own asset at V1. Dragging one onto another is what
+        # later merges two of these into one history.
+        asset = MediaAsset.objects.create(workspace=workspace, name=Path(clean_name).stem or clean_name)
+        project_file = ProjectFile(
+            id=uuid.uuid4(), workspace=workspace, client_team=client_team,
+            project=project,
+            folder=folder,
+            file=file_record,
+            media_asset=asset,
+            version_number=1,
+            task_stage=task_stage,
+            added_by_workspace_membership=membership,
+            created_at=now,
+            updated_at=now,
+        )
+        project_file.full_clean()
+        project_file.save()
+        enqueue_file_event(file=file_record, topic=SCAN_TOPIC)
+        return project_file
 
 
 @transaction.atomic

@@ -8,6 +8,8 @@ import {
   type UploadItem,
 } from "@/lib/upload-store";
 import { useUploads } from "@/lib/use-uploads";
+import { registerTransport } from "@/lib/upload-store";
+import { r2Transport } from "@/lib/r2-upload-transport";
 import "./upload-tray.css";
 
 const size = formatBytes;
@@ -39,6 +41,9 @@ export function UploadTray() {
   const [collapsed, setCollapsed] = useState(false);
   const counts = trayCounts(items);
   const busy = counts.active > 0;
+
+  // Direct-to-R2 for Files uploads; it falls back to the form POST when the server has it off.
+  useEffect(() => registerTransport(r2Transport), []);
 
   // Closing the tab mid-upload loses it: ask first.
   useEffect(() => {
