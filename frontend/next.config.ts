@@ -2,8 +2,19 @@ import type { NextConfig } from "next";
 
 const API_ORIGIN = process.env.BLAZEFLOW_API_URL ?? "http://127.0.0.1:8000";
 
+/** Extra dev-server origins (e.g. an ngrok tunnel), comma separated. Dev only. */
+const DEV_ORIGINS = (process.env.NEXT_ALLOWED_DEV_ORIGINS ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["unenvying-atheistically-romeo.ngrok-free.dev"],
+  /**
+   * `next build` emits a self-contained server in `.next/standalone` (used by the
+   * production Dockerfile). `next dev` / `next start` are unaffected.
+   */
+  output: "standalone",
+  allowedDevOrigins: DEV_ORIGINS,
   /**
    * Django owns trailing slashes (`APPEND_SLASH`) and every one of its API routes ends in
    * one. Next, by default, answers `/api/auth/login/` with a 308 to the slashless path,

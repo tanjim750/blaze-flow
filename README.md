@@ -60,3 +60,7 @@ Architecture, routes, and known limitations are documented in the [frontend guid
 ---
 
 **Blaze Flow** — One workspace for creative work, collaboration, and agency operations.
+
+## Production deployment
+
+See [docs/deploy.md](docs/deploy.md) for the production stack (`docker-compose.prod.yml`, gunicorn, Next.js standalone, workers, scheduler) and step-by-step server setup. `docker-compose.yml` is for local development only.

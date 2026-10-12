@@ -40,3 +40,7 @@ media/
 
 # Design mockups (Stitch exports) - kept local
 stitch_blaze_flow_creative_operating_system/
+
+# Production secrets (templates are committed, real files never)
+.env.production
+.env.*.local

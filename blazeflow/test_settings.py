@@ -29,3 +29,6 @@ REST_FRAMEWORK = {
 
 # AI Visual QA runs on the fake engine in tests (no Paddle needed).
 AI_QA_ENGINE = 'fake'
+
+# Expected 4xx responses in tests are not worth a log line each.
+LOGGING['loggers']['django.request']['level'] = 'ERROR'  # noqa: F405
