@@ -73,6 +73,10 @@ if DEBUG:
 THROTTLE_TRUSTED_PROXY_COUNT = int(os.environ.get('THROTTLE_TRUSTED_PROXY_COUNT', '0'))
 if THROTTLE_TRUSTED_PROXY_COUNT < 0:
     raise ImproperlyConfigured('THROTTLE_TRUSTED_PROXY_COUNT cannot be negative.')
+# Behind Cloudflare the real client is in CF-Connecting-IP. That header is trivially
+# spoofable by anyone who can reach the origin directly, so it is only honoured when this
+# is switched on (and the origin is firewalled to Cloudflare / reached via a tunnel).
+THROTTLE_TRUST_CF_CONNECTING_IP = env_bool('THROTTLE_TRUST_CF_CONNECTING_IP', default=False)
 
 
 # Application definition
@@ -90,6 +94,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serves collected static files (Django admin CSS) straight from gunicorn in production.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -133,6 +139,10 @@ DATABASES = {
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'blazeflow'),
         'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        # Persistent connections: reuse a connection for up to CONN_MAX_AGE seconds instead of
+        # opening one per request. 0 restores the old per-request behaviour.
+        'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '60')),
+        'CONN_HEALTH_CHECKS': env_bool('DB_CONN_HEALTH_CHECKS', default=True),
     }
 }
 
@@ -172,6 +182,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = Path(os.environ.get('DJANGO_STATIC_ROOT', str(BASE_DIR / 'staticfiles')))
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 MAX_MEDIA_UPLOAD_BYTES = int(os.environ.get('MAX_MEDIA_UPLOAD_BYTES', 1024 * 1024 * 1024))
@@ -248,6 +259,13 @@ if STORAGE_DRIVER not in {'local', 's3'}:
     raise ImproperlyConfigured('STORAGE_DRIVER must be local or s3.')
 STORAGE_PROVIDER = 's3-compatible' if STORAGE_DRIVER == 's3' else 'django-default'
 STORAGE_PUBLIC_METADATA = {'driver': STORAGE_DRIVER}
+# Compressed (gzip/brotli) but not manifest-hashed, so code paths that never ran
+# collectstatic (tests, local dev) keep working.
+_STATICFILES_STORAGE = {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'}
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': _STATICFILES_STORAGE,
+}
 if STORAGE_DRIVER == 's3':
     AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
     if not AWS_STORAGE_BUCKET_NAME:
@@ -278,9 +296,7 @@ if STORAGE_DRIVER == 's3':
                 'file_overwrite': False,
             },
         },
-        'staticfiles': {
-            'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
-        },
+        'staticfiles': _STATICFILES_STORAGE,
     }
 
 APP_BASE_URL = os.environ.get('APP_BASE_URL', 'http://localhost:8000').rstrip('/')
@@ -431,3 +447,29 @@ if SENTRY_DSN:
         # GDPR: no cookies, IPs or user emails unless explicitly turned on.
         send_default_pii=os.environ.get('SENTRY_SEND_DEFAULT_PII', 'false').lower() == 'true',
     )
+
+
+# Logging: everything to stdout/stderr so `docker compose logs` and any log shipper see it.
+LOG_LEVEL = os.environ.get('DJANGO_LOG_LEVEL', 'INFO').upper()
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'console': {
+            'format': '%(asctime)s %(levelname)s %(name)s [%(process)d] %(message)s',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://sys.stdout',
+            'formatter': 'console',
+        },
+    },
+    'root': {'handlers': ['console'], 'level': LOG_LEVEL},
+    'loggers': {
+        'django': {'handlers': ['console'], 'level': LOG_LEVEL, 'propagate': False},
+        'django.request': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
+        'django.db.backends': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
+    },
+}

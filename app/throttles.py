@@ -1,4 +1,39 @@
-from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+import ipaddress
+
+from django.conf import settings
+from rest_framework.throttling import AnonRateThrottle as _AnonRateThrottle
+from rest_framework.throttling import UserRateThrottle as _UserRateThrottle
+
+
+def _valid_ip(value):
+    try:
+        return str(ipaddress.ip_address(value.strip()))
+    except (ValueError, AttributeError):
+        return None
+
+
+class CloudflareClientIpMixin:
+    """Identify anonymous clients by Cloudflare's CF-Connecting-IP when explicitly trusted.
+
+    Only honoured with THROTTLE_TRUST_CF_CONNECTING_IP=true: the header is client-controlled
+    unless the origin is reachable solely through Cloudflare. Otherwise DRF's
+    X-Forwarded-For / NUM_PROXIES logic applies unchanged.
+    """
+
+    def get_ident(self, request):
+        if getattr(settings, 'THROTTLE_TRUST_CF_CONNECTING_IP', False):
+            ip = _valid_ip(request.META.get('HTTP_CF_CONNECTING_IP', ''))
+            if ip:
+                return ip
+        return super().get_ident(request)
+
+
+class AnonRateThrottle(CloudflareClientIpMixin, _AnonRateThrottle):
+    pass
+
+
+class UserRateThrottle(CloudflareClientIpMixin, _UserRateThrottle):
+    pass
 
 
 class RegistrationThrottle(AnonRateThrottle):

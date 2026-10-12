@@ -2,8 +2,8 @@ import uuid
 
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.core.files.storage import default_storage
-from django.http import Http404, HttpResponse
-from django.db import transaction
+from django.http import Http404, HttpResponse, JsonResponse
+from django.db import connection, transaction
 from django.core.exceptions import ValidationError
 from django.db.models import Count, IntegerField, JSONField, Max, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404
@@ -19,7 +19,6 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.exceptions import ValidationError as ApiValidationError
 
 from .http_range import is_initial_request, ranged_file_response
-from .events import DomainEvent, dispatch
 from .pagination import paginated_response
 from .serializers import (
     AssetFileUpdateSerializer,
@@ -296,9 +295,30 @@ from .services import (
 
 @api_view(['GET'])
 def health_check(request):
-    dispatch(DomainEvent(name='health.checked'))
+    # Side-effect free: uptime probes hit this every few seconds, so it must not dispatch
+    # events or write rows. See health_live / health_ready for probe-specific checks.
     serializer = MessageSerializer({'message': 'ok'})
     return Response(serializer.data)
+
+
+def health_live(request):
+    """Liveness: the process answers. No DB, no session, no DRF, no writes."""
+    if request.method not in ('GET', 'HEAD'):
+        return HttpResponse(status=405)
+    return JsonResponse({'status': 'ok'})
+
+
+def health_ready(request):
+    """Readiness: the process can reach the database (a single read-only SELECT 1)."""
+    if request.method not in ('GET', 'HEAD'):
+        return HttpResponse(status=405)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+    except Exception:  # noqa: BLE001 - any DB failure means "not ready"
+        return JsonResponse({'status': 'unavailable', 'database': 'error'}, status=503)
+    return JsonResponse({'status': 'ok', 'database': 'ok'})
 
 
 @api_view(['POST'])

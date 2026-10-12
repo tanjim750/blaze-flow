@@ -9,3 +9,5 @@ requests==2.32.3
 symspellpy==6.10.0
 spylls==0.1.7
 sentry-sdk==2.71.0
+gunicorn==23.0.0
+whitenoise==6.9.0
