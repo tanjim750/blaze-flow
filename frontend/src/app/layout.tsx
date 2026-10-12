@@ -5,6 +5,7 @@ import "./globals.css";
 import "./interactions.css";
 import { NavProgress } from "@/components/nav-progress";
 import { SubmitFeedback } from "@/components/submit-feedback";
+import { UploadTray } from "@/components/uploads/upload-tray";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <Suspense fallback={null}><NavProgress /></Suspense>
         <SubmitFeedback />
+        <UploadTray />
         {children}
       </body>
     </html>

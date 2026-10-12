@@ -15,6 +15,7 @@ vi.mock("@/lib/asset-api-client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/asset-api-client")>()),
   deleteAssetFile: (...args: unknown[]) => deleteAssetFile(...args),
   uploadAssetFile: (...args: unknown[]) => uploadAssetFile(...args),
+  uploadAssetFileTracked: (workspaceId: string, file: File, relationships: unknown) => uploadAssetFile(workspaceId, file, relationships),
   duplicateAssetFile: (...args: unknown[]) => duplicateAssetFile(...args),
 }));
 
@@ -245,10 +246,10 @@ describe("AssetLibrary", () => {
     fireEvent.change(input!, { target: { files: [new File(["x"], "hero.mp4", { type: "video/mp4" })] } });
     fireEvent.click(screen.getByRole("button", { name: "Upload 1 file" }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/over the 25 MB upload limit/));
+    // The dialog hands off to the upload tray (which keeps the failure with Retry) and closes.
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Upload 1 file" })).toBeNull());
+    await waitFor(() => expect(screen.getByText(/over the 25 MB upload limit/)).toBeInTheDocument());
     expect(rendered.container.querySelector('.fx-item[data-kind="file"]')).toBeNull();
-    // Still staged, so retrying is one click rather than re-picking the file.
-    expect(screen.getByRole("button", { name: "Retry upload" })).toBeInTheDocument();
   });
 
   it("puts an accepted upload on the grid under the id the server gave it", async () => {

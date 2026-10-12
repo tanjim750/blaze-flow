@@ -115,7 +115,7 @@ from .guest_views import (
 )
 
 from .decision_views import media_version_decisions
-from .dashboard_views import dashboard_my_cuts, dashboard_notes_to_address, dashboard_workload, workspace_quick_search
+from .dashboard_views import dashboard_my_cuts, dashboard_notes_to_address, dashboard_workload, workspace_file_processing, workspace_quick_search
 from .activity_views import (
     project_activity, project_activity_export, workspace_activity, workspace_activity_export,
 )
@@ -229,6 +229,7 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/dashboard/my-cuts/', dashboard_my_cuts, name='api-dashboard-my-cuts'),
     path('workspaces/<uuid:workspace_id>/dashboard/workload/', dashboard_workload, name='api-dashboard-workload'),
     path('workspaces/<uuid:workspace_id>/search/', workspace_quick_search, name='api-workspace-search'),
+    path('workspaces/<uuid:workspace_id>/files/<uuid:file_id>/processing/', workspace_file_processing, name='api-file-processing'),
     path('workspaces/<uuid:workspace_id>/billing/settings/', billing_views.billing_settings, name='api-billing-settings'),
     path('workspaces/<uuid:workspace_id>/billing/summary/', billing_views.billing_summary, name='api-billing-summary'),
     path('workspaces/<uuid:workspace_id>/billing/invoices/', billing_views.invoice_list_create, name='api-billing-invoices'),

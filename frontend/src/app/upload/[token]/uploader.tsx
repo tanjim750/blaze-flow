@@ -52,6 +52,7 @@ export function PublicUploader({ token, link }: { token: string; link: PublicUpl
           <div className="ul-files">
             <DropUploader
               url={publicUploadUrl(token)}
+              trayLabel={`To ${link.studio_name}`}
               fields={fields}
               accept={link.accept}
               maxBytes={link.max_file_bytes}

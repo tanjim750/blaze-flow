@@ -5,6 +5,7 @@ import { CircleAlert, CircleCheck, CloudUpload, FileText, Film, Image as ImageIc
 import {
   acceptedSummary, formatBytes, kindOf, newBatchId, rejectReason, sendFile, type CallResult, type UploadKind,
 } from "@/lib/client-uploads";
+import { dismissUpload } from "@/lib/upload-store";
 import "./client-uploads.css";
 
 type ItemStatus = "queued" | "uploading" | "done" | "error" | "rejected";
@@ -40,7 +41,7 @@ export function queueSummary(items: Pick<QueueItem, "status">[]): string {
  * all in one batch so the studio gets one notification for the drop.
  */
 export function DropUploader({
-  url, fields, accept, maxBytes, allowedKinds, blockedReason = null, onSent, compact = false, title = "Drop files here",
+  url, fields, accept, maxBytes, allowedKinds, blockedReason = null, onSent, compact = false, title = "Drop files here", trayLabel,
 }: {
   url: string | null;
   fields: Record<string, string>;
@@ -51,6 +52,8 @@ export function DropUploader({
   onSent?: (count: number) => void;
   compact?: boolean;
   title?: string;
+  /** Shown under the file name in the global upload tray. */
+  trayLabel?: string;
 }) {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -58,6 +61,7 @@ export function DropUploader({
   const batch = useRef(newBatchId());
   const active = useRef(new Set<string>());
   const sentCount = useRef(0);
+  const trayIds = useRef(new Map<string, string>());
   const hintId = useId();
 
   const patch = useCallback((id: string, change: Partial<QueueItem>) => {
@@ -80,7 +84,17 @@ export function DropUploader({
     for (const item of waiting.slice(0, Math.max(0, free))) {
       active.current.add(item.id);
       patch(item.id, { status: "uploading", progress: 0, error: null });
-      const attempt = () => sendFile(url, item.file, { ...fields, batch_id: batch.current }, (progress) => patch(item.id, { progress }));
+      // The tray row for this queue item; a retry here replaces it rather than adding another.
+      const attempt = () => {
+        const previous = trayIds.current.get(item.id);
+        if (previous) dismissUpload(previous);
+        return sendFile(url, item.file, { ...fields, batch_id: batch.current }, (progress) => patch(item.id, { progress }), undefined, {
+          destination: trayLabel ?? null,
+          onStarted: (uploadId) => trayIds.current.set(item.id, uploadId),
+          // A retry from the tray lands here too.
+          onSuccess: () => patch(item.id, { status: "done", progress: 1, error: null }),
+        });
+      };
       // One quiet retry for a server hiccup (5xx): the file is fine, the moment was not.
       void attempt().then((first) => (!first.ok && first.status >= 500 ? new Promise<CallResult<unknown>>((resolve) => setTimeout(() => resolve(attempt()), RETRY_DELAY_MS)) : first)).then((result) => {
         active.current.delete(item.id);
@@ -93,7 +107,7 @@ export function DropUploader({
         }
       });
     }
-  }, [items, blockedReason, url, fields, patch, onSent]);
+  }, [items, blockedReason, url, fields, patch, onSent, trayLabel]);
 
   const onDrop = (event: DragEvent) => {
     event.preventDefault();

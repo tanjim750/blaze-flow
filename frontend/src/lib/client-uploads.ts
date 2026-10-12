@@ -6,6 +6,7 @@
  * are `@authentication_classes([])`, so they need no CSRF token; the signed-in ones read it
  * from the `csrftoken` cookie like the rest of the browser-side clients.
  */
+import { cancelUpload, startUpload, type UploadRequest, type UploadSource } from "./upload-store";
 
 export type UploadKind = "video" | "image" | "audio" | "document";
 export const UPLOAD_KINDS: { value: UploadKind; label: string }[] = [
@@ -168,33 +169,20 @@ export const portalUploadUrl = (workspaceId: string, projectId: string) => `/api
 /** Progress as a fraction 0..1, or null while the browser cannot tell yet. */
 export type ProgressHandler = (fraction: number | null) => void;
 
+export type SendOptions = { source?: UploadSource; destination?: string | null; describe?: UploadRequest["describe"]; onSuccess?: (data: unknown) => void; onStarted?: (uploadId: string) => void };
+
 /**
- * POSTs one file with XHR, because `fetch` cannot report upload progress. Resolves with the
- * server's message on failure rather than throwing, so a queue can carry on with the rest.
+ * POSTs one file through the global upload store (so it shows in the upload tray and keeps
+ * going across page changes). Resolves with the server's message on failure rather than
+ * throwing, so a queue can carry on with the rest. `onSuccess` also runs when the user retries
+ * a failed one from the tray.
  */
-export function sendFile(url: string, file: File, fields: Record<string, string>, onProgress: ProgressHandler, signal?: AbortSignal): Promise<CallResult<unknown>> {
-  return new Promise((resolve) => {
-    const xhr = new XMLHttpRequest();
-    const body = new FormData();
-    Object.entries(fields).forEach(([key, value]) => body.append(key, value));
-    body.append("file", file);
-    xhr.open("POST", url);
-    xhr.withCredentials = true;
-    xhr.setRequestHeader("Accept", "application/json");
-    const csrf = csrfToken();
-    if (csrf) xhr.setRequestHeader("X-CSRFToken", csrf);
-    xhr.upload.onprogress = (event) => onProgress(event.lengthComputable ? event.loaded / event.total : null);
-    xhr.onload = () => {
-      let data: unknown = null;
-      try { data = JSON.parse(xhr.responseText); } catch { /* not JSON (proxy error page) */ }
-      if (xhr.status >= 200 && xhr.status < 300) resolve({ ok: true, data });
-      else resolve({ ok: false, status: xhr.status, error: uploadError(xhr.status, data) });
-    };
-    xhr.onerror = () => resolve({ ok: false, status: 0, error: "The upload was interrupted. Check your connection and try again." });
-    xhr.onabort = () => resolve({ ok: false, status: 0, error: "Cancelled." });
-    signal?.addEventListener("abort", () => xhr.abort());
-    xhr.send(body);
-  });
+export function sendFile(url: string, file: File, fields: Record<string, string>, onProgress: ProgressHandler, signal?: AbortSignal, options: SendOptions = {}): Promise<CallResult<unknown>> {
+  const source = options.source ?? (url.includes("/public/") ? "public" : "portal");
+  const { id, done } = startUpload({ url, file, fields, source, destination: options.destination, describe: options.describe, onSuccess: options.onSuccess, onProgress });
+  options.onStarted?.(id);
+  signal?.addEventListener("abort", () => cancelUpload(id));
+  return done;
 }
 
 /** The server's own words when it gave any; a plain sentence for throttling and proxies. */
