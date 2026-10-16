@@ -30,7 +30,7 @@ export function PlatformNav({ email, badges }: { email: string; badges: Partial<
       </nav>
       <div className="pf-nav-foot">
         <small title={email}>{email}</small>
-        <Link href="/" className="pf-back"><ArrowLeft size={15} /><span>Back to app</span></Link>
+        <Link href="/" className="pf-back" aria-label="Back to app"><ArrowLeft size={15} /><span>Back to app</span></Link>
       </div>
     </aside>
   );

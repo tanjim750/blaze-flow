@@ -24,12 +24,14 @@ class FakeXhr {
 }
 
 const calls: { path: string; body: unknown; method: string }[] = [];
+let configEnabled = true;
 let initResponse: { status: number; body: unknown } = { status: 201, body: {} };
 function fetchMock(input: string, init: RequestInit) {
   const path = input.replace(/^\/api/, "");
   const body = init.body ? JSON.parse(init.body as string) : null;
   calls.push({ path, body, method: init.method ?? "GET" });
   const json = (status: number, data: unknown) => Promise.resolve(new Response(status === 204 ? null : JSON.stringify(data), { status }));
+  if (path.endsWith("/uploads/config/")) return json(200, { enabled: configEnabled });
   if (path.endsWith("/uploads/") && init.method === "POST") return json(initResponse.status, initResponse.body);
   if (path.endsWith("/parts/")) return json(200, { parts: (body as { part_numbers: number[] }).part_numbers.map((n) => ({ part_number: n, url: `https://r2.example/key?part=${n}` })) });
   if (path.endsWith("/complete/")) return json(201, { id: "pf-1" });
@@ -44,7 +46,7 @@ const job = (file: File, resume: unknown = undefined): TransportJob & { saved: u
 const MB = 1024 * 1024;
 
 beforeEach(() => {
-  puts = []; calls.length = 0; failPart = null; __r2test.reset();
+  puts = []; calls.length = 0; configEnabled = true; failPart = null; __r2test.reset();
   vi.stubGlobal("XMLHttpRequest", FakeXhr);
   vi.stubGlobal("fetch", vi.fn(fetchMock));
 });
@@ -63,7 +65,8 @@ describe("r2 transport", () => {
     expect(result).toEqual({ ok: true, data: { id: "pf-1" } });
     expect(puts[0].url).toBe("https://r2.example/key?sig");
     expect(puts[0].xhr.headers["Content-Type"]).toBe("image/png");
-    expect(calls[0].body).toMatchObject({ name: "a.png", size: 10, content_type: "image/png", project_id: "p1" });
+    expect(calls[0].path).toBe("/workspaces/ws/uploads/config/");
+    expect(calls[1].body).toMatchObject({ name: "a.png", size: 10, content_type: "image/png", project_id: "p1" });
     expect(calls.at(-1)!.path).toBe("/workspaces/ws/uploads/u1/complete/");
     expect(progress.at(-1)).toBe(10);
   });
@@ -95,5 +98,28 @@ describe("r2 transport", () => {
     expect(posts).toEqual(["POST /api/workspaces/ws/asset-files/"]);
     expect(result.ok).toBe(true);
     expect(r2Transport.supports({ url: "/u", file: new File(["a"], "a"), source: "files", direct: { workspaceId: "ws" } })).toBe(false);
+  });
+  it("checks uploads/config once and never POSTs initialize when direct uploads are off", async () => {
+    configEnabled = false;
+    const posts: string[] = [];
+    const open = FakeXhr.prototype.open;
+    FakeXhr.prototype.open = function (this: FakeXhr, method: string, url: string) { this.method = method; this.url = `http://localhost${url}`; posts.push(`${method} ${url}`); };
+    try {
+      for (const name of ["a.png", "b.png"]) {
+        const result = await r2Transport.send(job(new File(["abc"], name, { type: "image/png" })), () => {}, new AbortController().signal);
+        expect(result.ok).toBe(true);
+      }
+    } finally { FakeXhr.prototype.open = open; }
+    expect(posts).toEqual(["POST /api/workspaces/ws/asset-files/", "POST /api/workspaces/ws/asset-files/"]);
+    expect(calls.filter((c) => c.path.endsWith("/uploads/") && c.method === "POST")).toHaveLength(0);
+    expect(calls.filter((c) => c.path.endsWith("/uploads/config/"))).toHaveLength(1);
+    expect(r2Transport.supports({ url: "/u", file: new File(["a"], "a"), source: "files", direct: { workspaceId: "ws" } })).toBe(false);
+  });
+
+  it("caches an enabled config per workspace across uploads", async () => {
+    initResponse = { status: 201, body: { id: "u1", mode: "single", url: "https://r2.example/key?sig" } };
+    for (let i = 0; i < 2; i += 1) await r2Transport.send(job(new File([new Uint8Array(4)], `f${i}.png`)), () => {}, new AbortController().signal);
+    expect(calls.filter((c) => c.path.endsWith("/uploads/config/"))).toHaveLength(1);
+    expect(calls.filter((c) => c.path.endsWith("/uploads/") && c.method === "POST")).toHaveLength(2);
   });
 });
