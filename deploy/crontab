@@ -1,0 +1,15 @@
+# Blaze Flow maintenance schedule, run by supercronic in the `scheduler` service.
+# Times are UTC (the container clock). Output goes to the container log.
+#
+# Not scheduled on purpose:
+#   check_operational_alerts  needs --workspace-id; run per workspace by hand or from a monitor.
+#   requeue_dead_letters      only after the delivery problem is fixed (manual).
+
+# Abandoned direct-to-R2 uploads: abort and release quota reservations.
+*/30 * * * * python manage.py expire_direct_uploads
+# Downgrade lapsed PRO subscriptions.
+15 2 * * * python manage.py process_expired_subscriptions
+# Expired password-reset / email-verification tokens.
+30 2 * * * python manage.py purge_auth_tokens
+# Physically delete soft-deleted review attachments past REVIEW_FILE_RETENTION_DAYS.
+45 2 * * * python manage.py purge_review_files

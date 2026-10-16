@@ -1,0 +1,12 @@
+# Reverse proxy for docker-compose.prod.yml (--profile caddy).
+# APP_DOMAIN comes from the environment (e.g. app.example.com). Caddy obtains a
+# Let's Encrypt certificate automatically; with Cloudflare in front use SSL mode
+# "Full (strict)". Only the Next.js frontend is exposed; it proxies /api/* to Django.
+{$APP_DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 1GB
+	}
+	# Caddy appends the client address to X-Forwarded-For (see THROTTLE_TRUSTED_PROXY_COUNT).
+	reverse_proxy frontend:3000
+}

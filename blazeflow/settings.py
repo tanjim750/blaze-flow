@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -20,13 +22,61 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-4ma!hr5hgjv=81n@qc^a^(r-mcw_*esv%tyobc0wm4&_vt*^6o'
+def env_bool(name, default=False):
+    """Read a conventional boolean value from the environment."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in {'1', 'true', 'yes', 'on'}
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
 
-ALLOWED_HOSTS = []
+DEBUG = env_bool('DJANGO_DEBUG', default=False)
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'unsafe-development-key'
+    else:
+        raise ImproperlyConfigured('DJANGO_SECRET_KEY must be set when DJANGO_DEBUG is false.')
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    if host.strip()
+]
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',')
+    if origin.strip()
+]
+
+# Deployment transport/session hardening. Development remains HTTP-friendly, while every
+# production deployment can enable these explicitly through its secret/environment store.
+SECURE_SSL_REDIRECT = env_bool('DJANGO_SECURE_SSL_REDIRECT', default=False)
+SESSION_COOKIE_SECURE = env_bool('DJANGO_SESSION_COOKIE_SECURE', default=not DEBUG)
+CSRF_COOKIE_SECURE = env_bool('DJANGO_CSRF_COOKIE_SECURE', default=not DEBUG)
+SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '0'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', default=False)
+SECURE_HSTS_PRELOAD = env_bool('DJANGO_SECURE_HSTS_PRELOAD', default=False)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+if env_bool('DJANGO_TRUST_PROXY_HTTPS', default=False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# The Next.js dev server proxies /api here and forwards its own Origin, which Django checks
+# on every unsafe request. Without these a local clone cannot write at all — uploads and
+# assignments fail CSRF — and setting the variable for a tunnel would otherwise replace them.
+# Debug only; production still has to list its origins explicitly.
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS = list(dict.fromkeys([
+        *CSRF_TRUSTED_ORIGINS,
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+    ]))
+THROTTLE_TRUSTED_PROXY_COUNT = int(os.environ.get('THROTTLE_TRUSTED_PROXY_COUNT', '0'))
+if THROTTLE_TRUSTED_PROXY_COUNT < 0:
+    raise ImproperlyConfigured('THROTTLE_TRUSTED_PROXY_COUNT cannot be negative.')
+# Behind Cloudflare the real client is in CF-Connecting-IP. That header is trivially
+# spoofable by anyone who can reach the origin directly, so it is only honoured when this
+# is switched on (and the origin is firewalled to Cloudflare / reached via a tunnel).
+THROTTLE_TRUST_CF_CONNECTING_IP = env_bool('THROTTLE_TRUST_CF_CONNECTING_IP', default=False)
 
 
 # Application definition
@@ -44,12 +94,15 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serves collected static files (Django admin CSS) straight from gunicorn in production.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'app.middleware.RequestIdMiddleware',
 ]
 
 ROOT_URLCONF = 'blazeflow.urls'
@@ -72,6 +125,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'blazeflow.wsgi.application'
 
+AUTH_USER_MODEL = 'app.User'
+
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
@@ -82,8 +137,12 @@ DATABASES = {
         'NAME': os.environ.get('POSTGRES_DB', 'blazeflow'),
         'USER': os.environ.get('POSTGRES_USER', 'blazeflow'),
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'blazeflow'),
-        'HOST': os.environ.get('POSTGRES_HOST', 'db'),
+        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        # Persistent connections: reuse a connection for up to CONN_MAX_AGE seconds instead of
+        # opening one per request. 0 restores the old per-request behaviour.
+        'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '60')),
+        'CONN_HEALTH_CHECKS': env_bool('DB_CONN_HEALTH_CHECKS', default=True),
     }
 }
 
@@ -123,6 +182,231 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = Path(os.environ.get('DJANGO_STATIC_ROOT', str(BASE_DIR / 'staticfiles')))
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+MAX_MEDIA_UPLOAD_BYTES = int(os.environ.get('MAX_MEDIA_UPLOAD_BYTES', 1024 * 1024 * 1024))
+MAX_REVIEW_ATTACHMENT_BYTES = int(os.environ.get('MAX_REVIEW_ATTACHMENT_BYTES', 25 * 1024 * 1024))
+MAX_TASK_ATTACHMENT_BYTES = int(os.environ.get('MAX_TASK_ATTACHMENT_BYTES', 25 * 1024 * 1024))
+# The asset library is where video lands, so it gets the same ceiling as a project media
+# upload. It was 25 MB — an attachment-sized limit that rejected essentially every real
+# video with "The file exceeds the configured size limit."
+MAX_PROJECT_FILE_BYTES = int(os.environ.get('MAX_PROJECT_FILE_BYTES', str(MAX_MEDIA_UPLOAD_BYTES)))
+REVIEW_PAGE_SIZE = int(os.environ.get('REVIEW_PAGE_SIZE', '50'))
+REVIEW_MAX_PAGE_SIZE = int(os.environ.get('REVIEW_MAX_PAGE_SIZE', '200'))
+PREVIEW_MAX_PIXELS = int(os.environ.get('PREVIEW_MAX_PIXELS', '40000000'))
+PREVIEW_MAX_WIDTH = int(os.environ.get('PREVIEW_MAX_WIDTH', '1280'))
+PREVIEW_MAX_HEIGHT = int(os.environ.get('PREVIEW_MAX_HEIGHT', '720'))
+PDF_PREVIEW_COMMAND = os.environ.get('PDF_PREVIEW_COMMAND', 'pdftoppm')
+FFMPEG_COMMAND = os.environ.get('FFMPEG_COMMAND', 'ffmpeg')
+FFPROBE_COMMAND = os.environ.get('FFPROBE_COMMAND', 'ffprobe')
+PREVIEW_DECODER_TIMEOUT_SECONDS = int(os.environ.get('PREVIEW_DECODER_TIMEOUT_SECONDS', '30'))
+PREVIEW_DECODER_MAX_INPUT_BYTES = int(os.environ.get('PREVIEW_DECODER_MAX_INPUT_BYTES', str(MAX_REVIEW_ATTACHMENT_BYTES)))
+PREVIEW_DECODER_MAX_OUTPUT_BYTES = int(os.environ.get('PREVIEW_DECODER_MAX_OUTPUT_BYTES', str(20 * 1024 * 1024)))
+PREVIEW_AUDIO_MAX_SECONDS = int(os.environ.get('PREVIEW_AUDIO_MAX_SECONDS', '600'))
+
+# Video review proxy: a lower-bitrate H.264 rendition generated on upload so reviewers
+# stream this instead of the (often much larger) original file.
+# The standard review proxy: 720p, always made, the fallback for slow connections.
+VIDEO_PROXY_MAX_WIDTH = int(os.environ.get('VIDEO_PROXY_MAX_WIDTH', '1280'))
+VIDEO_PROXY_MAX_HEIGHT = int(os.environ.get('VIDEO_PROXY_MAX_HEIGHT', '720'))
+VIDEO_PROXY_CRF = int(os.environ.get('VIDEO_PROXY_CRF', '23'))
+# Caps the bitrate on noisy footage, where CRF alone can make a proxy larger than its source.
+VIDEO_PROXY_MAXRATE = os.environ.get('VIDEO_PROXY_MAXRATE', '5M')
+VIDEO_PROXY_PRESET = os.environ.get('VIDEO_PROXY_PRESET', 'medium')
+# A keyframe every second, so scrubbing and frame-stepping land quickly and exactly.
+VIDEO_PROXY_KEYFRAME_SECONDS = float(os.environ.get('VIDEO_PROXY_KEYFRAME_SECONDS', '1'))
+# The high-quality proxy: 1080p, made after the 720p one, only for sources larger than 720p.
+VIDEO_PROXY_HQ_ENABLED = os.environ.get('VIDEO_PROXY_HQ_ENABLED', 'true').lower() == 'true'
+VIDEO_PROXY_HQ_MAX_WIDTH = int(os.environ.get('VIDEO_PROXY_HQ_MAX_WIDTH', '1920'))
+VIDEO_PROXY_HQ_MAX_HEIGHT = int(os.environ.get('VIDEO_PROXY_HQ_MAX_HEIGHT', '1080'))
+VIDEO_PROXY_HQ_CRF = int(os.environ.get('VIDEO_PROXY_HQ_CRF', '20'))
+VIDEO_PROXY_HQ_MAXRATE = os.environ.get('VIDEO_PROXY_HQ_MAXRATE', '10M')
+VIDEO_PROXY_AUDIO_BITRATE = os.environ.get('VIDEO_PROXY_AUDIO_BITRATE', '128k')
+VIDEO_PROXY_MAX_INPUT_BYTES = int(os.environ.get('VIDEO_PROXY_MAX_INPUT_BYTES', str(MAX_MEDIA_UPLOAD_BYTES)))
+VIDEO_PROXY_MAX_OUTPUT_BYTES = int(os.environ.get('VIDEO_PROXY_MAX_OUTPUT_BYTES', str(200 * 1024 * 1024)))
+VIDEO_PROXY_TIMEOUT_SECONDS = int(os.environ.get('VIDEO_PROXY_TIMEOUT_SECONDS', '600'))
+
+# Subscription plan resource limits. Kept in environment configuration rather than the
+# database for the MVP; consumers must read these through app.services.plan_config.get_plan_limit
+# rather than this settings module directly, so a future move to database-managed plans
+# does not require touching call sites.
+PLAN_LIMITS = {
+    'FREE': {
+        'max_workspaces_owned': int(os.environ.get('PLAN_FREE_MAX_WORKSPACES_OWNED', '1')),
+        'max_projects_per_workspace': int(os.environ.get('PLAN_FREE_MAX_PROJECTS_PER_WORKSPACE', '3')),
+        'max_storage_bytes': int(os.environ.get('PLAN_FREE_MAX_STORAGE_BYTES', str(5 * 1024 * 1024 * 1024))),
+    },
+    'PRO': {
+        'max_workspaces_owned': int(os.environ.get('PLAN_PRO_MAX_WORKSPACES_OWNED', '20')),
+        'max_projects_per_workspace': int(os.environ.get('PLAN_PRO_MAX_PROJECTS_PER_WORKSPACE', '200')),
+        'max_storage_bytes': int(os.environ.get('PLAN_PRO_MAX_STORAGE_BYTES', str(2 * 1024 * 1024 * 1024 * 1024))),
+    },
+}
+# Platform admin revenue estimate until Stripe is connected: what one PRO seat is assumed to
+# pay per month, in minor units of PLATFORM_CURRENCY. Purely for the /platform dashboard.
+PLATFORM_PRO_PRICE_MINOR = int(os.environ.get('PLATFORM_PRO_PRICE_MINOR', '2900'))
+PLATFORM_CURRENCY = os.environ.get('PLATFORM_CURRENCY', 'GBP')
+SUBSCRIPTION_TRIAL_DAYS = int(os.environ.get('SUBSCRIPTION_TRIAL_DAYS', '14'))
+# Where support replies come from (falls back to DEFAULT_FROM_EMAIL).
+SUPPORT_FROM_EMAIL = os.environ.get('SUPPORT_FROM_EMAIL', '')
+SUBSCRIPTION_PRO_PERIOD_DAYS = int(os.environ.get('SUBSCRIPTION_PRO_PERIOD_DAYS', '30'))
+if SUBSCRIPTION_PRO_PERIOD_DAYS < 1:
+    raise ImproperlyConfigured('SUBSCRIPTION_PRO_PERIOD_DAYS must be at least 1.')
+
+STORAGE_DRIVER = os.environ.get('STORAGE_DRIVER', 'local').lower()
+if STORAGE_DRIVER not in {'local', 's3'}:
+    raise ImproperlyConfigured('STORAGE_DRIVER must be local or s3.')
+STORAGE_PROVIDER = 's3-compatible' if STORAGE_DRIVER == 's3' else 'django-default'
+STORAGE_PUBLIC_METADATA = {'driver': STORAGE_DRIVER}
+# Compressed (gzip/brotli) but not manifest-hashed, so code paths that never ran
+# collectstatic (tests, local dev) keep working.
+_STATICFILES_STORAGE = {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'}
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': _STATICFILES_STORAGE,
+}
+if STORAGE_DRIVER == 's3':
+    AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
+    if not AWS_STORAGE_BUCKET_NAME:
+        raise ImproperlyConfigured('AWS_STORAGE_BUCKET_NAME is required when STORAGE_DRIVER=s3.')
+    AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME') or None
+    AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL') or None
+    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID') or None
+    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY') or None
+    AWS_S3_ADDRESSING_STYLE = os.environ.get('AWS_S3_ADDRESSING_STYLE', 'auto')
+    AWS_QUERYSTRING_EXPIRE = int(os.environ.get('AWS_QUERYSTRING_EXPIRE', '300'))
+    STORAGE_PUBLIC_METADATA.update({
+        'bucket': AWS_STORAGE_BUCKET_NAME, 'region': AWS_S3_REGION_NAME,
+        'endpoint': AWS_S3_ENDPOINT_URL,
+    })
+    STORAGES = {
+        'default': {
+            'BACKEND': 'storages.backends.s3.S3Storage',
+            'OPTIONS': {
+                'bucket_name': AWS_STORAGE_BUCKET_NAME,
+                'region_name': AWS_S3_REGION_NAME,
+                'endpoint_url': AWS_S3_ENDPOINT_URL,
+                'access_key': AWS_ACCESS_KEY_ID,
+                'secret_key': AWS_SECRET_ACCESS_KEY,
+                'addressing_style': AWS_S3_ADDRESSING_STYLE,
+                'default_acl': None,
+                'querystring_auth': True,
+                'querystring_expire': AWS_QUERYSTRING_EXPIRE,
+                'file_overwrite': False,
+            },
+        },
+        'staticfiles': _STATICFILES_STORAGE,
+    }
+
+APP_BASE_URL = os.environ.get('APP_BASE_URL', 'http://localhost:8000').rstrip('/')
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
+# --- Outgoing email --------------------------------------------------------------------
+# Configured purely by environment. Precedence:
+#   1. EMAIL_BACKEND, when set, always wins.
+#   2. RESEND_API_KEY + EMAIL_TRANSPORT=api (default) -> Resend HTTPS API (port 443).
+#      Recommended: many hosts (Hetzner, most clouds) block outbound SMTP ports.
+#   3. RESEND_API_KEY + EMAIL_TRANSPORT=smtp -> Resend's SMTP relay (smtp.resend.com:465, SSL).
+#   4. EMAIL_HOST set to a real relay -> Django's SMTP backend.
+#   5. Otherwise the console backend: emails are printed to the log, nothing is sent.
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+RESEND_API_URL = os.environ.get('RESEND_API_URL', 'https://api.resend.com/emails')
+EMAIL_TRANSPORT = os.environ.get('EMAIL_TRANSPORT', 'api').strip().lower() or 'api'
+if EMAIL_TRANSPORT not in ('api', 'smtp'):
+    raise ImproperlyConfigured("EMAIL_TRANSPORT must be 'api' or 'smtp'.")
+_EMAIL_HOST_ENV = os.environ.get('EMAIL_HOST', '')
+if RESEND_API_KEY and EMAIL_TRANSPORT == 'smtp':
+    EMAIL_HOST = _EMAIL_HOST_ENV or 'smtp.resend.com'
+    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
+    EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'resend')
+    EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD') or RESEND_API_KEY
+    EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=False)
+    EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', default=not EMAIL_USE_TLS)
+else:
+    EMAIL_HOST = _EMAIL_HOST_ENV or 'localhost'
+    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '25'))
+    EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+    EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+    EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=False)
+    EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', default=False)
+if os.environ.get('EMAIL_BACKEND'):
+    EMAIL_BACKEND = os.environ['EMAIL_BACKEND']
+elif RESEND_API_KEY and EMAIL_TRANSPORT == 'api':
+    EMAIL_BACKEND = 'blazeflow.email_backends.resend.EmailBackend'
+elif RESEND_API_KEY or _EMAIL_HOST_ENV not in ('', 'localhost'):
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '20'))
+# Brand name shown in email templates.
+EMAIL_BRAND_NAME = os.environ.get('EMAIL_BRAND_NAME', 'Blaze Flow')
+
+# --- Sign-up mode ------------------------------------------------------------------------
+# open: anyone may register. invite_only: only people holding a valid workspace or client
+# team invite (or with a pending workspace invite for their address) may create an account.
+SIGNUP_MODE = os.environ.get('SIGNUP_MODE', 'open').strip().lower()
+if SIGNUP_MODE not in {'open', 'invite_only'}:
+    raise ImproperlyConfigured('SIGNUP_MODE must be open or invite_only.')
+INVITE_ACCEPT_URL = os.environ.get('INVITE_ACCEPT_URL', f'{APP_BASE_URL}/invite')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Blaze Flow <no-reply@localhost>')
+PASSWORD_RESET_URL = os.environ.get('PASSWORD_RESET_URL', f'{APP_BASE_URL}/reset-password')
+PASSWORD_RESET_TTL_MINUTES = int(os.environ.get('PASSWORD_RESET_TTL_MINUTES', '30'))
+EMAIL_VERIFICATION_URL = os.environ.get(
+    'EMAIL_VERIFICATION_URL', f'{APP_BASE_URL}/verify-email'
+)
+EMAIL_VERIFICATION_TTL_MINUTES = int(
+    os.environ.get('EMAIL_VERIFICATION_TTL_MINUTES', '1440')
+)
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    raise ImproperlyConfigured('EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be enabled.')
+if PASSWORD_RESET_TTL_MINUTES < 1:
+    raise ImproperlyConfigured('PASSWORD_RESET_TTL_MINUTES must be at least 1.')
+if EMAIL_VERIFICATION_TTL_MINUTES < 1:
+    raise ImproperlyConfigured('EMAIL_VERIFICATION_TTL_MINUTES must be at least 1.')
+
+OUTBOX_MAX_ATTEMPTS = int(os.environ.get('OUTBOX_MAX_ATTEMPTS', '5'))
+OUTBOX_RETRY_BASE_SECONDS = int(os.environ.get('OUTBOX_RETRY_BASE_SECONDS', '60'))
+OUTBOX_RETRY_MAX_SECONDS = int(os.environ.get('OUTBOX_RETRY_MAX_SECONDS', '3600'))
+FILE_SECURITY_SCANNER = os.environ.get(
+    'FILE_SECURITY_SCANNER', 'app.services.file_processing.EicarAwareScanner'
+)
+CLAMAV_HOST = os.environ.get('CLAMAV_HOST', 'clamav')
+CLAMAV_PORT = int(os.environ.get('CLAMAV_PORT', '3310'))
+CLAMAV_TIMEOUT_SECONDS = float(os.environ.get('CLAMAV_TIMEOUT_SECONDS', '30'))
+CLAMAV_MAX_STREAM_BYTES = int(os.environ.get('CLAMAV_MAX_STREAM_BYTES', str(MAX_REVIEW_ATTACHMENT_BYTES)))
+OPERATIONS_STALE_MINUTES = int(os.environ.get('OPERATIONS_STALE_MINUTES', '15'))
+REVIEW_FILE_RETENTION_DAYS = int(os.environ.get('REVIEW_FILE_RETENTION_DAYS', '30'))
+WORKSPACE_DELETION_GRACE_DAYS = int(os.environ.get('WORKSPACE_DELETION_GRACE_DAYS', '30'))
+if OUTBOX_MAX_ATTEMPTS < 1:
+    raise ImproperlyConfigured('OUTBOX_MAX_ATTEMPTS must be at least 1.')
+if OUTBOX_RETRY_BASE_SECONDS < 1:
+    raise ImproperlyConfigured('OUTBOX_RETRY_BASE_SECONDS must be at least 1.')
+if OUTBOX_RETRY_MAX_SECONDS < OUTBOX_RETRY_BASE_SECONDS:
+    raise ImproperlyConfigured(
+        'OUTBOX_RETRY_MAX_SECONDS must be greater than or equal to OUTBOX_RETRY_BASE_SECONDS.'
+    )
+if REVIEW_FILE_RETENTION_DAYS < 1:
+    raise ImproperlyConfigured('REVIEW_FILE_RETENTION_DAYS must be at least 1.')
+if WORKSPACE_DELETION_GRACE_DAYS < 1:
+    raise ImproperlyConfigured('WORKSPACE_DELETION_GRACE_DAYS must be at least 1.')
+if REVIEW_PAGE_SIZE < 1 or REVIEW_MAX_PAGE_SIZE < REVIEW_PAGE_SIZE:
+    raise ImproperlyConfigured('Review pagination sizes must be positive and max must cover default.')
+if PREVIEW_MAX_PIXELS < 1 or PREVIEW_MAX_WIDTH < 1 or PREVIEW_MAX_HEIGHT < 1:
+    raise ImproperlyConfigured('Preview limits must be positive integers.')
+if PREVIEW_DECODER_TIMEOUT_SECONDS < 1 or PREVIEW_DECODER_MAX_INPUT_BYTES < 1 or PREVIEW_DECODER_MAX_OUTPUT_BYTES < 1 or PREVIEW_AUDIO_MAX_SECONDS < 1:
+    raise ImproperlyConfigured('Preview decoder limits must be positive integers.')
+if CLAMAV_PORT < 1 or CLAMAV_TIMEOUT_SECONDS <= 0 or CLAMAV_MAX_STREAM_BYTES < 1:
+    raise ImproperlyConfigured('ClamAV port, timeout, and stream limit must be positive.')
+# Direct browser-to-bucket uploads (presigned PUT / multipart). Off unless explicitly enabled,
+# and only ever active with STORAGE_DRIVER=s3; the bucket needs a narrow CORS rule first.
+DIRECT_UPLOADS_ENABLED = os.environ.get('DIRECT_UPLOADS_ENABLED', 'false').lower() in {'1', 'true', 'yes'}
+DIRECT_UPLOAD_SINGLE_PUT_MAX_BYTES = int(os.environ.get('DIRECT_UPLOAD_SINGLE_PUT_MAX_BYTES', str(64 * 1024 * 1024)))
+DIRECT_UPLOAD_PART_SIZE = int(os.environ.get('DIRECT_UPLOAD_PART_SIZE', str(16 * 1024 * 1024)))
+DIRECT_UPLOAD_URL_EXPIRE_SECONDS = int(os.environ.get('DIRECT_UPLOAD_URL_EXPIRE_SECONDS', '900'))
+DIRECT_UPLOAD_TTL_SECONDS = int(os.environ.get('DIRECT_UPLOAD_TTL_SECONDS', str(24 * 3600)))
+
+if STORAGE_DRIVER == 's3' and AWS_QUERYSTRING_EXPIRE < 1:
+    raise ImproperlyConfigured('AWS_QUERYSTRING_EXPIRE must be at least 1 second.')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -130,9 +414,9 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
+    'NUM_PROXIES': THROTTLE_TRUSTED_PROXY_COUNT,
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
@@ -141,4 +425,88 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
+    'DEFAULT_THROTTLE_RATES': {
+        'registration': os.environ.get('REGISTRATION_THROTTLE_RATE', '5/hour'),
+        'login': os.environ.get('LOGIN_THROTTLE_RATE', '20/hour'),
+        'password_reset': os.environ.get('PASSWORD_RESET_THROTTLE_RATE', '5/hour'),
+        'email_verification': os.environ.get('EMAIL_VERIFICATION_THROTTLE_RATE', '5/hour'),
+        # Public upload links: page loads plus one request per file, per client IP.
+        'upload_link': os.environ.get('UPLOAD_LINK_THROTTLE_RATE', '240/hour'),
+        # "Report a problem" submissions, per signed-in user.
+        'support_ticket': os.environ.get('SUPPORT_TICKET_THROTTLE_RATE', '20/hour'),
+    },
+}
+
+
+# AI Visual QA (spelling in visible text). Off unless switched on; see docs/ai-visual-qa/.
+AI_VISUAL_QA_ENABLED = os.environ.get('AI_VISUAL_QA_ENABLED', 'false').lower() == 'true'
+# 'paddleocr' needs `pip install -r requirements-ai.txt`; 'fake' is for tests and CI.
+AI_QA_ENGINE = os.environ.get('AI_QA_ENGINE', 'paddleocr')
+AI_QA_MAX_IMAGE_BYTES = int(os.environ.get('AI_QA_MAX_IMAGE_BYTES', str(50 * 1024 * 1024)))
+AI_QA_MAX_DECODE_PIXELS = int(os.environ.get('AI_QA_MAX_DECODE_PIXELS', str(80_000_000)))
+AI_QA_MAX_PIXELS = int(os.environ.get('AI_QA_MAX_PIXELS', str(8_300_000)))
+AI_QA_MAX_CONCURRENT_PER_WORKSPACE = int(os.environ.get('AI_QA_MAX_CONCURRENT_PER_WORKSPACE', '1'))
+AI_QA_DAILY_RUNS_PER_WORKSPACE = int(os.environ.get('AI_QA_DAILY_RUNS_PER_WORKSPACE', '50'))
+AI_QA_MAX_ATTEMPTS = int(os.environ.get('AI_QA_MAX_ATTEMPTS', '3'))
+AI_QA_MIN_OCR_CONFIDENCE = float(os.environ.get('AI_QA_MIN_OCR_CONFIDENCE', '0.6'))
+AI_QA_REQUIRE_CLEAN_SCAN = os.environ.get('AI_QA_REQUIRE_CLEAN_SCAN', 'true').lower() == 'true'
+AI_QA_HUNSPELL_DIRS = [d for d in os.environ.get(
+    'AI_QA_HUNSPELL_DIRS', '/usr/share/hunspell:/usr/share/myspell/dicts:/usr/share/myspell',
+).split(':') if d]
+# The general outbox worker leaves AI QA runs to `run_ai_qa_worker`, so a long OCR job
+# never holds up notification e-mail. Set false to process everything in one worker.
+AI_QA_DEDICATED_WORKER = os.environ.get('AI_QA_DEDICATED_WORKER', 'true').lower() == 'true'
+AI_QA_MAX_VIDEO_SECONDS = int(os.environ.get('AI_QA_MAX_VIDEO_SECONDS', str(15 * 60)))
+AI_QA_MAX_VIDEO_BYTES = int(os.environ.get('AI_QA_MAX_VIDEO_BYTES', str(MAX_MEDIA_UPLOAD_BYTES)))
+# 2 fps over 15 minutes is 1,800 baseline frames; the rest is room for densified frames.
+AI_QA_MAX_FRAMES = int(os.environ.get('AI_QA_MAX_FRAMES', '2400'))
+AI_QA_FRAME_WIDTH = int(os.environ.get('AI_QA_FRAME_WIDTH', '960'))
+AI_QA_FFMPEG_TIMEOUT_SECONDS = int(os.environ.get('AI_QA_FFMPEG_TIMEOUT_SECONDS', '1800'))
+# A frame where at most this share of a small greyscale copy changed reuses the previous OCR.
+AI_QA_DEDUPE_FRAMES = os.environ.get('AI_QA_DEDUPE_FRAMES', 'true').lower() == 'true'
+AI_QA_DUP_MAX_CHANGED = float(os.environ.get('AI_QA_DUP_MAX_CHANGED', '0.002'))
+# Threads Paddle may use per worker process; split the cores when running several workers.
+AI_QA_CPU_THREADS = int(os.environ.get('AI_QA_CPU_THREADS', str(os.cpu_count() or 4)))
+AI_QA_VIDEO_DET_MODEL = os.environ.get('AI_QA_VIDEO_DET_MODEL', 'PP-OCRv5_mobile_det')
+# Partial video findings are written after this many frames, so the panel fills in as it runs.
+AI_QA_PARTIAL_EVERY_FRAMES = int(os.environ.get('AI_QA_PARTIAL_EVERY_FRAMES', '12'))
+
+
+# Optional error tracking. Inactive unless SENTRY_DSN is set, so no account is needed to run.
+SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
+if SENTRY_DSN:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=os.environ.get('SENTRY_ENVIRONMENT', 'development' if DEBUG else 'production'),
+        traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0')),
+        # GDPR: no cookies, IPs or user emails unless explicitly turned on.
+        send_default_pii=os.environ.get('SENTRY_SEND_DEFAULT_PII', 'false').lower() == 'true',
+    )
+
+
+# Logging: everything to stdout/stderr so `docker compose logs` and any log shipper see it.
+LOG_LEVEL = os.environ.get('DJANGO_LOG_LEVEL', 'INFO').upper()
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'console': {
+            'format': '%(asctime)s %(levelname)s %(name)s [%(process)d] %(message)s',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://sys.stdout',
+            'formatter': 'console',
+        },
+    },
+    'root': {'handlers': ['console'], 'level': LOG_LEVEL},
+    'loggers': {
+        'django': {'handlers': ['console'], 'level': LOG_LEVEL, 'propagate': False},
+        'django.request': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
+        'django.db.backends': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
+    },
 }

@@ -1,0 +1,47 @@
+/*
+ * Shared interaction feel: what a click looks like, and where the text caret may appear.
+ * Durations come from the motion tokens in tokens.css (120 / 180 ms, one ease-out curve);
+ * globals.css already cuts every transition to ~0 under prefers-reduced-motion.
+ */
+
+/*
+ * The caret. Chromium and Safari paint a blinking caret in non-editable text when caret
+ * browsing is on (F7 in Chrome/Edge, easy to hit by accident) and when a click lands in
+ * text inside a focusable container (file tiles, task cards, tree rows: tabindex="0").
+ * The page inherited a visible `caret-color`, so that caret showed everywhere and read as
+ * "you're about to type". Only real text fields get a caret now. Text stays selectable and
+ * keyboard focus rings are untouched: this hides the insertion point, nothing else.
+ */
+html { caret-color: transparent; }
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),
+textarea, select, [contenteditable]:not([contenteditable=false]), [role=textbox] {
+  caret-color: auto;
+}
+
+/* Press feedback: every clickable thing answers the click at once, before any data arrives. */
+:where(button, [role=button], [role=tab], [role=menuitem], a.ui-button, summary):where(:not(:disabled)) {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: var(--bf-duration-fast);
+  transition-timing-function: var(--bf-ease-out);
+}
+/* Zero specificity throughout, so any component with its own transform (timeline markers,
+   centred pins) keeps it and simply doesn't get the press scale. */
+:where(button, [role=button], [role=tab], a.ui-button):where(:not(:disabled):active) { transform: scale(.97); }
+/* Sidebar and list links: a quick tint instead of a jump. */
+:where(.studio-sidebar nav a, a.review-row, a.note-row, a.editor-task-row, a.home-project-card) {
+  transition: background-color var(--bf-duration-fast) var(--bf-ease-out), color var(--bf-duration-fast) var(--bf-ease-out), transform var(--bf-duration-fast) var(--bf-ease-out);
+}
+:where(.studio-sidebar nav a, a.review-row, a.note-row, a.editor-task-row, a.home-project-card):where(:active) { transform: scale(.985); }
+
+/* A button doing work: `aria-busy` (set by PendingButton and forms) shows a spinner and blocks double clicks. */
+:where(button[aria-busy=true]) { position: relative; color: transparent !important; pointer-events: none; }
+:where(button[aria-busy=true])::after {
+  content: ""; position: absolute; inset: 0; margin: auto; width: 14px; height: 14px;
+  border: 2px solid currentColor; border-color: var(--text, #fff) transparent var(--text, #fff) var(--text, #fff);
+  border-radius: 50%; animation: bf-spin .7s linear infinite;
+}
+@keyframes bf-spin { to { transform: rotate(360deg); } }
+
+/* Route content enters with a short fade; the skeleton swaps in on the same curve. */
+.sk-body { animation: bf-fade-in var(--bf-duration-base) var(--bf-ease-out) both; }
+@keyframes bf-fade-in { from { opacity: 0; } to { opacity: 1; } }
