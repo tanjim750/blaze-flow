@@ -74,8 +74,8 @@
 .auth-strength b { color: var(--text); font-weight: 600; }
 
 /* Alerts */
-.auth-alert { display: flex; gap: 8px; align-items: flex-start; padding: 11px 13px; border-radius: 9px; font-size: 13px; line-height: 1.5; border: 1px solid; }
-.auth-alert svg { flex: none; margin-top: 2px; }
+.auth-alert { display: block; padding: 11px 13px; border-radius: 9px; font-size: 13px; line-height: 1.5; border: 1px solid; }
+.auth-alert svg { display: inline-block; vertical-align: -3px; margin-right: 6px; }
 .auth-alert a { color: inherit; text-decoration: underline; font-weight: 600; }
 .auth-alert.is-error { background: #3b171d; border-color: #792932; color: #ffb3b9; }
 .auth-alert.is-info { background: #1d1833; border-color: #3d3170; color: #d4c9ff; }
