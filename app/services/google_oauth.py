@@ -51,7 +51,7 @@ def _update_identity_profile(*, identity, claims, now):
 
 
 @transaction.atomic
-def authenticate_with_google(*, id_token):
+def authenticate_with_google(*, id_token, invite_token=None):
     claims = verify_google_id_token(id_token)
     subject = claims.get('sub')
     email = (claims.get('email') or '').strip().lower()
@@ -78,6 +78,12 @@ def authenticate_with_google(*, id_token):
     user = User.objects.filter(email__iexact=email).first()
     created_user = False
     if user is None:
+        from app.services.signup import SignupClosed, ensure_signup_allowed
+
+        try:
+            ensure_signup_allowed(email=email, invite_token=invite_token)
+        except SignupClosed as exc:
+            raise GoogleOAuthError(str(exc)) from exc
         user = User.objects.create_user(
             email=email,
             password=None,

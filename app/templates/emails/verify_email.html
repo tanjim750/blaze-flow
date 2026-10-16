@@ -1,0 +1,8 @@
+{% extends "emails/base.html" %}
+{% block preheader %}Confirm your email address to finish setting up {{ brand }}.{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;color:#ffffff;">Confirm your email</h1>
+<p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#c9c6d6;">Hi {{ first_name|default:"there" }}, confirm this address to finish setting up your {{ brand }} account.</p>
+{% include "emails/_button.html" with url=action_url label="Verify email" %}
+<p style="margin:20px 0 0 0;font-size:13px;color:#8a879a;">This link expires in {{ ttl_minutes }} minutes and can be used once.</p>
+{% endblock %}

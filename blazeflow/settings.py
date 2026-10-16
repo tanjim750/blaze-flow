@@ -301,16 +301,53 @@ if STORAGE_DRIVER == 's3':
 
 APP_BASE_URL = os.environ.get('APP_BASE_URL', 'http://localhost:8000').rstrip('/')
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
-EMAIL_BACKEND = os.environ.get(
-    'EMAIL_BACKEND',
-    'django.core.mail.backends.console.EmailBackend',
-)
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'localhost')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '25'))
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=False)
-EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', default=False)
+# --- Outgoing email --------------------------------------------------------------------
+# Configured purely by environment. Precedence:
+#   1. EMAIL_BACKEND, when set, always wins.
+#   2. RESEND_API_KEY + EMAIL_TRANSPORT=api (default) -> Resend HTTPS API (port 443).
+#      Recommended: many hosts (Hetzner, most clouds) block outbound SMTP ports.
+#   3. RESEND_API_KEY + EMAIL_TRANSPORT=smtp -> Resend's SMTP relay (smtp.resend.com:465, SSL).
+#   4. EMAIL_HOST set to a real relay -> Django's SMTP backend.
+#   5. Otherwise the console backend: emails are printed to the log, nothing is sent.
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+RESEND_API_URL = os.environ.get('RESEND_API_URL', 'https://api.resend.com/emails')
+EMAIL_TRANSPORT = os.environ.get('EMAIL_TRANSPORT', 'api').strip().lower() or 'api'
+if EMAIL_TRANSPORT not in ('api', 'smtp'):
+    raise ImproperlyConfigured("EMAIL_TRANSPORT must be 'api' or 'smtp'.")
+_EMAIL_HOST_ENV = os.environ.get('EMAIL_HOST', '')
+if RESEND_API_KEY and EMAIL_TRANSPORT == 'smtp':
+    EMAIL_HOST = _EMAIL_HOST_ENV or 'smtp.resend.com'
+    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
+    EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'resend')
+    EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD') or RESEND_API_KEY
+    EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=False)
+    EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', default=not EMAIL_USE_TLS)
+else:
+    EMAIL_HOST = _EMAIL_HOST_ENV or 'localhost'
+    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '25'))
+    EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+    EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+    EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=False)
+    EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', default=False)
+if os.environ.get('EMAIL_BACKEND'):
+    EMAIL_BACKEND = os.environ['EMAIL_BACKEND']
+elif RESEND_API_KEY and EMAIL_TRANSPORT == 'api':
+    EMAIL_BACKEND = 'blazeflow.email_backends.resend.EmailBackend'
+elif RESEND_API_KEY or _EMAIL_HOST_ENV not in ('', 'localhost'):
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '20'))
+# Brand name shown in email templates.
+EMAIL_BRAND_NAME = os.environ.get('EMAIL_BRAND_NAME', 'Blaze Flow')
+
+# --- Sign-up mode ------------------------------------------------------------------------
+# open: anyone may register. invite_only: only people holding a valid workspace or client
+# team invite (or with a pending workspace invite for their address) may create an account.
+SIGNUP_MODE = os.environ.get('SIGNUP_MODE', 'open').strip().lower()
+if SIGNUP_MODE not in {'open', 'invite_only'}:
+    raise ImproperlyConfigured('SIGNUP_MODE must be open or invite_only.')
+INVITE_ACCEPT_URL = os.environ.get('INVITE_ACCEPT_URL', f'{APP_BASE_URL}/invite')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Blaze Flow <no-reply@localhost>')
 PASSWORD_RESET_URL = os.environ.get('PASSWORD_RESET_URL', f'{APP_BASE_URL}/reset-password')
 PASSWORD_RESET_TTL_MINUTES = int(os.environ.get('PASSWORD_RESET_TTL_MINUTES', '30'))
