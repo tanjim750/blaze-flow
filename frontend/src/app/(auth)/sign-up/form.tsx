@@ -106,10 +106,12 @@ export function SignUpForm({ inviteToken, invite, inviteOnly = false, next }: Pr
         meter value={password} onChange={setPassword} error={fieldErrors.password}
         context={[names.first, names.last, names.email.split("@")[0] ?? ""]} />
 
-      <FormAlert>
-        {error}
-        {closed && <> <Link href="/sign-in">Sign in</Link> if you already have an account.</>}
-      </FormAlert>
+      {error && (
+        <FormAlert>
+          {error}
+          {closed && <> <Link href="/sign-in">Sign in</Link> if you already have an account.</>}
+        </FormAlert>
+      )}
 
       <SubmitButton busy={busy} busyLabel="Creating your account…">{invite ? "Create account & join" : "Create account"}</SubmitButton>
 
