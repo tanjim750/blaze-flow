@@ -304,12 +304,18 @@ GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
 # --- Outgoing email --------------------------------------------------------------------
 # Configured purely by environment. Precedence:
 #   1. EMAIL_BACKEND, when set, always wins.
-#   2. RESEND_API_KEY -> Resend's SMTP relay (smtp.resend.com:465, SSL, user "resend").
-#   3. EMAIL_HOST set to a real relay -> Django's SMTP backend.
-#   4. Otherwise the console backend: emails are printed to the log, nothing is sent.
+#   2. RESEND_API_KEY + EMAIL_TRANSPORT=api (default) -> Resend HTTPS API (port 443).
+#      Recommended: many hosts (Hetzner, most clouds) block outbound SMTP ports.
+#   3. RESEND_API_KEY + EMAIL_TRANSPORT=smtp -> Resend's SMTP relay (smtp.resend.com:465, SSL).
+#   4. EMAIL_HOST set to a real relay -> Django's SMTP backend.
+#   5. Otherwise the console backend: emails are printed to the log, nothing is sent.
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+RESEND_API_URL = os.environ.get('RESEND_API_URL', 'https://api.resend.com/emails')
+EMAIL_TRANSPORT = os.environ.get('EMAIL_TRANSPORT', 'api').strip().lower() or 'api'
+if EMAIL_TRANSPORT not in ('api', 'smtp'):
+    raise ImproperlyConfigured("EMAIL_TRANSPORT must be 'api' or 'smtp'.")
 _EMAIL_HOST_ENV = os.environ.get('EMAIL_HOST', '')
-if RESEND_API_KEY:
+if RESEND_API_KEY and EMAIL_TRANSPORT == 'smtp':
     EMAIL_HOST = _EMAIL_HOST_ENV or 'smtp.resend.com'
     EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
     EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'resend')
@@ -323,11 +329,14 @@ else:
     EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
     EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=False)
     EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', default=False)
-_SMTP_CONFIGURED = bool(RESEND_API_KEY) or _EMAIL_HOST_ENV not in ('', 'localhost')
-EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND') or (
-    'django.core.mail.backends.smtp.EmailBackend' if _SMTP_CONFIGURED
-    else 'django.core.mail.backends.console.EmailBackend'
-)
+if os.environ.get('EMAIL_BACKEND'):
+    EMAIL_BACKEND = os.environ['EMAIL_BACKEND']
+elif RESEND_API_KEY and EMAIL_TRANSPORT == 'api':
+    EMAIL_BACKEND = 'blazeflow.email_backends.resend.EmailBackend'
+elif RESEND_API_KEY or _EMAIL_HOST_ENV not in ('', 'localhost'):
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '20'))
 # Brand name shown in email templates.
 EMAIL_BRAND_NAME = os.environ.get('EMAIL_BRAND_NAME', 'Blaze Flow')

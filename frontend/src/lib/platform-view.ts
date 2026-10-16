@@ -9,8 +9,9 @@ export type Attention = { code: string; severity: "critical" | "warning" | "info
 
 export type Overview = {
   range_days: number; generated_at: string; currency: string; pro_price_minor: number; mrr_is_estimate: boolean; demo_users: number;
-  /** SIGNUP_MODE and the short name of the email backend (smtp / console / locmem). */
-  signup_mode?: "open" | "invite_only"; email_backend?: string;
+  /** SIGNUP_MODE and the email backend: short name (resend / smtp / console / locmem),
+   *  transport label ("Resend API", "SMTP", …) and whether mail really leaves the server. */
+  signup_mode?: "open" | "invite_only"; email_backend?: string; email_transport?: string; email_sending?: boolean;
   users: { total: number; signups: number; verified: number; signups_by_day: { date: string; count: number }[] };
   workspaces: { total: number; active: number };
   plans: { free: number; pro: number; pro_paying: number; trialing: number };

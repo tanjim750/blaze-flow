@@ -13,6 +13,25 @@ from app.models import (
 )
 
 DEMO_EMAIL_SUFFIX = '@demo.blazeflow.test'
+
+# Backends that actually deliver mail, with the label shown on the platform overview.
+_SENDING_BACKENDS = {
+    'blazeflow.email_backends.resend.EmailBackend': 'Resend API',
+    'django.core.mail.backends.smtp.EmailBackend': 'SMTP',
+}
+
+
+def email_status():
+    """Short backend name, a human transport label and whether mail really leaves."""
+    path = settings.EMAIL_BACKEND
+    label = _SENDING_BACKENDS.get(path)
+    if label == 'SMTP' and getattr(settings, 'EMAIL_HOST', '') == 'smtp.resend.com':
+        label = 'Resend SMTP'
+    return {
+        'email_backend': path.rsplit('.', 2)[-2],
+        'email_transport': label or path.rsplit('.', 2)[-2],
+        'email_sending': label is not None,
+    }
 CURRENT = (SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE)
 
 
@@ -66,7 +85,7 @@ def overview(*, days=30, now=None):
     ]
     return {
         'signup_mode': settings.SIGNUP_MODE,
-        'email_backend': settings.EMAIL_BACKEND.rsplit('.', 2)[-2],
+        **email_status(),
         'range_days': days,
         'generated_at': now,
         'currency': settings.PLATFORM_CURRENCY,

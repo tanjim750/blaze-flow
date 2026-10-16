@@ -76,10 +76,16 @@ HTML + plain text. Configuration is environment-only:
 
 | Set | Result |
 | --- | --- |
-| `RESEND_API_KEY` | Resend SMTP relay: `smtp.resend.com:465`, SSL, user `resend`, password = the key |
+| `RESEND_API_KEY` (`EMAIL_TRANSPORT=api`, the default) | Resend HTTPS API: `POST https://api.resend.com/emails` on port 443 (`blazeflow.email_backends.resend`) |
+| `RESEND_API_KEY` + `EMAIL_TRANSPORT=smtp` | Resend SMTP relay: `smtp.resend.com:465`, SSL, user `resend`, password = the key |
 | `EMAIL_HOST` (+ `EMAIL_PORT/USER/PASSWORD/USE_TLS`) | Any other SMTP provider |
 | neither | Console backend — emails are printed to the `web` / `outbox` logs, nothing is sent |
 | `EMAIL_BACKEND` | Always wins (escape hatch) |
+
+**Use the API transport in production.** Hetzner (and many other hosts) block outbound SMTP
+ports 25/465/587 on new servers, so `smtp.resend.com` simply times out. The API backend only
+needs outbound HTTPS, supports HTML + text, cc/bcc, reply-to, custom headers and attachments,
+honours `EMAIL_TIMEOUT`, and reports Resend's error message (never the key) on failure.
 
 1. **Create the key.** Resend → API Keys → *Create API key*, name it `blazeflow-production`,
    permission **Sending access**, domain = your sending domain. Put it in `.env.production`
@@ -111,8 +117,9 @@ HTML + plain text. Configuration is environment-only:
    ```
 
    It prints the backend and sender used, and fails loudly with the provider's error
-   (bad key, unverified domain, …). The platform admin overview shows *Email: sending* when
-   SMTP is configured and *Email: console (not sent)* otherwise.
+   (bad key, unverified domain, …). The platform admin overview shows *Email: sending via Resend API*
+   (or *SMTP* / *Resend SMTP*) when mail really leaves the server and *Email: console (not
+   sent)* otherwise.
 
 How emails are sent: mention notifications go through the outbox worker (retries and dead
 letters). Verification, password-reset and invitation emails are sent inline by the request
