@@ -55,7 +55,8 @@ Edit `.env.production`. Every variable is documented in the file. At minimum set
 - `DJANGO_ALLOWED_HOSTS` — your public host **plus `web`** (internal calls use `http://web:8000`)
 - `DJANGO_CSRF_TRUSTED_ORIGINS`, `APP_BASE_URL`, `PASSWORD_RESET_URL`, `EMAIL_VERIFICATION_URL`
 - R2: `STORAGE_DRIVER=s3`, `AWS_*` (bucket-scoped token)
-- SMTP: `EMAIL_*`, `DEFAULT_FROM_EMAIL`
+- Email: `RESEND_API_KEY`, `DEFAULT_FROM_EMAIL` (see [Email with Resend](#email-with-resend))
+- `SIGNUP_MODE=invite_only` (see [Sign-up mode](#sign-up-mode))
 - `APP_DOMAIN` if using Caddy
 - `THROTTLE_TRUSTED_PROXY_COUNT` / `THROTTLE_TRUST_CF_CONNECTING_IP` (see §6)
 
@@ -67,6 +68,65 @@ All compose commands below use this alias:
 ```sh
 alias dc='docker compose -f docker-compose.prod.yml --env-file .env.production'
 ```
+
+### Email with Resend
+
+Blaze Flow sends verification, password-reset, invitation and mention emails as branded
+HTML + plain text. Configuration is environment-only:
+
+| Set | Result |
+| --- | --- |
+| `RESEND_API_KEY` | Resend SMTP relay: `smtp.resend.com:465`, SSL, user `resend`, password = the key |
+| `EMAIL_HOST` (+ `EMAIL_PORT/USER/PASSWORD/USE_TLS`) | Any other SMTP provider |
+| neither | Console backend — emails are printed to the `web` / `outbox` logs, nothing is sent |
+| `EMAIL_BACKEND` | Always wins (escape hatch) |
+
+1. **Create the key.** Resend → API Keys → *Create API key*, name it `blazeflow-production`,
+   permission **Sending access**, domain = your sending domain. Put it in `.env.production`
+   as `RESEND_API_KEY=` (never in git).
+2. **Verify the domain.** Resend → Domains → *Add domain*. Use a subdomain such as
+   `mail.example.com` so marketing tools on the apex never clash. Resend shows the exact
+   records; on Cloudflare (DNS → Records) add them with **Proxy status: DNS only**:
+
+   | Type | Name (on `mail.example.com`) | Content | Purpose |
+   | --- | --- | --- | --- |
+   | MX | `send.mail` | `feedback-smtp.<region>.amazonses.com` (priority 10) | bounce/return path |
+   | TXT | `send.mail` | `v=spf1 include:amazonses.com ~all` | **SPF** |
+   | TXT | `resend._domainkey.mail` | `p=MIGfMA0G…` (long key from Resend) | **DKIM** |
+   | TXT | `_dmarc` (recommended) | `v=DMARC1; p=none; rua=mailto:dmarc@example.com` | DMARC |
+
+   Copy values from the Resend dashboard verbatim (the region and DKIM key are per-account).
+   Resend's *Auto configure* button can write them to Cloudflare for you. Click *Verify*;
+   it usually turns green within minutes.
+3. **Sender.** Set `DEFAULT_FROM_EMAIL="Blaze Flow <no-reply@mail.example.com>"` — the
+   address must be on the verified domain.
+   *Sandbox caveat:* before a domain is verified you can only send from
+   `onboarding@resend.dev`, and Resend then delivers **only to the email address of the
+   Resend account owner**. Everyone else's verification/invite emails will be rejected, so
+   verify the domain before inviting real users.
+4. **Test.** After `dc up -d`:
+
+   ```sh
+   dc exec web python manage.py send_test_email you@example.com
+   ```
+
+   It prints the backend and sender used, and fails loudly with the provider's error
+   (bad key, unverified domain, …). The platform admin overview shows *Email: sending* when
+   SMTP is configured and *Email: console (not sent)* otherwise.
+
+How emails are sent: mention notifications go through the outbox worker (retries and dead
+letters). Verification, password-reset and invitation emails are sent inline by the request
+because they carry one-time tokens that are only ever stored hashed; on failure the token is
+invalidated and the user can resend (the UI enforces a 60-second cooldown, the API throttles).
+
+### Sign-up mode
+
+`SIGNUP_MODE=open` (default, used in development) lets anyone register.
+`SIGNUP_MODE=invite_only` (recommended for production) only lets someone create an account
+when they hold a valid invitation: the link from a workspace invite or client-team invite, or
+a pending workspace invite addressed to the email they sign up with (email or Google).
+Existing users always sign in normally. Everyone else sees a friendly "sign-up is by
+invitation" page. Platform admins see the current mode on `/platform`.
 
 ## 3. Build, migrate, start
 

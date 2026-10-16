@@ -21,7 +21,7 @@ export async function signOutAction(): Promise<void> {
   const jar = await cookies();
   jar.delete("sessionid");
   jar.delete("csrftoken");
-  redirect("/sign-in");
+  redirect("/sign-in?signed_out=1");
 }
 
 export async function switchWorkspaceAction(form: FormData): Promise<void> {

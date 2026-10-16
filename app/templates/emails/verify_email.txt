@@ -1,0 +1,10 @@
+{% autoescape off %}Hi {{ first_name|default:"there" }},
+
+Confirm this address to finish setting up your {{ brand }} account:
+
+{{ action_url }}
+
+This link expires in {{ ttl_minutes }} minutes and can be used once.
+If you didn't create an account, ignore this email.
+
+— {{ brand }}{% endautoescape %}

@@ -7,10 +7,10 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
+from app.services.mailer import send_templated_email
 from app.models import EmailVerificationToken, PasswordResetToken, UserStatus
 
 
@@ -52,15 +52,14 @@ def request_email_verification(*, email):
         f'{settings.EMAIL_VERIFICATION_URL}?{urlencode({"token": raw_token})}'
     )
     try:
-        send_mail(
-            subject='Verify your Blaze Flow email',
-            message=(
-                f'Use this link to verify your email address:\n\n{verification_url}\n\n'
-                f'This link expires in {settings.EMAIL_VERIFICATION_TTL_MINUTES} minutes.'
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=False,
+        send_templated_email(
+            template='verify_email',
+            to=user.email,
+            context={
+                'first_name': user.first_name,
+                'action_url': verification_url,
+                'ttl_minutes': settings.EMAIL_VERIFICATION_TTL_MINUTES,
+            },
         )
     except Exception:
         EmailVerificationToken.objects.filter(id=verification.id).update(

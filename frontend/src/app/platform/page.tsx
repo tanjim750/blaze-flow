@@ -12,7 +12,7 @@ export default async function PlatformOverview({ searchParams }: PageProps<"/pla
   const max = chartMax(o.users.signups_by_day.map((d) => d.count));
   const freeShare = share(o.plans.free, o.plans.free + o.plans.pro);
   return <>
-    <PageHead title="Overview" sub={<>How Blaze Flow is doing across every workspace. {o.demo_users > 0 && <Pill tone="demo">Includes {o.demo_users} demo users</Pill>}</>}>
+    <PageHead title="Overview" sub={<>How Blaze Flow is doing across every workspace. {o.demo_users > 0 && <Pill tone="demo">Includes {o.demo_users} demo users</Pill>} {o.signup_mode && <Pill tone={o.signup_mode === "invite_only" ? "violet" : "neutral"}>Sign-up: {o.signup_mode === "invite_only" ? "invite-only" : "open"}</Pill>} {o.email_backend && <Pill tone={o.email_backend === "smtp" ? "good" : "warn"}>Email: {o.email_backend === "smtp" ? "sending" : `${o.email_backend} (not sent)`}</Pill>}</>}>
       <nav className="pf-range" aria-label="Date range">
         {RANGES.map((r) => <Link key={r} href={`/platform?days=${r}`} className={r === days ? "active" : undefined} aria-current={r === days ? "page" : undefined}>{r}d</Link>)}
       </nav>

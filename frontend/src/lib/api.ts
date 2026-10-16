@@ -449,3 +449,18 @@ export const listMyCuts = (workspaceId: string, limit = 20) =>
   request<{ results: MyCut[]; count: number }>(`/workspaces/${workspaceId}/dashboard/my-cuts/?limit=${limit}`);
 /** Open tasks per team member. Owners and admins only (403 otherwise). */
 export const getTeamWorkload = (workspaceId: string) => request<TeamWorkload>(`/workspaces/${workspaceId}/dashboard/workload/`);
+
+/** Public pre-session config (sign-up mode). Falls back to `open` if the API is down. */
+export async function getAuthConfig(): Promise<{ signup_mode: "open" | "invite_only" }> {
+  const result = await request<{ signup_mode: "open" | "invite_only" }>("/auth/config/");
+  return result.ok ? result.data : { signup_mode: "open" };
+}
+
+export const getInvitePreview = (token: string) =>
+  request<import("./auth-client").InvitePreview>(`/auth/invite-preview/?token=${encodeURIComponent(token)}`);
+
+export const acceptWorkspaceInvite = (token: string) =>
+  request<{ id: string; workspace: string }>("/workspace-invitations/accept/", jsonBody({ token }));
+
+export const acceptClientTeamInvite = (token: string) =>
+  request<{ id: string }>("/client-team-invitations/accept/", jsonBody({ token }));

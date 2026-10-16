@@ -65,6 +65,8 @@ def overview(*, days=30, now=None):
         ) if item['count']
     ]
     return {
+        'signup_mode': settings.SIGNUP_MODE,
+        'email_backend': settings.EMAIL_BACKEND.rsplit('.', 2)[-2],
         'range_days': days,
         'generated_at': now,
         'currency': settings.PLATFORM_CURRENCY,

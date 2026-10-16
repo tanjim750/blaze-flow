@@ -32,6 +32,7 @@ class RegistrationSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
     timezone = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    invite_token = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=255)
 
     def validate_email(self, value):
         normalized = value.strip().lower()
@@ -64,6 +65,7 @@ class RegistrationSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         try:
+            validated_data.pop('invite_token', None)
             return User.objects.create_user(**validated_data)
         except IntegrityError as exc:
             raise serializers.ValidationError(
@@ -89,6 +91,7 @@ class LoginSerializer(serializers.Serializer):
 
 class GoogleLoginSerializer(serializers.Serializer):
     id_token = serializers.CharField(trim_whitespace=False)
+    invite_token = serializers.CharField(required=False, allow_blank=True, max_length=255)
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):

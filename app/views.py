@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.core.files.storage import default_storage
 from django.http import Http404, HttpResponse, JsonResponse
@@ -20,6 +21,9 @@ from rest_framework.exceptions import ValidationError as ApiValidationError
 
 from .http_range import is_initial_request, ranged_file_response
 from .pagination import paginated_response
+from app.services.signup import (
+    SignupClosed, ensure_signup_allowed, invite_preview, send_workspace_invite_email,
+)
 from .serializers import (
     AssetFileUpdateSerializer,
     AssetFileUploadSerializer,
@@ -328,10 +332,39 @@ def health_ready(request):
 def register(request):
     serializer = RegistrationSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
+    try:
+        ensure_signup_allowed(
+            email=serializer.validated_data['email'],
+            invite_token=serializer.validated_data.get('invite_token') or None,
+        )
+    except SignupClosed as exc:
+        return Response(
+            {'detail': str(exc), 'code': 'signup_closed'}, status=status.HTTP_403_FORBIDDEN,
+        )
     user = serializer.save()
     provision_free_subscription(user=user)
     request_email_verification(email=user.email)
     return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def auth_config(request):
+    """Public pre-session config the sign-in/sign-up pages need."""
+    return Response({'signup_mode': settings.SIGNUP_MODE})
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@throttle_classes([EmailVerificationThrottle])
+def invite_preview_view(request):
+    token = (request.query_params.get('token') or '').strip()
+    preview = invite_preview(token) if token else None
+    if preview is None:
+        return Response({'detail': 'This invitation is invalid.'}, status=status.HTTP_404_NOT_FOUND)
+    return Response(preview)
 
 
 @api_view(['POST'])
@@ -356,7 +389,10 @@ def google_login(request):
     serializer = GoogleLoginSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     try:
-        user = authenticate_with_google(id_token=serializer.validated_data['id_token'])
+        user = authenticate_with_google(
+            id_token=serializer.validated_data['id_token'],
+            invite_token=serializer.validated_data.get('invite_token') or None,
+        )
     except GoogleOAuthError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     login(request, user)
@@ -931,6 +967,9 @@ def workspace_invitations(request, workspace_id):
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     data = WorkspaceInviteSerializer(invitation).data
     data['token'] = token
+    data['email_sent'] = send_workspace_invite_email(
+        invitation=invitation, token=token, inviter=request.user,
+    )
     return Response(data, status=status.HTTP_201_CREATED)
 
 

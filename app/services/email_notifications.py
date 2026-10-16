@@ -1,7 +1,6 @@
 import uuid
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.utils import timezone
 
 from app.models import (
@@ -40,11 +39,7 @@ def _mention_email(notification):
         f"/projects/{payload['project_id']}/media/{payload['media_version_id']}"
         f"?comment={payload['review_comment_id']}"
     )
-    return (
-        f'{actor_name} mentioned you in Blaze Flow',
-        f'{actor_name} mentioned you in a review comment.\n\n'
-        f'Comment: {payload.get("excerpt", "")}\n\nOpen review: {link}\n',
-    )
+    return {'actor_name': actor_name, 'excerpt': payload.get('excerpt', ''), 'action_url': link}
 
 
 def deliver_notification_email(*, notification_id):
@@ -69,14 +64,13 @@ def deliver_notification_email(*, notification_id):
         delivery.save(update_fields=['status', 'last_error', 'updated_at'])
         return delivery
 
-    subject, body = _mention_email(notification)
     try:
-        sent_count = send_mail(
-            subject,
-            body,
-            settings.DEFAULT_FROM_EMAIL,
-            [notification.recipient_user.email],
-            fail_silently=False,
+        from app.services.mailer import send_templated_email
+
+        sent_count = send_templated_email(
+            template='mention',
+            to=notification.recipient_user.email,
+            context=_mention_email(notification),
         )
         if sent_count != 1:
             raise RuntimeError('The email backend did not confirm delivery acceptance.')

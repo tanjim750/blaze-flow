@@ -9,10 +9,10 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
+from app.services.mailer import send_templated_email
 from app.models import PasswordResetToken, UserStatus
 
 
@@ -46,15 +46,14 @@ def request_password_reset(*, email):
         )
     reset_url = f'{settings.PASSWORD_RESET_URL}?{urlencode({"token": raw_token})}'
     try:
-        send_mail(
-            subject='Reset your Blaze Flow password',
-            message=(
-                f'Use this link to reset your password:\n\n{reset_url}\n\n'
-                f'This link expires in {settings.PASSWORD_RESET_TTL_MINUTES} minutes.'
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=False,
+        send_templated_email(
+            template='password_reset',
+            to=user.email,
+            context={
+                'first_name': user.first_name,
+                'action_url': reset_url,
+                'ttl_minutes': settings.PASSWORD_RESET_TTL_MINUTES,
+            },
         )
     except Exception:
         PasswordResetToken.objects.filter(id=reset.id).update(invalidated_at=timezone.now())
