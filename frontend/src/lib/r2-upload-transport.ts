@@ -17,6 +17,9 @@ type Init = { id: string; mode: "single" | "multipart"; url?: string; headers?: 
 type Resume = { workspaceId: string; id: string; mode: Init["mode"]; partSize: number; completed: CompletedPart[] };
 
 const disabled = new Set<string>();
+// Per-session cache of GET uploads/config/ so the tray never POSTs an initialize the server
+// will refuse with 409 (which the browser logs as a console error on every upload).
+const configs = new Map<string, Promise<boolean>>();
 const STORAGE_KEY = "bf.direct-uploads.v1";
 const RESUME_TTL_MS = 20 * 3600_000; // server keeps an upload open 24h
 
@@ -31,6 +34,19 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const data = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) throw new HttpError(response.status, uploadError(response.status, data), (data as { code?: string } | null)?.code);
   return data as T;
+}
+
+/** Whether direct uploads are on for this workspace; asked once per session. A failed check
+ * is not cached and falls through to the initialize call (whose 409 fallback stays). */
+function directEnabled(workspaceId: string): Promise<boolean> {
+  let pending = configs.get(workspaceId);
+  if (!pending) {
+    pending = api<{ enabled?: boolean }>(`/workspaces/${workspaceId}/uploads/config/`)
+      .then((config) => config?.enabled !== false)
+      .catch(() => { configs.delete(workspaceId); return true; });
+    configs.set(workspaceId, pending);
+  }
+  return pending;
 }
 
 // -- resume across a page refresh (same file picked again) ------------------------------------
@@ -79,6 +95,7 @@ async function directSend(job: TransportJob, onProgress: (loaded: number, total:
     void api(`${base}/${resume.id}/`, { method: "DELETE" }).catch(() => {});
     resume = undefined;
   }
+  if (!resume && !(await directEnabled(workspaceId))) { disabled.add(workspaceId); return xhrTransport(job, onProgress, signal); }
   if (!resume) {
     try {
       init = await api<Init>(`${base}/`, { method: "POST", body: JSON.stringify({ name: file.name, size: file.size, content_type: file.type, ...job.fields }), signal });
@@ -138,4 +155,4 @@ export const r2Transport: UploadTransport = {
 };
 
 /** Test seam. */
-export const __r2test = { reset() { disabled.clear(); try { localStorage.removeItem(STORAGE_KEY); } catch { /* */ } } };
+export const __r2test = { reset() { disabled.clear(); configs.clear(); try { localStorage.removeItem(STORAGE_KEY); } catch { /* */ } } };
