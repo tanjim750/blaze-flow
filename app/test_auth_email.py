@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.cache import cache
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
@@ -44,6 +45,8 @@ class _WorkspaceMixin:
 
 class SignupModeTests(_WorkspaceMixin, TestCase):
     def setUp(self):
+        # Registration/reset throttles are cache-backed; start each test with a clean slate.
+        cache.clear()
         self.client = APIClient()
 
     def test_config_reports_mode(self):
@@ -112,6 +115,8 @@ class SignupModeTests(_WorkspaceMixin, TestCase):
 
 class EmailTemplateTests(_WorkspaceMixin, TestCase):
     def setUp(self):
+        # Registration/reset throttles are cache-backed; start each test with a clean slate.
+        cache.clear()
         self.client = APIClient()
 
     def test_register_sends_branded_verification_email(self):
