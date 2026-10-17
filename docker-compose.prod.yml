@@ -168,7 +168,8 @@ services:
     logging: *logging
 
   clamav:
-    image: clamav/clamav:stable
+    # clamav/clamav is amd64-only; on ARM hosts set CLAMAV_IMAGE=clamav/clamav-debian:stable.
+    image: ${CLAMAV_IMAGE:-clamav/clamav:stable}
     profiles: ["malware"]
     restart: unless-stopped
     expose:

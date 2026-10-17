@@ -16,7 +16,7 @@ source mounts) is for local work only and must never be exposed.
 | `scheduler` | backend | supercronic running `deploy/crontab` (maintenance commands) |
 | `frontend` | frontend (Next.js standalone) | Public UI on :3000, proxies `/api/*` to `web` |
 | `caddy` | caddy:2 (profile `caddy`) | Optional TLS reverse proxy on :80/:443 |
-| `clamav` | clamav (profile `malware`) | Optional virus scanning |
+| `clamav` | clamav (profile `malware`; `CLAMAV_IMAGE` on ARM) | Optional virus scanning |
 
 Migrations never run on container start; restarting any service is safe.
 
@@ -37,6 +37,24 @@ Health endpoints (on Django, also reachable through the frontend at the same pat
    sudo adduser --disabled-password deploy && sudo usermod -aG docker deploy
    ```
 4. Enable unattended security upgrades (`apt install unattended-upgrades`).
+
+### ARM64 hosts (e.g. Oracle Cloud Ampere A1)
+
+The stack builds and runs natively on `linux/arm64` as well as `linux/amd64`; `dc build` on
+the server picks the right architecture automatically, nothing to configure for the backend
+or frontend. What differs:
+
+- `scheduler`: the Dockerfile downloads the arm64 supercronic binary (checksum-pinned).
+- `ai-qa-worker`: PyPI has no Linux arm64 `paddlepaddle` wheel, so the `ai` target installs
+  the same version from Paddle's official CPU index (SHA256-pinned). OCR runs on CPU; its
+  speed on ARM has not been benchmarked, so size `AI_QA_CPU_LIMIT`/`AI_QA_MEMORY_LIMIT`
+  to the VM (A1 Free Tier: up to 4 OCPU / 24 GB) and watch the first jobs.
+- `clamav` (profile `malware`): the default `clamav/clamav` image is amd64-only. Set
+  `CLAMAV_IMAGE=clamav/clamav-debian:stable` in `.env.production`.
+- Building images elsewhere for an ARM server: `docker buildx build --platform linux/arm64`
+  (slow under QEMU emulation; building on the server itself is simpler).
+
+CI builds the `web`, `ai` and frontend images on a native arm64 runner and smoke-tests them.
 
 ## 2. Code and configuration
 
