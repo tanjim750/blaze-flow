@@ -76,7 +76,8 @@ jobs:
         run: |
           docker run --rm blazeflow-backend:ci-arm64 uname -m | grep -qx aarch64
           docker run --rm blazeflow-backend:ci-arm64 supercronic -version
-          docker run --rm blazeflow-backend:ci-arm64 supercronic -test /app/deploy/crontab
+          # --init like the compose scheduler: supercronic must not be PID 1 (its reaper re-execs itself).
+          docker run --rm --init blazeflow-backend:ci-arm64 supercronic -test /app/deploy/crontab
           docker run --rm -e DJANGO_SECRET_KEY=ci-only-secret blazeflow-backend:ci-arm64 python manage.py check
           docker run --rm blazeflow-backend:ci-arm64 sh -c 'ffmpeg -hide_banner -version | head -1 && command -v pdftoppm'
       - name: Build backend AI image (ai target, arm64)
