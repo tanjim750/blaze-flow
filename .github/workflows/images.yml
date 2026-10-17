@@ -54,3 +54,65 @@ jobs:
           cp .env.production.example .env.production
           docker compose -f docker-compose.prod.yml --env-file .env.production config --quiet
           rm .env.production
+
+  # Production may run on ARM64 (Oracle Cloud Ampere A1). Build natively on GitHub's arm64
+  # runner (no QEMU, so it stays about as fast as the amd64 job) and smoke-test the images.
+  images-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build backend image (web target, arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: web
+          platforms: linux/arm64
+          load: true
+          tags: blazeflow-backend:ci-arm64
+          cache-from: type=gha,scope=backend-arm64
+          cache-to: type=gha,mode=max,scope=backend-arm64
+      - name: Smoke test backend image (arm64)
+        run: |
+          docker run --rm blazeflow-backend:ci-arm64 uname -m | grep -qx aarch64
+          docker run --rm blazeflow-backend:ci-arm64 supercronic -version
+          docker run --rm blazeflow-backend:ci-arm64 supercronic -test /app/deploy/crontab
+          docker run --rm -e DJANGO_SECRET_KEY=ci-only-secret blazeflow-backend:ci-arm64 python manage.py check
+          docker run --rm blazeflow-backend:ci-arm64 sh -c 'ffmpeg -hide_banner -version | head -1 && command -v pdftoppm'
+      - name: Build backend AI image (ai target, arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ai
+          platforms: linux/arm64
+          load: true
+          tags: blazeflow-backend-ai:ci-arm64
+          cache-from: type=gha,scope=backend-ai-arm64
+          cache-to: type=gha,mode=max,scope=backend-ai-arm64
+      - name: Smoke test AI image (arm64)
+        run: |
+          docker run --rm blazeflow-backend-ai:ci-arm64 python -c "import paddle, paddleocr, cv2; print(paddle.__version__, paddleocr.__version__, cv2.__version__)"
+          docker run --rm blazeflow-backend-ai:ci-arm64 python -c "import paddle; paddle.utils.run_check()"
+          docker run --rm blazeflow-backend-ai:ci-arm64 pip check
+      - name: Build frontend image (arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          platforms: linux/arm64
+          load: true
+          build-args: BLAZEFLOW_API_URL=http://web:8000
+          tags: blazeflow-frontend:ci-arm64
+          cache-from: type=gha,scope=frontend-arm64
+          cache-to: type=gha,mode=max,scope=frontend-arm64
+      - name: Smoke test frontend image (arm64)
+        run: |
+          docker run -d --name fe -p 3000:3000 blazeflow-frontend:ci-arm64
+          # Same check as the image HEALTHCHECK: any status below 500 (no backend in CI).
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/sign-in || true)
+            echo "attempt $i: HTTP $code"
+            if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then exit 0; fi
+            sleep 2
+          done
+          docker logs fe
+          exit 1
