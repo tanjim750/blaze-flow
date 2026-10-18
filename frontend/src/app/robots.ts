@@ -10,7 +10,7 @@ export const PRIVATE_PREFIXES = [
   "/api/", "/platform", "/review", "/guest-review", "/review-embed", "/upload", "/onboarding",
   "/welcome", "/sign-in", "/sign-up", "/forgot-password", "/reset-password", "/verify-email", "/invite",
   "/chat", "/clients", "/deliverables", "/files", "/help", "/messages", "/money", "/notifications",
-  "/portal", "/projects", "/render-queue", "/settings", "/tasks", "/team",
+  "/portal", "/projects", "/render-queue", "/settings", "/tasks", "/team", "/mockups",
 ];
 
 export default function robots(): MetadataRoute.Robots {
