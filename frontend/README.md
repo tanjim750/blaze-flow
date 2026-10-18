@@ -39,6 +39,7 @@ see the demo-fallback convention in the full documentation.
 | Variable | Required | Meaning |
 | --- | --- | --- |
 | `BLAZEFLOW_API_URL` | No | Django origin; defaults to `http://127.0.0.1:8000` |
+| `NEXT_PUBLIC_SITE_URL` | No | Public site URL for canonical links, `sitemap.xml` and Open Graph cards (build time) |
 
 Set it for both the server-side client and the `/api/*` rewrite — they read the same
 variable, in `src/lib/api.ts` and `next.config.ts` respectively.
@@ -48,6 +49,8 @@ variable, in `src/lib/api.ts` and `next.config.ts` respectively.
 ```
 src/app/          routes: / (dashboard), /projects, /review
 src/app/(auth)/   sign-in, sign-up, forgot/reset password, verify email
+src/app/(marketing)/  public site: /welcome (served at / when signed out), /features,
+                  /pricing, /contact, /privacy, /terms, /cookies
 src/components/   app shell and shared panels
 src/lib/          typed API client, session, and per-page view models
 ```
@@ -55,3 +58,16 @@ src/lib/          typed API client, session, and per-page view models
 Data is loaded in server components through `src/lib/*-view.ts`; writes go through server
 actions in each route's `actions.ts`. Client components receive finished view models and
 own interaction state only.
+
+## Public marketing site
+
+Signed-out visitors at `/` get the marketing homepage; signed-in people keep their
+dashboard. `src/proxy.ts` decides on the presence of Django's `sessionid` cookie and
+rewrites `/` to `/welcome` (the address bar keeps `/`). It matches `/` only, so app routes,
+`/platform` and the API never pass through it.
+
+The product name, tagline, contact email, domain and Pro price live in one file,
+`src/lib/site-config.ts`. Marketing pages, titles, metadata, `sitemap.xml`, `robots.txt` and
+the Open Graph card (`/og.png`) all read from it, and a test fails if a marketing file types
+the name out. Screenshots and the hero clip in `public/marketing/` are real captures from
+the local demo workspace.

@@ -6,6 +6,7 @@ import "./interactions.css";
 import { NavProgress } from "@/components/nav-progress";
 import { SubmitFeedback } from "@/components/submit-feedback";
 import { UploadTray } from "@/components/uploads/upload-tray";
+import { siteConfig } from "@/lib/site-config";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,8 +22,8 @@ const geistMono = Geist_Mono({
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export const metadata: Metadata = {
-  title: "Blaze Flow",
-  description: "Creative work, reviews and delivery in one workspace.",
+  title: siteConfig.name,
+  description: siteConfig.description,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
