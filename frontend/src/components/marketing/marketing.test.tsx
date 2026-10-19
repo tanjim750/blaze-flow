@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import MarketingHome from "@/app/(marketing)/welcome/page";
+import MarketingHome from "@/app/(pro)/welcome/page";
 import PricingPage from "@/app/(marketing)/pricing/page";
 import PrivacyPage from "@/app/(marketing)/privacy/page";
 import TermsPage from "@/app/(marketing)/terms/page";
@@ -32,34 +32,38 @@ describe("marketing homepage", () => {
     Object.defineProperty(HTMLMediaElement.prototype, "play", { configurable: true, value: vi.fn().mockResolvedValue(undefined) });
   });
 
-  it("leads with a headline for video agencies and the brand from siteConfig", () => {
+  it("leads with a post-production headline and the brand from siteConfig", () => {
     render(<MarketingHome />);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/circle it\..*scribble it\..*ship it\./i);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/every note on the frame\..*every sign-off on record\./i);
     expect(screen.getAllByText(new RegExp(siteConfig.name)).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { level: 2, name: "Built for video agencies, studios and freelancers" })).toBeInTheDocument();
   });
 
-  it("sends every call to action to the existing sign-up and log-in pages", () => {
+  it("sends every trial call to action to the existing sign-up page", () => {
     render(<MarketingHome />);
     const trial = screen.getAllByRole("link", { name: /free trial/i });
-    expect(trial.length).toBeGreaterThan(0);
+    expect(trial.length).toBeGreaterThan(1);
     for (const link of trial) expect(link).toHaveAttribute("href", "/sign-up");
     for (const link of screen.getAllByRole("link", { name: /^log in$/i })) expect(link).toHaveAttribute("href", "/sign-in");
   });
 
-  it("shows the product moments with real screenshots, the demo clip, pricing and FAQ", () => {
+  it("covers review, AI Visual QA, the client portal, big files and tasks with real screenshots", () => {
     const { container } = render(<MarketingHome />);
-    for (const title of [/draw right on the frame/i, /proofreader/i, /home for every client/i, /big files/i, /tasks/i]) {
+    for (const title of [/exact frame/i, /proofreader/i, /home for every client/i, /masters, not attachments/i, /tasks that remember/i]) {
       expect(screen.getByRole("heading", { level: 3, name: title })).toBeInTheDocument();
     }
+    expect(screen.getByRole("heading", { level: 2, name: /catch the typo/i })).toBeInTheDocument();
     const images = [...container.querySelectorAll("img")];
     expect(images.length).toBeGreaterThanOrEqual(7);
     for (const image of images) expect(decodeURIComponent(image.getAttribute("src") ?? "")).toMatch(/\/marketing\//);
-    // Only the hero's front card (the LCP image) loads eagerly; everything below the fold is lazy.
-    const eager = images.filter((image) => image.getAttribute("loading") !== "lazy");
-    expect(eager.map((image) => image.getAttribute("alt"))).toEqual([expect.stringMatching(/^Review page/)]);
+    // The hero's largest paint is the video poster, so every image stays lazy.
+    expect(images.filter((image) => image.getAttribute("loading") !== "lazy")).toEqual([]);
     expect(container.querySelector("video")).toHaveAttribute("poster", "/marketing/demo-poster.webp");
-    expect(screen.getAllByText("£29").length).toBeGreaterThan(0);
+  });
+
+  it("teases Pro at £29 a month with the 14-day trial, and keeps the FAQ", () => {
+    render(<MarketingHome />);
+    expect(screen.getAllByText(/£29/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/14-day free trial/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Do my clients need an account to review?")).toBeInTheDocument();
   });
 });

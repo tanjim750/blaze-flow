@@ -52,7 +52,7 @@ describe("sitemap and robots", () => {
 
 describe("one place for the brand name", () => {
   // The product may be renamed: marketing code must read the name from siteConfig.
-  const roots = [join(__dirname, "../app/(marketing)"), join(__dirname, "../components/marketing"), join(__dirname, "../app/og.png")];
+  const roots = [join(__dirname, "../app/(marketing)"), join(__dirname, "../app/(pro)"), join(__dirname, "../components/pro"), join(__dirname, "../components/marketing"), join(__dirname, "../app/og.png")];
   const files = (dir: string): string[] => readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     return statSync(path).isDirectory() ? files(path) : /\.(tsx?|css)$/.test(name) && !/\.test\./.test(name) ? [path] : [];
