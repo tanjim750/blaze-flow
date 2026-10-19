@@ -10,6 +10,7 @@ import { useFinePointer, useReducedMotionSafe } from "@/components/marketing/mot
 import { SCREENS, type ScreenKey } from "@/components/marketing/screenshot";
 import { siteConfig } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
+import { ProHeroBg } from "./pro-hero-bg";
 
 export type FaqItem = { q: string; a: ReactNode };
 
@@ -144,6 +145,7 @@ export function ProHero() {
 
   return (
     <section className="pro-hero" aria-labelledby="pro-hero-title">
+      <ProHeroBg />
       <div className="pro-wrap pro-hero-copy">
         {/* No entrance on the headline: it is the largest paint, so it shows at once. */}
         <h1 id="pro-hero-title" className="pro-h1">Client review for video studios</h1>
