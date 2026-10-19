@@ -118,7 +118,7 @@ export function ProPinnedStory() {
 
   if (lite) {
     return (
-      <section className="pro-story is-stacked" aria-labelledby="pro-story-title">
+      <section ref={ref} className="pro-story is-stacked" aria-labelledby="pro-story-title">
         <div className="pro-wrap">
           <h2 id="pro-story-title" className="pro-h2">One window. The whole job.</h2>
           {CHAPTERS.map((c, i) => (
