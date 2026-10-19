@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type PointerEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode, type PointerEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { animate, motion, useInView, useMotionValue, useScroll, useSpring, useTransform } from "motion/react";
 import { ArrowRight, Check } from "lucide-react";
 import { DemoVideo } from "@/components/marketing/demo-video";
-import { useFinePointer, useLiteMotion, useReducedMotionSafe } from "@/components/marketing/motion-prefs";
+import { useFinePointer, useReducedMotionSafe } from "@/components/marketing/motion-prefs";
 import { SCREENS, type ScreenKey } from "@/components/marketing/screenshot";
 import type { FaqItem } from "@/components/marketing/sections";
 import { siteConfig } from "@/lib/site-config";
@@ -15,6 +15,28 @@ import { cn } from "@/lib/utils";
 const { name } = siteConfig;
 const { symbol, proMonthly, trialDays } = siteConfig.pricing;
 const EASE = [0.22, 1, 0.36, 1] as const;
+
+/*
+ * Motion budget for this page. Full scroll-linked motion everywhere except phones (<700px),
+ * Data Saver and reduced motion. Unlike the shared useLiteMotion it does not guess from CPU
+ * count, so an ordinary laptop always gets the full effects.
+ */
+const smallQuery = "(max-width: 699px)";
+const subscribeSmall = (cb: () => void) => {
+  if (typeof window === "undefined" || !window.matchMedia) return () => {};
+  const mq = window.matchMedia(smallQuery);
+  mq.addEventListener?.("change", cb);
+  return () => mq.removeEventListener?.("change", cb);
+};
+const getSmall = () => typeof window !== "undefined" && !!window.matchMedia?.(smallQuery)?.matches;
+const getSaveData = () => typeof navigator !== "undefined" && !!(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+const noop = () => () => {};
+function useLiteMotion(): boolean {
+  const reduce = useReducedMotionSafe();
+  const small = useSyncExternalStore(subscribeSmall, getSmall, () => false);
+  const save = useSyncExternalStore(noop, getSaveData, () => false);
+  return reduce || small || save;
+}
 
 /* ---------- real captures from the demo workspace (public/marketing/v3, 2× density) ---------- */
 
@@ -44,15 +66,16 @@ function Shot({ name: key, sizes, decorative = false }: { name: ScreenKey; sizes
 }
 
 /** One fade-and-rise when something first scrolls into view. */
-function Reveal({ children, className, delay = 0, y = 28 }: { children: ReactNode; className?: string; delay?: number; y?: number }) {
+function Reveal({ children, className, delay = 0, y = 64, tilt = 0 }: { children: ReactNode; className?: string; delay?: number; y?: number; tilt?: number }) {
   const reduce = useReducedMotionSafe();
   return (
     <motion.div
       className={className}
-      initial={reduce ? false : { opacity: 0, y }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "0px 0px -10% 0px" }}
-      transition={{ duration: 0.8, ease: EASE, delay }}
+      initial={reduce ? false : { opacity: 0, y, rotateX: tilt, scale: tilt ? 0.96 : 1 }}
+      whileInView={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
+      viewport={{ once: true, margin: "0px 0px -8% 0px" }}
+      transition={{ duration: 1, ease: EASE, delay }}
+      style={tilt ? { transformPerspective: 1200 } : undefined}
     >
       {children}
     </motion.div>
@@ -78,11 +101,13 @@ function useSequence(steps: number, interval = 650) {
 function useSettle(from: number, axis: "x" | "y" = "y") {
   const ref = useRef<HTMLDivElement>(null);
   const lite = useLiteMotion();
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "center 60%"] });
-  const p = useSpring(scrollYProgress, { stiffness: 120, damping: 30, mass: 0.4 });
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "center 55%"] });
+  const p = useSpring(scrollYProgress, { stiffness: 90, damping: 24, mass: 0.5 });
   const rot = useTransform(p, [0, 1], [from, 0]);
-  const scale = useTransform(p, [0, 1], [0.94, 1]);
-  return { ref, style: lite ? undefined : axis === "y" ? { rotateY: rot, scale } : { rotateX: rot, scale } };
+  const tip = useTransform(p, [0, 1], [14, 0]);
+  const scale = useTransform(p, [0, 1], [0.86, 1]);
+  const y = useTransform(p, [0, 1], [80, 0]);
+  return { ref, style: lite ? undefined : axis === "y" ? { rotateY: rot, rotateX: tip, scale, y } : { rotateX: rot, scale, y } };
 }
 
 function TrialButton({ children = "Start free trial", light = false }: { children?: ReactNode; light?: boolean }) {
@@ -100,21 +125,22 @@ export function ProHero() {
   const p = useSpring(scrollYProgress, { stiffness: 130, damping: 30, mass: 0.4 });
   const mx = useSpring(useMotionValue(0), { stiffness: 80, damping: 20 });
   const my = useSpring(useMotionValue(0), { stiffness: 80, damping: 20 });
-  const tiltX = useTransform(p, [0, 1], [20, 0]);
+  const tiltX = useTransform(p, [0, 1], [34, 0]);
   const rotateX = useTransform([tiltX, my], ([a, b]: number[]) => a + b);
   const rotateY = useTransform(mx, (v) => v);
-  const scale = useTransform(p, [0, 1], [0.9, 1]);
-  const near = useTransform(p, [0, 1], [90, -30]);
-  const mid = useTransform(p, [0, 1], [50, -10]);
-  const far = useTransform(p, [0, 1], [130, -40]);
+  const scale = useTransform(p, [0, 1], [0.84, 1]);
+  const near = useTransform(p, [0, 1], [200, -60]);
+  const mid = useTransform(p, [0, 1], [120, -20]);
+  const far = useTransform(p, [0, 1], [280, -90]);
   const move = (event: PointerEvent<HTMLDivElement>) => {
     if (lite || !fine) return;
     const r = event.currentTarget.getBoundingClientRect();
-    mx.set(((event.clientX - r.left) / r.width - 0.5) * 6);
-    my.set(-((event.clientY - r.top) / r.height - 0.5) * 4);
+    mx.set(((event.clientX - r.left) / r.width - 0.5) * 10);
+    my.set(-((event.clientY - r.top) / r.height - 0.5) * 7);
   };
   const reset = () => { mx.set(0); my.set(0); };
-  const enter = (delay: number) => (reduce ? {} : { initial: { opacity: 0, y: 40 }, animate: { opacity: 1, y: 0 }, transition: { duration: 1, ease: EASE, delay } });
+  const enter = (delay: number) => (reduce ? {} : { initial: { opacity: 0, y: 48 }, animate: { opacity: 1, y: 0 }, transition: { duration: 1.1, ease: EASE, delay } });
+  const fly = (delay: number, x: number, y = 0) => (reduce ? {} : { initial: { opacity: 0, x, y, scale: 0.9 }, animate: { opacity: 1, x: 0, y: 0, scale: 1 }, transition: { duration: 1.3, ease: EASE, delay } });
 
   return (
     <section className="pro-hero" aria-labelledby="pro-hero-title">
@@ -130,18 +156,18 @@ export function ProHero() {
       </div>
 
       <div className="pro-stage" ref={stage} onPointerMove={move} onPointerLeave={reset}>
-        <motion.div className="pro-scene" style={lite ? undefined : { rotateX, rotateY, scale }} {...enter(0.25)}>
+        <motion.div className="pro-scene" style={lite ? undefined : { rotateX, rotateY, scale }} {...(reduce ? {} : { initial: { opacity: 0, y: 120 }, animate: { opacity: 1, y: 0 }, transition: { duration: 1.4, ease: EASE, delay: 0.3 } })}>
           <div className="pro-window">
             <DemoVideo label={`${name} review page: a client cut playing, with time-stamped comments and drawings beside it`} />
           </div>
           <motion.figure className="pro-layer is-qa" style={lite ? undefined : { y: near }}>
-            <Pic img={V3.finding1} sizes="340px" />
+            <motion.div {...fly(0.7, -160)}><Pic img={V3.finding1} sizes="340px" /></motion.div>
           </motion.figure>
           <motion.figure className="pro-layer is-signoff" style={lite ? undefined : { y: far }}>
-            <Pic img={V3.signoff} sizes="420px" />
+            <motion.div {...fly(0.9, 160)}><Pic img={V3.signoff} sizes="420px" /></motion.div>
           </motion.figure>
           <motion.figure className="pro-layer is-money" style={lite ? undefined : { y: mid }}>
-            <Pic img={V3.invoiceTotals} sizes="440px" />
+            <motion.div {...fly(1.1, 0, 140)}><Pic img={V3.invoiceTotals} sizes="440px" /></motion.div>
           </motion.figure>
         </motion.div>
       </div>
@@ -170,8 +196,8 @@ const BOXES = [
 const FINDINGS = [V3.finding1, V3.finding2, V3.finding3, V3.finding4];
 
 export function ProQaScene() {
-  const { ref, step, inView } = useSequence(5, 700);
-  const { ref: settleRef, style: settleStyle } = useSettle(-10);
+  const { ref, step, inView } = useSequence(5, 1000);
+  const { ref: settleRef, style: settleStyle } = useSettle(-26);
   const reduce = useReducedMotionSafe();
   return (
     <section id="features" className="pro-feature is-qa" aria-labelledby="pro-qa-title">
@@ -195,8 +221,8 @@ export function ProQaScene() {
                   aria-hidden="true"
                   style={{ left: `${b.left}%`, top: `${b.top}%`, width: `${b.width}%`, height: `${b.height}%` }}
                   initial={false}
-                  animate={step > i ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 1.25 }}
-                  transition={{ duration: 0.45, ease: EASE }}
+                  animate={step > i ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 1.6 }}
+                  transition={{ type: "spring", stiffness: 260, damping: 18 }}
                 />
               ))}
             </motion.div>
@@ -206,8 +232,9 @@ export function ProQaScene() {
               <motion.li
                 key={img.src}
                 initial={false}
-                animate={step > i ? { opacity: 1, x: 0 } : { opacity: 0, x: 40 }}
-                transition={{ duration: 0.55, ease: EASE }}
+                animate={step > i ? { opacity: 1, x: 0, rotateY: 0 } : { opacity: 0, x: 120, rotateY: -25 }}
+                transition={{ duration: 0.8, ease: EASE }}
+                style={{ transformPerspective: 900 }}
               >
                 <Pic img={img} sizes="(max-width: 960px) 80vw, 340px" />
               </motion.li>
@@ -223,8 +250,8 @@ export function ProQaScene() {
 }
 
 export function ProPortalScene() {
-  const { ref, step } = useSequence(3, 800);
-  const { ref: settleRef, style: settleStyle } = useSettle(10);
+  const { ref, step } = useSequence(3, 900);
+  const { ref: settleRef, style: settleStyle } = useSettle(26);
   return (
     <section className="pro-feature is-portal" aria-labelledby="pro-portal-title">
       <div className="pro-wrap pro-feature-grid is-flip">
@@ -245,15 +272,18 @@ export function ProPortalScene() {
             className="pro-float is-stepper"
             initial={false}
             animate={{ clipPath: step >= 1 ? "inset(0 0% 0 0 round 10px)" : "inset(0 100% 0 0 round 10px)" }}
-            transition={{ duration: 1.1, ease: EASE }}
+            transition={{ duration: 1.6, ease: EASE }}
           >
             <Pic img={V3.stepper} sizes="(max-width: 960px) 90vw, 640px" />
           </motion.figure>
+          <div className="pro-portal-progress" aria-hidden="true">
+            <motion.span initial={false} animate={{ scaleX: step >= 1 ? 1 : 0 }} transition={{ duration: 2.2, ease: EASE, delay: 0.3 }} />
+          </div>
           <motion.figure
             className="pro-float is-signoff"
             initial={false}
-            animate={step >= 2 ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.97 }}
-            transition={{ duration: 0.7, ease: EASE }}
+            animate={step >= 2 ? { opacity: 1, y: 0, x: 0, scale: 1 } : { opacity: 0, y: 90, x: 60, scale: 0.9 }}
+            transition={{ duration: 1, ease: EASE }}
           >
             <Pic img={V3.signoff} sizes="(max-width: 960px) 90vw, 440px" />
           </motion.figure>
@@ -266,13 +296,13 @@ export function ProPortalScene() {
 /** A figure that counts up from zero the first time it scrolls into view. */
 function Count({ value, prefix = "", className }: { value: number; prefix?: string; className?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, amount: 0.6 });
+  const inView = useInView(ref, { once: true, amount: 0.4 });
   const reduce = useReducedMotionSafe();
   const fmt = (n: number) => prefix + Math.round(n).toLocaleString("en-GB");
   useEffect(() => {
     const el = ref.current;
     if (!el || !inView || reduce) return;
-    const controls = animate(0, value, { duration: 1.6, ease: EASE, onUpdate: (v) => { el.textContent = fmt(v); } });
+    const controls = animate(0, value, { duration: 2.4, ease: EASE, onUpdate: (v) => { el.textContent = fmt(v); } });
     return () => controls.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inView, reduce, value]);
@@ -287,7 +317,7 @@ const SUMS = [
 ];
 
 export function ProMoneyScene() {
-  const { ref: settleRef, style: settleStyle } = useSettle(-8);
+  const { ref: settleRef, style: settleStyle } = useSettle(-24);
   return (
     <section className="pro-feature is-money" aria-labelledby="pro-money-title">
       <div className="pro-wrap pro-feature-grid">
@@ -301,7 +331,7 @@ export function ProMoneyScene() {
         <div className="pro-money-visual">
           <dl className="pro-sums">
             {SUMS.map((s, i) => (
-              <Reveal key={s.label} delay={i * 0.08} y={18} className="pro-sum">
+              <Reveal key={s.label} delay={i * 0.12} y={50} tilt={20} className="pro-sum">
                 <dt>{s.label}</dt>
                 <dd><Count value={s.value} prefix={symbol} /></dd>
                 <dd className="pro-sum-note">{s.note}</dd>
@@ -342,7 +372,7 @@ export function ProBento() {
         <Reveal><h2 id="pro-bento-title" className="pro-h2 is-center">Also in {name}</h2></Reveal>
         <div className="pro-bento-grid">
           {TILES.map((t, i) => (
-            <Reveal key={t.key} delay={(i % 2) * 0.08} className={cn("pro-tile", t.size === "wide" && "is-wide")}>
+            <Reveal key={t.key} delay={(i % 2) * 0.14} tilt={18} className={cn("pro-tile", t.size === "wide" && "is-wide")}>
               <div className="pro-tile-copy">
                 <h3>{t.title}</h3>
                 <p>{t.line}</p>
