@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LegalPage } from "@/components/marketing/legal-page";
+import { ProLegal } from "@/components/pro/pro-pages";
 import { marketingMetadata } from "@/lib/marketing-metadata";
 import { siteConfig } from "@/lib/site-config";
 
@@ -9,7 +9,7 @@ export default function PrivacyPage() {
   const { name, contactEmail, legalEntity } = siteConfig;
   const mail = <a href={`mailto:${contactEmail}`}>{contactEmail}</a>;
   return (
-    <LegalPage title="Privacy notice" intro={`How ${name} collects, uses and protects personal data.`}>
+    <ProLegal title="Privacy notice" intro={`How ${name} collects, uses and protects personal data.`}>
       <h2>1. Who we are</h2>
       <p>{name} (“we”, “us”) is provided by {legalEntity}. For personal data we process for our own purposes, such as running accounts, billing and this website, we are the <strong>controller</strong> under the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018. You can contact us about privacy at {mail}.</p>
       <p>When our customers (studios and agencies) upload their projects, files and client feedback to {name}, the customer is the controller of that content and we process it on their behalf as a <strong>processor</strong>. If you are a client of one of our customers, please contact that studio first about your data; we will help them respond.</p>
@@ -25,7 +25,7 @@ export default function PrivacyPage() {
       </ul>
 
       <h2>3. Why we use it, and our lawful basis</h2>
-      <div className="mk-table-wrap"><table>
+      <div className="pro-table-wrap"><table>
         <thead><tr><th>Purpose</th><th>Lawful basis</th></tr></thead>
         <tbody>
           <tr><td>Providing the service: accounts, workspaces, review, file storage, notifications</td><td>Contract</td></tr>
@@ -65,6 +65,6 @@ export default function PrivacyPage() {
 
       <h2>12. Changes</h2>
       <p>We will update this notice when our practices change and show the date at the top. For significant changes we will tell account owners by email.</p>
-    </LegalPage>
+    </ProLegal>
   );
 }

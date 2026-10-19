@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LegalPage } from "@/components/marketing/legal-page";
+import { ProLegal } from "@/components/pro/pro-pages";
 import { marketingMetadata } from "@/lib/marketing-metadata";
 import { siteConfig } from "@/lib/site-config";
 
@@ -9,7 +9,7 @@ export default function TermsPage() {
   const { name, contactEmail, legalEntity, jurisdiction, pricing } = siteConfig;
   const mail = <a href={`mailto:${contactEmail}`}>{contactEmail}</a>;
   return (
-    <LegalPage title="Terms of service" intro={`The agreement between you and ${name} when you use the service.`}>
+    <ProLegal title="Terms of service" intro={`The agreement between you and ${name} when you use the service.`}>
       <h2>1. About these terms</h2>
       <p>These terms apply to your use of {name}, provided by {legalEntity} (“we”, “us”). By creating an account or using the service you agree to them on behalf of yourself and, if applicable, the business you represent (“you”). {name} is intended for business use.</p>
 
@@ -22,7 +22,7 @@ export default function TermsPage() {
 
       <h2>3. Subscriptions, trials and payment</h2>
       <ul>
-        <li>{name} Pro costs {pricing.symbol}{pricing.proMonthly} per month in GBP, unless we agree otherwise in writing. (Owner to confirm whether this is per workspace or per user, and how VAT is shown.)</li>
+        <li>{name} Pro costs {pricing.symbol}{pricing.proMonthly} per month in {pricing.currency}, unless we agree otherwise in writing. (Owner to confirm whether this is per workspace or per user, and how VAT is shown.)</li>
         <li>New accounts may start with a {pricing.trialDays}-day free trial. At the end of the trial you need a paid subscription to keep using Pro features.</li>
         <li>Subscriptions renew monthly until cancelled. You can cancel at any time, and cancellation takes effect at the end of the current billing period. Fees already paid are not refunded except where the law requires. (Owner to confirm the cancellation and refund policy.)</li>
         <li>We may change prices with at least 30 days’ notice; changes apply from your next renewal.</li>
@@ -52,6 +52,6 @@ export default function TermsPage() {
 
       <h2>11. Contact</h2>
       <p>Questions about these terms: {mail}.</p>
-    </LegalPage>
+    </ProLegal>
   );
 }

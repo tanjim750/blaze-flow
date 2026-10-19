@@ -26,12 +26,25 @@ export const siteConfig = {
     signIn: "/sign-in",
   },
   pricing: {
-    currency: "GBP",
-    symbol: "£",
-    proMonthly: 29,
+    currency: "USD",
+    symbol: "$",
+    /** The highlighted plan's monthly price; keep equal to the Pro entry in `plans`. */
+    proMonthly: 39.99,
     trialDays: 14,
   },
+  /**
+   * The three subscription plans, in USD per month. The homepage pricing band, /pricing,
+   * the terms and the OG card all read from here. `toConfirm` shows a small "To confirm"
+   * note on the card until the owner signs the plans off.
+   */
+  plans: [
+    { id: "starter", name: "Starter", monthly: 19.99, features: ["1 TB storage", "Up to 20 users", "Unlimited clients"], highlighted: false, toConfirm: true },
+    { id: "pro", name: "Pro", monthly: 39.99, features: ["2 TB storage", "Up to 50 users", "Unlimited clients"], highlighted: true, toConfirm: true },
+    { id: "scale", name: "Scale", monthly: 119.99, features: ["4 TB storage", "Unlimited users", "Unlimited clients and projects"], highlighted: false, toConfirm: true },
+  ],
 } as const;
+
+export type Plan = (typeof siteConfig.plans)[number];
 
 export type SiteConfig = typeof siteConfig;
 

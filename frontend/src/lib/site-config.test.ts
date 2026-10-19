@@ -7,8 +7,9 @@ import { marketingMetadata } from "./marketing-metadata";
 import { pageTitle, publicRoutes, siteConfig } from "./site-config";
 
 describe("siteConfig", () => {
-  it("prices Pro in GBP with a 14-day trial", () => {
-    expect(siteConfig.pricing).toMatchObject({ currency: "GBP", symbol: "£", proMonthly: 29, trialDays: 14 });
+  it("prices plans in USD with a 14-day trial, Pro matching the highlighted plan", () => {
+    expect(siteConfig.pricing).toMatchObject({ currency: "USD", symbol: "$", proMonthly: 39.99, trialDays: 14 });
+    expect(siteConfig.plans.find((p) => p.highlighted)?.monthly).toBe(siteConfig.pricing.proMonthly);
   });
 
   it("builds page titles from the brand name", () => {
@@ -52,7 +53,7 @@ describe("sitemap and robots", () => {
 
 describe("one place for the brand name", () => {
   // The product may be renamed: marketing code must read the name from siteConfig.
-  const roots = [join(__dirname, "../app/(marketing)"), join(__dirname, "../app/(pro)"), join(__dirname, "../components/pro"), join(__dirname, "../components/marketing"), join(__dirname, "../app/og.png")];
+  const roots = [join(__dirname, "../app/(pro)"), join(__dirname, "../components/pro"), join(__dirname, "../components/marketing"), join(__dirname, "../app/og.png")];
   const files = (dir: string): string[] => readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     return statSync(path).isDirectory() ? files(path) : /\.(tsx?|css)$/.test(name) && !/\.test\./.test(name) ? [path] : [];

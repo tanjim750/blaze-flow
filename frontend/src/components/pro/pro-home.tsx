@@ -8,13 +8,14 @@ import { ArrowRight, Check } from "lucide-react";
 import { DemoVideo } from "@/components/marketing/demo-video";
 import { useFinePointer, useReducedMotionSafe } from "@/components/marketing/motion-prefs";
 import { SCREENS, type ScreenKey } from "@/components/marketing/screenshot";
-import type { FaqItem } from "@/components/marketing/sections";
 import { siteConfig } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 
+export type FaqItem = { q: string; a: ReactNode };
+
 const { name } = siteConfig;
-const { symbol, proMonthly, trialDays } = siteConfig.pricing;
-const EASE = [0.22, 1, 0.36, 1] as const;
+const { symbol, currency, trialDays } = siteConfig.pricing;
+export const EASE = [0.22, 1, 0.36, 1] as const;
 
 /*
  * Motion budget for this page. Full scroll-linked motion everywhere except phones (<700px),
@@ -31,7 +32,7 @@ const subscribeSmall = (cb: () => void) => {
 const getSmall = () => typeof window !== "undefined" && !!window.matchMedia?.(smallQuery)?.matches;
 const getSaveData = () => typeof navigator !== "undefined" && !!(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
 const noop = () => () => {};
-function useLiteMotion(): boolean {
+export function useLiteMotion(): boolean {
   const reduce = useReducedMotionSafe();
   const small = useSyncExternalStore(subscribeSmall, getSmall, () => false);
   const save = useSyncExternalStore(noop, getSaveData, () => false);
@@ -41,7 +42,6 @@ function useLiteMotion(): boolean {
 /* ---------- real captures from the demo workspace (public/marketing/v3, 2× density) ---------- */
 
 const V3 = {
-  money: { src: "/marketing/v3/money.webp", w: 2400, h: 1500, alt: "Money page: what clients owe, what the studio owes editors, margin and collected, with receivables by client and payouts by editor" },
   portalProject: { src: "/marketing/v3/portal-project.webp", w: 2400, h: 1500, alt: "Client portal project page: progress from kick-off to delivered, approved deliverables to download and the sign-off record" },
   posterArt: { src: "/marketing/v3/poster-art.webp", w: 1153, h: 1440, alt: "Summer sale poster with the misspelt word PREMUIM" },
   finding1: { src: "/marketing/v3/finding-1.webp", w: 706, h: 259, alt: "Finding: PREMUIM should be PREMIUM, high confidence" },
@@ -52,24 +52,24 @@ const V3 = {
   invoiceTotals: { src: "/marketing/v3/invoice-totals.webp", w: 1623, h: 410, alt: "Invoice INV-0002: total £3,250, paid £1,300, balance due £1,950" },
   stepper: { src: "/marketing/v3/portal-stepper.webp", w: 2256, h: 180, alt: "Project progress: kick-off, in production, your review, signed off, delivered" },
   signoff: { src: "/marketing/v3/portal-signoff.webp", w: 1274, h: 475, alt: "Sign-off record: V4 approved by Rachel Kim, V2 changes asked" },
-  deliverables: { src: "/marketing/v3/portal-deliverables.webp", w: 1274, h: 483, alt: "Your deliverables: two approved cuts ready to download" },
 } as const;
 type Asset = (typeof V3)[keyof typeof V3];
 
-function Pic({ img, sizes, className, decorative = false }: { img: Asset; sizes: string; className?: string; decorative?: boolean }) {
+export function Pic({ img, sizes, className, decorative = false }: { img: Asset; sizes: string; className?: string; decorative?: boolean }) {
   return <Image className={className} src={img.src} alt={decorative ? "" : img.alt} width={img.w} height={img.h} sizes={sizes} loading="lazy" />;
 }
 
-function Shot({ name: key, sizes, decorative = false }: { name: ScreenKey; sizes: string; decorative?: boolean }) {
+export function Shot({ name: key, sizes, decorative = false }: { name: ScreenKey; sizes: string; decorative?: boolean }) {
   const s = SCREENS[key];
   return <Image src={s.src} alt={decorative ? "" : s.alt} width={1920} height={1200} sizes={sizes} loading="lazy" />;
 }
 
 /** One fade-and-rise when something first scrolls into view. */
-function Reveal({ children, className, delay = 0, y = 64, tilt = 0 }: { children: ReactNode; className?: string; delay?: number; y?: number; tilt?: number }) {
+export function Reveal({ children, className, delay = 0, y = 64, tilt = 0, ...rest }: { children: ReactNode; className?: string; delay?: number; y?: number; tilt?: number; [data: `data-${string}`]: string | undefined }) {
   const reduce = useReducedMotionSafe();
   return (
     <motion.div
+      {...rest}
       className={className}
       initial={reduce ? false : { opacity: 0, y, rotateX: tilt, scale: tilt ? 0.96 : 1 }}
       whileInView={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
@@ -98,7 +98,7 @@ function useSequence(steps: number, interval = 650) {
 }
 
 /** A scroll-linked tilt that settles flat as the element reaches the middle of the screen. */
-function useSettle(from: number, axis: "x" | "y" = "y") {
+export function useSettle(from: number, axis: "x" | "y" = "y") {
   const ref = useRef<HTMLDivElement>(null);
   const lite = useLiteMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "center 55%"] });
@@ -110,7 +110,7 @@ function useSettle(from: number, axis: "x" | "y" = "y") {
   return { ref, style: lite ? undefined : axis === "y" ? { rotateY: rot, rotateX: tip, scale, y } : { rotateX: rot, scale, y } };
 }
 
-function TrialButton({ children = "Start free trial", light = false }: { children?: ReactNode; light?: boolean }) {
+export function TrialButton({ children = "Start free trial", light = false }: { children?: ReactNode; light?: boolean }) {
   return <Link className={cn("pro-btn", light && "is-light")} href={siteConfig.links.signUp}>{children}<ArrowRight aria-hidden="true" /></Link>;
 }
 
@@ -152,7 +152,7 @@ export function ProHero() {
           <TrialButton light>Start {trialDays}-day free trial</TrialButton>
           <Link className="pro-btn is-ghost" href="#features">See the features</Link>
         </motion.div>
-        <motion.p className="pro-fine" {...enter(0.22)}>{symbol}{proMonthly} a month after the trial. Clients don&rsquo;t need an account.</motion.p>
+        <motion.p className="pro-fine" {...enter(0.22)}>From {symbol}{siteConfig.plans[0].monthly} a month after the trial. Clients don&rsquo;t need an account.</motion.p>
       </div>
 
       <div className="pro-stage" ref={stage} onPointerMove={move} onPointerLeave={reset}>
@@ -333,7 +333,7 @@ export function ProMoneyScene() {
             {SUMS.map((s, i) => (
               <Reveal key={s.label} delay={i * 0.12} y={50} tilt={20} className="pro-sum">
                 <dt>{s.label}</dt>
-                <dd><Count value={s.value} prefix={symbol} /></dd>
+                <dd><Count value={s.value} prefix="£" /></dd> {/* the demo studio bills in GBP, as in the screenshots */}
                 <dd className="pro-sum-note">{s.note}</dd>
               </Reveal>
             ))}
@@ -391,18 +391,39 @@ export function ProBento() {
 export function ProPricing() {
   return (
     <section className="pro-pricing" aria-labelledby="pro-pricing-title">
-      <div className="pro-wrap pro-pricing-row">
-        <Reveal>
-          <h2 id="pro-pricing-title" className="pro-h2">One plan</h2>
-          <p className="pro-price"><strong>{symbol}{proMonthly}</strong> a month, billed in GBP</p>
-          <p className="pro-line">Everything on this page. {trialDays} days free.</p>
+      <div className="pro-wrap">
+        <Reveal className="pro-pricing-head">
+          <h2 id="pro-pricing-title" className="pro-h2">Three plans</h2>
+          <p className="pro-line">Every plan starts with a {trialDays}-day free trial. Prices in {currency}.</p>
         </Reveal>
-        <Reveal delay={0.1} className="pro-pricing-actions">
-          <TrialButton />
-          <Link className="pro-link" href="/pricing">Pricing details <ArrowRight aria-hidden="true" /></Link>
-        </Reveal>
+        <ProPlans headingLevel="h3" />
+        <p className="pro-fine is-center"><Link className="pro-link" href="/pricing">Compare plans <ArrowRight aria-hidden="true" /></Link></p>
       </div>
     </section>
+  );
+}
+
+/** The three plan cards, rendered from `siteConfig.plans`. */
+export function ProPlans({ headingLevel = "h3" }: { headingLevel?: "h2" | "h3" }) {
+  const H = headingLevel;
+  return (
+    <div className="pro-plans">
+      {siteConfig.plans.map((plan, i) => (
+        <Reveal key={plan.id} delay={i * 0.12} tilt={16} className={cn("pro-plan", plan.highlighted && "is-featured")} data-plan={plan.id} data-to-confirm={plan.toConfirm ? "true" : undefined}>
+          <article>
+            <div className="pro-plan-top">
+              <H className="pro-plan-name">{plan.name}{plan.highlighted && <span className="pro-plan-pick">Most popular</span>}</H>
+              {plan.toConfirm && <span className="pro-badge">To confirm</span>}
+            </div>
+            <p className="pro-plan-price"><strong>{symbol}{plan.monthly}</strong> a month</p>
+            <Link className={cn("pro-btn", !plan.highlighted && "is-ghost")} href={siteConfig.links.signUp}>Start {trialDays}-day free trial</Link>
+            <ul className="pro-points">
+              {plan.features.map((f) => <li key={f}><Check aria-hidden="true" />{f}</li>)}
+            </ul>
+          </article>
+        </Reveal>
+      ))}
+    </div>
   );
 }
 

@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { ProBento, ProClosing, ProFaq, ProHero, ProMoneyScene, ProPortalScene, ProPricing, ProQaScene } from "@/components/pro/pro-home";
-import type { FaqItem } from "@/components/marketing/sections";
+import { ProBento, ProClosing, ProFaq, ProHero, ProMoneyScene, ProPortalScene, ProPricing, ProQaScene, type FaqItem } from "@/components/pro/pro-home";
 import { marketingMetadata } from "@/lib/marketing-metadata";
 import { siteConfig } from "@/lib/site-config";
 
@@ -10,14 +9,13 @@ import { siteConfig } from "@/lib/site-config";
  */
 export const metadata = marketingMetadata({ path: "/" });
 
-const name = siteConfig.name;
-const { symbol, proMonthly, trialDays } = siteConfig.pricing;
+const { trialDays } = siteConfig.pricing;
 
 const FAQ: FaqItem[] = [
   { q: "Do my clients need an account?", a: `Not to review. A review link lets them watch, comment and approve in the browser. Invite them to the portal if they want all their projects in one place.` },
   { q: "What does AI Visual QA check?", a: `The text in posters, stills and video frames: spelling, and anything that differs from the approved copy, such as a changed price or a missing word. It only suggests. A person accepts each finding.` },
   { q: "How big can uploads be?", a: `Up to 1 GB per file.` },
-  { q: "How much does it cost?", a: `${name} Pro is ${symbol}${proMonthly} a month, billed in GBP, after a ${trialDays}-day free trial.` },
+  { q: "How much does it cost?", a: <>There are three plans, each with a {trialDays}-day free trial. See <Link href="/pricing">pricing</Link>.</> },
   { q: "Where is my data stored?", a: <>See the <Link href="/privacy">privacy notice</Link>, or <Link href="/contact">contact us</Link>.</> },
 ];
 

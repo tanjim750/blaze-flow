@@ -1,4 +1,4 @@
-import { LegalPage } from "@/components/marketing/legal-page";
+import { ProLegal } from "@/components/pro/pro-pages";
 import { marketingMetadata } from "@/lib/marketing-metadata";
 import { siteConfig } from "@/lib/site-config";
 
@@ -15,12 +15,12 @@ const COOKIES = [
 export default function CookiesPage() {
   const { name, contactEmail } = siteConfig;
   return (
-    <LegalPage title="Cookie policy" intro={`What ${name} stores in your browser, and why.`}>
+    <ProLegal title="Cookie policy" intro={`What ${name} stores in your browser, and why.`}>
       <h2>Our approach</h2>
       <p>{name} uses only the cookies it needs to work. We do not use advertising or cross-site tracking cookies, and this public website sets no cookies of its own. Because these cookies are strictly necessary, the UK’s Privacy and Electronic Communications Regulations (PECR) do not require consent for them, but we still want you to know what they are.</p>
 
       <h2>Cookies we set</h2>
-      <div className="mk-table-wrap"><table>
+      <div className="pro-table-wrap"><table>
         <thead><tr><th>Name</th><th>Purpose</th><th>Duration</th><th>Type</th></tr></thead>
         <tbody>{COOKIES.map((cookie) => <tr key={cookie.name}><td><code>{cookie.name}</code></td><td>{cookie.purpose}</td><td>{cookie.duration}</td><td>{cookie.type}</td></tr>)}</tbody>
       </table></div>
@@ -36,6 +36,6 @@ export default function CookiesPage() {
 
       <h2>Contact</h2>
       <p>Questions: <a href={`mailto:${contactEmail}`}>{contactEmail}</a>.</p>
-    </LegalPage>
+    </ProLegal>
   );
 }

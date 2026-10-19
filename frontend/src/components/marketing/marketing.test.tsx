@@ -1,14 +1,14 @@
 import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MarketingHome from "@/app/(pro)/welcome/page";
-import PricingPage from "@/app/(marketing)/pricing/page";
-import PrivacyPage from "@/app/(marketing)/privacy/page";
-import TermsPage from "@/app/(marketing)/terms/page";
-import CookiesPage from "@/app/(marketing)/cookies/page";
-import FeaturesPage from "@/app/(marketing)/features/page";
-import ContactPage from "@/app/(marketing)/contact/page";
+import PricingPage from "@/app/(pro)/pricing/page";
+import PrivacyPage from "@/app/(pro)/privacy/page";
+import TermsPage from "@/app/(pro)/terms/page";
+import CookiesPage from "@/app/(pro)/cookies/page";
+import FeaturesPage from "@/app/(pro)/features/page";
+import ContactPage from "@/app/(pro)/contact/page";
 import { siteConfig } from "@/lib/site-config";
-import { buildMailto } from "./contact-form";
+import { buildMailto } from "@/components/pro/pro-pages";
 import { DemoVideo } from "./demo-video";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
@@ -59,9 +59,10 @@ describe("marketing homepage", () => {
     expect(container.querySelector("video")).toHaveAttribute("poster", "/marketing/demo-poster.webp");
   });
 
-  it("teases Pro at £29 a month with the 14-day trial, and keeps the FAQ", () => {
+  it("shows the three plans with the 14-day trial, and keeps the FAQ", () => {
     render(<MarketingHome />);
-    expect(screen.getAllByText(/£29/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("$39.99").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("To confirm")).toHaveLength(3);
     expect(screen.getAllByText(/14-day free trial/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Do my clients need an account?")).toBeInTheDocument();
   });
@@ -106,14 +107,22 @@ describe("DemoVideo", () => {
 });
 
 describe("pricing", () => {
-  it("shows Pro at £29 a month with a 14-day trial and labels any other card as a placeholder", () => {
+  it("shows three plans from site-config, Pro highlighted, each marked to confirm", () => {
     const { container } = render(<PricingPage />);
-    expect(screen.getByRole("heading", { level: 2, name: /^Pro/ })).toBeInTheDocument();
-    expect(screen.getAllByText("£29").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/14-day free trial/).length).toBeGreaterThan(0);
-    for (const card of container.querySelectorAll(".mk-price:not(.is-featured)")) {
-      expect(within(card as HTMLElement).getByText(/placeholder/i)).toBeInTheDocument();
+    const cards = container.querySelectorAll(".pro-plan");
+    expect(cards).toHaveLength(siteConfig.plans.length);
+    expect(siteConfig.plans.map((p) => [p.name, p.monthly])).toEqual([["Starter", 19.99], ["Pro", 39.99], ["Scale", 119.99]]);
+    expect(siteConfig.pricing.currency).toBe("USD");
+    for (const plan of siteConfig.plans) {
+      const card = container.querySelector(`[data-plan="${plan.id}"]`) as HTMLElement;
+      expect(within(card).getByRole("heading", { level: 2, name: new RegExp(`^${plan.name}`) })).toBeInTheDocument();
+      expect(within(card).getByText(`${siteConfig.pricing.symbol}${plan.monthly}`)).toBeInTheDocument();
+      expect(within(card).getByText("To confirm")).toBeInTheDocument();
     }
+    expect(container.querySelectorAll(".pro-plan.is-featured")).toHaveLength(1);
+    expect(container.querySelector(".pro-plan.is-featured")).toHaveAttribute("data-plan", "pro");
+    expect(siteConfig.plans.find((p) => p.id === "pro")?.monthly).toBe(siteConfig.pricing.proMonthly);
+    expect(screen.getAllByText(/14-day free trial/).length).toBeGreaterThan(0);
   });
 });
 
@@ -137,7 +146,7 @@ describe("features and contact", () => {
   it("renders the features page", () => {
     render(<FeaturesPage />);
     expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 3, name: /proofreader/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /proofreader/i })).toBeInTheDocument();
   });
 
   it("contact shows the address and composes a mailto without sending anything", () => {
