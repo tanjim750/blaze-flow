@@ -32,9 +32,9 @@ describe("marketing homepage", () => {
     Object.defineProperty(HTMLMediaElement.prototype, "play", { configurable: true, value: vi.fn().mockResolvedValue(undefined) });
   });
 
-  it("leads with a plain headline about what it does, and the brand from siteConfig", () => {
+  it("leads with a short, plain headline and the brand from siteConfig", () => {
     render(<MarketingHome />);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/get client feedback on the frame, not in email threads/i);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^client review for video studios$/i);
     expect(screen.getAllByText(new RegExp(siteConfig.name)).length).toBeGreaterThan(0);
   });
 
@@ -46,16 +46,15 @@ describe("marketing homepage", () => {
     for (const link of screen.getAllByRole("link", { name: /^log in$/i })) expect(link).toHaveAttribute("href", "/sign-in");
   });
 
-  it("covers review, AI Visual QA, the client portal, big files and tasks with real screenshots", () => {
+  it("features AI spelling checks, the client portal and the money totals first, with real captures", () => {
     const { container } = render(<MarketingHome />);
-    for (const title of [/comment on the frame/i, /approved copy/i, /portal with your logo/i, /1 gb master/i, /notes into tasks/i]) {
-      expect(screen.getByRole("heading", { level: 3, name: title })).toBeInTheDocument();
-    }
-    expect(screen.getByRole("heading", { level: 2, name: /PREMUIM/ })).toBeInTheDocument();
+    const h2s = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(h2s.slice(0, 3)).toEqual([expect.stringMatching(/spelling mistakes/i), expect.stringMatching(/portal/i), expect.stringMatching(/owe/i)]);
+    // Real figures from the demo studio's Money page (reduced motion shows the final values).
+    for (const sum of ["£8,330", "£760", "£19,180", "£8,150"]) expect(screen.getByText(sum)).toBeInTheDocument();
     const images = [...container.querySelectorAll("img")];
-    expect(images.length).toBeGreaterThanOrEqual(7);
+    expect(images.length).toBeGreaterThanOrEqual(12);
     for (const image of images) expect(decodeURIComponent(image.getAttribute("src") ?? "")).toMatch(/\/marketing\//);
-    // The hero's largest paint is the video poster, so every image stays lazy.
     expect(images.filter((image) => image.getAttribute("loading") !== "lazy")).toEqual([]);
     expect(container.querySelector("video")).toHaveAttribute("poster", "/marketing/demo-poster.webp");
   });
@@ -64,7 +63,7 @@ describe("marketing homepage", () => {
     render(<MarketingHome />);
     expect(screen.getAllByText(/£29/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/14-day free trial/i).length).toBeGreaterThan(0);
-    expect(screen.getByText("Do my clients need an account to review?")).toBeInTheDocument();
+    expect(screen.getByText("Do my clients need an account?")).toBeInTheDocument();
   });
 });
 

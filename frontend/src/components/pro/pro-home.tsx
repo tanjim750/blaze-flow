@@ -1,80 +1,92 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type PointerEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { motion, useMotionValueEvent, useScroll, useSpring, useTransform, type MotionValue } from "motion/react";
+import { animate, motion, useInView, useMotionValue, useScroll, useSpring, useTransform } from "motion/react";
 import { ArrowRight, Check } from "lucide-react";
 import { DemoVideo } from "@/components/marketing/demo-video";
-import { useLiteMotion, useReducedMotionSafe } from "@/components/marketing/motion-prefs";
+import { useFinePointer, useLiteMotion, useReducedMotionSafe } from "@/components/marketing/motion-prefs";
 import { SCREENS, type ScreenKey } from "@/components/marketing/screenshot";
 import type { FaqItem } from "@/components/marketing/sections";
 import { siteConfig } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 
 const { name } = siteConfig;
-const { symbol, proMonthly, trialDays, currency } = siteConfig.pricing;
+const { symbol, proMonthly, trialDays } = siteConfig.pricing;
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-/* ---------- small building blocks ---------- */
+/* ---------- real captures from the demo workspace (public/marketing/v3, 2× density) ---------- */
 
-/** One short fade-and-rise the first time something enters the viewport. Nothing loops. */
-function Reveal({ children, className, delay = 0, as = "div" }: { children: ReactNode; className?: string; delay?: number; as?: "div" | "li" | "article" }) {
+const V3 = {
+  money: { src: "/marketing/v3/money.webp", w: 2400, h: 1500, alt: "Money page: what clients owe, what the studio owes editors, margin and collected, with receivables by client and payouts by editor" },
+  portalProject: { src: "/marketing/v3/portal-project.webp", w: 2400, h: 1500, alt: "Client portal project page: progress from kick-off to delivered, approved deliverables to download and the sign-off record" },
+  posterArt: { src: "/marketing/v3/poster-art.webp", w: 1153, h: 1440, alt: "Summer sale poster with the misspelt word PREMUIM" },
+  finding1: { src: "/marketing/v3/finding-1.webp", w: 706, h: 259, alt: "Finding: PREMUIM should be PREMIUM, high confidence" },
+  finding2: { src: "/marketing/v3/finding-2.webp", w: 706, h: 258, alt: "Finding: Recieve should be Receive, high confidence" },
+  finding3: { src: "/marketing/v3/finding-3.webp", w: 706, h: 262, alt: "Finding: 50% differs from the approved 40%" },
+  finding4: { src: "/marketing/v3/finding-4.webp", w: 706, h: 258, alt: "Finding: the word bag is in the approved copy but missing from the poster" },
+  payouts: { src: "/marketing/v3/money-payouts.webp", w: 1058, h: 900, alt: "Payouts by editor: earned, paid and owed for each editor" },
+  invoiceTotals: { src: "/marketing/v3/invoice-totals.webp", w: 1623, h: 410, alt: "Invoice INV-0002: total £3,250, paid £1,300, balance due £1,950" },
+  stepper: { src: "/marketing/v3/portal-stepper.webp", w: 2256, h: 180, alt: "Project progress: kick-off, in production, your review, signed off, delivered" },
+  signoff: { src: "/marketing/v3/portal-signoff.webp", w: 1274, h: 475, alt: "Sign-off record: V4 approved by Rachel Kim, V2 changes asked" },
+  deliverables: { src: "/marketing/v3/portal-deliverables.webp", w: 1274, h: 483, alt: "Your deliverables: two approved cuts ready to download" },
+} as const;
+type Asset = (typeof V3)[keyof typeof V3];
+
+function Pic({ img, sizes, className, decorative = false }: { img: Asset; sizes: string; className?: string; decorative?: boolean }) {
+  return <Image className={className} src={img.src} alt={decorative ? "" : img.alt} width={img.w} height={img.h} sizes={sizes} loading="lazy" />;
+}
+
+function Shot({ name: key, sizes, decorative = false }: { name: ScreenKey; sizes: string; decorative?: boolean }) {
+  const s = SCREENS[key];
+  return <Image src={s.src} alt={decorative ? "" : s.alt} width={1920} height={1200} sizes={sizes} loading="lazy" />;
+}
+
+/** One fade-and-rise when something first scrolls into view. */
+function Reveal({ children, className, delay = 0, y = 28 }: { children: ReactNode; className?: string; delay?: number; y?: number }) {
   const reduce = useReducedMotionSafe();
-  const Tag = motion[as];
   return (
-    <Tag
+    <motion.div
       className={className}
-      initial={reduce ? false : { opacity: 0, y: 20 }}
+      initial={reduce ? false : { opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "0px 0px -12% 0px" }}
-      transition={{ duration: 0.6, ease: EASE, delay }}
+      viewport={{ once: true, margin: "0px 0px -10% 0px" }}
+      transition={{ duration: 0.8, ease: EASE, delay }}
     >
       {children}
-    </Tag>
+    </motion.div>
   );
 }
 
-/** A real screenshot at full resolution. Lazy unless `eager`. */
-function Shot({ name: key, sizes = "(max-width: 960px) 100vw, 760px", className }: { name: ScreenKey; sizes?: string; className?: string }) {
-  const screen = SCREENS[key];
-  return <Image className={className} src={screen.src} alt={screen.alt} width={1920} height={1200} sizes={sizes} loading="lazy" />;
+/** Steps 0..n once the element is in view; reduced motion jumps straight to the end. */
+function useSequence(steps: number, interval = 650) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, amount: 0.35 });
+  const reduce = useReducedMotionSafe();
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    if (!inView || reduce) return;
+    let i = 0;
+    const id = window.setInterval(() => { i += 1; setStep(i); if (i >= steps) window.clearInterval(id); }, interval);
+    return () => window.clearInterval(id);
+  }, [inView, reduce, steps, interval]);
+  return { ref, step: reduce ? steps : step, inView: inView || reduce };
 }
 
-/**
- * A 1:1 detail cropped out of a real screenshot (coordinates in the 1280×800 capture space),
- * so a panel can be shown at a readable size without a separate asset.
- */
-function Crop({ name: key, x, y, w, h, width }: { name: ScreenKey; x: number; y: number; w: number; h: number; width: number }) {
-  const scale = width / w;
-  return (
-    <div className="pro-crop" style={{ width, height: Math.round(h * scale) }}>
-      <Image
-        src={SCREENS[key].src}
-        alt=""
-        width={1920}
-        height={1200}
-        sizes={`${Math.round(1280 * scale)}px`}
-        loading="lazy"
-        style={{ width: 1280 * scale, height: 800 * scale, transform: `translate(${-x * scale}px, ${-y * scale}px)` }}
-      />
-    </div>
-  );
+/** A scroll-linked tilt that settles flat as the element reaches the middle of the screen. */
+function useSettle(from: number, axis: "x" | "y" = "y") {
+  const ref = useRef<HTMLDivElement>(null);
+  const lite = useLiteMotion();
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "center 60%"] });
+  const p = useSpring(scrollYProgress, { stiffness: 120, damping: 30, mass: 0.4 });
+  const rot = useTransform(p, [0, 1], [from, 0]);
+  const scale = useTransform(p, [0, 1], [0.94, 1]);
+  return { ref, style: lite ? undefined : axis === "y" ? { rotateY: rot, scale } : { rotateX: rot, scale } };
 }
 
-function TrialButton({ children = "Start free trial" }: { children?: ReactNode }) {
-  return <Link className="pro-btn" href={siteConfig.links.signUp}>{children}</Link>;
-}
-
-/** A plain timeline ruler under the hero window, echoing the player's scrub bar. */
-function Ruler({ playhead, marks = [] }: { playhead?: MotionValue<string>; marks?: number[] }) {
-  return (
-    <div className="pro-ruler" aria-hidden="true">
-      <div className="pro-ruler-ticks" />
-      {marks.map((at) => <span key={at} className="pro-ruler-mark" style={{ left: `${at}%` }} />)}
-      {playhead && <motion.span className="pro-ruler-head" style={{ left: playhead }} />}
-    </div>
-  );
+function TrialButton({ children = "Start free trial", light = false }: { children?: ReactNode; light?: boolean }) {
+  return <Link className={cn("pro-btn", light && "is-light")} href={siteConfig.links.signUp}>{children}<ArrowRight aria-hidden="true" /></Link>;
 }
 
 /* ---------- hero ---------- */
@@ -82,289 +94,287 @@ function Ruler({ playhead, marks = [] }: { playhead?: MotionValue<string>; marks
 export function ProHero() {
   const stage = useRef<HTMLDivElement>(null);
   const lite = useLiteMotion();
-  const { scrollYProgress } = useScroll({ target: stage, offset: ["start end", "start 12%"] });
-  const p = useSpring(scrollYProgress, { stiffness: 140, damping: 32, mass: 0.35 });
-  const rotateX = useTransform(p, [0, 1], [22, 0]);
-  const scale = useTransform(p, [0, 1], [0.92, 1]);
-  const y = useTransform(p, [0, 1], [24, 0]);
-  const floatY = useTransform(p, [0, 1], [60, -10]);
-  const playhead = useTransform(p, [0, 1], ["6%", "58%"]);
+  const fine = useFinePointer();
+  const reduce = useReducedMotionSafe();
+  const { scrollYProgress } = useScroll({ target: stage, offset: ["start end", "start 10%"] });
+  const p = useSpring(scrollYProgress, { stiffness: 130, damping: 30, mass: 0.4 });
+  const mx = useSpring(useMotionValue(0), { stiffness: 80, damping: 20 });
+  const my = useSpring(useMotionValue(0), { stiffness: 80, damping: 20 });
+  const tiltX = useTransform(p, [0, 1], [20, 0]);
+  const rotateX = useTransform([tiltX, my], ([a, b]: number[]) => a + b);
+  const rotateY = useTransform(mx, (v) => v);
+  const scale = useTransform(p, [0, 1], [0.9, 1]);
+  const near = useTransform(p, [0, 1], [90, -30]);
+  const mid = useTransform(p, [0, 1], [50, -10]);
+  const far = useTransform(p, [0, 1], [130, -40]);
+  const move = (event: PointerEvent<HTMLDivElement>) => {
+    if (lite || !fine) return;
+    const r = event.currentTarget.getBoundingClientRect();
+    mx.set(((event.clientX - r.left) / r.width - 0.5) * 6);
+    my.set(-((event.clientY - r.top) / r.height - 0.5) * 4);
+  };
+  const reset = () => { mx.set(0); my.set(0); };
+  const enter = (delay: number) => (reduce ? {} : { initial: { opacity: 0, y: 40 }, animate: { opacity: 1, y: 0 }, transition: { duration: 1, ease: EASE, delay } });
 
   return (
     <section className="pro-hero" aria-labelledby="pro-hero-title">
-      <div className="pro-wrap">
-        <h1 id="pro-hero-title" className="pro-h1">Get client feedback on the frame, not in email threads.</h1>
-        <div className="pro-hero-foot">
-          <p className="pro-lede">
-            Send your client a link to the cut. They click the moment they mean and type &ldquo;logo&rsquo;s too small here&rdquo;.
-            The note lands at 0:14 on that version. You upload v3, and they approve it in the same place.
-          </p>
-          <div className="pro-hero-actions">
-            <div className="pro-ctas">
-              <TrialButton>Start a {trialDays}-day free trial</TrialButton>
-              <Link className="pro-btn is-ghost" href="#tour">See the review page</Link>
-            </div>
-            <p className="pro-fine">Pro is {symbol}{proMonthly} a month after the trial. Your clients don&rsquo;t need an account.</p>
-          </div>
-        </div>
+      <div className="pro-wrap pro-hero-copy">
+        {/* No entrance on the headline: it is the largest paint, so it shows at once. */}
+        <h1 id="pro-hero-title" className="pro-h1">Client review for video studios</h1>
+        <motion.p className="pro-sub" {...enter(0.08)}>Clients leave notes on the exact frame. Invoices and editor pay sit in the same app.</motion.p>
+        <motion.div className="pro-ctas" {...enter(0.16)}>
+          <TrialButton light>Start {trialDays}-day free trial</TrialButton>
+          <Link className="pro-btn is-ghost" href="#features">See the features</Link>
+        </motion.div>
+        <motion.p className="pro-fine" {...enter(0.22)}>{symbol}{proMonthly} a month after the trial. Clients don&rsquo;t need an account.</motion.p>
       </div>
 
-      <div className="pro-stage-wrap" ref={stage}>
-        <motion.div className="pro-stage" style={lite ? undefined : { rotateX, scale, y }}>
+      <div className="pro-stage" ref={stage} onPointerMove={move} onPointerLeave={reset}>
+        <motion.div className="pro-scene" style={lite ? undefined : { rotateX, rotateY, scale }} {...enter(0.25)}>
           <div className="pro-window">
-            <div className="pro-window-bar">
-              <span>Northlight Coffee / Spring Launch / Hero 30s</span>
-              <span className="pro-window-tc">V2 · 00:00:14:00</span>
-            </div>
             <DemoVideo label={`${name} review page: a client cut playing, with time-stamped comments and drawings beside it`} />
           </div>
-          <motion.figure className="pro-float" style={lite ? undefined : { y: floatY }}>
-            <Crop name="aiqaVideo" x={955} y={218} w={316} h={190} width={330} />
-            <figcaption>AI Visual QA found a typo in the title at 0:01</figcaption>
+          <motion.figure className="pro-layer is-qa" style={lite ? undefined : { y: near }}>
+            <Pic img={V3.finding1} sizes="340px" />
+          </motion.figure>
+          <motion.figure className="pro-layer is-signoff" style={lite ? undefined : { y: far }}>
+            <Pic img={V3.signoff} sizes="420px" />
+          </motion.figure>
+          <motion.figure className="pro-layer is-money" style={lite ? undefined : { y: mid }}>
+            <Pic img={V3.invoiceTotals} sizes="440px" />
           </motion.figure>
         </motion.div>
-        <div className="pro-wrap"><Ruler playhead={lite ? undefined : playhead} marks={[12, 21, 27, 44, 57, 66, 81, 88]} /></div>
       </div>
     </section>
   );
 }
 
-/* ---------- facts (no customer logos yet, so no logo row) ---------- */
+/* ---------- three featured scenes ---------- */
 
-const SPECS = [
-  { k: "Notes on the frame", v: "Comments, drawings, voice and screen recordings, pinned to a timecode or a range." },
-  { k: "1 GB per file", v: "Masters and proxies upload in the background while you keep working." },
-  { k: "No client logins", v: "Clients open a link to watch, comment and approve." },
-  { k: `${symbol}${proMonthly} a month`, v: `One plan. Try it free for ${trialDays} days.` },
+function SceneCopy({ id, label, title, line, points }: { id: string; label: string; title: string; line: string; points: string[] }) {
+  return (
+    <Reveal className="pro-scene-copy">
+      <p className="pro-label">{label}</p>
+      <h2 id={id} className="pro-h2">{title}</h2>
+      <p className="pro-line">{line}</p>
+      <ul className="pro-points">{points.map((p) => <li key={p}><Check aria-hidden="true" />{p}</li>)}</ul>
+    </Reveal>
+  );
+}
+
+const BOXES = [
+  { left: 4.9, top: 35, width: 35, height: 11.7 },
+  { left: 6.4, top: 51.8, width: 18.2, height: 5.6 },
+  { left: 62, top: 59.4, width: 8.8, height: 5.2 },
 ];
+const FINDINGS = [V3.finding1, V3.finding2, V3.finding3, V3.finding4];
 
-export function ProSpecs() {
+export function ProQaScene() {
+  const { ref, step, inView } = useSequence(5, 700);
+  const { ref: settleRef, style: settleStyle } = useSettle(-10);
+  const reduce = useReducedMotionSafe();
   return (
-    <section className="pro-specs" aria-label="Key facts">
-      <div className="pro-wrap">
-        <ul>
-          {SPECS.map((spec, i) => (
-            <Reveal as="li" key={spec.k} delay={i * 0.05}>
-              <strong>{spec.k}</strong>
-              <span>{spec.v}</span>
-            </Reveal>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
-/* ---------- the problem, in one scene ---------- */
-
-export function ProStatement() {
-  return (
-    <section className="pro-statement" aria-labelledby="pro-statement-title">
-      <div className="pro-wrap pro-statement-grid">
-        <Reveal>
-          <h2 id="pro-statement-title" className="pro-h2 is-xl">Most client feedback still arrives as a screenshot in an email.</h2>
-        </Reveal>
-        <Reveal className="pro-statement-copy" delay={0.08}>
-          <p>&ldquo;Logo&rsquo;s too small at 0:14.&rdquo; Which version? Which logo? By the third final_FINAL.mov thread, nobody is sure.</p>
-          <p>In {name}, that note sits on v3 at 00:14, next to the frame it&rsquo;s about, with the client&rsquo;s name and the date on it.</p>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-/* ---------- the tour: sticky product screen, five chapters ---------- */
-
-const CHAPTERS: { key: ScreenKey; label: string; title: string; body: string; points: string[] }[] = [
-  {
-    key: "review", label: "Review and approval", title: "Clients comment on the frame they are looking at.",
-    body: "Open a cut, still or PDF in the player. The client clicks a point in the frame and types a note, or draws on it. Each note is saved with its timecode and version. When they are happy they press Approve, and you keep a record of who approved which version and when.",
-    points: ["Comments, drawings, voice and screen notes", "Play v2 and v3 side by side, in sync", "Mark any comment as team-only"],
-  },
-  {
-    key: "aiqaVideo", label: "AI Visual QA", title: "Check the text on screen against the approved copy.",
-    body: "Pick the script or copy the client signed off. AI Visual QA reads the text in your poster or video frames and lists anything that doesn't match it. Each finding is boxed on the frame, with a time range on video. Nothing changes until someone on your team accepts it.",
-    points: ["Spelling, changed words, prices and dates", "Lines in the approved copy that are missing", "Accept, dismiss, or turn a finding into a comment"],
-  },
-  {
-    key: "portal", label: "Client portal", title: "Give each client a portal with your logo on it.",
-    body: "Clients see what is waiting for their review, download approved files, check invoices and send you their own files. You set the logo, colour and welcome line.",
-    points: ["Approved files with a sign-off record", "Clients can upload to you, up to 1 GB a file", "Messages kept per project"],
-  },
-  {
-    key: "files", label: "Files", title: "Upload a 1 GB master and keep working.",
-    body: "Uploads run in a tray at the bottom of the screen, so you can carry on while a master goes up. Files are sorted by client and project, and show duration, size and where they are in review.",
-    points: ["Up to 1 GB per file", "Grid and list views, folders and filters", "Open any file straight into review"],
-  },
-  {
-    key: "tasks", label: "Tasks", title: "Turn client notes into tasks for the edit.",
-    body: "Select a client's notes and make them tasks, with the version and timecode attached. Move them across a board as the edit goes. When v4 arrives, the notes still open on v3 come with it as a checklist.",
-    points: ["Assignees, due dates and priorities", "Filter by client, editor or due date", "Open notes carried to the next version"],
-  },
-];
-
-export function ProTour() {
-  const track = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState(0);
-  const { scrollYProgress } = useScroll({ target: track, offset: ["start 45%", "end 55%"] });
-  useMotionValueEvent(scrollYProgress, "change", (v) => setActive(Math.min(CHAPTERS.length - 1, Math.max(0, Math.floor(v * CHAPTERS.length)))));
-
-  return (
-    <section id="tour" className="pro-tour" aria-labelledby="pro-tour-title">
-      <div className="pro-wrap">
-        <div className="pro-section-head">
-          <h2 id="pro-tour-title" className="pro-h2">What you can do in {name}</h2>
-        </div>
-        <div className="pro-tour-grid" ref={track}>
-          <div className="pro-tour-copy">
-            {CHAPTERS.map((chapter, i) => (
-              <article key={chapter.key} className={cn("pro-chapter", i === active && "is-active")}>
-                <p className="pro-chapter-label">{chapter.label}</p>
-                <h3>{chapter.title}</h3>
-                <p>{chapter.body}</p>
-                <ul>{chapter.points.map((point) => <li key={point}><Check aria-hidden="true" />{point}</li>)}</ul>
-                <div className="pro-chapter-shot"><Shot name={chapter.key} sizes="(max-width: 960px) 100vw, 820px" /></div>
-              </article>
-            ))}
-          </div>
-          <div className="pro-tour-stage" aria-hidden="true">
-            <div className="pro-tour-sticky">
-              <div className="pro-tour-frame">
-                {CHAPTERS.map((chapter, i) => (
-                  <div key={chapter.key} className={cn("pro-tour-screen", i === active && "is-active", i < active && "is-past")}>
-                    <Shot name={chapter.key} sizes="(max-width: 960px) 100vw, 820px" />
-                  </div>
-                ))}
-              </div>
-              <ol className="pro-tour-index">
-                {CHAPTERS.map((chapter, i) => <li key={chapter.key} className={cn(i === active && "is-active")}>{chapter.label}</li>)}
-              </ol>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ---------- AI QA close-up ---------- */
-
-const FINDINGS = [
-  { found: "PREMUIM", fix: "PREMIUM", kind: "Spelling, against the approved copy" },
-  { found: "Recieve", fix: "Receive", kind: "Spelling, against the approved copy" },
-  { found: "50%", fix: "40%", kind: "Number differs from the approved copy" },
-  { found: "(missing)", fix: "bag", kind: "Word in the approved copy, not on the poster" },
-];
-
-export function ProQa() {
-  const ref = useRef<HTMLDivElement>(null);
-  const lite = useLiteMotion();
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "center 55%"] });
-  const p = useSpring(scrollYProgress, { stiffness: 140, damping: 32, mass: 0.35 });
-  const rotateY = useTransform(p, [0, 1], [-12, 0]);
-  const scale = useTransform(p, [0, 1], [0.95, 1]);
-
-  return (
-    <section className="pro-qa" aria-labelledby="pro-qa-title">
-      <div className="pro-wrap pro-qa-grid">
-        <div className="pro-qa-copy">
-          <h2 id="pro-qa-title" className="pro-h2">This poster nearly went out with PREMUIM on it.</h2>
-          <p className="pro-body">
-            It&rsquo;s the Summer sale poster from our demo project. We gave AI Visual QA the approved copy and it found four problems.
-            Three were high confidence, so we added them to the review as comments in one click.
-          </p>
-          <table className="pro-findings">
-            <caption className="pro-sr">AI Visual QA findings on the Summer sale poster</caption>
-            <thead><tr><th scope="col">On the poster</th><th scope="col">Approved copy</th><th scope="col">Finding</th></tr></thead>
-            <tbody>
-              {FINDINGS.map((row) => (
-                <tr key={row.kind + row.fix}><td>{row.found === "(missing)" ? <em>missing</em> : <s>{row.found}</s>}</td><td>{row.fix}</td><td>{row.kind}</td></tr>
+    <section id="features" className="pro-feature is-qa" aria-labelledby="pro-qa-title">
+      <div className="pro-wrap pro-feature-grid">
+        <SceneCopy
+          id="pro-qa-title"
+          label="AI Visual QA"
+          title="Spelling mistakes found before the client sees them"
+          line="It reads the text on posters and video frames and checks it against the approved copy."
+          points={["Typos, changed prices and missing words", "Boxed on the image, timed on video"]}
+        />
+        <div className="pro-qa-visual" ref={ref}>
+          <div className="pro-persp" ref={settleRef}>
+            <motion.div className="pro-poster" style={settleStyle}>
+              <Pic img={V3.posterArt} sizes="(max-width: 960px) 70vw, 420px" />
+              {inView && !reduce && step < 4 && <span className="pro-scan" aria-hidden="true" />}
+              {BOXES.map((b, i) => (
+                <motion.span
+                  key={i}
+                  className="pro-typo-box"
+                  aria-hidden="true"
+                  style={{ left: `${b.left}%`, top: `${b.top}%`, width: `${b.width}%`, height: `${b.height}%` }}
+                  initial={false}
+                  animate={step > i ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 1.25 }}
+                  transition={{ duration: 0.45, ease: EASE }}
+                />
               ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="pro-qa-media" ref={ref}>
-          <motion.div className="pro-window is-tilt" style={lite ? undefined : { rotateY, scale }}>
-            <Shot name="aiqaPoster" sizes="(max-width: 960px) 100vw, 760px" />
-          </motion.div>
+            </motion.div>
+          </div>
+          <ol className="pro-findings" aria-label="Findings">
+            {FINDINGS.map((img, i) => (
+              <motion.li
+                key={img.src}
+                initial={false}
+                animate={step > i ? { opacity: 1, x: 0 } : { opacity: 0, x: 40 }}
+                transition={{ duration: 0.55, ease: EASE }}
+              >
+                <Pic img={img} sizes="(max-width: 960px) 80vw, 340px" />
+              </motion.li>
+            ))}
+          </ol>
+          <motion.p className="pro-count" initial={false} animate={{ opacity: step >= 4 ? 1 : 0 }} aria-hidden={step < 4}>
+            4 findings on V1 · 3 high confidence
+          </motion.p>
         </div>
       </div>
     </section>
   );
 }
 
-/* ---------- workflow ---------- */
+export function ProPortalScene() {
+  const { ref, step } = useSequence(3, 800);
+  const { ref: settleRef, style: settleStyle } = useSettle(10);
+  return (
+    <section className="pro-feature is-portal" aria-labelledby="pro-portal-title">
+      <div className="pro-wrap pro-feature-grid is-flip">
+        <SceneCopy
+          id="pro-portal-title"
+          label="Client portal"
+          title="Your clients approve cuts in a portal with your logo"
+          line="Every approval and change request is kept, with a name and a date."
+          points={["Approved files ready to download", "No client logins for single review links"]}
+        />
+        <div className="pro-portal-visual" ref={ref}>
+          <div className="pro-persp" ref={settleRef}>
+            <motion.div className="pro-window is-shot" style={settleStyle}>
+              <Pic img={V3.portalProject} sizes="(max-width: 960px) 100vw, 760px" />
+            </motion.div>
+          </div>
+          <motion.figure
+            className="pro-float is-stepper"
+            initial={false}
+            animate={{ clipPath: step >= 1 ? "inset(0 0% 0 0 round 10px)" : "inset(0 100% 0 0 round 10px)" }}
+            transition={{ duration: 1.1, ease: EASE }}
+          >
+            <Pic img={V3.stepper} sizes="(max-width: 960px) 90vw, 640px" />
+          </motion.figure>
+          <motion.figure
+            className="pro-float is-signoff"
+            initial={false}
+            animate={step >= 2 ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.97 }}
+            transition={{ duration: 0.7, ease: EASE }}
+          >
+            <Pic img={V3.signoff} sizes="(max-width: 960px) 90vw, 440px" />
+          </motion.figure>
+        </div>
+      </div>
+    </section>
+  );
+}
 
-const FLOW = [
-  { title: "Upload", body: "Drop in the cut, poster or stills. Files up to 1 GB each go into the client's project." },
-  { title: "Review", body: "Send the client a link. They watch in the browser and leave notes on the frame, without an account." },
-  { title: "Approve", body: "They approve the version or ask for changes. You can see who approved v3, and when." },
-  { title: "Deliver", body: "The approved file appears in the client's portal, ready to download, with the invoice next to it." },
+/** A figure that counts up from zero the first time it scrolls into view. */
+function Count({ value, prefix = "", className }: { value: number; prefix?: string; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, amount: 0.6 });
+  const reduce = useReducedMotionSafe();
+  const fmt = (n: number) => prefix + Math.round(n).toLocaleString("en-GB");
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !inView || reduce) return;
+    const controls = animate(0, value, { duration: 1.6, ease: EASE, onUpdate: (v) => { el.textContent = fmt(v); } });
+    return () => controls.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inView, reduce, value]);
+  return <span ref={ref} className={className}>{fmt(value)}</span>;
+}
+
+const SUMS = [
+  { label: "Clients owe you", value: 8330, note: "2 invoices overdue" },
+  { label: "You owe editors", value: 760, note: "Earned on approved tasks" },
+  { label: "Margin", value: 19180, note: "86.9% of priced work" },
+  { label: "Collected", value: 8150, note: "Of £16,480 billed" },
 ];
 
-export function ProFlow() {
-  const ref = useRef<HTMLOListElement>(null);
-  const lite = useLiteMotion();
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start 85%", "end 45%"] });
-  const p = useSpring(scrollYProgress, { stiffness: 120, damping: 30 });
-
+export function ProMoneyScene() {
+  const { ref: settleRef, style: settleStyle } = useSettle(-8);
   return (
-    <section className="pro-flow" aria-labelledby="pro-flow-title">
-      <div className="pro-wrap">
-        <div className="pro-section-head">
-          <h2 id="pro-flow-title" className="pro-h2">How a job goes through it</h2>
+    <section className="pro-feature is-money" aria-labelledby="pro-money-title">
+      <div className="pro-wrap pro-feature-grid">
+        <SceneCopy
+          id="pro-money-title"
+          label="Money"
+          title="What clients owe you, and what you owe your editors"
+          line="Invoices come from the project fee and priced tasks. An editor’s pay is earned when their task is approved."
+          points={["Part payments and overdue invoices", "Each editor’s earned, paid and owed"]}
+        />
+        <div className="pro-money-visual">
+          <dl className="pro-sums">
+            {SUMS.map((s, i) => (
+              <Reveal key={s.label} delay={i * 0.08} y={18} className="pro-sum">
+                <dt>{s.label}</dt>
+                <dd><Count value={s.value} prefix={symbol} /></dd>
+                <dd className="pro-sum-note">{s.note}</dd>
+              </Reveal>
+            ))}
+          </dl>
+          <div className="pro-money-stack">
+            <div className="pro-persp" ref={settleRef}>
+              <motion.div className="pro-window is-shot is-payouts" style={settleStyle}>
+                <Pic img={V3.payouts} sizes="(max-width: 960px) 90vw, 440px" />
+              </motion.div>
+            </div>
+            <Reveal className="pro-float is-invoice" delay={0.2}>
+              <Pic img={V3.invoiceTotals} sizes="(max-width: 960px) 90vw, 460px" />
+            </Reveal>
+          </div>
+          <p className="pro-source">Figures from the demo studio&rsquo;s Money page.</p>
         </div>
-        <ol className="pro-flow-list" ref={ref}>
-          <motion.span className="pro-flow-line" aria-hidden="true" style={lite ? { scaleX: 1 } : { scaleX: p }} />
-          {FLOW.map((step, i) => (
-            <Reveal as="li" key={step.title} delay={i * 0.06}>
-              <span className="pro-flow-num">{i + 1}</span>
-              <h3>{step.title}</h3>
-              <p>{step.body}</p>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- bento: the rest of the app ---------- */
+
+/** `focus` frames the interesting part of each screenshot: rendered width and offset, in px. */
+const TILES: { key: ScreenKey; title: string; line: string; size?: "wide"; focus: [number, number, number] }[] = [
+  { key: "review", title: "Notes on the frame", line: "Comments, drawings and voice notes at a timecode.", size: "wide", focus: [1300, -330, -200] },
+  { key: "aiqaVideo", title: "QA on video too", line: "Each finding has its time range.", focus: [980, -250, -150] },
+  { key: "files", title: "1 GB uploads", line: "Masters upload in the background.", focus: [980, -330, -60] },
+  { key: "tasks", title: "Notes become tasks", line: "With the version and timecode attached.", size: "wide", focus: [1300, -240, -40] },
+];
+
+export function ProBento() {
+  return (
+    <section className="pro-bento" aria-labelledby="pro-bento-title">
+      <div className="pro-wrap">
+        <Reveal><h2 id="pro-bento-title" className="pro-h2 is-center">Also in {name}</h2></Reveal>
+        <div className="pro-bento-grid">
+          {TILES.map((t, i) => (
+            <Reveal key={t.key} delay={(i % 2) * 0.08} className={cn("pro-tile", t.size === "wide" && "is-wide")}>
+              <div className="pro-tile-copy">
+                <h3>{t.title}</h3>
+                <p>{t.line}</p>
+              </div>
+              <div className="pro-tile-shot" style={{ "--w": `${t.focus[0]}px`, "--x": `${t.focus[1]}px`, "--y": `${t.focus[2]}px` } as CSSProperties}><Shot name={t.key} sizes="1300px" /></div>
             </Reveal>
           ))}
-        </ol>
+        </div>
       </div>
     </section>
   );
 }
 
-/* ---------- pricing teaser ---------- */
-
-const PLAN = [
-  "Review links your clients can use without an account",
-  "Comments, drawings, voice and screen notes on the frame",
-  "Versions, side-by-side compare and approvals",
-  "AI Visual QA for posters and video, against the approved copy",
-  "A client portal with your logo, approved files and sign-off records",
-  "Files, tasks, project chat and invoices",
-  "Uploads up to 1 GB per file",
-];
+/* ---------- pricing, FAQ, closing ---------- */
 
 export function ProPricing() {
   return (
     <section className="pro-pricing" aria-labelledby="pro-pricing-title">
-      <div className="pro-wrap pro-pricing-grid">
-        <div>
-          <h2 id="pro-pricing-title" className="pro-h2">Pricing</h2>
-          <p className="pro-body">There is one plan, Pro, at {symbol}{proMonthly} a month. It includes everything on this page. Try it free for {trialDays} days on a real job before you pay.</p>
-          <Link className="pro-link is-arrow" href="/pricing">See full pricing <ArrowRight aria-hidden="true" /></Link>
-        </div>
-        <Reveal className="pro-price">
-          <div className="pro-price-head">
-            <h3>Pro</h3>
-            <span className="pro-price-trial">{trialDays}-day free trial</span>
-          </div>
-          <p className="pro-price-amount"><strong>{symbol}{proMonthly}</strong><span>a month, billed in {currency}</span></p>
-          <ul>{PLAN.map((feature) => <li key={feature}><Check aria-hidden="true" />{feature}</li>)}</ul>
-          <Link className="pro-btn is-block" href={siteConfig.links.signUp}>Start free trial</Link>
+      <div className="pro-wrap pro-pricing-row">
+        <Reveal>
+          <h2 id="pro-pricing-title" className="pro-h2">One plan</h2>
+          <p className="pro-price"><strong>{symbol}{proMonthly}</strong> a month, billed in GBP</p>
+          <p className="pro-line">Everything on this page. {trialDays} days free.</p>
+        </Reveal>
+        <Reveal delay={0.1} className="pro-pricing-actions">
+          <TrialButton />
+          <Link className="pro-link" href="/pricing">Pricing details <ArrowRight aria-hidden="true" /></Link>
         </Reveal>
       </div>
     </section>
   );
 }
-
-/* ---------- FAQ ---------- */
 
 export function ProFaq({ items }: { items: FaqItem[] }) {
   return (
@@ -384,17 +394,14 @@ export function ProFaq({ items }: { items: FaqItem[] }) {
   );
 }
 
-/* ---------- closing ---------- */
-
 export function ProClosing() {
   return (
     <section className="pro-closing" aria-labelledby="pro-closing-title">
       <div className="pro-wrap">
         <Reveal>
-          <h2 id="pro-closing-title" className="pro-h2 is-xl">Try it on your next client job.</h2>
-          <p className="pro-lede">Start the {trialDays}-day trial, upload one cut and send the link to your client. Pro is {symbol}{proMonthly} a month after that.</p>
-          <div className="pro-ctas">
-            <TrialButton />
+          <h2 id="pro-closing-title" className="pro-h2 is-center is-xl">Try it on your next client job</h2>
+          <div className="pro-ctas is-center">
+            <TrialButton light>Start {trialDays}-day free trial</TrialButton>
             <Link className="pro-btn is-ghost" href={siteConfig.links.signIn}>Log in</Link>
           </div>
         </Reveal>

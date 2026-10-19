@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Schibsted_Grotesk } from "next/font/google";
+import { Hanken_Grotesk, Source_Serif_4 } from "next/font/google";
 import { ProFooter } from "@/components/pro/pro-footer";
 import { ProHeader } from "@/components/pro/pro-header";
 import { ProMotion } from "@/components/pro/pro-motion";
@@ -7,17 +7,13 @@ import { siteConfig } from "@/lib/site-config";
 import "./pro.css";
 
 /*
- * One typeface for the whole homepage, self-hosted by next/font at build time. Schibsted Grotesk
- * is a newspaper grotesk: firm, slightly condensed, and plain enough for body text too.
+ * Homepage typefaces, self-hosted by next/font at build time.
+ * - Source Serif 4 (display optical size) for headlines: a sober book serif with real contrast
+ *   at large sizes.
+ * - Hanken Grotesk for everything else: interface labels, body text and numbers.
  */
-const sans = Schibsted_Grotesk({ subsets: ["latin"], variable: "--pro-sans", display: "swap" });
-
-/*
- * Two palettes share the same page: light (paper, default) and dark (graphite). For preview,
- * `/?theme=dark` or `/?theme=light` picks one. The page stays static: this runs before first
- * paint and only flips a data attribute, so there is no flash and no hydration mismatch.
- */
-const THEME_SCRIPT = `(function(){try{var t=new URLSearchParams(location.search).get("theme");if(t==="dark"||t==="light")document.currentScript.parentElement.setAttribute("data-theme",t)}catch(e){}})()`;
+const serif = Source_Serif_4({ subsets: ["latin"], axes: ["opsz"], variable: "--pro-serif", display: "swap" });
+const sans = Hanken_Grotesk({ subsets: ["latin"], variable: "--pro-sans", display: "swap" });
 
 /**
  * Chrome for the public homepage (served at `/` to signed-out visitors, see `src/proxy.ts`).
@@ -31,8 +27,7 @@ export const metadata: Metadata = {
 
 export default function ProLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`pro ${sans.variable}`} data-theme="light" suppressHydrationWarning>
-      <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+    <div className={`pro ${serif.variable} ${sans.variable}`}>
       {/* Without JavaScript, nothing should stay parked in its pre-entrance state. */}
       <noscript><style>{`.pro [style*="opacity:0"],.pro [style*="opacity: 0"]{opacity:1!important;transform:none!important}`}</style></noscript>
       <a className="pro-skip" href="#main">Skip to content</a>
