@@ -14,6 +14,11 @@ import { DemoVideo } from "./demo-video";
 vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
 afterEach(cleanup);
 
+// jsdom has no IntersectionObserver; motion's whileInView needs one to mount. An inert one
+// means nothing ever "enters the viewport", which is fine: the content is in the DOM either way.
+class InertObserver { observe() {} unobserve() {} disconnect() {} takeRecords() { return []; } }
+globalThis.IntersectionObserver ??= InertObserver as unknown as typeof IntersectionObserver;
+
 function mockMotion(reduce: boolean) {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     matches: reduce && query.includes("reduce"), media: query, onchange: null,
@@ -29,9 +34,9 @@ describe("marketing homepage", () => {
 
   it("leads with a headline for video agencies and the brand from siteConfig", () => {
     render(<MarketingHome />);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/feedback on every frame/i);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/circle it\..*scribble it\..*ship it\./i);
     expect(screen.getAllByText(new RegExp(siteConfig.name)).length).toBeGreaterThan(0);
-    expect(screen.getByText("Built for video agencies, studios and freelancers")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Built for video agencies, studios and freelancers" })).toBeInTheDocument();
   });
 
   it("sends every call to action to the existing sign-up and log-in pages", () => {
@@ -42,17 +47,18 @@ describe("marketing homepage", () => {
     for (const link of screen.getAllByRole("link", { name: /^log in$/i })) expect(link).toHaveAttribute("href", "/sign-in");
   });
 
-  it("shows the five feature blocks with real screenshots, steps, pricing and FAQ", () => {
-    render(<MarketingHome />);
-    for (const title of [/exact frame/i, /catch the typo/i, /front door/i, /every asset/i, /notes into work/i]) {
+  it("shows the product moments with real screenshots, the demo clip, pricing and FAQ", () => {
+    const { container } = render(<MarketingHome />);
+    for (const title of [/draw right on the frame/i, /proofreader/i, /home for every client/i, /big files/i, /tasks/i]) {
       expect(screen.getByRole("heading", { level: 3, name: title })).toBeInTheDocument();
     }
-    const images = screen.getAllByRole("img");
-    expect(images.length).toBeGreaterThanOrEqual(6);
-    for (const image of images) expect(image.getAttribute("src")).toMatch(/marketing/);
-    // Below-the-fold screenshots load lazily.
-    expect(images.every((image) => image.getAttribute("loading") === "lazy")).toBe(true);
-    expect(screen.getByText("Upload the cut")).toBeInTheDocument();
+    const images = [...container.querySelectorAll("img")];
+    expect(images.length).toBeGreaterThanOrEqual(7);
+    for (const image of images) expect(decodeURIComponent(image.getAttribute("src") ?? "")).toMatch(/\/marketing\//);
+    // Only the hero's front card (the LCP image) loads eagerly; everything below the fold is lazy.
+    const eager = images.filter((image) => image.getAttribute("loading") !== "lazy");
+    expect(eager.map((image) => image.getAttribute("alt"))).toEqual([expect.stringMatching(/^Review page/)]);
+    expect(container.querySelector("video")).toHaveAttribute("poster", "/marketing/demo-poster.webp");
     expect(screen.getAllByText("£29").length).toBeGreaterThan(0);
     expect(screen.getByText("Do my clients need an account to review?")).toBeInTheDocument();
   });

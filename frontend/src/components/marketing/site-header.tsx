@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { Flame, Menu, X } from "lucide-react";
 import { siteConfig } from "@/lib/site-config";
+import { useReducedMotionSafe } from "./motion-prefs";
 
 export const MARKETING_NAV = [
   { href: "/features", label: "Features" },
@@ -22,14 +23,14 @@ export function Brand() {
   );
 }
 
-/** Sticky public header. Below 860px the links fold into a menu with 48px rows. */
+/** Sticky public header. Below 860px the links fold into a menu with 52px rows. */
 export function SiteHeader() {
   const pathname = usePathname();
   // The menu belongs to the page it was opened on, so navigating closes it with no effect.
   const [openOn, setOpenOn] = useState<string | null>(null);
   const open = openOn === pathname;
   const setOpen = (value: boolean) => setOpenOn(value ? pathname : null);
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useReducedMotionSafe();
 
   // Escape closes it too.
   useEffect(() => {
@@ -51,8 +52,8 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="mk-header-actions">
-          <Link className="ui-button ui-button-ghost mk-btn mk-btn-sm" href={siteConfig.links.signIn}>Log in</Link>
-          <Link className="ui-button ui-button-primary mk-btn mk-btn-sm" href={siteConfig.links.signUp}>Start free trial</Link>
+          <Link className="mk-header-login" href={siteConfig.links.signIn}>Log in</Link>
+          <Link className="mk-btn is-sm" href={siteConfig.links.signUp}>Start free trial</Link>
         </div>
         <button
           type="button"
@@ -71,17 +72,17 @@ export function SiteHeader() {
             id="mk-mobile-menu"
             className="mk-mobile-panel"
             aria-label="Main"
-            initial={reduceMotion ? false : { opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={reduceMotion ? false : { opacity: 0, y: -12, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reduceMotion ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
+            transition={{ type: "spring", stiffness: 420, damping: 30 }}
           >
             {MARKETING_NAV.map((item) => (
               <Link key={item.href} href={item.href} aria-current={current(item.href)}>{item.label}</Link>
             ))}
             <div className="mk-ctas">
-              <Link className="ui-button ui-button-secondary mk-btn" href={siteConfig.links.signIn}>Log in</Link>
-              <Link className="ui-button ui-button-primary mk-btn" href={siteConfig.links.signUp}>Start free trial</Link>
+              <Link className="mk-btn is-ghost" href={siteConfig.links.signIn}>Log in</Link>
+              <Link className="mk-btn" href={siteConfig.links.signUp}>Start free trial</Link>
             </div>
           </motion.nav>
         )}

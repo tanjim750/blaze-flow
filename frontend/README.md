@@ -71,3 +71,14 @@ The product name, tagline, contact email, domain and Pro price live in one file,
 the Open Graph card (`/og.png`) all read from it, and a test fails if a marketing file types
 the name out. Screenshots and the hero clip in `public/marketing/` are real captures from
 the local demo workspace.
+
+Look and motion: cream paper, ink outlines and poster colours (tomato accent with sun, sky,
+mint and pink), Bricolage Grotesque + Caveat via `next/font` (self-hosted at build time),
+all scoped under `.mk` in `src/app/(marketing)/marketing.css` so the app keeps its own
+theme. The playful pieces (self-drawing scribbles, 3D tilt cards, stickers, spring
+entrances) live in `src/components/marketing/playful.tsx`. `motion-prefs.ts` sets the
+motion budget: prefers-reduced-motion gets no animation (the demo clip waits on its
+poster with a Play button), and small screens, data-saver and low-power devices skip
+the continuous scroll-linked effects and keep only one-shot entrances. Tilt only exists
+with a real mouse. The OG card's fonts are static TTF instances in `src/app/og.png/fonts/`
+(SIL OFL), because the OG renderer can't use variable fonts.

@@ -1,5 +1,7 @@
 import { LifeBuoy, Mail, MessageSquareText } from "lucide-react";
 import { ContactForm } from "@/components/marketing/contact-form";
+import { Marked } from "@/components/marketing/playful";
+import { PageHero } from "@/components/marketing/sections";
 import { marketingMetadata } from "@/lib/marketing-metadata";
 import { siteConfig } from "@/lib/site-config";
 
@@ -12,19 +14,18 @@ export const metadata = marketingMetadata({
 export default function ContactPage() {
   return (
     <>
-      <section className="mk-page-hero">
-        <div className="mk-wrap">
-          <p className="mk-eyebrow">Contact</p>
-          <h1>Talk to a human.</h1>
-          <p>Questions about {siteConfig.name}, pricing, or moving your studio over? We read every message.</p>
-        </div>
-      </section>
-      <section className="mk-section" style={{ paddingTop: 0 }}>
+      <PageHero
+        eyebrow="Contact"
+        tone="mint"
+        title={<>Talk to a <Marked kind="wave">human.</Marked></>}
+        lede={`Questions about ${siteConfig.name}, pricing, or moving your studio over? We read every message.`}
+      />
+      <section className="mk-section mk-section-tight" aria-label="Ways to reach us">
         <div className="mk-wrap mk-contact">
           <div className="mk-contact-cards">
-            <div className="mk-card"><Mail aria-hidden="true" /><h2 style={{ fontSize: 18 }}>Email</h2><p><a href={`mailto:${siteConfig.contactEmail}`}>{siteConfig.contactEmail}</a></p></div>
-            <div className="mk-card"><MessageSquareText aria-hidden="true" /><h2 style={{ fontSize: 18 }}>Sales and demos</h2><p>Tell us about your team and the work you review, and we’ll show you around.</p></div>
-            <div className="mk-card"><LifeBuoy aria-hidden="true" /><h2 style={{ fontSize: 18 }}>Already a customer?</h2><p>Use <b>Help → Report a problem</b> inside the app so we get the details we need.</p></div>
+            <div className="mk-card is-sun"><span className="mk-card-icon" aria-hidden="true"><Mail /></span><h2>Email</h2><p><a href={`mailto:${siteConfig.contactEmail}`}>{siteConfig.contactEmail}</a></p></div>
+            <div className="mk-card is-sky"><span className="mk-card-icon" aria-hidden="true"><MessageSquareText /></span><h2>Sales and demos</h2><p>Tell us about your team and the work you review, and we’ll show you around.</p></div>
+            <div className="mk-card is-pink"><span className="mk-card-icon" aria-hidden="true"><LifeBuoy /></span><h2>Already a customer?</h2><p>Use <b>Help → Report a problem</b> inside the app so we get the details we need.</p></div>
           </div>
           <ContactForm />
         </div>

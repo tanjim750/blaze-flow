@@ -25,7 +25,7 @@ export function ContactForm() {
   };
   return (
     <form className="mk-form" onSubmit={submit} aria-labelledby="mk-contact-form-title">
-      <h2 id="mk-contact-form-title" style={{ fontSize: 22 }}>Send us a message</h2>
+      <h2 id="mk-contact-form-title">Send us a message</h2>
       <div className="mk-form-row">
         <label>Your name<input name="name" autoComplete="name" required /></label>
         <label>Work email<input name="email" type="email" autoComplete="email" required /></label>
@@ -43,7 +43,7 @@ export function ContactForm() {
         </label>
       </div>
       <label>Message<textarea name="message" required /></label>
-      <button type="submit" className="ui-button ui-button-primary mk-btn"><Send aria-hidden="true" />Open in my email app</button>
+      <button type="submit" className="mk-btn"><Send aria-hidden="true" />Open in my email app</button>
       <p className="mk-fineprint" role="status">
         {opened
           ? <>Your email app should have opened. If not, write to <a href={`mailto:${siteConfig.contactEmail}`}>{siteConfig.contactEmail}</a>.</>

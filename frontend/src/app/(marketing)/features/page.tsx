@@ -1,5 +1,6 @@
 import { Bell, Columns2, FileCheck2, FolderOpen, Keyboard, ListChecks, Lock, MessageSquareText, MessagesSquare, Mic, PoundSterling, ScanText, ShieldCheck, Sparkles, UploadCloud } from "lucide-react";
-import { FeatureBlock, FinalCta, SectionHead } from "@/components/marketing/sections";
+import { Marked, Rise, Tilt } from "@/components/marketing/playful";
+import { FeatureBlock, FinalCta, PageHero, SectionHead } from "@/components/marketing/sections";
 import { Screenshot } from "@/components/marketing/screenshot";
 import { marketingMetadata } from "@/lib/marketing-metadata";
 import { siteConfig } from "@/lib/site-config";
@@ -25,16 +26,16 @@ const MORE = [
 export default function FeaturesPage() {
   return (
     <>
-      <section className="mk-page-hero">
-        <div className="mk-wrap">
-          <p className="mk-eyebrow">Features</p>
-          <h1>Built around the cut, the client and the deadline.</h1>
-          <p>{siteConfig.name} replaces the email threads, spreadsheets and file-transfer links between your edit suite and your client’s inbox.</p>
-        </div>
-      </section>
+      <PageHero
+        eyebrow="Features"
+        title={<>Built around the cut, the client and the <Marked kind="wave">deadline.</Marked></>}
+        lede={`${siteConfig.name} replaces the email threads, spreadsheets and file-transfer links between your edit suite and your client’s inbox.`}
+      />
 
-      <section className="mk-section" style={{ paddingTop: 0 }} aria-label="Dashboard">
-        <div className="mk-wrap"><Screenshot name="dashboard" eager sizes="(max-width: 1200px) 100vw, 1120px" /></div>
+      <section className="mk-section mk-section-tight" aria-label="Dashboard">
+        <div className="mk-wrap mk-hero-shot">
+          <Tilt max={6}><Screenshot name="dashboard" eager caption="the studio dashboard, Monday 9am" sizes="(max-width: 1200px) 100vw, 1120px" /></Tilt>
+        </div>
       </section>
 
       <section className="mk-section" aria-label="Core features">
@@ -47,11 +48,12 @@ export default function FeaturesPage() {
             body="Open any cut, still or PDF in the review player. Reviewers click a frame or an area of the image and leave a note or a drawing, and approve or request changes on the exact version they watched."
             points={["Frame-accurate, time-ranged comments", "Drawings held on screen for a frame, 3, 5 or 10 seconds, or a range", "Carry open notes forward from the last version as a checklist", "Review links with optional approve and request-changes buttons"]}
             screen="review"
+            caption="circled, timed, sorted"
           />
           <FeatureBlock
             id="ai-qa"
             icon={<ScanText />}
-            tone="amber"
+            tone="tomato"
             eyebrow="AI Visual QA"
             title="A proofreader for posters, titles and lower thirds."
             body="AI Visual QA reads the text in your artwork and video frames, then checks it for spelling and against the copy the client approved. Every finding is drawn on the image, or tied to a time range on video, so you can see it in context in seconds."
@@ -63,32 +65,36 @@ export default function FeaturesPage() {
           <FeatureBlock
             id="portal"
             icon={<Sparkles />}
-            tone="teal"
+            tone="mint"
             eyebrow="Client portal"
             title="Your studio’s own client portal."
             body="Invite a client team and they get a home for everything with you: cuts waiting on them, approved work to download, invoices, messages, and a form to start a new project."
             points={["Your logo and studio name on top", "Clients send files to you, up to 1 GB each", "Project progress and sign-off records"]}
             screen="portal"
+            caption="your logo, not ours"
           />
           <FeatureBlock
             id="files"
             icon={<FolderOpen />}
-            tone="green"
+            tone="sky"
             eyebrow="Files and big uploads"
             title="A files browser that knows about review."
             body="Every upload is organised by client and project, with thumbnails, durations and review stage. Filter, search, move and open anything straight into review."
             points={["Uploads up to 1 GB per file in a background tray", "Grid and list views, folders and filters", "Stages show where each file is in the approval process"]}
             screen="files"
+            caption="sorted by client, all by itself"
             flipped
           />
           <FeatureBlock
             id="tasks"
             icon={<ListChecks />}
+            tone="pink"
             eyebrow="Tasks"
             title="Tasks that remember which frame they came from."
             body="Turn a single note, or a batch of them, into tasks with the version attached. Track work on a board with stages you define, filter by assignee, client or due date."
             points={["Board and list views", "Customisable stages", "Due dates, priorities and overdue warnings"]}
             screen="tasks"
+            caption="the frame comes along too"
           />
         </div>
       </section>
@@ -96,10 +102,13 @@ export default function FeaturesPage() {
       <section className="mk-section" aria-labelledby="mk-more-title">
         <div className="mk-wrap">
           <SectionHead center eyebrow="And the rest" title={<span id="mk-more-title">The details that save an afternoon a week.</span>} />
-          <div className="mk-grid">
-            {MORE.map((item) => <div key={item.title} className="mk-card mk-reveal">{item.icon}<h3>{item.title}</h3><p>{item.body}</p></div>)}
-            <div className="mk-card mk-reveal"><UploadCloud /><h3>Works in the browser</h3><p>Nothing to install for you or your clients. Open a link and start reviewing.</p></div>
-          </div>
+          <ul className="mk-grid">
+            {[...MORE, { icon: <UploadCloud />, title: "Works in the browser", body: "Nothing to install for you or your clients. Open a link and start reviewing." }].map((item, index) => (
+              <Rise as="li" key={item.title} className="mk-card" delay={(index % 3) * 0.06} rotate={[-1.2, 0.8, -0.4][index % 3]}>
+                <span className="mk-card-icon" aria-hidden="true">{item.icon}</span><h3>{item.title}</h3><p>{item.body}</p>
+              </Rise>
+            ))}
+          </ul>
         </div>
       </section>
 

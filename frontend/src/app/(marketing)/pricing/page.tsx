@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { Faq, FinalCta, ProPriceCard, SectionHead, type FaqItem } from "@/components/marketing/sections";
+import { Marked } from "@/components/marketing/playful";
+import { Faq, FinalCta, PageHero, ProPriceCard, SectionHead, type FaqItem } from "@/components/marketing/sections";
 import { marketingMetadata } from "@/lib/marketing-metadata";
 import { siteConfig } from "@/lib/site-config";
 
@@ -30,23 +31,22 @@ const FAQ: FaqItem[] = [
 export default function PricingPage() {
   return (
     <>
-      <section className="mk-page-hero">
-        <div className="mk-wrap">
-          <p className="mk-eyebrow">Pricing</p>
-          <h1>Simple pricing for busy studios.</h1>
-          <p>One plan with every feature. Try it free for {trialDays} days, then {symbol}{proMonthly} a month.</p>
-        </div>
-      </section>
+      <PageHero
+        eyebrow="Pricing"
+        tone="tomato"
+        title={<>Simple pricing for <Marked kind="circle">busy</Marked> studios.</>}
+        lede={`One plan with every feature. Try it free for ${trialDays} days, then ${symbol}${proMonthly} a month.`}
+      />
 
-      <section className="mk-section" style={{ paddingTop: 0 }} aria-label="Plans">
+      <section className="mk-section mk-section-tight" aria-label="Plans">
         <div className="mk-wrap">
           <div className="mk-prices">
             <ProPriceCard headingLevel="h2" />
-            <div className="mk-price" data-placeholder="true">
+            <div className="mk-price is-placeholder" data-placeholder="true">
               <h2>Free <span className="mk-badge is-draft">Placeholder · to confirm</span></h2>
               <div className="mk-price-amount"><b>{symbol}0</b><span>per month</span></div>
               <p className="mk-muted">Draft plan shown for review. Limits mirror the app’s current defaults and are not yet a public offer.</p>
-              <Link className="ui-button ui-button-secondary mk-btn" href={siteConfig.links.signUp}>Create an account</Link>
+              <Link className="mk-btn is-ghost" href={siteConfig.links.signUp}>Create an account</Link>
               <ul className="mk-checks">
                 {FREE_DRAFT.map((item) => <li key={item}><Check aria-hidden="true" />{item}</li>)}
               </ul>

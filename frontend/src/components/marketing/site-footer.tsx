@@ -16,6 +16,7 @@ export function SiteFooter() {
           <div className="mk-footer-about">
             <Brand />
             <p>{siteConfig.tagline}</p>
+            <p className="mk-hand mk-footer-note">made by people who have exported “final_v7_REAL.mov”</p>
           </div>
           {COLUMNS.map((column) => (
             <nav key={column.title} aria-labelledby={`mk-footer-${column.title}`}>
