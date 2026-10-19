@@ -118,4 +118,6 @@ def accept_client_team_invite(*, user, token):
     invite.use_count = invite.use_count + 1
     invite.updated_at = now
     invite.save(update_fields=['use_count', 'updated_at'])
+    from .approval_requests import attach_invite_contact
+    attach_invite_contact(invite=invite, member=member)
     return member
