@@ -123,6 +123,10 @@ describe("pricing", () => {
     expect(container.querySelector(".pro-plan.is-featured")).toHaveAttribute("data-plan", "pro");
     expect(siteConfig.plans.find((p) => p.id === "pro")?.monthly).toBe(siteConfig.pricing.proMonthly);
     expect(screen.getAllByText(/14-day free trial/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/unlimited clients on every plan/i)).toBeInTheDocument();
+    expect(screen.getAllByText("To confirm").length).toBeGreaterThan(3);
+    expect(screen.queryByRole("button", { name: /yearly/i })).toBeNull();
+    expect(siteConfig.yearlyBilling).toBe(false);
   });
 });
 
@@ -146,7 +150,12 @@ describe("features and contact", () => {
   it("renders the features page", () => {
     render(<FeaturesPage />);
     expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 2, name: /proofreader/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /one window/i })).toBeInTheDocument();
+    for (const t of ["Upload", "Review", "AI typo check", "Client portal", "Money"]) expect(screen.getAllByText(new RegExp(t)).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { level: 2, name: /every tile is the app/i })).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: /playhead/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /move card to/i })).toBeInTheDocument();
+    expect(screen.getAllByText("£8,330").length).toBeGreaterThan(0);
   });
 
   it("contact shows the address and composes a mailto without sending anything", () => {

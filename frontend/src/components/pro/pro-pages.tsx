@@ -1,12 +1,9 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
-import { motion } from "motion/react";
-import { Check, Send, TriangleAlert } from "lucide-react";
-import type { ScreenKey } from "@/components/marketing/screenshot";
+import { Send, TriangleAlert } from "lucide-react";
 import { siteConfig } from "@/lib/site-config";
-import { cn } from "@/lib/utils";
-import { Reveal, Shot, useSettle } from "./pro-home";
+import { Reveal } from "./pro-home";
 
 /*
  * Building blocks for the inner public pages (features, pricing, contact, legal). They use
@@ -21,33 +18,6 @@ export function ProPageHero({ label, title, line }: { label: string; title: Reac
         <Reveal y={40}><p className="pro-label">{label}</p></Reveal>
         <Reveal y={48} delay={0.08}><h1 className="pro-h1 is-page">{title}</h1></Reveal>
         {line && <Reveal y={40} delay={0.16}><p className="pro-sub">{line}</p></Reveal>}
-      </div>
-    </section>
-  );
-}
-
-/** A real app screenshot that tilts flat as it scrolls into view. */
-export function ProSettleShot({ name, from = -22, sizes = "(max-width: 960px) 92vw, 720px" }: { name: ScreenKey; from?: number; sizes?: string }) {
-  const { ref, style } = useSettle(from);
-  return (
-    <div className="pro-persp" ref={ref}>
-      <motion.div className="pro-window" style={style}><Shot name={name} sizes={sizes} /></motion.div>
-    </div>
-  );
-}
-
-/** One feature: copy beside a settling screenshot. `flip` puts the picture on the left. */
-export function ProFeatureRow({ id, label, title, line, points, shot, flip = false }: { id: string; label: string; title: string; line: string; points: string[]; shot: ScreenKey; flip?: boolean }) {
-  return (
-    <section className={cn("pro-feature", flip && "is-alt")} id={id} aria-labelledby={`${id}-title`}>
-      <div className={cn("pro-wrap pro-feature-grid", flip && "is-flip")}>
-        <Reveal className="pro-feature-copy">
-          <p className="pro-label">{label}</p>
-          <h2 id={`${id}-title`} className="pro-h2">{title}</h2>
-          <p className="pro-line">{line}</p>
-          <ul className="pro-points">{points.map((p) => <li key={p}><Check aria-hidden="true" />{p}</li>)}</ul>
-        </Reveal>
-        <ProSettleShot name={shot} from={flip ? 22 : -22} />
       </div>
     </section>
   );

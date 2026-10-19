@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Lock, ShieldCheck, UploadCloud, Users } from "lucide-react";
 import { ProClosing, ProFaq, ProPlans, type FaqItem } from "@/components/pro/pro-home";
-import { ProPageHero } from "@/components/pro/pro-pages";
+import { ProCardGrid, ProPageHero } from "@/components/pro/pro-pages";
+import { ProCompare } from "@/components/pro/pro-pricing";
 import { marketingMetadata } from "@/lib/marketing-metadata";
 import { siteConfig } from "@/lib/site-config";
 
@@ -20,14 +22,27 @@ const FAQ: FaqItem[] = [
   { q: "We’re a bigger team. Can we talk?", a: <>Yes. <Link href="/contact">Contact us</Link>.</> },
 ];
 
+const TRUST = [
+  { icon: <ShieldCheck />, title: "UK GDPR", line: <>How we handle data is in the <Link href="/privacy">privacy notice</Link>.</> },
+  { icon: <Users />, title: "Roles", line: "Owners, editors, viewers and client reviewers each see only their part." },
+  { icon: <Lock />, title: "Team-only notes", line: "Internal comments never reach the client." },
+  { icon: <UploadCloud />, title: "Only needed cookies", line: <>No ad or tracking cookies. See the <Link href="/cookies">cookie policy</Link>.</> },
+];
+
 export default function PricingPage() {
   return (
     <>
-      <ProPageHero label="Pricing" title="Three plans" line={`Every plan starts with a ${trialDays}-day free trial. Prices in ${currency}.`} />
+      <ProPageHero label="Pricing" title="Pricing for studios" line={`Every plan starts with a ${trialDays}-day free trial. Prices in ${currency}.`} />
       <section className="pro-plans-section" aria-label="Plans">
         <div className="pro-wrap">
           <ProPlans headingLevel="h2" />
-          <p className="pro-fine is-center">Plans and prices are still to be confirmed.</p>
+        </div>
+      </section>
+      <ProCompare />
+      <section className="pro-trust" aria-labelledby="pro-trust-title">
+        <div className="pro-wrap">
+          <h2 id="pro-trust-title" className="pro-h2">Your clients’ work, handled carefully</h2>
+          <ProCardGrid headingLevel="h3" items={TRUST} />
         </div>
       </section>
       <ProFaq items={FAQ} />

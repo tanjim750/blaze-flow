@@ -41,7 +41,7 @@ export function useLiteMotion(): boolean {
 
 /* ---------- real captures from the demo workspace (public/marketing/v3, 2× density) ---------- */
 
-const V3 = {
+export const V3 = {
   portalProject: { src: "/marketing/v3/portal-project.webp", w: 2400, h: 1500, alt: "Client portal project page: progress from kick-off to delivered, approved deliverables to download and the sign-off record" },
   posterArt: { src: "/marketing/v3/poster-art.webp", w: 1153, h: 1440, alt: "Summer sale poster with the misspelt word PREMUIM" },
   finding1: { src: "/marketing/v3/finding-1.webp", w: 706, h: 259, alt: "Finding: PREMUIM should be PREMIUM, high confidence" },
@@ -53,7 +53,7 @@ const V3 = {
   stepper: { src: "/marketing/v3/portal-stepper.webp", w: 2256, h: 180, alt: "Project progress: kick-off, in production, your review, signed off, delivered" },
   signoff: { src: "/marketing/v3/portal-signoff.webp", w: 1274, h: 475, alt: "Sign-off record: V4 approved by Rachel Kim, V2 changes asked" },
 } as const;
-type Asset = (typeof V3)[keyof typeof V3];
+type Asset = { src: string; w: number; h: number; alt: string };
 
 export function Pic({ img, sizes, className, decorative = false }: { img: Asset; sizes: string; className?: string; decorative?: boolean }) {
   return <Image className={className} src={img.src} alt={decorative ? "" : img.alt} width={img.w} height={img.h} sizes={sizes} loading="lazy" />;
@@ -188,7 +188,7 @@ function SceneCopy({ id, label, title, line, points }: { id: string; label: stri
   );
 }
 
-const BOXES = [
+export const BOXES = [
   { left: 4.9, top: 35, width: 35, height: 11.7 },
   { left: 6.4, top: 51.8, width: 18.2, height: 5.6 },
   { left: 62, top: 59.4, width: 8.8, height: 5.2 },
@@ -294,7 +294,7 @@ export function ProPortalScene() {
 }
 
 /** A figure that counts up from zero the first time it scrolls into view. */
-function Count({ value, prefix = "", className }: { value: number; prefix?: string; className?: string }) {
+export function Count({ value, prefix = "", className }: { value: number; prefix?: string; className?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, amount: 0.4 });
   const reduce = useReducedMotionSafe();
@@ -309,7 +309,7 @@ function Count({ value, prefix = "", className }: { value: number; prefix?: stri
   return <span ref={ref} className={className}>{fmt(value)}</span>;
 }
 
-const SUMS = [
+export const SUMS = [
   { label: "Clients owe you", value: 8330, note: "2 invoices overdue" },
   { label: "You owe editors", value: 760, note: "Earned on approved tasks" },
   { label: "Margin", value: 19180, note: "86.9% of priced work" },

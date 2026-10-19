@@ -1,6 +1,7 @@
 import { Bell, Columns2, FileCheck2, Keyboard, Lock, MessagesSquare, Mic, ShieldCheck, UploadCloud } from "lucide-react";
 import { ProClosing } from "@/components/pro/pro-home";
-import { ProCardGrid, ProFeatureRow, ProPageHero } from "@/components/pro/pro-pages";
+import { ProPinnedStory, ProLiveBento } from "@/components/pro/pro-features";
+import { ProCardGrid, ProPageHero } from "@/components/pro/pro-pages";
 import { marketingMetadata } from "@/lib/marketing-metadata";
 import { siteConfig } from "@/lib/site-config";
 
@@ -26,11 +27,8 @@ export default function FeaturesPage() {
   return (
     <>
       <ProPageHero label="Features" title="Everything between the cut and the invoice" line="Review, proofreading, the client portal, files, tasks and money in one app." />
-      <ProFeatureRow id="review" label="Review" title="Notes on the exact frame" line="Clients click a frame or an area and leave a note or a drawing. They approve the version they watched." points={["Time-ranged comments and drawings", "Open notes carry over to the next version", "Approve and request-changes on review links"]} shot="review" />
-      <ProFeatureRow id="ai-qa" label="AI Visual QA" title="A proofreader for posters and titles" line="It reads the text in artwork and video frames and checks it against the approved copy." points={["Spelling in UK and US English", "Changed prices, dates and missing lines", "A person accepts every finding"]} shot="aiqaVideo" flip />
-      <ProFeatureRow id="portal" label="Client portal" title="A portal with your logo" line="Clients see cuts waiting on them, approved work, invoices and messages." points={["Your logo and studio name", "Clients send files up to 1 GB each", "Progress and sign-off records"]} shot="portal" />
-      <ProFeatureRow id="files" label="Files" title="Files sorted by client and project" line="Thumbnails, durations and review stage on every upload." points={["1 GB uploads in a background tray", "Grid and list views, folders, filters"]} shot="files" flip />
-      <ProFeatureRow id="tasks" label="Tasks" title="Tasks that keep the frame" line="Turn notes into tasks with the version attached, and track them on a board." points={["Board and list views", "Your own stages, due dates and priorities"]} shot="tasks" />
+      <ProPinnedStory />
+      <ProLiveBento />
       <section className="pro-more" aria-labelledby="pro-more-title">
         <div className="pro-wrap">
           <h2 id="pro-more-title" className="pro-h2 is-center">And the rest</h2>

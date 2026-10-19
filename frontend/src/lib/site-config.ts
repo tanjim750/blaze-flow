@@ -42,6 +42,33 @@ export const siteConfig = {
     { id: "pro", name: "Pro", monthly: 39.99, features: ["2 TB storage", "Up to 50 users", "Unlimited clients"], highlighted: true, toConfirm: true },
     { id: "scale", name: "Scale", monthly: 119.99, features: ["4 TB storage", "Unlimited users", "Unlimited clients and projects"], highlighted: false, toConfirm: true },
   ],
+  /**
+   * Monthly-only for now. Set a yearly price per plan here (and flip this on) to show the
+   * monthly/yearly toggle on /pricing; without one the toggle stays hidden.
+   */
+  yearlyBilling: false,
+  /**
+   * The /pricing comparison table. Values are per plan, in `plans` order. `true` is a tick,
+   * `false` is a dash, a string is shown as written, and "to confirm" is drawn as undecided.
+   * Storage, team members and clients come from `plans` and are added by the page.
+   */
+  compare: [
+    { group: "Review and AI", rows: [
+      { label: "Frame-accurate review and drawings", values: [true, true, true] },
+      { label: "Compare versions side by side", values: [true, true, true] },
+      { label: "AI typo check on posters and video", values: ["to confirm", true, true] },
+    ] },
+    { group: "Clients and money", rows: [
+      { label: "Client portal", values: [true, true, true] },
+      { label: "Your logo on the portal", values: ["to confirm", true, true] },
+      { label: "Invoices and editor pay", values: ["to confirm", true, true] },
+    ] },
+    { group: "Files and team", rows: [
+      { label: "Uploads up to 1 GB per file", values: [true, true, true] },
+      { label: "Tasks, roles and team-only notes", values: [true, true, true] },
+      { label: "Support", values: ["Email", "Email", "to confirm"] },
+    ] },
+  ],
 } as const;
 
 export type Plan = (typeof siteConfig.plans)[number];
