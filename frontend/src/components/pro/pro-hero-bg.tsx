@@ -16,23 +16,31 @@ import { useEffect, useRef, useState } from "react";
 
 const VERT = `attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}`;
 const FRAG = `precision mediump float;
-uniform vec2 r;uniform float t;uniform vec3 bg;uniform vec3 hi;uniform float s;
+uniform vec2 r;uniform float t;uniform vec3 bg;uniform vec3 hi;uniform vec3 co;uniform float s;uniform vec2 m;
 float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
 return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
 float fbm(vec2 p){float v=0.,a=.5;for(int k=0;k<4;k++){v+=a*n(p);p=p*2.02+vec2(1.7,9.2);a*=.5;}return v;}
 void main(){
- vec2 uv=gl_FragCoord.xy/r; vec2 q=vec2(uv.x*r.x/r.y,uv.y);
- float T=t*.035;
- vec2 w=vec2(fbm(q*1.6+vec2(T,-T*.6)),fbm(q*1.6+vec2(-T*.8,T)+4.3));
- float f=fbm(q*1.2+w*1.4+vec2(0.,s*.6));
- float bands=.5+.5*sin((q.y+w.x*.35)*9.-T*6.);
- float light=smoothstep(.38,.9,f)*(.75+.25*bands);
- vec2 c=uv-vec2(.5,.36+s*.25);
- float mask=exp(-dot(c*vec2(.9,1.6),c*vec2(.9,1.6))*2.6);
- float top=smoothstep(1.,.55,uv.y);
- float glow=.10*mask;
- vec3 col=mix(bg,hi,clamp(light*mask*top*.55+glow*top,0.,.5));
+ vec2 uv=gl_FragCoord.xy/r; float ar=r.x/r.y; vec2 q=vec2(uv.x*ar,uv.y);
+ float T=t*.06;
+ vec2 mm=(m-.5)*vec2(.18,.12);
+ vec2 w=vec2(fbm(q*1.3+vec2(T,-T*.7)+mm),fbm(q*1.3+vec2(-T*.9,T*.8)+4.3-mm));
+ float f=fbm(q*1.05+w*1.6+vec2(0.,s*.8));
+ float g=fbm(q*.9-w*1.2+vec2(7.1,-T*.5));
+ float bands=.5+.5*sin((q.y+w.x*.4)*7.-T*7.);
+ float light=smoothstep(.34,.86,f)*(.7+.3*bands);
+ float cool=smoothstep(.42,.9,g);
+ vec2 c=(uv-vec2(.5+mm.x*.8,.42+s*.3))*vec2(ar*.55,1.);
+ float mask=exp(-dot(c,c)*2.3);
+ float side=exp(-pow((uv.x-(.16+mm.x)) *2.4,2.)-pow((uv.y-.3)*2.2,2.));
+ float side2=exp(-pow((uv.x-(.86+mm.x))*2.4,2.)-pow((uv.y-.55)*2.,2.));
+ float top=smoothstep(1.02,.5,uv.y);
+ // Keep the headline band (upper middle) calmer so the text keeps its contrast.
+ float hl=1.-.55*exp(-pow((uv.x-.5)*2.6,2.)-pow((uv.y-.74)*5.,2.));
+ vec3 col=bg;
+ col=mix(col,co,clamp(cool*(side*.55+side2*.4+mask*.15)*top*hl,0.,.42));
+ col=mix(col,hi,clamp((light*(mask*.75+side2*.25)+.14*mask)*top*hl,0.,.62));
  gl_FragColor=vec4(col,1.);
 }`;
 
@@ -73,7 +81,13 @@ export function ProHeroBg() {
     const u = (k: string) => gl.getUniformLocation(prog, k);
     gl.uniform3fv(u("bg"), tokenRgb("--bf-canvas", [0.05, 0.05, 0.06]));
     gl.uniform3fv(u("hi"), tokenRgb("--bf-brand", [0.55, 0.42, 1]));
-    const uR = u("r"), uT = u("t"), uS = u("s");
+    gl.uniform3fv(u("co"), tokenRgb("--bf-info", [0.35, 0.55, 0.95]));
+    const uR = u("r"), uT = u("t"), uS = u("s"), uM = u("m");
+    // Pointer: eased toward the target each frame, so the light leans gently rather than jumps.
+    const mouse = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5 };
+    const fine = window.matchMedia("(pointer: fine)").matches;
+    const onMove = (e: PointerEvent) => { mouse.tx = e.clientX / window.innerWidth; mouse.ty = 1 - e.clientY / window.innerHeight; };
+    if (fine) window.addEventListener("pointermove", onMove, { passive: true });
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
     const SCALE = 1 / 6;
@@ -89,6 +103,8 @@ export function ProHeroBg() {
     const draw = (now: number) => {
       gl.uniform1f(uT, (now - start) / 1000 + 20);
       gl.uniform1f(uS, Math.min(1, window.scrollY / Math.max(1, box.clientHeight)));
+      mouse.x += (mouse.tx - mouse.x) * 0.06; mouse.y += (mouse.ty - mouse.y) * 0.06;
+      gl.uniform2f(uM, mouse.x, mouse.y);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     };
     const loop = (now: number) => {
@@ -104,7 +120,7 @@ export function ProHeroBg() {
     reduce.addEventListener?.("change", kick);
     setMode("live");
     kick();
-    return () => { cancelAnimationFrame(raf); io.disconnect(); ro.disconnect(); document.removeEventListener("visibilitychange", kick); reduce.removeEventListener?.("change", kick); };
+    return () => { cancelAnimationFrame(raf); io.disconnect(); ro.disconnect(); window.removeEventListener("pointermove", onMove); document.removeEventListener("visibilitychange", kick); reduce.removeEventListener?.("change", kick); };
   };
 
   useEffect(() => {
