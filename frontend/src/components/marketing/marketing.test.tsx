@@ -32,9 +32,9 @@ describe("marketing homepage", () => {
     Object.defineProperty(HTMLMediaElement.prototype, "play", { configurable: true, value: vi.fn().mockResolvedValue(undefined) });
   });
 
-  it("leads with a post-production headline and the brand from siteConfig", () => {
+  it("leads with a plain headline about what it does, and the brand from siteConfig", () => {
     render(<MarketingHome />);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/every note on the frame\..*every sign-off on record\./i);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/get client feedback on the frame, not in email threads/i);
     expect(screen.getAllByText(new RegExp(siteConfig.name)).length).toBeGreaterThan(0);
   });
 
@@ -48,10 +48,10 @@ describe("marketing homepage", () => {
 
   it("covers review, AI Visual QA, the client portal, big files and tasks with real screenshots", () => {
     const { container } = render(<MarketingHome />);
-    for (const title of [/exact frame/i, /proofreader/i, /home for every client/i, /masters, not attachments/i, /tasks that remember/i]) {
+    for (const title of [/comment on the frame/i, /approved copy/i, /portal with your logo/i, /1 gb master/i, /notes into tasks/i]) {
       expect(screen.getByRole("heading", { level: 3, name: title })).toBeInTheDocument();
     }
-    expect(screen.getByRole("heading", { level: 2, name: /catch the typo/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /PREMUIM/ })).toBeInTheDocument();
     const images = [...container.querySelectorAll("img")];
     expect(images.length).toBeGreaterThanOrEqual(7);
     for (const image of images) expect(decodeURIComponent(image.getAttribute("src") ?? "")).toMatch(/\/marketing\//);

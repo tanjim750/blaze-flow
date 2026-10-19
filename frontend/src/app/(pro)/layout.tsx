@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Newsreader, Schibsted_Grotesk } from "next/font/google";
+import { Schibsted_Grotesk } from "next/font/google";
 import { ProFooter } from "@/components/pro/pro-footer";
 import { ProHeader } from "@/components/pro/pro-header";
 import { ProMotion } from "@/components/pro/pro-motion";
@@ -7,16 +7,17 @@ import { siteConfig } from "@/lib/site-config";
 import "./pro.css";
 
 /*
- * The homepage's typefaces, self-hosted by next/font at build time.
- * - Schibsted Grotesk: a newspaper-born grotesk with a firm, slightly condensed rhythm. It sets
- *   every headline and the interface text.
- * - Newsreader: an editorial serif with optical sizes, used only for ledes and longer reading,
- *   so the page reads like a well-made trade publication rather than a template.
- * - JetBrains Mono: timecodes, labels and spec lines, the vocabulary of an edit suite.
+ * One typeface for the whole homepage, self-hosted by next/font at build time. Schibsted Grotesk
+ * is a newspaper grotesk: firm, slightly condensed, and plain enough for body text too.
  */
 const sans = Schibsted_Grotesk({ subsets: ["latin"], variable: "--pro-sans", display: "swap" });
-const serif = Newsreader({ subsets: ["latin"], axes: ["opsz"], style: ["normal", "italic"], variable: "--pro-serif", display: "swap" });
-const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--pro-mono", display: "swap", preload: false });
+
+/*
+ * Two palettes share the same page: light (paper, default) and dark (graphite). For preview,
+ * `/?theme=dark` or `/?theme=light` picks one. The page stays static: this runs before first
+ * paint and only flips a data attribute, so there is no flash and no hydration mismatch.
+ */
+const THEME_SCRIPT = `(function(){try{var t=new URLSearchParams(location.search).get("theme");if(t==="dark"||t==="light")document.currentScript.parentElement.setAttribute("data-theme",t)}catch(e){}})()`;
 
 /**
  * Chrome for the public homepage (served at `/` to signed-out visitors, see `src/proxy.ts`).
@@ -30,7 +31,8 @@ export const metadata: Metadata = {
 
 export default function ProLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`pro ${sans.variable} ${serif.variable} ${mono.variable}`}>
+    <div className={`pro ${sans.variable}`} data-theme="light" suppressHydrationWarning>
+      <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       {/* Without JavaScript, nothing should stay parked in its pre-entrance state. */}
       <noscript><style>{`.pro [style*="opacity:0"],.pro [style*="opacity: 0"]{opacity:1!important;transform:none!important}`}</style></noscript>
       <a className="pro-skip" href="#main">Skip to content</a>
