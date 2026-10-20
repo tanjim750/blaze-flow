@@ -663,6 +663,12 @@ class Project(models.Model):
         if self.client_team_id and self.workspace_id and self.client_team.workspace_id != self.workspace_id:
             raise ValidationError({'client_team': 'The client team must belong to the project workspace.'})
 
+    def save(self, *args, **kwargs):
+        # Every write path (API, portal request, admin) stores the brief sanitised.
+        from .rich_text import sanitize_brief
+        self.description = sanitize_brief(self.description)
+        super().save(*args, **kwargs)
+
 
 class ResourceAccess(models.Model):
     id = models.UUIDField(primary_key=True)
