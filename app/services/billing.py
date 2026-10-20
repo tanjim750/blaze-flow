@@ -596,6 +596,18 @@ def receivables(*, workspace, today=None):
     return out
 
 
+def member_rates(*, workspace):
+    """Every active team member (not client contacts) with their default rate, for Settings."""
+    memberships = WorkspaceMembership.objects.filter(
+        workspace=workspace, principal_type=WorkspacePrincipalType.USER, status=WorkspaceMembershipStatus.ACTIVE,
+    ).select_related('user', 'role').order_by('user__first_name', 'user__email')
+    rates = dict(MemberPayRate.objects.filter(workspace_membership__in=memberships).values_list('workspace_membership_id', 'default_task_rate'))
+    return [{
+        'membership_id': str(m.id), 'name': _person(m), 'email': m.user.email if m.user else None, 'active': True,
+        'role': m.role.name if m.role_id else None, 'default_rate': money_str(rates.get(m.id)),
+    } for m in memberships]
+
+
 def payouts_ledger(*, workspace):
     """Per team member with any pay: pending, earned, paid and owed, plus their payout entries."""
     member_ids = set(EditorPay.objects.filter(workspace=workspace).values_list('workspace_membership_id', flat=True))

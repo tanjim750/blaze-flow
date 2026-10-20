@@ -41,3 +41,28 @@
 .notif-list small { color: var(--shell-outline); font-size: 12px; }
 .notif-list li.is-disabled strong { color: var(--shell-outline); }
 .notif-later { margin: 0; color: var(--shell-outline); font-size: 12px; }
+/* Studio settings: invoicing, rates, glossary (A3) */
+.settings-grid.is-three { grid-template-columns: repeat(3, 1fr); }
+.settings-hint { color: var(--shell-outline); font-weight: 400; font-size: 11px; }
+.settings-form select { width: 100%; padding: 10px 11px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-rail); color: var(--shell-on); }
+.settings-rates { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.settings-rates li { display: grid; grid-template-columns: 1fr 200px; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--shell-highest); border-radius: 10px; background: var(--shell-low); }
+.settings-rates li > span { min-width: 0; }
+.settings-rates strong, .settings-rates small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-rates small { color: var(--shell-outline); font-size: 12px; }
+.settings-rates .form-error { grid-column: 1 / -1; margin: 0; }
+.settings-money { position: relative; display: flex; align-items: center; }
+.settings-money i { position: absolute; left: 10px; font-style: normal; font-size: 11px; color: var(--shell-outline); }
+.settings-money input { width: 100%; padding: 9px 30px 9px 44px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-rail); color: var(--shell-on); text-align: right; font-variant-numeric: tabular-nums; }
+.settings-money input:focus { outline: 0; border-color: var(--shell-primary); }
+.settings-money svg { position: absolute; right: 9px; }
+.settings-glossary-add { display: grid; grid-template-columns: 1fr 150px auto; gap: 10px; align-items: center; }
+.settings-glossary-add .settings-button { justify-self: stretch; }
+.settings-glossary { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.settings-glossary li { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 4px 4px 10px; border: 1px solid var(--shell-highest); border-radius: 999px; background: var(--shell-low); font-size: 13px; }
+.settings-glossary strong { font-weight: 600; overflow-wrap: anywhere; }
+.settings-glossary small { color: var(--shell-outline); font-size: 11px; }
+.settings-glossary button { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 999px; background: transparent; color: var(--shell-outline); cursor: pointer; }
+.settings-glossary button:hover { background: var(--shell-highest); color: var(--shell-on); }
+.settings-page .spin { animation: settings-spin 1s linear infinite; } @keyframes settings-spin { to { transform: rotate(360deg); } }
+@media (max-width: 700px) { .settings-grid.is-three { grid-template-columns: 1fr; } .settings-rates li { grid-template-columns: 1fr; } .settings-glossary-add { grid-template-columns: 1fr 1fr; } .settings-glossary-add label:first-child { grid-column: 1 / -1; } }
