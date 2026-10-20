@@ -9,6 +9,7 @@ from app.models import (
     ClientTeamMember,
     ClientTeamMemberStatus,
     ClientTeamStatus,
+    ProjectAccessMode,
     WorkspaceMembership,
     WorkspaceMembershipStatus,
     WorkspacePrincipalType,
@@ -134,3 +135,24 @@ def grant_client_team_workspace_access(*, client_team, role, project_access_mode
     except (IntegrityError, ValidationError) as exc:
         raise ClientTeamError('This client team already has workspace access.') from exc
     return membership
+
+
+def ensure_client_team_workspace_access(client_team):
+    """Give a client team portal access (restricted Client role, selected projects) if it has none."""
+    from app.services.workspaces import ensure_client_role
+
+    existing = WorkspaceMembership.objects.filter(
+        workspace_id=client_team.workspace_id,
+        principal_type=WorkspacePrincipalType.CLIENT_TEAM,
+        client_team=client_team,
+    ).first()
+    if existing is not None:
+        if existing.status != WorkspaceMembershipStatus.ACTIVE:
+            existing.status = WorkspaceMembershipStatus.ACTIVE
+            existing.updated_at = timezone.now()
+            existing.save(update_fields=['status', 'updated_at'])
+        return existing
+    role = ensure_client_role(client_team.workspace)
+    return grant_client_team_workspace_access(
+        client_team=client_team, role=role, project_access_mode=ProjectAccessMode.SELECTED,
+    )

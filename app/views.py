@@ -116,7 +116,7 @@ from .services.retention import (
     update_workspace_retention_policy, workspace_retention_policy_data,
 )
 from .throttles import (
-    EmailVerificationThrottle, LoginThrottle, PasswordResetThrottle, RegistrationThrottle,
+    EmailVerificationThrottle, InvitePreviewThrottle, LoginThrottle, PasswordResetThrottle, RegistrationThrottle,
 )
 from .models import (
     ClientUpload,
@@ -358,7 +358,7 @@ def auth_config(request):
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@throttle_classes([EmailVerificationThrottle])
+@throttle_classes([InvitePreviewThrottle])
 def invite_preview_view(request):
     token = (request.query_params.get('token') or '').strip()
     preview = invite_preview(token) if token else None

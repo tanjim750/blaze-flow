@@ -430,6 +430,7 @@ REST_FRAMEWORK = {
         'login': os.environ.get('LOGIN_THROTTLE_RATE', '20/hour'),
         'password_reset': os.environ.get('PASSWORD_RESET_THROTTLE_RATE', '5/hour'),
         'email_verification': os.environ.get('EMAIL_VERIFICATION_THROTTLE_RATE', '5/hour'),
+        'invite_preview': os.environ.get('INVITE_PREVIEW_THROTTLE_RATE', '60/hour'),
         # Public upload links: page loads plus one request per file, per client IP.
         'upload_link': os.environ.get('UPLOAD_LINK_THROTTLE_RATE', '240/hour'),
         # "Report a problem" submissions, per signed-in user.
