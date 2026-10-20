@@ -12,7 +12,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Banknote, CircleDollarSign, Printer, Send, Trash2 } from "lucide-react";
 import { formatMoney, toMinor } from "@/lib/money";
-import { addressLines, dueLabel, formatDate, invoiceBadge, methodLabel, type InvoiceDetail } from "@/lib/money-view";
+import { addressLines, dueLabel, formatDate, invoiceBadge, methodLabel, settleLabel, type InvoiceDetail } from "@/lib/money-view";
 import { deleteInvoice, recordInvoicePayment, sendInvoice } from "./billing-client";
 import { markInvoicePaid } from "./money-board";
 import { PaymentDialog } from "./payment-dialog";
@@ -43,7 +43,7 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: 
       </>}
       {canManage && invoice.status === "sent" && <>
         <button type="button" className="money-button" disabled={busy} onClick={() => setPaying(true)}><Banknote aria-hidden="true" />Record payment</button>
-        <button type="button" className="money-button is-primary" disabled={busy} onClick={() => void run(() => markInvoicePaid(workspaceId, invoice))}><CircleDollarSign aria-hidden="true" />Mark as paid (demo)</button>
+        <button type="button" className="money-button is-primary" disabled={busy} onClick={() => void run(() => markInvoicePaid(workspaceId, invoice))}><CircleDollarSign aria-hidden="true" />{settleLabel(invoice, formatMoney)}</button>
       </>}
       <button type="button" className="money-button" onClick={() => window.print()}><Printer aria-hidden="true" />Print</button>
     </div>

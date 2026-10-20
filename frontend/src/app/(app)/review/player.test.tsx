@@ -123,6 +123,15 @@ describe("Player seeking", () => {
     expect(element.currentTime).toBe(0);
   });
 
+  it("shows a loading state, not 00:00, until the metadata arrives (R13)", () => {
+    const { container, media } = setup();
+    expect(container.querySelector(".rvp-buffering")).not.toBeNull();
+    expect(container.querySelector(".rvp-clock")?.textContent).toContain("--:--");
+    act(() => media.loadMetadata());
+    expect(container.querySelector(".rvp-buffering")).toBeNull();
+    expect(container.querySelector(".rvp-clock")?.textContent).not.toContain("--:--");
+  });
+
   it("shows the buffering spinner only after a short delay", () => {
     const { container, element, media } = setup();
     act(() => media.loadMetadata());

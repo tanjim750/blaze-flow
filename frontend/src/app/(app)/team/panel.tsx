@@ -1,4 +1,5 @@
 "use client";
+import { useEscapeKey } from "@/lib/use-escape";
 
 import { useActionState, useState, useTransition } from "react";
 import { BadgePlus, Copy, MailPlus, ShieldCheck, TriangleAlert, UserRoundCog, Users, X } from "lucide-react";
@@ -53,4 +54,4 @@ function RoleDialog({ roles, close }: { roles: Role[]; close: () => void }) {
 }
 
 function Feedback({ state }: { state: TeamActionState }) { return state.error ? <p className="form-error">{state.error}</p> : state.message ? <p className="team-success">{state.message}</p> : null; }
-function Modal({ title, close, children }: { title: string; close: () => void; children: React.ReactNode }) { return <div className="team-modal" onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); close(); } }}><button type="button" className="team-backdrop" onClick={close} tabIndex={-1} aria-hidden="true" /><section role="dialog" aria-modal="true" aria-label={title}><header><h2>{title}</h2><button type="button" onClick={close} aria-label="Close dialog"><X /></button></header>{children}</section></div>; }
+function Modal({ title, close, children }: { title: string; close: () => void; children: React.ReactNode }) { useEscapeKey(close); return <div className="team-modal"><button type="button" className="team-backdrop" onClick={close} tabIndex={-1} aria-hidden="true" /><section role="dialog" aria-modal="true" aria-label={title}><header><h2>{title}</h2><button type="button" onClick={close} aria-label="Close dialog"><X /></button></header>{children}</section></div>; }

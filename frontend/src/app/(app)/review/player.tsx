@@ -595,7 +595,8 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
             )}
           </div>
         )}
-        {buffering && !failed && (
+        {/* R13: until the media's metadata arrives there is no duration; say it is loading. */}
+        {(buffering || (!durationMs && Boolean(source) && !still)) && !failed && (
           <div className="rvp-buffering" role="status" aria-live="polite">
             <Loader2 size={28} aria-hidden="true" />
             <span className="sr-only">Loading…</span>
@@ -779,7 +780,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
 
         <div className={`rvp-clock ${seekTarget !== null ? "is-seeking" : ""}`} aria-live="off">
           <strong>{timecode(positionMs)}</strong>
-          <span>/ {timecode(durationMs)}</span>
+          <span>/ {durationMs ? timecode(durationMs) : "--:--"}</span>
         </div>
 
         {loop && (

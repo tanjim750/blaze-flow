@@ -89,3 +89,12 @@ it("drops blank address parts", () => {
   expect(addressLines({ name: "Northlight", email: "a@b.c", address_line_1: "14 Harbourside Lane", address_line_2: " ", city: "Bristol", region: null, postal_code: "BS1 5TT", country_code: "GB" }))
     .toEqual(["14 Harbourside Lane", "Bristol, BS1 5TT", "GB", "a@b.c"]);
 });
+
+import { settleLabel as settle } from "./money-view";
+describe("settleLabel (R20)", () => {
+  const fmt = (v: string, c: string) => `${c} ${v}`;
+  it("offers the demo shortcut before any payment and the remaining balance after one", () => {
+    expect(settle({ paid: "0.00", outstanding: "1500.00", currency: "GBP" }, fmt)).toBe("Mark as paid (demo)");
+    expect(settle({ paid: "500.00", outstanding: "1000.00", currency: "GBP" }, fmt)).toBe("Record remaining GBP 1000.00");
+  });
+});

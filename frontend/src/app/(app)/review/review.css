@@ -446,6 +446,7 @@
   background: #1b1b22; color: var(--text); font-size: 12px; cursor: pointer;
 }
 .rvc-revision > div button[type="submit"] { background: var(--primary); border-color: var(--primary); color: #fff; }
+.rvc-revision > div button[type="submit"]:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Recorder ---------------------------------------------------------------- */
 .rvr { display: grid; gap: 7px; }
