@@ -9,7 +9,7 @@ source mounts) is for local work only and must never be exposed.
 | Service | Image | Purpose |
 |---|---|---|
 | `db` | postgres:16-alpine | Database, `postgres_data` volume, not published to the host |
-| `migrate` | backend (`web` target) | One-shot `manage.py migrate` (profile `release`; run per deploy) |
+| `migrate` | backend (`web` target) | One-shot `manage.py migrate` + `createcachetable` (profile `release`; run per deploy). The cache table backs rate limits shared by all gunicorn workers (`CACHE_BACKEND`, default `db`). |
 | `web` | backend | gunicorn on :8000 (internal), whitenoise serves `/static/` |
 | `outbox-worker` | backend | `run_outbox_worker`: emails, notifications, previews, FFmpeg proxies |
 | `ai-qa-worker` | backend (`ai` target, + PaddleOCR) | `run_ai_qa_worker` (AI Visual QA) |

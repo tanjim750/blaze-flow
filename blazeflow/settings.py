@@ -11,9 +11,12 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
+
+from blazeflow.cache_config import cache_settings
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -412,6 +415,18 @@ if STORAGE_DRIVER == 's3' and AWS_QUERYSTRING_EXPIRE < 1:
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Shared cache. DRF throttles (login, sign-up, password reset, upload links…) count requests
+# in the default cache; with Django's per-process LocMem default every gunicorn worker kept its
+# own counts (limits ~3x looser) and a restart reset them. `db` (default) stores entries in the
+# Postgres table `django_cache` that `manage.py createcachetable` creates (the release step
+# runs it), so all workers and restarts share them. `redis` needs CACHE_URL and the redis
+# package; `locmem` is for local experiments. Tests always use LocMem.
+CACHE_BACKEND = os.environ.get('CACHE_BACKEND', 'db').strip().lower()
+CACHES = cache_settings(
+    backend=CACHE_BACKEND, cache_url=os.environ.get('CACHE_URL'), max_entries=os.environ.get('CACHE_MAX_ENTRIES', '20000'),
+    testing=len(sys.argv) > 1 and sys.argv[1] == 'test',
+)
 
 REST_FRAMEWORK = {
     'NUM_PROXIES': THROTTLE_TRUSTED_PROXY_COUNT,
