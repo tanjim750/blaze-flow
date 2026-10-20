@@ -23,6 +23,8 @@ export type AiReview = {
   id: string; media_version_id: string; status: AiReviewStatus; stage: string;
   progress: { kind?: "image" | "video"; frames_total?: number; frames_done?: number; lines?: number; duration_ms?: number };
   language: string; engine: string; engine_version: string;
+  /** Where the text was read, in plain words ("on our servers"). Comes from the provider, not the UI. */
+  engine_label?: string;
   error_code: string; error_message: string;
   requested_by: { id: string; name: string } | null;
   summary: { total: number; by_category: Record<string, number>; by_band: Record<string, number>; by_status: Record<string, number> };
@@ -140,11 +142,47 @@ export function sortFindings(findings: AiFinding[]): AiFinding[] {
     || (("x" in a.region ? a.region.x : 0) - ("x" in b.region ? b.region.x : 0)));
 }
 
-export function filterCounts(findings: AiFinding[]): Record<FindingFilter, number> {
+export function filterCounts(findings: AiFinding[], scope: BandScope = "all"): Record<FindingFilter, number> {
   const counts = { open: 0, copy: 0, spelling: 0, uncertain: 0, commented: 0, dismissed: 0, all: 0 } as Record<FindingFilter, number>;
-  for (const finding of findings) for (const { id } of FILTERS) if (matchesFilter(finding, id)) counts[id] += 1;
+  for (const finding of findings) {
+    if (!inScope(finding, scope)) continue;
+    for (const { id } of FILTERS) if (matchesFilter(finding, id)) counts[id] += 1;
+  }
   return counts;
 }
+
+/**
+ * Which confidence bands the list shows. By default only high-confidence findings: medium
+ * and low are mostly noise on busy artwork, so they are one tap away rather than in the way.
+ */
+export type BandScope = "high" | "all";
+export const inScope = (finding: AiFinding, scope: BandScope) => scope === "all" || finding.band === "high";
+export const isOpenFinding = (finding: AiFinding) => OPEN.includes(finding.status);
+
+/** Open findings shown and hidden under a scope, for the tab badge and the reveal button. */
+export function scopeCounts(findings: AiFinding[], scope: BandScope) {
+  const out = { visible: 0, hidden: 0, medium: 0, low: 0 };
+  for (const finding of findings) {
+    if (!OPEN.includes(finding.status)) continue;
+    if (inScope(finding, scope)) out.visible += 1;
+    else { out.hidden += 1; if (finding.band === "medium") out.medium += 1; else if (finding.band === "low") out.low += 1; }
+  }
+  return out;
+}
+
+/** localStorage key for one person's band choice. */
+export const bandScopeKey = (userId: string | null | undefined) => `bf.aiqa.bands.${userId || "anon"}`;
+
+export function readBandScope(userId: string | null | undefined): BandScope {
+  try { return window.localStorage.getItem(bandScopeKey(userId)) === "all" ? "all" : "high"; } catch { return "high"; }
+}
+
+export function saveBandScope(userId: string | null | undefined, scope: BandScope) {
+  try { window.localStorage.setItem(bandScopeKey(userId), scope); } catch { /* private mode: keep it for this visit */ }
+}
+
+/** How many cards render at first; "Show more" adds the same again. */
+export const FINDINGS_PAGE = 25;
 
 export const BAND_LABEL: Record<AiBand, string> = { high: "High confidence", medium: "Medium", low: "Low" };
 export const CATEGORY_LABEL: Record<AiCategory, string> = {

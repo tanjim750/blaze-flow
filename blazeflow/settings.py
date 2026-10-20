@@ -442,6 +442,9 @@ REST_FRAMEWORK = {
 AI_VISUAL_QA_ENABLED = os.environ.get('AI_VISUAL_QA_ENABLED', 'false').lower() == 'true'
 # 'paddleocr' needs `pip install -r requirements-ai.txt`; 'fake' is for tests and CI.
 AI_QA_ENGINE = os.environ.get('AI_QA_ENGINE', 'paddleocr')
+import json as _json
+AI_QA_EXTRA_ENGINES = _json.loads(os.environ.get('AI_QA_EXTRA_ENGINES', '{}'))
+AI_QA_EXTRA_ENGINE_LABELS = _json.loads(os.environ.get('AI_QA_EXTRA_ENGINE_LABELS', '{}'))
 AI_QA_MAX_IMAGE_BYTES = int(os.environ.get('AI_QA_MAX_IMAGE_BYTES', str(50 * 1024 * 1024)))
 AI_QA_MAX_DECODE_PIXELS = int(os.environ.get('AI_QA_MAX_DECODE_PIXELS', str(80_000_000)))
 AI_QA_MAX_PIXELS = int(os.environ.get('AI_QA_MAX_PIXELS', str(8_300_000)))
