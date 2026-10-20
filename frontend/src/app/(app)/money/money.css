@@ -156,3 +156,6 @@
   .invoice-editor > footer .money-button { flex: 1 1 auto; justify-content: center; }
 }
 @media print { .invoice-editor, .invoice-preview-note { display: none !important; } }
+.invoice-field .pp-input { display: flex; align-items: center; gap: 6px; min-height: 40px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line, rgba(255,255,255,.14)); }
+.invoice-field .pp-input i { font-style: normal; font-size: 12px; opacity: .7; }
+.invoice-field .pp-input input { flex: 1; min-width: 0; }
