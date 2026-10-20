@@ -26,6 +26,8 @@ import { filterClientTree } from "@/lib/client-filter";
 import "../tasks/tasks.css";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, renameCampaignAction, renameFolderAction, type ActionState } from "./actions";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import type { PlanLimit } from "@/lib/plan-limit";
 import { startUpload } from "@/lib/upload-store";
 import { reviewHref } from "@/lib/open-in-review";
 
@@ -84,9 +86,35 @@ function InlineCreate({ action, hidden, placeholder, label, onClose, nested = fa
       />
       <button type="submit" disabled={pending}>{pending ? "Adding…" : "Add"}</button>
       <button type="button" className="pb-inline-cancel" onClick={onClose} aria-label="Cancel"><X size={13} /></button>
-      {state.error && <small role="alert">{state.error}</small>}
+      {state.error && !state.planLimit && <small role="alert">{state.error}</small>}
+      {state.planLimit && <PlanLimitDialog key={state.error} limit={state.planLimit} name={value.trim()} onClose={onClose} />}
     </form>
   );
+}
+
+/**
+ * R2: hitting the plan's project limit is a decision, not a typo, so it gets a dialog that
+ * says what happened and what to do (archive a finished project, or upgrade) instead of a
+ * line of small print inside the sidebar form.
+ */
+function PlanLimitDialog({ limit, name, onClose }: { limit: PlanLimit; name: string; onClose: () => void }) {
+  const [open, setOpen] = useState(true);
+  const close = () => { setOpen(false); onClose(); };
+  return <Dialog open={open} onOpenChange={(next) => { if (!next) close(); }}>
+    <DialogContent className="pb-limit-dialog">
+      <DialogTitle>You&rsquo;ve reached the {limit.plan} plan&rsquo;s {limit.limit}-project limit</DialogTitle>
+      <DialogDescription>{name ? <>&ldquo;{name}&rdquo; wasn&rsquo;t created. </> : null}This workspace already has {limit.limit} open {limit.limit === 1 ? "project" : "projects"}.</DialogDescription>
+      <ul className="pb-limit-steps">
+        <li><strong>Archive a finished project.</strong> Archived projects don&rsquo;t count towards the limit and keep their files. Use a project&rsquo;s ⋯ menu in the sidebar.</li>
+        <li><strong>Upgrade the plan.</strong> Only the workspace owner can change it. Contact support from Help to move to a bigger plan.</li>
+      </ul>
+      <footer className="pb-limit-actions">
+        <Link href="/help" className="pb-limit-secondary" onClick={close}>Help &amp; upgrades</Link>
+        <button type="button" className="pb-limit-primary" onClick={close}>Manage projects</button>
+      </footer>
+      <DialogClose />
+    </DialogContent>
+  </Dialog>;
 }
 const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log", "Client uploads", "Pricing"] as const;
 /** "Client uploads" also answers to `?tab=client-uploads` (what notifications and the feed link to). */

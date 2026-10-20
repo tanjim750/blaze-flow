@@ -127,7 +127,9 @@ export function buildTotals(summary: Pick<MoneySummary, "currency" | "totals">):
   }
   cards.push({
     id: "collected", label: "Collected", value: money(totals.collected),
-    hint: `of ${money(totals.billed)} billed${toMinor(totals.unbilled) > 0 ? ` · ${money(totals.unbilled)} not billed yet` : ""}`, tone: "accent",
+    hint: toMinor(totals.billed) > 0
+      ? `of ${money(totals.billed)} billed${toMinor(totals.unbilled) > 0 ? ` · ${money(totals.unbilled)} not billed yet` : ""}`
+      : toMinor(totals.unbilled) > 0 ? `Nothing billed yet · ${money(totals.unbilled)} priced, not billed` : "Nothing billed yet", tone: "accent",
   });
   return cards;
 }

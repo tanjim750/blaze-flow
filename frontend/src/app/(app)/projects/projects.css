@@ -345,3 +345,13 @@
 .pb-messages { padding: 4px 0 8px; }
 
 .pb-chat-preview { padding: 0 0 12px; max-width: 720px; }
+
+/* R2: plan-limit dialog */
+.pb-limit-dialog { display: grid; gap: 12px; max-width: min(460px, calc(100vw - 32px)); }
+.pb-limit-steps { display: grid; gap: 10px; margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+.pb-limit-steps strong { display: block; }
+.pb-limit-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.pb-limit-actions > * { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0 16px; border-radius: 10px; font-weight: 600; font-size: 14px; text-decoration: none; cursor: pointer; }
+.pb-limit-primary { border: 0; background: var(--primary, #7c5cff); color: #fff; }
+.pb-limit-secondary { border: 1px solid var(--border, rgba(255,255,255,.14)); color: inherit; background: transparent; }
+@media (max-width: 480px) { .pb-limit-actions > * { flex: 1 1 100%; } }
