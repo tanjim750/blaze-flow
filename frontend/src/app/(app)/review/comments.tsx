@@ -184,7 +184,13 @@ export function Comments({
   // Clicking a marker on the timeline should bring its note into view, not just seek.
   useEffect(() => {
     if (!focusedId) return;
-    feed.current?.querySelector(`[data-note="${focusedId}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const row = feed.current?.querySelector<HTMLElement>(`[data-note="${focusedId}"]`);
+    if (!row) return;
+    // M4: stacked on a phone the page itself scrolls, and "center" dragged the player off
+    // screen on every marker tap. Scroll only the feed when it scrolls on its own; otherwise
+    // the smallest move that brings the note into view (the player is sticky there).
+    const ownScroll = feed.current && feed.current.scrollHeight > feed.current.clientHeight + 1;
+    row.scrollIntoView({ behavior: "smooth", block: ownScroll ? "center" : "nearest" });
   }, [focusedId]);
 
   // Comparing is a reading mode: two labelled feeds, and no composer, because a note

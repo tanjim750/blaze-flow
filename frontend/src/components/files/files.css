@@ -595,10 +595,9 @@
   /* Labels collapse visually but stay the accessible name. */
   .fx-toolbar-actions .fx-btn:not(.is-primary) > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .fx-toolbar-actions .fx-btn:not(.is-primary) { width: 40px; padding: 0; }
-  /* Upload becomes a 48px floating button, bottom-right (DS §12). */
-  .fx-toolbar-actions .fx-btn.is-primary { position: fixed; right: 16px; bottom: 16px; z-index: 40; width: 48px; height: 48px; padding: 0; border-radius: var(--radius-lg); box-shadow: var(--elevation-2); }
-  .fx-toolbar-actions .fx-btn.is-primary > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .fx-toolbar-actions .fx-btn.is-primary svg { width: 20px; height: 20px; }
+  /* M8: the app's mobile top bar already mirrors Upload (data-mobile-primary), so the old
+   * floating copy only duplicated it and covered the last row of cards. One entry point. */
+  .fx-toolbar-actions .fx-btn.is-primary[data-mobile-primary] { display: none; }
   .fx-grid.is-grid, .fx-grid.is-grid.is-compact { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .fx-item.is-tile .fx-open-chip { display: none; }
   /* Phone list: thumb + stacked name/meta + ⋯, 56px rows. */
