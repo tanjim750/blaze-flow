@@ -1,4 +1,5 @@
 "use client";
+import "@/app/(app)/tasks/tasks.css";
 
 import { useAppRouter } from "@/lib/app-router";/**
  * One invoice as a printable page: studio and client addresses, the priced items, payments
@@ -16,11 +17,25 @@ import { addressLines, dueLabel, formatDate, invoiceBadge, methodLabel, type Inv
 import { deleteInvoice, recordInvoicePayment, sendInvoice } from "./billing-client";
 import { markInvoicePaid } from "./money-board";
 import { PaymentDialog } from "./payment-dialog";
+import { ConfirmDialog } from "@/components/tasks/task-dialogs";
+import { sentMessage } from "@/lib/invoice-send";
 
 export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: { workspaceId: string; invoice: InvoiceDetail; canManage: boolean; backHref: string; now: string }) {
   const router = useAppRouter();
   const [paying, setPaying] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [emailClient, setEmailClient] = useState(true);
+  const recipients = invoice.client_recipients ?? [];
+
+  function send() {
+    const email = emailClient && recipients.length > 0;
+    void run(async () => {
+      const sent = await sendInvoice(workspaceId, invoice.id, email);
+      setSending(false);
+      toast(sentMessage(invoice.number, sent.emailed_to ?? []));
+    });
+  }
   const badge = invoiceBadge(invoice);
   const money = (value: string) => formatMoney(value, invoice.currency);
 
@@ -39,7 +54,7 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: 
       <span className="money-spacer" />
       {canManage && invoice.status === "draft" && <>
         <button type="button" className="money-button is-ghost" disabled={busy} onClick={() => { if (confirm(`Delete draft ${invoice.number}?`)) void run(async () => { await deleteInvoice(workspaceId, invoice.id); router.push("/money"); }, `${invoice.number} deleted`); }}><Trash2 aria-hidden="true" />Delete draft</button>
-        <button type="button" className="money-button is-primary" disabled={busy} onClick={() => void run(() => sendInvoice(workspaceId, invoice.id), `${invoice.number} marked as sent`)}><Send aria-hidden="true" />Mark as sent</button>
+        <button type="button" className="money-button is-primary" disabled={busy} onClick={() => setSending(true)}><Send aria-hidden="true" />{recipients.length ? "Send to client" : "Mark as sent"}</button>
       </>}
       {canManage && invoice.status === "sent" && <>
         <button type="button" className="money-button" disabled={busy} onClick={() => setPaying(true)}><Banknote aria-hidden="true" />Record payment</button>
@@ -80,6 +95,13 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: 
       {invoice.notes && <p className="invoice-notes">{invoice.notes}</p>}
     </article>
 
+    {sending && <ConfirmDialog open title={`Send ${invoice.number}?`} confirmLabel={emailClient && recipients.length ? "Send invoice" : "Mark as sent"} busy={busy} onCancel={() => setSending(false)} onConfirm={send}
+      body={recipients.length ? "The client gets an email with the amount, due date and a link to view the invoice in their portal." : "This client has no email address or portal contacts yet, so nothing will be emailed. The invoice is still marked as sent."}>
+      {recipients.length > 0 && <div className="invoice-send">
+        <label className="invoice-send-toggle"><input type="checkbox" checked={emailClient} onChange={(event) => setEmailClient(event.target.checked)} />Email the invoice to the client</label>
+        {emailClient && <ul aria-label="Recipients">{recipients.map((email) => <li key={email}>{email}</li>)}</ul>}
+      </div>}
+    </ConfirmDialog>}
     {paying && <PaymentDialog title={`Record a payment on ${invoice.number}`} description={`${invoice.bill_to.name} · ${money(invoice.outstanding)} outstanding`}
       maxAmount={invoice.outstanding} currency={invoice.currency} onClose={() => setPaying(false)}
       onSubmit={async (payment) => { await recordInvoicePayment(workspaceId, invoice.id, payment); toast(`Payment recorded on ${invoice.number}`); setPaying(false); router.refresh(); }} />}

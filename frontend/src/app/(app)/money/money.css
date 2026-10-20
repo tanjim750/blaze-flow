@@ -126,3 +126,9 @@
 /* At any width a wide table scrolls inside its panel; `relative` keeps its sr-only text inside too. */
 .money-panel { position: relative; overflow-x: auto; min-width: 0; }
 .money-columns > * { min-width: 0; }
+
+/* Send to client (A2) */
+.invoice-send { display: grid; gap: var(--bf-space-2); margin-top: var(--bf-space-3); }
+.invoice-send-toggle { display: flex; align-items: center; gap: var(--bf-space-2); font-size: var(--bf-text-sm); cursor: pointer; }
+.invoice-send-toggle input { width: 16px; height: 16px; accent-color: var(--bf-brand); }
+.invoice-send ul { list-style: none; margin: 0; padding: var(--bf-space-2) var(--bf-space-3); border: 1px solid var(--bf-border); border-radius: var(--bf-radius-md); background: var(--bf-secondary); display: grid; gap: 2px; font-size: var(--bf-text-sm); overflow-wrap: anywhere; }

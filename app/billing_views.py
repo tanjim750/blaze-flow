@@ -181,6 +181,9 @@ def invoice_detail(request, workspace_id, invoice_id):
         return Response(status=status.HTTP_204_NO_CONTENT)
     data = _invoice_detail(workspace, invoice)
     data['viewer_can_manage'] = access['manage']
+    if access['manage'] and invoice.status == 'draft':
+        from .services.invoice_email import invoice_recipients
+        data['client_recipients'] = invoice_recipients(invoice)
     return Response(data)
 
 
@@ -191,10 +194,12 @@ def invoice_send(request, workspace_id, invoice_id):
     _require(access, 'manage', MANAGE_DENIED)
     invoice = get_object_or_404(Invoice, id=invoice_id, workspace=workspace)
     try:
-        billing.send_invoice(invoice=invoice, user=request.user)
+        sent = billing.send_invoice(invoice=invoice, user=request.user, email=request.data.get('email', True) is not False)
     except billing.BillingError as exc:
         return _error(exc)
-    return Response(_invoice_detail(workspace, invoice))
+    data = _invoice_detail(workspace, invoice)
+    data['emailed_to'] = sent.emailed_to
+    return Response(data)
 
 
 @api_view(['POST'])

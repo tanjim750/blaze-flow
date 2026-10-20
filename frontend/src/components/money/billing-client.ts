@@ -14,7 +14,8 @@ export const setProjectFee = (workspaceId: string, projectId: string, fee: strin
   api<ProjectPricing>(`${base(workspaceId)}/projects/${projectId}/`, "PATCH", { fee });
 export const createInvoice = (workspaceId: string, projectId: string, dueDate?: string) =>
   api<InvoiceDetail>(`${base(workspaceId)}/invoices/`, "POST", { project_id: projectId, ...(dueDate ? { due_date: dueDate } : {}) });
-export const sendInvoice = (workspaceId: string, invoiceId: string) => api<InvoiceDetail>(`${base(workspaceId)}/invoices/${invoiceId}/send/`, "POST");
+/** Marks a draft as sent. By default the backend also emails the client a portal link (`emailed_to`). */
+export const sendInvoice = (workspaceId: string, invoiceId: string, email = true) => api<InvoiceDetail>(`${base(workspaceId)}/invoices/${invoiceId}/send/`, "POST", { email });
 export const deleteInvoice = (workspaceId: string, invoiceId: string) => api<void>(`${base(workspaceId)}/invoices/${invoiceId}/`, "DELETE");
 /**
  * Records a client payment. Leave `amount` out to pay the whole balance: that is what the

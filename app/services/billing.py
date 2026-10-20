@@ -248,7 +248,7 @@ def create_invoice_from_project(*, project, user, due_date=None, notes=''):
 
 
 @transaction.atomic
-def send_invoice(*, invoice, user, today=None):
+def send_invoice(*, invoice, user, today=None, email=True):
     invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
     if invoice.status != InvoiceStatus.DRAFT:
         raise BillingError('Only a draft invoice can be sent.', conflict=True)
@@ -258,9 +258,15 @@ def send_invoice(*, invoice, user, today=None):
     invoice.due_date = invoice.due_date or today + dt.timedelta(days=billing_settings(invoice.workspace).payment_terms_days)
     invoice.sent_at = timezone.now()
     invoice.save(update_fields=['status', 'issue_date', 'due_date', 'sent_at', 'updated_at'])
-    # Demo: "sent" only changes the status. No email goes to the client.
     _audit(user=user, workspace=invoice.workspace, action='billing.invoice.sent', entity_type='invoice', entity_id=invoice.id,
            number=invoice.number)
+    from app.services.invoice_email import invoice_recipients
+    # Emailed after the commit so a rolled-back send never reaches the client.
+    invoice.emailed_to = invoice_recipients(invoice) if email else []
+    if invoice.emailed_to:
+        from app.services.invoice_email import email_invoice
+        total, sender = money_str(invoice_total(invoice)), (user.get_full_name() or user.email) if user else ''
+        transaction.on_commit(lambda: email_invoice(invoice=invoice, total=total, sender_name=sender))
     return invoice
 
 

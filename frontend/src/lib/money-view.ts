@@ -21,6 +21,10 @@ export type Address = { name: string; email: string | null; address_line_1: stri
 export type InvoiceDetail = InvoiceSummary & {
   notes: string; lines: { id: string; kind: "project_fee" | "task"; description: string; amount: string; task_id: string | null }[];
   payments: PaymentEntry[]; bill_to: Address; from: Address; viewer_can_manage?: boolean;
+  /** Drafts, managers only: who "Send to client" will email. */
+  client_recipients?: string[];
+  /** Only on the send response: who the invoice email went to. */
+  emailed_to?: string[];
 };
 export type Receivable = { client: { id: string; name: string }; billed: string; paid: string; outstanding: string; overdue: string; unbilled: string; invoice_count: number };
 export type PayoutRow = { membership_id: string; name: string; email: string | null; active: boolean; default_rate: string | null; pending: string; earned: string; paid: string; owed: string; payouts: PaymentEntry[] };
