@@ -365,3 +365,13 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(retried.status_code, 200)
         self.assertEqual(event.status, 'PENDING')
         self.assertNotIn('cancelled', event.payload)
+
+
+class VideoProxyThreadArgsTests(TestCase):
+    def test_threads_follow_the_setting_and_zero_means_auto(self):
+        from django.test import override_settings
+        from .services.file_processing import video_proxy_thread_args
+        with override_settings(VIDEO_PROXY_THREADS=2):
+            self.assertEqual(video_proxy_thread_args(), ['-threads', '2'])
+        with override_settings(VIDEO_PROXY_THREADS=0):
+            self.assertEqual(video_proxy_thread_args(), [])

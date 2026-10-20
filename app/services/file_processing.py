@@ -107,6 +107,18 @@ class ClamAVTcpScanner:
         raise RuntimeError(f'ClamAV scan failed: {message or "empty response"}')
 
 
+def video_proxy_thread_args():
+    """`-threads N` for libx264, or nothing to let ffmpeg decide.
+
+    Inside a container ffmpeg sees every host core, not the `cpus:` quota, so on a 4-core box
+    with `OUTBOX_CPU_LIMIT=2` it would start ~6 encoder threads and spend the quota on
+    context switches. Matching the quota keeps the encode smooth and leaves the other cores to
+    web and Postgres.
+    """
+    threads = settings.VIDEO_PROXY_THREADS
+    return ['-threads', str(threads)] if threads > 0 else []
+
+
 def scanner_backend():
     scanner_class = import_string(settings.FILE_SECURITY_SCANNER)
     return scanner_class()
@@ -349,10 +361,11 @@ def _encode_proxy(file, *, max_width, max_height, crf, variant_type, maxrate=Non
             ":force_original_aspect_ratio=decrease:flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2"
         )
         rate = ['-maxrate', maxrate, '-bufsize', _double(maxrate)] if maxrate else []
+        threads = video_proxy_thread_args()
         subprocess.run(
             [executable, '-v', 'error', '-y', '-i', str(source),
              '-vf', scale, '-c:v', 'libx264', '-preset', settings.VIDEO_PROXY_PRESET,
-             '-crf', str(crf), *rate, '-pix_fmt', 'yuv420p', '-profile:v', 'high',
+             '-crf', str(crf), *rate, *threads, '-pix_fmt', 'yuv420p', '-profile:v', 'high',
              '-force_key_frames', f'expr:gte(t,n_forced*{settings.VIDEO_PROXY_KEYFRAME_SECONDS})',
              '-movflags', '+faststart', '-c:a', 'aac', '-b:a', settings.VIDEO_PROXY_AUDIO_BITRATE,
              '-ac', '2', str(output)],
