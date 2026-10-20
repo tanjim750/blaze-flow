@@ -95,3 +95,24 @@ class LinkProjectToClientTests(TestCase):
         foreign = create_client_team(workspace=other_ws, name='Other', created_by_membership=other_m)
         url = f'/api/workspaces/{self.workspace.id}/projects/{self.project_id}/'
         self.assertEqual(self.api.patch(url, {'client_team_id': str(foreign.id)}, format='json').status_code, 404)
+
+
+class ClientSeesLinkedProjectsTests(TestCase):
+    def test_client_sees_projects_linked_before_and_after_accepting(self):
+        from app.permissions import has_project_permission
+        from rest_framework.test import APIClient
+        owner = User.objects.create_user(email='o9@example.com', password='pw-12345678!', first_name='A', last_name='B')
+        ws, m = create_workspace(owner=owner, name='S9', slug='s9', workspace_timezone='Europe/London')
+        team = create_client_team(workspace=ws, name='Acme', created_by_membership=m)
+        api = APIClient(); api.force_authenticate(owner)
+        before = api.post(f'/api/workspaces/{ws.id}/projects/', {'name': 'Early', 'client_team_id': str(team.id)}, format='json').json()
+        client = User.objects.create_user(email='c9@example.com', password='pw-12345678!', first_name='A', last_name='B')
+        _, token = create_client_team_invite(client_team=team, created_by_membership=m, invite_type='LINK')
+        accept_client_team_invite(user=client, token=token)
+        later = api.post(f'/api/workspaces/{ws.id}/projects/', {'name': 'Later'}, format='json').json()
+        api.patch(f'/api/workspaces/{ws.id}/projects/{later["id"]}/', {'client_team_id': str(team.id)}, format='json')
+        from app.models import Project
+        for pid in (before['id'], later['id']):
+            self.assertTrue(has_project_permission(user=client, project=Project.objects.get(id=pid), permission_key=PROJECT_READ))
+        api.patch(f'/api/workspaces/{ws.id}/projects/{later["id"]}/', {'client_team_id': None}, format='json')
+        self.assertFalse(has_project_permission(user=client, project=Project.objects.get(id=later['id']), permission_key=PROJECT_READ))

@@ -10,6 +10,8 @@ from app.models import (
     ClientTeamMemberStatus,
     ClientTeamStatus,
     ProjectAccessMode,
+    Project,
+    ResourceAccess,
     WorkspaceMembership,
     WorkspaceMembershipStatus,
     WorkspacePrincipalType,
@@ -151,8 +153,38 @@ def ensure_client_team_workspace_access(client_team):
             existing.status = WorkspaceMembershipStatus.ACTIVE
             existing.updated_at = timezone.now()
             existing.save(update_fields=['status', 'updated_at'])
+        for project in Project.objects.filter(client_team=client_team):
+            sync_client_project_access(project)
         return existing
     role = ensure_client_role(client_team.workspace)
-    return grant_client_team_workspace_access(
+    membership = grant_client_team_workspace_access(
         client_team=client_team, role=role, project_access_mode=ProjectAccessMode.SELECTED,
     )
+    for project in Project.objects.filter(client_team=client_team):
+        sync_client_project_access(project)
+    return membership
+
+
+def sync_client_project_access(project, *, previous_client_team_id=None):
+    """A client team with SELECTED access sees exactly the projects linked to it.
+
+    Grants the linked team's membership access to ``project`` and, when the project moved
+    away from another client, removes that team's access to it.
+    """
+    now = timezone.now()
+    if previous_client_team_id and previous_client_team_id != project.client_team_id:
+        ResourceAccess.objects.filter(
+            project=project,
+            workspace_membership__principal_type=WorkspacePrincipalType.CLIENT_TEAM,
+            workspace_membership__client_team_id=previous_client_team_id,
+        ).delete()
+    if not project.client_team_id:
+        return
+    for membership in WorkspaceMembership.objects.filter(
+        workspace_id=project.workspace_id, principal_type=WorkspacePrincipalType.CLIENT_TEAM,
+        client_team_id=project.client_team_id, status=WorkspaceMembershipStatus.ACTIVE,
+        project_access_mode=ProjectAccessMode.SELECTED,
+    ):
+        ResourceAccess.objects.get_or_create(
+            workspace_membership=membership, project=project, defaults={'id': uuid.uuid4(), 'created_at': now},
+        )
