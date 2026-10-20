@@ -9,7 +9,44 @@ from app.services.file_processing import HQ_PROXY_VARIANT_TYPE, POSTER_VARIANT_T
 MEDIA_POSTER_VARIANT_TYPES = (POSTER_VARIANT_TYPE, 'IMAGE_THUMBNAIL')
 
 
+def prime_media_rows(medias):
+    """Load what a list of cuts reads per row (variants, open stage entry, preview job) in
+    three queries, and hang it on each instance. Every reader below falls back to its own
+    query when a row was not primed, so single-object views behave as before."""
+    medias = list(medias)
+    if not medias:
+        return medias
+    file_ids = {m.original_file_id for m in medias}
+    variants = {}
+    for variant in FileVariant.objects.filter(file_id__in=file_ids, deleted_at__isnull=True).order_by('-created_at'):
+        variants.setdefault(variant.file_id, []).append(variant)
+    entries = {
+        entry.media_version_id: entry
+        for entry in MediaVersionStageEntry.objects.filter(
+            media_version_id__in=[m.id for m in medias], exited_at__isnull=True,
+        ).select_related('workflow_stage', 'changed_by_user', 'changed_by_guest_session')
+    }
+    events = {}
+    for event in OutboxEvent.objects.filter(topic='file.preview.requested', aggregate_id__in=[str(f) for f in file_ids]).order_by('-pk'):
+        events[event.aggregate_id] = event  # mirrors `.first()` on the default ordering below
+    for media in medias:
+        media._variants = variants.get(media.original_file_id, [])
+        media._open_entry = entries.get(media.id)
+        media._preview_event = events.get(str(media.original_file_id))
+    return medias
+
+
+def _variant_type(variant):
+    return (variant.metadata or {}).get('variant_type')
+
+
 def media_poster_variant(media):
+    primed = getattr(media, '_variants', None)
+    if primed is not None:
+        return next((
+            v for v in primed
+            if v.status == FileStatus.READY and _variant_type(v) in MEDIA_POSTER_VARIANT_TYPES
+        ), None)
     return FileVariant.objects.filter(
         file_id=media.original_file_id, status=FileStatus.READY, deleted_at__isnull=True,
         metadata__variant_type__in=MEDIA_POSTER_VARIANT_TYPES,
@@ -25,6 +62,11 @@ class MediaUploadSerializer(serializers.Serializer):
     initial_stage_id = serializers.UUIDField(required=False)
 
 
+class MediaVersionListSerializer(serializers.ListSerializer):
+    def to_representation(self, data):
+        return [self.child.to_representation(media) for media in prime_media_rows(data.all() if hasattr(data, 'all') else data)]
+
+
 class MediaVersionSerializer(serializers.ModelSerializer):
     file = serializers.SerializerMethodField()
     current_stage = serializers.SerializerMethodField()
@@ -35,6 +77,7 @@ class MediaVersionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MediaVersion
+        list_serializer_class = MediaVersionListSerializer
         fields = (
             'id', 'project_id', 'version_number', 'title', 'note', 'priority',
             'allow_download', 'status', 'file', 'current_stage', 'preview_status', 'preview_qualities', 'poster', 'created_at',
@@ -69,7 +112,7 @@ class MediaVersionSerializer(serializers.ModelSerializer):
         }
 
     def get_current_stage(self, media):
-        entry = media_stage_entries(media).filter(exited_at__isnull=True).select_related(
+        entry = media._open_entry if hasattr(media, '_open_entry') else media_stage_entries(media).filter(exited_at__isnull=True).select_related(
             'workflow_stage', 'changed_by_user', 'changed_by_guest_session'
         ).first()
         if not entry or not entry.workflow_stage:
@@ -93,7 +136,11 @@ class MediaVersionSerializer(serializers.ModelSerializer):
         }
 
     def get_preview_qualities(self, media):
-        types = set(FileVariant.objects.filter(
+        primed = getattr(media, '_variants', None)
+        types = {
+            _variant_type(v) for v in primed
+            if v.status == FileStatus.READY and _variant_type(v) in (*PREVIEW_VARIANT_TYPES, HQ_PROXY_VARIANT_TYPE)
+        } if primed is not None else set(FileVariant.objects.filter(
             file=media.original_file, deleted_at__isnull=True, status=FileStatus.READY,
             metadata__variant_type__in=[*PREVIEW_VARIANT_TYPES, HQ_PROXY_VARIANT_TYPE],
         ).values_list('metadata__variant_type', flat=True))
@@ -105,10 +152,14 @@ class MediaVersionSerializer(serializers.ModelSerializer):
         return qualities
 
     def get_preview_status(self, media):
-        variant = FileVariant.objects.filter(file=media.original_file, deleted_at__isnull=True, metadata__variant_type__in=PREVIEW_VARIANT_TYPES).order_by('-created_at').values_list('status', flat=True).first()
+        primed = getattr(media, '_variants', None)
+        if primed is not None:
+            variant = next((v.status for v in primed if _variant_type(v) in PREVIEW_VARIANT_TYPES), None)
+        else:
+            variant = FileVariant.objects.filter(file=media.original_file, deleted_at__isnull=True, metadata__variant_type__in=PREVIEW_VARIANT_TYPES).order_by('-created_at').values_list('status', flat=True).first()
         if variant:
             return variant
-        event = OutboxEvent.objects.filter(topic='file.preview.requested', aggregate_id=str(media.original_file_id)).first()
+        event = media._preview_event if hasattr(media, '_preview_event') else OutboxEvent.objects.filter(topic='file.preview.requested', aggregate_id=str(media.original_file_id)).first()
         if not event:
             return 'PENDING'
         if event.payload.get('cancelled'):
