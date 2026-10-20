@@ -1053,7 +1053,11 @@ def project_detail(request, workspace_id, project_id):
     if request.method == 'PATCH':
         serializer = ProjectUpdateSerializer(project, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        project = update_project(project=project, **serializer.validated_data)
+        changes = dict(serializer.validated_data)
+        if changes.get('client_team_id'):
+            # Linking a project to a client: the client must be an active one of this workspace.
+            get_object_or_404(ClientTeam, id=changes['client_team_id'], workspace=workspace, status=ClientTeamStatus.ACTIVE)
+        project = update_project(project=project, **changes)
         return Response(ProjectSerializer(project, context={'viewer_can_edit': True}).data)
     archive_project(project=project)
     return Response(status=status.HTTP_204_NO_CONTENT)

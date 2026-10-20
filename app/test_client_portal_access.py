@@ -69,3 +69,29 @@ class InvitePreviewThrottleTests(TestCase):
             self.assertEqual(client.get(url, HTTP_X_FORWARDED_FOR='203.0.113.1').status_code, 429)
             # A different visitor behind the same frontend has their own bucket.
             self.assertNotEqual(client.get(url, HTTP_X_FORWARDED_FOR='203.0.113.2').status_code, 429)
+
+
+class LinkProjectToClientTests(TestCase):
+    def setUp(self):
+        from rest_framework.test import APIClient
+        self.owner = User.objects.create_user(email='o2@example.com', password='pw-12345678!', first_name='A', last_name='B')
+        self.workspace, self.membership = create_workspace(owner=self.owner, name='S2', slug='s2', workspace_timezone='Europe/London')
+        self.team = create_client_team(workspace=self.workspace, name='Acme', created_by_membership=self.membership)
+        self.api = APIClient()
+        self.api.force_authenticate(self.owner)
+        self.project_id = self.api.post(f'/api/workspaces/{self.workspace.id}/projects/', {'name': 'Film'}, format='json').json()['id']
+
+    def test_owner_can_link_and_unlink_a_client(self):
+        url = f'/api/workspaces/{self.workspace.id}/projects/{self.project_id}/'
+        linked = self.api.patch(url, {'client_team_id': str(self.team.id)}, format='json')
+        self.assertEqual(linked.status_code, 200, linked.content)
+        self.assertEqual(linked.json()['client_team_id'], str(self.team.id))
+        unlinked = self.api.patch(url, {'client_team_id': None}, format='json')
+        self.assertIsNone(unlinked.json()['client_team_id'])
+
+    def test_client_from_another_workspace_is_rejected(self):
+        other_owner = User.objects.create_user(email='o3@example.com', password='pw-12345678!', first_name='A', last_name='B')
+        other_ws, other_m = create_workspace(owner=other_owner, name='S3', slug='s3', workspace_timezone='Europe/London')
+        foreign = create_client_team(workspace=other_ws, name='Other', created_by_membership=other_m)
+        url = f'/api/workspaces/{self.workspace.id}/projects/{self.project_id}/'
+        self.assertEqual(self.api.patch(url, {'client_team_id': str(foreign.id)}, format='json').status_code, 404)

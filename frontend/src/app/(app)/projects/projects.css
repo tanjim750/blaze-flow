@@ -345,3 +345,4 @@
 .pb-messages { padding: 4px 0 8px; }
 
 .pb-chat-preview { padding: 0 0 12px; max-width: 720px; }
+.pb-inline-error{color:#ff8f98;font-size:12px;align-self:center}

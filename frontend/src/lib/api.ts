@@ -282,7 +282,7 @@ export const createProject = (workspaceId: string, payload: { name: string; clie
 export const createFolder = (workspaceId: string, projectId: string, payload: { name: string; parent_folder_id?: string }) =>
   request<ProjectFolder>(`/workspaces/${workspaceId}/projects/${projectId}/folders/`, jsonBody(payload));
 
-export const updateProject = (workspaceId: string, projectId: string, payload: { name?: string; status?: string; priority?: string }) =>
+export const updateProject = (workspaceId: string, projectId: string, payload: { name?: string; status?: string; priority?: string; client_team_id?: string | null }) =>
   request<Project>(`/workspaces/${workspaceId}/projects/${projectId}/`, { ...jsonBody(payload), method: "PATCH" });
 
 /** Archives rather than destroys: the API keeps the row and flips its status. */
