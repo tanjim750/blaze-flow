@@ -405,7 +405,7 @@ export const updateGuestInvite = (workspaceId: string, projectId: string, invite
 export const listMediaDecisions = (workspaceId: string, projectId: string, mediaVersionId: string) =>
   request<{ results: ReviewDecision[]; viewer: DecisionViewer }>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/decisions/`);
 /** A client-team member's Approve / Request changes. Team members use the workflow routes. */
-export const createMediaDecision = (workspaceId: string, projectId: string, mediaVersionId: string, payload: { decision: DecisionKind; message?: string; start_time_ms?: number }) =>
+export const createMediaDecision = (workspaceId: string, projectId: string, mediaVersionId: string, payload: { decision: DecisionKind; message?: string; start_time_ms?: number; confirm_override?: boolean }) =>
   request<ReviewDecision>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/decisions/`, jsonBody(payload));
 export const revokeGuestInvite = (workspaceId: string, projectId: string, inviteId: string) =>
   request<void>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/${inviteId}/`, { method: "DELETE" });

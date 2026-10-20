@@ -19,7 +19,8 @@ import type { AnnotationElement } from "@/lib/api";
 import { loadDraft, patchDraft, unsavedWarning } from "@/lib/review-drafts";
 import { DEFAULT_HOLD, displayWindow, drawingEndMs, rememberedHold, windowOpacity, type HoldChoice } from "@/lib/annotation-window";
 import { specMismatches } from "@/lib/project-brief";
-import { latestFor, openNotesWarning, proofDetail, proofLine, reviewBarActions } from "@/lib/review-decisions";
+import { latestFor, openNotesWarning, overrideWarning, proofDetail, proofLine, reviewBarActions } from "@/lib/review-decisions";
+import { useLiveDecisions } from "./live-decisions";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import { Comments, RevisionForm, type ComposerState } from "./comments";
 import { Fields } from "./fields";
@@ -239,6 +240,10 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const canShare = Boolean(view.target && view.role !== "client" && view.canManageGuests);
   // The proof of delivery: the newest client decision on exactly this version.
   const clientDecision = latestFor(view.decisions, version?.target?.versionId);
+  // R8: a guest's decision in another session shows here without a reload.
+  useLiveDecisions(view.target ?? null, clientDecision?.id ?? null, () => router.refresh());
+  const approveOverride = overrideWarning(clientDecision, "approved");
+  const reopenOverride = overrideWarning(clientDecision, "changes_requested");
   const openWarning = version ? openNotesWarning(openNotes, version.label) : null;
 
   async function approve() {
@@ -561,8 +566,9 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           onConfirm={() => void approve()}
           onCancel={() => setApproveOpen(false)}
         >
-          {(openNotes > 0 || (latest && latest.id !== version.id) || writer.error) && (
+          {(openNotes > 0 || (latest && latest.id !== version.id) || writer.error || approveOverride) && (
             <div className="rv-confirm-notes">
+              {approveOverride && <p className="rv-confirm-warn" role="alert" data-testid="override-warning"><TriangleAlert size={14} /><span>{approveOverride}</span></p>}
               {openWarning && (
                 <p className="rv-confirm-warn" role="alert">
                   <TriangleAlert size={14} />
@@ -639,6 +645,9 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
         />
       )}
 
+      {revisionOpen && reopenOverride && (
+        <p className="rv-banner" role="alert" data-testid="override-warning"><TriangleAlert size={14} /><span>{reopenOverride}</span></p>
+      )}
       {revisionOpen && (
         <RevisionForm
           writer={writer} positionMs={positionMs} approved={approved}

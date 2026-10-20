@@ -79,6 +79,9 @@ def transition_media_version(
         record_guest_audit(guest_session=guest_session, **audit)
     else:
         record_user_audit(user=user, **audit)
+    if current.workflow_stage_id != stage.id:
+        from .review_sync import sync_review_outcome
+        sync_review_outcome(media_version=locked_media, stage=stage, user=user)
     if notify and current.workflow_stage_id != stage.id:
         notify_stage_outcome(media_version=locked_media, entry=entry, stage=stage, actor=user, comment=comment)
     return entry

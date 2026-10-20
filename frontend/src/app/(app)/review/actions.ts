@@ -218,7 +218,7 @@ export async function setGuestInviteDecisionsAction(workspaceId: string, project
  * decision (the same record a review link makes) and moves the cut like the team buttons.
  */
 export async function clientDecisionAction(
-  workspaceId: string, projectId: string, versionId: string, decision: DecisionKind, message: string, startMs: number | null,
+  workspaceId: string, projectId: string, versionId: string, decision: DecisionKind, message: string, startMs: number | null, confirmOverride = false,
 ): Promise<ActionState> {
   if (!workspaceId || !projectId || !versionId) return { error: "This cut has no project review record." };
   if (decision === "changes_requested") {
@@ -228,6 +228,7 @@ export async function clientDecisionAction(
   const result = await createMediaDecision(workspaceId, projectId, versionId, {
     decision,
     ...(decision === "changes_requested" ? { message: message.trim(), ...startTimeField(startMs) } : {}),
+    ...(confirmOverride ? { confirm_override: true } : {}),
   });
   if (!result.ok) return { error: result.error.detail };
   revalidatePath("/review");
