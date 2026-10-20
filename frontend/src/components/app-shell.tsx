@@ -6,7 +6,6 @@ import { LinkPending } from "@/components/nav-progress";
 import { usePathname } from "next/navigation";
 import { BadgeCheck, Clapperboard, Inbox, ReceiptText, Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, MessagesSquare, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { motion, useReducedMotion } from "motion/react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
 import type { ShellUser } from "@/lib/user";
 import type { Workspace } from "@/lib/api";
@@ -39,7 +38,6 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   railCollapsed?: boolean;
 }) {
   const pathname = usePathname();
-  const reduceMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(railCollapsed);
   const [health, setHealth] = useState<OperationsHealth | "restricted" | "unavailable" | null>(null);
@@ -138,17 +136,15 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
       {open && <button type="button" className="studio-scrim" aria-label="Close navigation" tabIndex={-1} onClick={() => setOpen(false)} />}
 
       <aside className={open ? "studio-sidebar open" : "studio-sidebar"}>
-        <motion.button
+        <button
           type="button"
           className="studio-rail-toggle"
           onClick={toggleRail}
           aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
           aria-expanded={!collapsed}
-          whileTap={reduceMotion ? undefined : { scale: 0.82 }}
-          transition={{ type: "spring", stiffness: 620, damping: 14 }}
         >
           <ChevronLeft size={14} strokeWidth={2.25} />
-        </motion.button>
+        </button>
 
         <div className="studio-sidebar-top">
           <div className="studio-brand"><span><Flame size={17} /></span><strong>Blaze Flow</strong></div>
@@ -197,7 +193,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
 
       <div className="studio-main">
         <UniversalReviewLayout pathname={pathname}>
-          <motion.main key={pathname} className={flush ? "flush" : undefined} initial={{ opacity: 0, y: reduceMotion ? 0 : 7 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0 : .24, ease: [.22, 1, .36, 1] }}>{children}</motion.main>
+          <main key={pathname} className={flush ? "flush studio-page-enter" : "studio-page-enter"}>{children}</main>
         </UniversalReviewLayout>
       </div>
     </div>

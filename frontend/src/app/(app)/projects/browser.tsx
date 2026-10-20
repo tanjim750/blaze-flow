@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useDoParam } from "@/lib/do-param";
 import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { motion, useReducedMotion } from "motion/react";
 import {
   Activity, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
   FolderInput, FolderOpen, MessagesSquare, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Wallet, X,
@@ -306,8 +305,6 @@ function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onTogg
   const [filter, setFilter] = useState(initialFilter);
   const [creating, setCreating] = useState(false);
   useDoParam("new", () => setCreating(true));
-  const reduceMotion = useReducedMotion();
-
   const rows = filterClientTree(view.clients, filter);
   const toggle = (id: string) => setExpanded(expanded.includes(id) ? expanded.filter((value) => value !== id) : [...expanded, id]);
 
@@ -315,19 +312,17 @@ function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onTogg
     <aside className="pb-rail">
       {/* Same handle as the main rail, but centred on the edge: anchored to the top it
           landed on the shell's own toggle once this rail closed to nothing. The wrapper
-          owns the positioning so `whileTap`'s scale does not fight a translate. */}
+          owns the positioning so the :active scale (CSS) does not fight a translate. */}
       <div className="pb-rail-handle">
-      <motion.button
+      <button
         type="button"
         className="pb-rail-toggle"
         onClick={onToggle}
         aria-label={closed ? "Show clients" : "Hide clients"}
         aria-expanded={!closed}
-        whileTap={reduceMotion ? undefined : { scale: 0.82 }}
-        transition={{ type: "spring", stiffness: 620, damping: 14 }}
       >
         <ChevronLeft size={14} strokeWidth={2.25} />
-      </motion.button>
+      </button>
       </div>
       <div className="pb-rail-top">
         <div className="pb-rail-head">

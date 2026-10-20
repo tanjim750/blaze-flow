@@ -12,7 +12,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useReducedMotion } from "motion/react";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 import { Plus } from "lucide-react";
 import type { ProjectFile, Task } from "@/lib/api";
 import type { BoardStage } from "@/lib/task-board";
