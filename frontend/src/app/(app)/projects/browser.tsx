@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useDoParam } from "@/lib/do-param";
-import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
@@ -30,6 +30,8 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } fr
 import { planLabel, type PlanLimit } from "@/lib/plan-limit";
 import { startUpload } from "@/lib/upload-store";
 import { reviewHref } from "@/lib/open-in-review";
+import { ProjectActionsMenu, StatusPill } from "@/components/projects/project-actions-menu";
+import { ArchivePicker, ArchivedNotice, OpenProjectsContext, type OpenProject } from "@/components/projects/archive-picker";
 
 const initialState: ActionState = { error: null, savedAt: null };
 
@@ -55,6 +57,7 @@ function InlineCreate({ action, hidden, placeholder, label, onClose, nested = fa
 }) {
   const [state, submit, pending] = useActionState(action, initialState);
   const [value, setValue] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
   const acknowledged = useRef(state.savedAt);
 
   useEffect(() => {
@@ -66,6 +69,7 @@ function InlineCreate({ action, hidden, placeholder, label, onClose, nested = fa
 
   return (
     <form
+      ref={formRef}
       action={submit}
       className={nested ? "pb-inline-form nested" : "pb-inline-form"}
       onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}
@@ -87,7 +91,7 @@ function InlineCreate({ action, hidden, placeholder, label, onClose, nested = fa
       <button type="submit" disabled={pending}>{pending ? "Adding…" : "Add"}</button>
       <button type="button" className="pb-inline-cancel" onClick={onClose} aria-label="Cancel"><X size={13} /></button>
       {state.error && !state.planLimit && <small role="alert">{state.error}</small>}
-      {state.planLimit && <PlanLimitDialog key={state.error} limit={state.planLimit} name={value.trim()} onClose={onClose} />}
+      {state.planLimit && <PlanLimitDialog key={state.error} limit={state.planLimit} name={value.trim()} onClose={onClose} onRetry={() => formRef.current?.requestSubmit()} />}
     </form>
   );
 }
@@ -97,8 +101,11 @@ function InlineCreate({ action, hidden, placeholder, label, onClose, nested = fa
  * says what happened and what to do (archive a finished project, or upgrade) instead of a
  * line of small print inside the sidebar form.
  */
-function PlanLimitDialog({ limit, name, onClose }: { limit: PlanLimit; name: string; onClose: () => void }) {
+function PlanLimitDialog({ limit, name, onClose, onRetry }: { limit: PlanLimit; name: string; onClose: () => void; onRetry?: () => void }) {
   const [open, setOpen] = useState(true);
+  const [step, setStep] = useState<"options" | "pick">("options");
+  const [archived, setArchived] = useState<OpenProject | null>(null);
+  const retry = () => { setOpen(false); onRetry?.(); };
   const close = () => { setOpen(false); onClose(); };
   const plan = planLabel(limit.plan);
   const noun = limit.limit === 1 ? "project" : "projects";
@@ -112,12 +119,15 @@ function PlanLimitDialog({ limit, name, onClose }: { limit: PlanLimit; name: str
         </div>
       </header>
       <DialogDescription className="pb-limit-body">{name ? <>&ldquo;{name}&rdquo; wasn&rsquo;t created. </> : null}Free up a slot or move to a bigger plan to keep going.</DialogDescription>
-      <div className="pb-limit-meter" role="meter" aria-label="Projects used" aria-valuemin={0} aria-valuemax={limit.limit} aria-valuenow={limit.limit}>
+      {!archived && <div className="pb-limit-meter" role="meter" aria-label="Projects used" aria-valuemin={0} aria-valuemax={limit.limit} aria-valuenow={limit.limit}>
         <div className="pb-limit-meter-row"><span>Open projects</span><strong>{limit.limit} of {limit.limit} {noun}</strong></div>
         <i><b /></i>
-      </div>
+      </div>}
+      {archived ? <ArchivedNotice project={archived} name={name} />
+        : step === "pick" ? <ArchivePicker onArchived={setArchived} />
+        : <>
       <div className="pb-limit-options">
-        <button type="button" className="pb-limit-option" onClick={close}>
+        <button type="button" className="pb-limit-option" onClick={() => setStep("pick")}>
           <span aria-hidden><Archive /></span>
           <span><strong>Archive a project</strong><small>Archived projects keep their files and don&rsquo;t count towards the limit.</small></span>
           <ChevronRight aria-hidden className="pb-limit-chev" />
@@ -128,9 +138,19 @@ function PlanLimitDialog({ limit, name, onClose }: { limit: PlanLimit; name: str
           <ChevronRight aria-hidden className="pb-limit-chev" />
         </Link>
       </div>
+        </>}
       <footer className="pb-limit-actions">
-        <Link href="/help" className="pb-limit-secondary" onClick={close}>Help &amp; upgrades</Link>
-        <button type="button" className="pb-limit-primary" onClick={close}>Manage projects</button>
+        {archived ? <>
+          <button type="button" className="pb-limit-secondary" onClick={close}>Not now</button>
+          {onRetry && name ? <button type="button" className="pb-limit-primary" onClick={retry}>Create &ldquo;{name}&rdquo;</button>
+            : <button type="button" className="pb-limit-primary" onClick={close}>Done</button>}
+        </> : step === "pick" ? <>
+          <button type="button" className="pb-limit-secondary" onClick={() => setStep("options")}>Back</button>
+          <Link href="/projects/archived" className="pb-limit-primary" onClick={close}>Archived projects</Link>
+        </> : <>
+          <Link href="/help" className="pb-limit-secondary" onClick={close}>Help &amp; upgrades</Link>
+          <button type="button" className="pb-limit-primary" onClick={() => setStep("pick")}>Choose a project to archive</button>
+        </>}
       </footer>
       <DialogClose />
     </DialogContent>
@@ -151,6 +171,10 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
   const campaignId = view.selectedCampaign?.id ?? null;
   const [unread, setUnread] = useState<{ project: string | null; count: number }>({ project: null, count: 0 });
   const messagesUnread = unread.project === campaignId ? unread.count : 0;
+  const openProjects = useMemo<OpenProject[]>(
+    () => (view.workspaceId ? view.clients.flatMap((client) => client.campaigns.map((campaign) => ({ id: campaign.id, name: campaign.name, client: client.name, status: campaign.status }))) : []),
+    [view.workspaceId, view.clients],
+  );
 
   // The tab's badge: this project's unread count from the workspace summary, refreshed every
   // half minute (the open thread reports its own count while it is on screen).
@@ -168,6 +192,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
   }, [view.workspaceId, campaignId]);
 
   return (
+    <OpenProjectsContext.Provider value={openProjects}>
     <div className={railClosed ? "pb-layout is-rail-closed" : "pb-layout"}>
       {/* Keyed on the query so a new sidebar search replaces the filter instead of being ignored. */}
       <ClientRail key={initialQuery} initialFilter={initialQuery} view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} />
@@ -197,9 +222,12 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
             <div className="pb-title">
               <span className="pb-monogram">{initials(view.selectedClient?.name ?? "Blaze Flow")}</span>
               <h1>{view.selectedCampaign?.name ?? "No campaign selected"}</h1>
+              {view.workspaceId && view.selectedCampaign && <StatusPill status={view.selectedCampaign.project?.status ?? view.selectedCampaign.status ?? "DRAFT"} />}
             </div>
             <div className="pb-title-actions">
-              <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions"><Ellipsis size={15} /></button>
+              {view.workspaceId && view.selectedCampaign
+                ? <ProjectActionsMenu projectId={view.selectedCampaign.id} name={view.selectedCampaign.name} status={view.selectedCampaign.project?.status ?? view.selectedCampaign.status ?? "DRAFT"} />
+                : <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions" disabled><Ellipsis size={15} /></button>}
               {view.workspaceId && view.selectedCampaign && (
                 <ChatHeaderButton workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} unread={messagesUnread} />
               )}
@@ -257,6 +285,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
         <UploadDialog workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} onClose={() => setUploading(false)} onUploaded={() => setUploading(false)} onLanded={() => router.refresh()} />
       )}
     </div>
+    </OpenProjectsContext.Provider>
   );
 }
 
@@ -411,6 +440,7 @@ function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onTogg
             </p>
           )}
         </div>
+        {view.workspaceId && <Link className="pb-archived-link" href="/projects/archived"><Archive size={13} />Archived projects</Link>}
       </div>
     </aside>
   );

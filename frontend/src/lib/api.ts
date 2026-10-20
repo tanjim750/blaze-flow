@@ -214,6 +214,8 @@ export const listProjectRequests = (workspaceId: string, status?: string) => req
 export const getBranding = (workspaceId: string) => request<import("./portal").Branding>(`/workspaces/${workspaceId}/branding/`);
 // Per-request dedupe (React `cache`): several loaders on one page ask for this.
 export const listProjects = cache((workspaceId: string) => request<Project[]>(`/workspaces/${workspaceId}/projects/`));
+/** Only archived projects (every other list leaves them out). */
+export const listArchivedProjects = (workspaceId: string) => request<Project[]>(`/workspaces/${workspaceId}/projects/?archived=1`);
 export const getProject = (workspaceId: string, projectId: string) => request<Project>(`/workspaces/${workspaceId}/projects/${projectId}/`);
 export const listFolders = (workspaceId: string, projectId: string) => request<ProjectFolder[]>(`/workspaces/${workspaceId}/projects/${projectId}/folders/`);
 export const listProjectFiles = (workspaceId: string, projectId: string) => request<ProjectFile[]>(`/workspaces/${workspaceId}/projects/${projectId}/files/`);
