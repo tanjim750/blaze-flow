@@ -1,10 +1,10 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { Check, Copy, Eye, Link2, TriangleAlert, UserMinus, X } from "lucide-react";
+import { Check, Copy, ExternalLink, Eye, Link2, RefreshCw, TriangleAlert, UserMinus, X } from "lucide-react";
 import type { GuestInvite } from "@/lib/api";
 import { guestLinkStatus } from "@/lib/activity";
-import { createGuestInviteAction, revokeGuestAccessAction, revokeGuestInviteAction, setGuestInviteDecisionsAction } from "./actions";
+import { createGuestInviteAction, replaceGuestInviteAction, revokeGuestAccessAction, revokeGuestInviteAction, setGuestInviteDecisionsAction } from "./actions";
 import { allowsDecisions, emptyGuestInviteState, GUEST_PRESETS } from "./guest-presets";
 
 /** Stable regardless of the viewer's locale, so the server and client markup agree. */
@@ -30,8 +30,12 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
   workspaceId: string; projectId: string; projectName: string;
   invites: GuestInvite[]; canManage: boolean; onClose: () => void;
 }) {
-  const [state, submit, creating] = useActionState(createGuestInviteAction, emptyGuestInviteState);
+  const [created, submit, creating] = useActionState(createGuestInviteAction, emptyGuestInviteState);
+  const [replaced, setReplaced] = useState<typeof created | null>(null);
+  // The newest reveal wins: a fresh "Create link" or a "New link" on an existing row.
+  const state = replaced && replaced.token && replaced !== created ? replaced : created;
   const [copied, setCopied] = useState(false);
+  const known = useKnownLinks(projectId, state.inviteId ?? null, state.token);
   const [revokeError, setRevokeError] = useState("");
   const [revoking, startRevoke] = useTransition();
   // The action only produces a token in the browser, so the guarded origin stays safe
@@ -46,9 +50,9 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
     return () => window.clearTimeout(timer);
   }, [copied]);
 
-  const copy = async () => {
+  const copy = async (url: string = shareUrl) => {
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(url);
       setCopied(true);
     } catch {
       setCopied(false);
@@ -101,7 +105,7 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
               <p><TriangleAlert size={13} /> Copy this now — it is shown only once.</p>
               <div>
                 <input readOnly value={shareUrl} aria-label="Client review link" onFocus={(event) => event.currentTarget.select()} />
-                <button type="button" onClick={copy} aria-label={copied ? "Link copied" : "Copy link"} title={copied ? "Copied" : "Copy link"}>
+                <button type="button" onClick={() => copy()} aria-label={copied ? "Link copied" : "Copy link"} title={copied ? "Copied" : "Copy link"}>
                   {copied ? <Check size={14} /> : <Copy size={14} />}
                 </button>
                 <span className="sr-only" aria-live="polite">{copied ? "Link copied" : ""}</span>
@@ -135,6 +139,22 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
                 </div>
                 {!invite.revoked_at && (
                   <div className="rv-share-row-actions">
+                    {status.tone === "live" && known[invite.id] && <>
+                      <button type="button" className="rv-share-icon" onClick={() => copy(known[invite.id])} aria-label={`Copy ${invite.label || "link"}`} title="Copy link"><Copy size={14} /></button>
+                      <a className="rv-share-icon" href={known[invite.id]} target="_blank" rel="noreferrer" aria-label={`Open ${invite.label || "link"}`} title="Open link"><ExternalLink size={14} /></a>
+                    </>}
+                    {canManage && status.tone === "live" && !known[invite.id] && (
+                      <button
+                        type="button"
+                        disabled={revoking}
+                        title="Links are shown only once. This issues a new link with the same access and revokes this one."
+                        onClick={() => startRevoke(async () => {
+                          const result = await replaceGuestInviteAction(workspaceId, projectId, invite);
+                          setRevokeError(result.error ?? "");
+                          if (result.token) setReplaced(result);
+                        })}
+                      ><RefreshCw size={13} aria-hidden="true" />New link</button>
+                    )}
                     {canManage && status.tone === "live" && (
                       <label className="rv-share-toggle" title="Whether reviewers on this link can approve or request changes">
                         <input
@@ -202,4 +222,24 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
       </ul>
     </aside>
   );
+}
+
+/**
+ * Links revealed in this browser tab, so Copy and Open keep working after the one-time
+ * reveal is dismissed. Kept in sessionStorage (gone when the tab closes); the server only
+ * ever stores the hash.
+ */
+function useKnownLinks(projectId: string, inviteId: string | null, token: string | null): Record<string, string> {
+  const key = `bf-guest-links:${projectId}`;
+  const [links, setLinks] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let stored: Record<string, string> = {};
+    try { stored = JSON.parse(window.sessionStorage.getItem(key) || "{}"); } catch { stored = {}; }
+    if (inviteId && token) {
+      stored = { ...stored, [inviteId]: `${window.location.origin}/guest-review?token=${token}` };
+      try { window.sessionStorage.setItem(key, JSON.stringify(stored)); } catch { /* storage full or blocked */ }
+    }
+    queueMicrotask(() => setLinks(stored));
+  }, [key, inviteId, token]);
+  return links;
 }
