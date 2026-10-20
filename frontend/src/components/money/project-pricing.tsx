@@ -68,8 +68,11 @@ export function ProjectPricing({ workspaceId, projectId }: { workspaceId: string
 
     <section className="pp-card">
       <header><h2><ReceiptText aria-hidden="true" />Invoices for this project</h2>
-        {data.can_manage && <button type="button" className="money-button is-primary is-sm" disabled={busy || toMinor(data.uninvoiced) <= 0} onClick={() => void invoice()}><FilePlus2 aria-hidden="true" />Invoice {money(data.uninvoiced)}</button>}
+        {data.can_manage && (data.draft_invoice && toMinor(data.uninvoiced) <= 0
+          ? <Link className="money-button is-primary is-sm" href={`/money/invoices/${data.draft_invoice.id}`}><ReceiptText aria-hidden="true" />Open draft {data.draft_invoice.number} · {money(data.draft_invoice.total)}</Link>
+          : <button type="button" className="money-button is-primary is-sm" disabled={busy || toMinor(data.uninvoiced) <= 0} onClick={() => void invoice()}><FilePlus2 aria-hidden="true" />Invoice {money(data.uninvoiced)}</button>)}
       </header>
+      {data.draft_invoice && <p className="pp-muted">Draft {data.draft_invoice.number} totals {money(data.draft_invoice.total)}: the items already on it{toMinor(data.uninvoiced) > 0 ? `, not the ${money(data.uninvoiced)} priced since` : ""}. Edit its lines, tax and discount on the draft.</p>}
       {data.invoices.length === 0 ? <p className="pp-muted">No invoices yet.</p> : <ul className="pp-invoices">{data.invoices.map((item) => {
         const badge = invoiceBadge(item);
         return <li key={item.id}><Link href={`/money/invoices/${item.id}`}>{item.number}</Link><span className={`money-badge tone-${badge.tone}`}>{badge.label}</span><span>{formatMoney(item.total, item.currency)}</span><small>{toMinor(item.outstanding) > 0 && item.status !== "draft" ? `${formatMoney(item.outstanding, item.currency)} outstanding` : ""}</small></li>;

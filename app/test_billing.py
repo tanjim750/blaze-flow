@@ -292,9 +292,10 @@ class TotalsAndInvoiceTests(BillingBase, TestCase):
         # Re-pricing a task later leaves the issued line alone.
         self.patch_money(first['id'], {'client_price': '999'})
         self.assertEqual(self.client.get(self.url('api-billing-invoice-detail', invoice['id'])).json()['total'], '1400.00')
-        # Everything is invoiced, so a second invoice has nothing to list.
+        # Everything is on the open draft, so "New invoice" opens that draft (and keeps the due date).
         self.as_user(self.owner)
-        self.assertEqual(self.client.post(self.url('api-billing-invoices'), {'project_id': self.project_id}, format='json').status_code, 400)
+        again = self.client.post(self.url('api-billing-invoices'), {'project_id': self.project_id, 'due_date': '2026-12-01'}, format='json')
+        self.assertEqual((again.status_code, again.json()['id'], again.json()['due_date']), (200, invoice['id'], '2026-12-01'))
         self.task('Extra cutdown', self.editor_membership)
         Task.objects.filter(title='Extra cutdown').update(client_price=Decimal('60'))
         second = self.invoice(send=False)
@@ -382,6 +383,54 @@ class TotalsAndInvoiceTests(BillingBase, TestCase):
         self.assertEqual(EditorPay.objects.filter(workspace=self.workspace).values_list('currency', flat=True).distinct().get(), 'USD')
 
 
+class DraftEditingTests(BillingBase, TestCase):
+    def edit(self, invoice_id, payload, expect=200):
+        self.as_user(self.owner)
+        response = self.client.patch(self.url('api-billing-invoice-detail', invoice_id), payload, format='json')
+        self.assertEqual(response.status_code, expect, response.content)
+        return response.json()
+
+    def test_lines_tax_discount_due_date_and_notes_are_editable_on_a_draft(self):
+        self.priced_project()
+        invoice = self.invoice(send=False)
+        fee, first, _second = invoice['lines']
+        data = self.edit(invoice['id'], {
+            'due_date': '2026-12-01', 'notes': 'Thanks!', 'tax_rate': '20', 'discount_amount': '100',
+            'lines': [{'id': fee['id'], 'description': 'Launch film: fee', 'amount': '900'},
+                      {'id': first['id'], 'description': first['description'], 'amount': first['amount']},
+                      {'description': 'Rush delivery', 'amount': '50'}],
+        })
+        self.assertEqual([(line['kind'], line['description'], line['amount']) for line in data['lines']],
+                         [('project_fee', 'Launch film: fee', '900.00'), ('task', 'Hero 30s', '250.00'), ('manual', 'Rush delivery', '50.00')])
+        # 1200 - 100 = 1100, + 20% = 1320.
+        self.assertEqual((data['subtotal'], data['discount_amount'], data['tax'], data['total']), ('1200.00', '100.00', '220.00', '1320.00'))
+        self.assertEqual((data['due_date'], data['notes']), ('2026-12-01', 'Thanks!'))
+        # The removed task line is back on Pricing; the manual line never counts as priced work.
+        pricing = self.client.get(self.url('api-billing-project', self.project_id)).json()
+        self.assertEqual((pricing['invoiced'], pricing['draft_invoice']['total']), ('1150.00', '1320.00'))
+        self.edit(invoice['id'], {'tax_rate': '120'}, expect=400)
+        self.edit(invoice['id'], {'lines': [{'description': '', 'amount': '5'}]}, expect=400)
+
+    def test_sent_invoices_are_locked_and_can_revert_until_paid(self):
+        self.priced_project()
+        invoice = self.invoice()
+        self.edit(invoice['id'], {'notes': 'late edit'}, expect=409)
+        self.assertTrue(self.client.get(self.url('api-billing-invoice-detail', invoice['id'])).json()['can_revert'])
+        reverted = self.client.post(self.url('api-billing-invoice-revert', invoice['id']))
+        self.assertEqual((reverted.status_code, reverted.json()['status'], reverted.json()['issue_date']), (200, 'draft', None))
+        self.as_user(self.owner)
+        self.client.post(self.url('api-billing-invoice-send', invoice['id']))
+        self.pay(invoice['id'], '10')
+        self.assertEqual(self.client.post(self.url('api-billing-invoice-revert', invoice['id'])).status_code, 409)
+
+    def test_only_managers_edit_or_revert(self):
+        self.priced_project()
+        invoice = self.invoice(send=False)
+        self.as_user(self.editor)
+        self.assertIn(self.client.patch(self.url('api-billing-invoice-detail', invoice['id']), {'notes': 'x'}, format='json').status_code, (403, 404))
+        self.assertIn(self.client.post(self.url('api-billing-invoice-revert', invoice['id'])).status_code, (403, 404))
+
+
 class RecordPaymentIsTheOnlyPathTests(BillingBase, TestCase):
     def test_the_invoice_and_payout_routes_call_record_payment_with_the_manual_provider(self):
         first, _ = self.priced_project()
@@ -417,7 +466,7 @@ class RecordPaymentIsTheOnlyPathTests(BillingBase, TestCase):
         invoice = self.invoice()
         self.as_user(self.owner)
         response = self.client.patch(self.url('api-billing-invoice-detail', invoice['id']), {'status': 'paid'}, format='json')
-        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.status_code, 400)
         self.assertEqual(Invoice.objects.get(id=invoice['id']).status, InvoiceStatus.SENT)
 
     def test_a_gateway_reference_makes_a_repeat_delivery_a_no_op(self):
