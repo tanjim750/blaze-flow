@@ -87,8 +87,9 @@ describe("buildCatalogue", () => {
 
     // The media version is the same bytes as V2, so it does not become a third cut.
     expect(assets).toHaveLength(1);
-    expect(assets[0].versions.map((version) => version.label)).toEqual(["V1", "V2"]);
-    // It numbers 7 in its project, but the asset's own history is what the page shows.
+    // V2 is the cut clients review as V7 (guest page, share links, notifications), so it is
+    // labelled V7 here too; the library order still decides which version is latest.
+    expect(assets[0].versions.map((version) => version.label)).toEqual(["V1", "V7"]);
     const [first, second] = assets[0].versions;
     expect(first.target).toBeNull();
     expect(second.target).toEqual({ workspaceId: WORKSPACE, projectId: "p1", versionId: "mv-2" });
