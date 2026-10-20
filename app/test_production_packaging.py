@@ -46,3 +46,17 @@ class CloudflareThrottleIdentTests(TestCase):
     def test_invalid_header_falls_back(self):
         request = RequestFactory().get('/', REMOTE_ADDR='10.0.0.5', HTTP_CF_CONNECTING_IP='not-an-ip')
         self.assertEqual(LoginThrottle().get_ident(request), '10.0.0.5')
+
+
+
+class ComposeDbIsolationTests(TestCase):
+    def test_db_does_not_share_the_app_env_file(self):
+        import re
+        from pathlib import Path
+
+        text = (Path(__file__).resolve().parent.parent / 'docker-compose.prod.yml').read_text()
+        block = re.search(r'^  db:\n(.*?)(?=^  \S)', text, re.S | re.M).group(1)
+        body = '\n'.join(line for line in block.splitlines() if not line.strip().startswith('#'))
+        self.assertNotIn('env_file', body)
+        for key in ('POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD'):
+            self.assertIn(f'{key}:', body)

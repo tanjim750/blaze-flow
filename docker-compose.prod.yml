@@ -1,6 +1,7 @@
 # Blaze Flow production stack (single host). See docs/deploy.md.
 #
 #   cp .env.production.example .env.production   # fill in real values; never commit it
+#   (always pass --env-file .env.production: db's POSTGRES_* are interpolated from it)
 #   docker compose -f docker-compose.prod.yml build
 #   docker compose -f docker-compose.prod.yml run --rm migrate
 #   docker compose -f docker-compose.prod.yml up -d
@@ -37,8 +38,14 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
-    env_file:
-      - ${ENV_FILE:-.env.production}
+    # Only the three POSTGRES_* values, interpolated from the --env-file, and deliberately
+    # no env_file: sharing .env.production meant any edit (a throttle rate, the tunnel
+    # hostname) changed db's config, so `up -d <svc>` recreated Postgres and every service
+    # briefly failed with "Temporary failure in name resolution".
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-blazeflow}
+      POSTGRES_USER: ${POSTGRES_USER:-blazeflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD and run compose with --env-file .env.production}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

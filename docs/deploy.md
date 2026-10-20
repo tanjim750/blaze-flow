@@ -87,6 +87,11 @@ All compose commands below use this alias:
 alias dc='docker compose -f docker-compose.prod.yml --env-file .env.production'
 ```
 
+`db` gets only `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD`, interpolated from that
+`--env-file`; it does not load the whole env file. Editing any other value and running
+`dc up -d <svc>` therefore leaves Postgres running. Changing one of those three (or the
+first deploy after this change) recreates `db` once, which is expected.
+
 ### Email with Resend
 
 Blaze Flow sends verification, password-reset, invitation and mention emails as branded
