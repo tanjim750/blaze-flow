@@ -209,6 +209,7 @@ from .services.notifications import (
 )
 from .serializers.media import MEDIA_POSTER_VARIANT_TYPES
 from .services.tasks import record_task_stage_move
+from .services.review_sync import sync_file_stage
 from .services import (
     InvitationError,
     ClientTeamError,
@@ -1256,13 +1257,19 @@ def asset_file_detail(request, workspace_id, file_id):
         if project:
             _require_project_permission(request, project, PROJECT_FILE_UPDATE, 'You do not have permission to move assets into this project.')
         stage, clear_stage = _asset_stage(workspace, data)
-        item = update_project_file(
-            project_file=item, workspace=workspace, client_team=client_team, project=project,
-            folder=folder, name=data.get('name'), task_stage=stage, clear_stage=clear_stage,
-        )
+        previous_stage_id = item.task_stage_id
+        with transaction.atomic():
+            item = update_project_file(
+                project_file=item, workspace=workspace, client_team=client_team, project=project,
+                folder=folder, name=data.get('name'), task_stage=stage, clear_stage=clear_stage,
+            )
+            # Same rule as a review outcome: moving the file to Approval etc. moves its tasks.
+            moved = sync_file_stage(project_file=item, stage=stage, user=request.user) if stage and stage.id != previous_stage_id else []
     except ProjectFileError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    return Response(ProjectFileSerializer(item).data)
+    payload = ProjectFileSerializer(item).data
+    payload['synced_tasks'] = [{'id': str(task.id), 'title': task.title} for task in moved]
+    return Response(payload)
 
 
 @api_view(['GET', 'HEAD'])

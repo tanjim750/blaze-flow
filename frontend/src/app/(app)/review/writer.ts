@@ -9,7 +9,7 @@ import { timecode } from "@/lib/timecode";
 import { EMPTY_OVERLAY, applyOverlay, dropEntry, pruneOverlay, type Overlay } from "@/lib/review-optimistic";
 import type { ReviewView } from "@/lib/review-view";
 import { addLocalAnnotation, addLocalNote, editLocalNote, removeLocalAnnotation, removeLocalNote, setLocalAnnotationWindow, setLocalNoteResolved, toggleLocalReaction } from "@/lib/review-local";
-import { updateAssetFile } from "@/lib/asset-api-client";
+import { syncedTasksMessage, updateAssetFile } from "@/lib/asset-api-client";
 import {
   addAnnotationAction, deleteAnnotationAction, deleteNoteAction, editNoteAction, postNoteAction, reactToCommentAction, setAnnotationWindowAction,
   clientDecisionAction, recolorAnnotationAction, requestRevisionAction, setNoteResolvedAction, transitionStageAction,
@@ -309,7 +309,11 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
   const setTaskStage = useCallback((stageId: string | null) => {
     const assetFileId = view.version?.assetFileId;
     if (!view.workspaceId || !assetFileId) { setError("This cut is not in the asset library, so it has no board status to set."); return Promise.resolve(false); }
-    return run(async () => { await updateAssetFile(view.workspaceId!, assetFileId, { task_stage_id: stageId }); });
+    return run(async () => {
+      const result = await updateAssetFile(view.workspaceId!, assetFileId, { task_stage_id: stageId });
+      const message = syncedTasksMessage(result);
+      if (message) toast(message);
+    });
   }, [run, view.version?.assetFileId, view.workspaceId]);
 
   return { error, setError, busy, overlay, apply, compose, setResolved, editNote, deleteNote, setDrawingWindow, react, removeNote, draw, eraseAnnotation, moveAnnotation, recolorAnnotation, moveToStage, requestChanges, decideAsClient, setTaskStage };
