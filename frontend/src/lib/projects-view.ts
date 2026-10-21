@@ -4,6 +4,8 @@ import { selectWorkspace } from "./workspace";
 
 export type CampaignNode = {
   id: string; name: string; assetCount: number; folders: FolderNode[];
+  /** API status (DRAFT, ACTIVE, ON_HOLD, COMPLETED). Absent on demo content. */
+  status?: string;
   /** The full project, loaded for the selected campaign only (the Brief tab reads it). */
   project?: Project | null;
   /** Why the brief could not be loaded, when it could not. */
@@ -59,7 +61,7 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
       .filter((project) => project.client_team_id === team.id)
       .map((project) => {
         claimed.add(project.id);
-        return { id: project.id, name: project.name, assetCount: 0, folders: [] as FolderNode[] };
+        return { id: project.id, name: project.name, status: project.status, assetCount: 0, folders: [] as FolderNode[] };
       });
     return { id: team.id, name: team.name, initial: team.name.charAt(0).toUpperCase(), assetCount: 0, campaigns };
   });
@@ -68,7 +70,7 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
   if (orphans.length) {
     clients.push({
       id: "unassigned", name: "Unassigned", initial: "?", assetCount: 0,
-      campaigns: orphans.map((project) => ({ id: project.id, name: project.name, assetCount: 0, folders: [] })),
+      campaigns: orphans.map((project) => ({ id: project.id, name: project.name, status: project.status, assetCount: 0, folders: [] })),
     });
   }
 

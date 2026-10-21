@@ -1,13 +1,13 @@
 import { guardRoute } from "@/lib/route-guard";
-import { Bell, BookA, Building2, CircleUserRound, Coins, FileText, Palette, ShieldCheck } from "lucide-react";
+import { Bell, BookA, Building2, CircleUserRound, Coins, FileText, MessageCircle, Palette, ShieldCheck } from "lucide-react";
 import { getGlossary, getInvoiceSettings, getRates } from "@/lib/studio-settings-server";
 import { GlossaryForm, InvoiceSettingsForm, RatesForm } from "@/components/settings/studio-settings";
-import { getBranding, getNotificationPreferences, getNotificationSettings, getWorkspaceProfile } from "@/lib/api";
+import { getBranding, getNotificationPreferences, getNotificationSettings, getWhatsAppSettings, getWorkspaceProfile } from "@/lib/api";
 import { BrandingForm } from "@/components/portal/branding-form";
 import "@/components/portal/portal.css";
 import { loadSession } from "@/lib/session";
 import { displayName } from "@/lib/user";
-import { NotificationPreferencesForm, NotificationSettingsForm, PasswordForm, VerificationForm, WorkspaceProfileForm } from "./forms";
+import { NotificationPreferencesForm, NotificationSettingsForm, PasswordForm, VerificationForm, WhatsAppSettingsForm, WorkspaceProfileForm } from "./forms";
 import "./settings.css";
 import { loadWorkspaceContext } from "@/lib/workspace";
 import { roleFor } from "@/lib/dashboard-role";
@@ -25,9 +25,9 @@ export default async function SettingsPage() {
   const workspace = workspaceContext.ok ? workspaceContext.data.selected : null;
   // Editors get their own account here; the studio's profile and branding are the owners'.
   const studio = Boolean(workspace && roleFor(workspace) === "owner");
-  const [loadedProfile, loadedBranding] = workspace && studio
-    ? await Promise.all([getWorkspaceProfile(workspace.id), getBranding(workspace.id)])
-    : [null, null];
+  const [loadedProfile, loadedBranding, loadedWhatsApp] = workspace && studio
+    ? await Promise.all([getWorkspaceProfile(workspace.id), getBranding(workspace.id), getWhatsAppSettings(workspace.id)])
+    : [null, null, null];
   const [loadedNotifications, loadedSettings] = await Promise.all([
     getNotificationPreferences(),
     workspace ? getNotificationSettings(workspace.id) : Promise.resolve(null),
@@ -63,6 +63,10 @@ export default async function SettingsPage() {
     {(studio || !workspace) && <section className="settings-card">
       <div className="settings-title"><Building2 /><div><h2>Workspace profile</h2><p>{workspace ? `Public business details for ${workspace.name}.` : "Create a workspace to add business details."}</p></div></div>
       {workspace ? <WorkspaceProfileForm profile={profile} /> : <p className="settings-muted">No workspace is available.</p>}
+    </section>}
+    {workspace && loadedWhatsApp?.ok && <section className="settings-card" id="whatsapp">
+      <div className="settings-title"><MessageCircle /><div><h2>WhatsApp approvals</h2><p>Message clients on WhatsApp when a cut is waiting for their approval.</p></div></div>
+      <WhatsAppSettingsForm initial={loadedWhatsApp.data} />
     </section>}
     {workspace && loadedBranding?.ok && <section className="settings-card" id="branding">
       <div className="settings-title"><Palette /><div><h2>Client portal branding</h2><p>Your logo, colour and welcome line on the client portal and on upload pages.</p></div></div>

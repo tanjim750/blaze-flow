@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, CalendarDays, Check, Clapperboard, Flag, Loader2, Lock, Monitor, RotateCcw, Ruler, Timer } from "lucide-react";
 import type { Project } from "@/lib/api";
+import { BriefEditor } from "@/components/brief/brief-editor";
+import { RichBrief } from "@/components/brief/rich-brief";
+import { briefIsEmpty } from "@/lib/rich-brief";
 import {
   ASPECT_RATIOS, EMPTY_SPECS, PLATFORMS, PRIORITIES, aspectName, dueLabel, formatLength, fromDateInput, normalizeSpecs,
   parseLength, specChips, toDateInput, type AspectRatio, type DeliverableSpecs, type Platform,
@@ -164,8 +167,8 @@ export function ProjectBrief({ workspaceId, project }: { workspaceId: string; pr
         <div className="br-main">
           <section className="br-card">
             <header className="br-card-head"><h2>Brief</h2><span className="br-lock"><Lock size={12} />View only</span></header>
-            {project.description?.trim()
-              ? <div className="br-desc">{project.description}</div>
+            {project.description && !briefIsEmpty(project.description)
+              ? <RichBrief value={project.description} className="br-desc-rich" />
               : <p className="br-muted">No brief has been written for this project yet.</p>}
           </section>
           <section className="br-card">
@@ -192,17 +195,15 @@ export function ProjectBrief({ workspaceId, project }: { workspaceId: string; pr
       <div className="br-main">
         <section className="br-card">
           <header className="br-card-head">
-            <h2><label htmlFor="br-description">Brief</label></h2>
+            <h2 id="br-description-label">Brief</h2>
             <SaveIndicator state={save.state} onRetry={save.retry} />
           </header>
-          <textarea
+          <BriefEditor
             id="br-description"
-            className="br-textarea"
+            label="Brief"
             value={description}
             placeholder="What is this project for? Audience, key message, must-haves, references…"
-            rows={9}
-            maxLength={20000}
-            onChange={(event) => { setDescription(event.target.value); save.queue({ description: event.target.value }, TYPING_DELAY); }}
+            onChange={(html) => { setDescription(html); save.queue({ description: html }, TYPING_DELAY); }}
             onBlur={() => void save.flush()}
           />
         </section>

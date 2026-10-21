@@ -19,8 +19,11 @@ class OcrLine:
 
 
 class OcrEngine:
+    """The provider interface. See docs/ai-visual-qa/providers.md for adding one."""
     name = 'base'
     version = ''
+    # What the UI shows after "Checked V1 ·": where the text was read, in plain words.
+    label = 'AI provider'
 
     def read(self, image_path, *, width, height, source_path=None, time_ms=None, file_metadata=None):  # pragma: no cover - interface
         raise NotImplementedError
@@ -74,6 +77,7 @@ class PaddleOcrEngine(OcrEngine):
     """Self-hosted PaddleOCR 3.x (PP-OCRv6 by default) on CPU. Install with requirements-ai.txt."""
 
     name = 'paddleocr'
+    label = 'on our servers'
 
     def __init__(self):
         try:
@@ -217,8 +221,24 @@ ENGINES = {
 }
 
 
+# Labels without importing the engine (PaddleOCR is heavy and lives only on the AI worker).
+ENGINE_LABELS = {'fake': 'test engine', 'paddleocr': 'on our servers'}
+
+
+def _registry():
+    # Deployments can add providers without editing this file: AI_QA_EXTRA_ENGINES maps a
+    # name to a dotted class path (and AI_QA_EXTRA_ENGINE_LABELS to its UI label).
+    return {**ENGINES, **getattr(settings, 'AI_QA_EXTRA_ENGINES', {})}
+
+
+def engine_label(name):
+    labels = {**ENGINE_LABELS, **getattr(settings, 'AI_QA_EXTRA_ENGINE_LABELS', {})}
+    return labels.get(name) or name or ''
+
+
 def get_engine(name=None):
     name = name or settings.AI_QA_ENGINE
-    if name not in ENGINES:
+    engines = _registry()
+    if name not in engines:
         raise RuntimeError(f'Unknown AI QA engine {name!r}.')
-    return import_string(ENGINES[name])()
+    return import_string(engines[name])()
