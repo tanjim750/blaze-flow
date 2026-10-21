@@ -22,7 +22,14 @@ import { Archive, ChevronRight, Clapperboard, Copy, Download, Ellipsis, Eye, Fol
 import type { ProjectFile } from "@/lib/api";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
-import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, updateAssetFile, updateAssetFolder, uploadAssetFileTracked } from "@/lib/asset-api-client";
+import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, syncedTasksMessage, updateAssetFile, updateAssetFolder, uploadAssetFileTracked, type SyncedTasks } from "@/lib/asset-api-client";
+import { toast } from "sonner";
+
+/** Moving a file to Approval etc. moves its linked tasks too; say so. */
+function announceSynced(result: SyncedTasks | null | undefined, stageName?: string) {
+  const message = syncedTasksMessage(result, stageName);
+  if (message) toast(message);
+}
 import { formatSize, groupSections, isMoveKey, libraryNavRows, moveIndex, nextSelection, pruneSelection, scopeItems, visibleOrder, type Density, type GroupBy, type LibraryNavRow, type SelectionState, type SortKey, type ViewMode } from "@/lib/files-panel";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
@@ -393,7 +400,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   };
   const setStage = (file: LibraryFile, stageId: string | null) => {
     const apply = (state: LibraryState) => ({ ...state, files: upsert(state.files, { ...file, stageId }) });
-    if (view?.workspaceId) write({ ids: [file.id], optimistic: apply, describe: `Moving ${file.name}`, send: () => updateAssetFile(view.workspaceId!, file.id, { task_stage_id: stageId }) });
+    if (view?.workspaceId) write({ ids: [file.id], optimistic: apply, describe: `Moving ${file.name}`, send: () => updateAssetFile(view.workspaceId!, file.id, { task_stage_id: stageId }).then((result) => { announceSynced(result, view?.stages?.find((item) => item.id === stageId)?.name); return result; }) });
     else updateLibrary(apply);
   };
   const showDetails = (entity: LibraryFile | LibraryFolder) => {
@@ -1055,7 +1062,7 @@ function StageMenu({ file, view }: { file: LibraryFile; view?: FilesView }) {
   const write = useAssetWrite();
   const set = (stageId: string | null) => {
     const apply = (state: LibraryState) => ({ ...state, files: upsert(state.files, { ...file, stageId }) });
-    if (view?.workspaceId) write({ ids: [file.id], optimistic: apply, describe: `Moving ${file.name}`, send: () => updateAssetFile(view.workspaceId!, file.id, { task_stage_id: stageId }) });
+    if (view?.workspaceId) write({ ids: [file.id], optimistic: apply, describe: `Moving ${file.name}`, send: () => updateAssetFile(view.workspaceId!, file.id, { task_stage_id: stageId }).then((result) => { announceSynced(result, view?.stages?.find((item) => item.id === stageId)?.name); return result; }) });
     else updateLibrary(apply);
   };
   return (

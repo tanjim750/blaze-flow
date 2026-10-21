@@ -41,3 +41,25 @@ def sync_review_outcome(*, media_version, stage, user=None):
     for task in Task.objects.select_related('task_stage').filter(id__in=task_ids, project_id=project.id, deleted_at__isnull=True).exclude(task_stage=target):
         moved.append(update_task(task=task, task_stage=target, actor=user))
     return moved
+
+
+# Moving a file on the Files tab into one of these columns moves its tasks too, the same way
+# a review outcome does. Other columns (To do, In progress, custom) only move the file.
+FILE_SYNC_KINDS = {TaskStageKind.CLIENT_REVIEW, TaskStageKind.REVISIONS, TaskStageKind.APPROVED}
+
+
+def sync_file_stage(*, project_file, stage, user=None):
+    """Tasks attached to this file, and other library rows of the same file, follow it into ``stage``.
+
+    Called only when a person actually changes the file's stage. Returns the moved tasks.
+    """
+    if stage is None or stage.kind not in FILE_SYNC_KINDS:
+        return []
+    ProjectFile.objects.filter(file_id=project_file.file_id, deleted_at__isnull=True).exclude(id=project_file.id).exclude(task_stage=stage).update(task_stage=stage)
+    from .tasks import update_task
+
+    task_ids = TaskAttachment.objects.filter(file_id=project_file.file_id).values_list('task_id', flat=True)
+    tasks = Task.objects.select_related('task_stage').filter(id__in=task_ids, workspace_id=project_file.workspace_id, deleted_at__isnull=True).exclude(task_stage=stage)
+    if project_file.project_id:
+        tasks = tasks.filter(project_id=project_file.project_id)
+    return [update_task(task=task, task_stage=stage, actor=user) for task in tasks]
