@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { nestNotes, type ReviewNote } from "@/lib/review-notes";
 import {
-  changeMessageProblem, decisionLine, guestBarActions, MESSAGE_MAX_LENGTH, openNotesWarning,
+  changeMessageProblem, decisionLine, guestBarActions, MESSAGE_MAX_LENGTH, openNotesWarning, overrideWarning,
 } from "@/lib/review-decisions";
 import { timecode } from "@/lib/timecode";
 import { RichBrief } from "@/components/brief/rich-brief";
@@ -272,8 +272,10 @@ function DecisionBar({ session, version, canDecide, positionMs, onDecided, onErr
 
   const decide = async (decision: "approved" | "changes_requested") => {
     setBusy(true);
+    // A reversal was shown its warning first (overrideWarning), so it goes out confirmed.
+    const confirm = latest && latest.decision !== decision ? { confirm_override: true } : {};
     const result = await createGuestDecision(session.projectId, version.id, session.accessKey,
-      decision === "approved" ? { decision } : { decision, message: message.trim(), start_time_ms: Math.max(0, Math.round(positionMs)) });
+      decision === "approved" ? { decision, ...confirm } : { decision, message: message.trim(), start_time_ms: Math.max(0, Math.round(positionMs)), ...confirm });
     setBusy(false);
     if (!result.ok) {
       if (decision === "approved") setConfirming(false);
@@ -315,6 +317,7 @@ function DecisionBar({ session, version, canDecide, positionMs, onDecided, onErr
             if (!why) void decide("changes_requested");
           }}
         >
+          {overrideWarning(latest, "changes_requested") && <p className="rv-confirm-warn" role="alert"><TriangleAlert size={14} /><span>{overrideWarning(latest, "changes_requested")}</span></p>}
           <label htmlFor="gr-request-text">What should change in {label}? <small>Pinned at {timecode(positionMs)}</small></label>
           <textarea
             id="gr-request-text"
@@ -344,6 +347,9 @@ function DecisionBar({ session, version, canDecide, positionMs, onDecided, onErr
       >
         {warning && (
           <p className="rv-confirm-warn" role="alert"><TriangleAlert size={14} /><span>{warning}</span></p>
+        )}
+        {overrideWarning(latest, "approved") && (
+          <p className="rv-confirm-warn" role="alert"><TriangleAlert size={14} /><span>{overrideWarning(latest, "approved")}</span></p>
         )}
       </ConfirmDialog>
     </div>
