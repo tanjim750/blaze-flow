@@ -15,7 +15,7 @@ import {
   clientDecisionAction, recolorAnnotationAction, requestRevisionAction, setNoteResolvedAction, transitionStageAction,
   updateAnnotationElementsAction, type ActionState,
 } from "./actions";
-import type { DecisionKind } from "@/lib/review-decisions";
+import { latestFor, type DecisionKind } from "@/lib/review-decisions";
 
 /**
  * Every write the review page makes, in one place.
@@ -296,8 +296,11 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
   /** A client-team member's Approve / Request changes, recorded as a client decision. */
   const decideAsClient = useCallback((decision: DecisionKind, message = "", startMs: number | null = null) => {
     if (!target) { setError("This cut has no project review record, so it cannot be decided on yet."); return Promise.resolve(false); }
-    return run(() => clientDecisionAction(target.workspaceId, target.projectId, target.versionId, decision, message, startMs));
-  }, [run, target]);
+    // The page warned before a reversal (overrideWarning), so a reversal goes out confirmed.
+    const latest = latestFor(view.decisions, target.versionId);
+    const confirmOverride = Boolean(latest && latest.decision !== decision);
+    return run(() => clientDecisionAction(target.workspaceId, target.projectId, target.versionId, decision, message, startMs, confirmOverride));
+  }, [run, target, view.decisions]);
 
   /**
    * Moves the file's task stage, which is the status the board and the Files list both

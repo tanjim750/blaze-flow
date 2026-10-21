@@ -114,3 +114,17 @@
 .gr-shell>.gr-body{grid-row:3;min-height:0}
 .gr-versions{flex-wrap:wrap}
 .gr-version-title{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-geist-sans,inherit);font-weight:500;margin-right:2px}
+.gr-form input[aria-invalid="true"]{border-color:#f87171;box-shadow:0 0 0 3px #f8717122}
+.gr-field-error{color:#fca5a5;font-weight:500;font-size:12px}
+.gr-form .gr-remember{display:flex;align-items:flex-start;gap:10px;font-weight:500;cursor:pointer}
+.gr-form .gr-remember input{width:20px;height:20px;flex:none;margin:2px 0 0;padding:0;accent-color:var(--primary)}
+.gr-remember small{display:block;font-weight:400;opacity:.7;margin-top:2px}
+
+/* Rich-text brief: a one-line excerpt in the top bar that opens the full brief below it. */
+.gr-brief-toggle { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.gr-brief-toggle small { min-width: 0; }
+.gr-brief-toggle span { flex: none; color: var(--bf-violet-300); font-size: 11px; font-weight: 600; }
+.gr-brief-toggle:hover span { text-decoration: underline; }
+.gr-brief-toggle:focus-visible { outline: 2px solid var(--bf-ring); outline-offset: 2px; border-radius: 4px; }
+.gr-brief { max-height: min(50vh, 420px); overflow: auto; margin: 0 16px 12px; padding: 16px 20px; border: 1px solid var(--bf-border); border-radius: var(--bf-radius-lg); background: var(--bf-card); }
+@media (max-width: 520px) { .gr-brief-toggle small { display: none; } .gr-brief { margin: 0 12px 12px; padding: 14px 16px; } }

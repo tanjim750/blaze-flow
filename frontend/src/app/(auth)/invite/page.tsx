@@ -17,6 +17,7 @@ export default async function Invite({ searchParams }: PageProps<"/invite">) {
     <InvitePanel
       token={token}
       invite={preview?.ok ? preview.data : null}
+      rateLimited={preview?.ok === false && preview.error.status === 429}
       userEmail={me.ok ? me.data.email : null}
     />
   );
