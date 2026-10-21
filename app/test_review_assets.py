@@ -71,6 +71,8 @@ class ReviewAssetsApiTests(WorkspaceAccessSetupMixin, TestCase):
             format='multipart',
         )
         self.media_id = media.json()['id']
+        # The review media's own scan/preview jobs aren't what these tests are about.
+        OutboxEvent.objects.filter(aggregate_type='file').delete()
         comment = self.client.post(
             reverse('api-review-comments', args=[self.workspace.id, self.project_id, self.media_id]),
             {'text': 'Reference files and markup'}, format='json',

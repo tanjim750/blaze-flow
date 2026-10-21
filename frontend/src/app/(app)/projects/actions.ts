@@ -1,4 +1,6 @@
 "use server";
+import { planLimitOf, type PlanLimit } from "@/lib/plan-limit";
+import { isProjectStatus } from "@/lib/project-status";
 
 import { revalidatePath } from "next/cache";
 import { archiveProject, createClientTeam, createFolder, createProject, deleteProjectFolder, listWorkspaces, renameProjectFolder, updateProject } from "@/lib/api";
@@ -9,7 +11,7 @@ import { selectWorkspace } from "@/lib/workspace";
  * have `error: null`, which is why the inline create forms used to stay open after
  * successfully creating something.
  */
-export type ActionState = { error: string | null; savedAt: number | null };
+export type ActionState = { error: string | null; savedAt: number | null; planLimit?: PlanLimit | null };
 const ok = (): ActionState => ({ error: null, savedAt: Date.now() });
 
 async function currentWorkspaceId(): Promise<{ id: string } | ActionState> {
@@ -48,7 +50,7 @@ export async function createCampaignAction(_prev: ActionState, form: FormData): 
   if (isFailure(workspace)) return workspace;
 
   const project = await createProject(workspace.id, { name, client_team_id: clientId });
-  if (!project.ok) return { error: project.error.detail, savedAt: null };
+  if (!project.ok) return { error: project.error.detail, savedAt: null, planLimit: planLimitOf(project.error.detail) };
 
   revalidatePath("/projects");
   return ok();
@@ -122,5 +124,33 @@ export async function deleteFolderAction(campaignId: string, folderId: string): 
   if (!removed.ok) return { error: removed.error.detail, savedAt: null };
   revalidatePath("/projects");
   revalidatePath("/files");
+  return ok();
+}
+
+/**
+ * Sets a project's status, including ARCHIVED and back. Unarchiving counts towards the plan's
+ * project limit again, so a refusal comes back as `planLimit` for the same dialog as creating.
+ */
+export async function setProjectStatusAction(projectId: string, status: string): Promise<ActionState> {
+  if (!isProjectStatus(status) && status !== "ARCHIVED") return { error: "Pick a status.", savedAt: null };
+  const workspace = await currentWorkspaceId();
+  if (isFailure(workspace)) return workspace;
+  const saved = await updateProject(workspace.id, projectId, { status });
+  if (!saved.ok) return { error: saved.error.detail, savedAt: null, planLimit: planLimitOf(saved.error.detail) };
+  revalidatePath("/projects");
+  revalidatePath("/projects/archived");
+  revalidatePath("/");
+  return ok();
+}
+
+/** Links a project to a client (or unlinks it with `null`). The client then sees it in their portal. */
+export async function moveCampaignToClientAction(campaignId: string, clientId: string | null): Promise<ActionState> {
+  const workspace = await currentWorkspaceId();
+  if (isFailure(workspace)) return workspace;
+  const updated = await updateProject(workspace.id, campaignId, { client_team_id: clientId });
+  if (!updated.ok) return { error: updated.error.detail, savedAt: null };
+  revalidatePath("/projects");
+  revalidatePath("/files");
+  revalidatePath("/money");
   return ok();
 }

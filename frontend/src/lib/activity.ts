@@ -6,7 +6,9 @@
  * The API already decides who may see a row; nothing here filters for permissions.
  */
 
-export type ActivityCategory = "tasks" | "comments" | "media" | "guests" | "uploads";
+export type ActivityCategory = "tasks" | "comments" | "media" | "guests" | "uploads" | "notifications";
+export type DeliveryStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED" | "SKIPPED";
+export type ActivityDelivery = { channel: "EMAIL" | "WHATSAPP"; status: DeliveryStatus; attempts: number; error: string | null; sent_at: string | null; delivered_at: string | null; read_at: string | null };
 /** `client` is someone who sent files through a public upload link (no account). */
 export type ActivityActor = { type: "user" | "guest" | "client" | "system"; id: string | null; name: string; initials: string; avatar_url: string | null };
 export type ActivityObject = { type: string; id: string | null; label: string; href: string | null };
@@ -29,6 +31,7 @@ export type ActivityEntry = {
     assignee?: string; guest_name?: string | null; media_title?: string;
     client_decision?: boolean; open_notes_count?: number | null; allow_decisions?: boolean;
     via?: "link" | "portal" | null; link_label?: string | null;
+    recipient_name?: string; deliveries?: ActivityDelivery[]; queued_channels?: ("EMAIL" | "WHATSAPP")[]; link_kind?: "guest" | "portal" | null;
   };
   team_only: boolean;
   /** The server's own one-line wording (what the CSV export uses). */
@@ -47,7 +50,23 @@ export const ACTIVITY_FILTERS: { value: ActivityCategory | null; label: string }
   { value: "media", label: "Uploads & approvals" },
   { value: "guests", label: "Client links" },
   { value: "uploads", label: "Client files" },
+  { value: "notifications", label: "Messages" },
 ];
+
+const DELIVERY_WORDS: Record<DeliveryStatus, string> = { PENDING: "sending", SENT: "sent", DELIVERED: "delivered", READ: "read", FAILED: "failed", SKIPPED: "not sent" };
+
+/** "WhatsApp delivered", "Email sent", one per channel; a channel still queued reads "sending". */
+export function deliveryBadges(entry: ActivityEntry): { channel: string; status: DeliveryStatus; label: string; error: string | null }[] {
+  const rows = entry.detail.deliveries ?? [];
+  const queued = entry.detail.queued_channels ?? [];
+  const channels = Array.from(new Set([...queued, ...rows.map((row) => row.channel)]));
+  return channels.map((channel) => {
+    const row = rows.find((item) => item.channel === channel);
+    const status: DeliveryStatus = row?.status ?? "PENDING";
+    const name = channel === "WHATSAPP" ? "WhatsApp" : "Email";
+    return { channel, status, label: `${name} ${DELIVERY_WORDS[status]}`, error: row?.error ?? null };
+  });
+}
 
 export const DECISION_LABELS: Record<"approved" | "changes_requested" | "none", string> = {
   approved: "approved",
@@ -145,6 +164,8 @@ export function describeActivity(entry: ActivityEntry, now: Date = new Date()): 
       return line("created upload link");
     case "upload_link.revoked":
       return line("turned off upload link");
+    case "approval_request.sent":
+      return { actor: "Approval request", verb: `sent to ${entry.detail.recipient_name ?? "the client"} for`, subject, tail: version(entry), change: null, meta: [] };
     case "guest.access.revoked":
       return { actor, verb: `revoked ${entry.detail.guest_name ?? entry.before ?? "a guest"}’s access to`, subject, tail: null, change: null, meta: [] };
     default:

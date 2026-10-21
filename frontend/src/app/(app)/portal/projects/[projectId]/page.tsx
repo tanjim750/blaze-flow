@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RichBrief } from "@/components/brief/rich-brief";
 import type { Metadata } from "next";
 import { ArrowLeft, CalendarClock, CheckCircle2, CircleDot, Clapperboard, Download, Eye, FileText, Flag, History, ListChecks, MessagesSquare, RotateCcw, Sparkles } from "lucide-react";
 import { getClientPortalData, getClientProjectOverview } from "@/lib/api";
@@ -140,7 +141,7 @@ export default async function ClientProjectPage({ params }: PageProps<"/portal/p
 
         {view.project.description && <section className="pt-card" aria-labelledby="pt-brief">
           <div className="pt-card-head"><h2 id="pt-brief"><Sparkles />The brief</h2>{view.request && <small>From your request of {dayDate(view.request.created_at, now)}</small>}</div>
-          <p className="pt-brief">{view.project.description}</p>
+          <RichBrief value={view.project.description} className="pt-brief" />
         </section>}
 
         {sendTarget && portal.ok && <ClientUploadPanel

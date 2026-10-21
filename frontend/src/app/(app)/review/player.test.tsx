@@ -228,6 +228,33 @@ describe("Review page QA fixes", () => {
     return { ...utils, handle, element, media: fakeMedia(element) };
   }
 
+  it("draws a freehand path without crashing (pointer events read before the state update)", () => {
+    // jsdom has no PointerEvent; without one fireEvent drops clientX and buttons.
+    if (!("PointerEvent" in window)) vi.stubGlobal("PointerEvent", MouseEvent);
+    const onDraw = vi.fn();
+    const { container } = mount({ onDraw });
+    fireEvent.click(within(container).getByRole("button", { name: /freehand/i }));
+    const layer = container.querySelector<HTMLElement>(".rvp-draw")!;
+    layer.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100, x: 0, y: 0, toJSON: () => ({}) });
+    fireEvent.pointerDown(layer, { clientX: 10, clientY: 10, buttons: 1 });
+    fireEvent.pointerMove(layer, { clientX: 20, clientY: 30, buttons: 1 });
+    fireEvent.pointerMove(layer, { clientX: 40, clientY: 50, buttons: 1 });
+    fireEvent.pointerUp(layer, { clientX: 50, clientY: 60 });
+    expect(container.querySelector(".rvp-annotation-error")).toBeNull();
+    expect(onDraw).toHaveBeenCalledTimes(1);
+    expect(onDraw.mock.calls[0][0].element_type).toBe("PATH");
+    expect(onDraw.mock.calls[0][0].geometry.points.length).toBeGreaterThan(2);
+  });
+
+  it("keeps a failing annotation inside its boundary instead of crashing the page", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const broken = { id: "x", noteId: null, startMs: 0, elements: [{ element_type: "ARROW", geometry: null, style: {}, payload: {} }] } as unknown as DrawnAnnotation;
+    const { container } = mount({ annotations: [broken] });
+    expect(container.querySelector("video")).not.toBeNull();
+    expect(screen.getAllByRole("alert").some((node) => /couldn.t be shown/.test(node.textContent ?? ""))).toBe(true);
+    spy.mockRestore();
+  });
+
   it("Escape puts an armed drawing tool down", () => {
     const { container } = mount();
     fireEvent.click(within(container).getByRole("button", { name: /rectangle/i }));

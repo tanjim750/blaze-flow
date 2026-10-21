@@ -67,6 +67,20 @@ class InvoiceCreateSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True, max_length=2000)
 
 
+class InvoiceLineInputSerializer(serializers.Serializer):
+    id = serializers.UUIDField(required=False, allow_null=True)
+    description = serializers.CharField(max_length=255)
+    amount = serializers.CharField(max_length=20)
+
+
+class InvoiceUpdateSerializer(serializers.Serializer):
+    due_date = serializers.DateField(required=False, allow_null=True)
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    tax_rate = serializers.CharField(required=False, allow_blank=True, max_length=10)
+    discount_amount = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    lines = InvoiceLineInputSerializer(many=True, required=False)
+
+
 class PaymentSerializer(serializers.Serializer):
     amount = AmountField()
     paid_on = serializers.DateField(required=False, allow_null=True)
@@ -144,7 +158,8 @@ def invoice_list_create(request, workspace_id):
         )
     except billing.BillingError as exc:
         return _error(exc)
-    return Response(_invoice_detail(workspace, invoice), status=status.HTTP_201_CREATED)
+    reopened = getattr(invoice, 'reopened', False)
+    return Response(_invoice_detail(workspace, invoice), status=status.HTTP_200_OK if reopened else status.HTTP_201_CREATED)
 
 
 def _invoice_detail(workspace, invoice):
@@ -164,7 +179,7 @@ def _visible_invoice(request, workspace, access, invoice_id):
     raise Invoice.DoesNotExist
 
 
-@api_view(['GET', 'DELETE'])
+@api_view(['GET', 'PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def invoice_detail(request, workspace_id, invoice_id):
     workspace, access = _workspace(request, workspace_id)
@@ -179,6 +194,17 @@ def invoice_detail(request, workspace_id, invoice_id):
         except billing.BillingError as exc:
             return _error(exc)
         return Response(status=status.HTTP_204_NO_CONTENT)
+    if request.method == 'PATCH':
+        _require(access, 'manage', MANAGE_DENIED)
+        if 'status' in request.data:
+            # Status only moves through send / revert / record_payment, never a plain PATCH.
+            return Response({'detail': 'Use Mark as sent, Revert to draft or Record payment to change the status.'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = InvoiceUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            billing.update_draft_invoice(invoice=invoice, user=request.user, data=serializer.validated_data)
+        except billing.BillingError as exc:
+            return _error(exc)
     data = _invoice_detail(workspace, invoice)
     data['viewer_can_manage'] = access['manage']
     if access['manage'] and invoice.status == 'draft':
@@ -200,6 +226,20 @@ def invoice_send(request, workspace_id, invoice_id):
     data = _invoice_detail(workspace, invoice)
     data['emailed_to'] = sent.emailed_to
     return Response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def invoice_revert(request, workspace_id, invoice_id):
+    """Back to draft after "Mark as sent", as long as no payment has been recorded."""
+    workspace, access = _workspace(request, workspace_id)
+    _require(access, 'manage', MANAGE_DENIED)
+    invoice = get_object_or_404(Invoice, id=invoice_id, workspace=workspace)
+    try:
+        billing.revert_invoice_to_draft(invoice=invoice, user=request.user)
+    except billing.BillingError as exc:
+        return _error(exc)
+    return Response(_invoice_detail(workspace, invoice))
 
 
 @api_view(['POST'])

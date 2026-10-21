@@ -53,7 +53,7 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
         <h1>Money</h1>
         <p>What clients owe {workspaceName}, what {workspaceName} owes editors, and the margin in between.</p>
       </div>
-      {access.manage && <button type="button" className="money-button is-primary" data-mobile-primary="New invoice" onClick={() => setCreating(true)} disabled={!projects.length}><FilePlus2 aria-hidden="true" />New invoice</button>}
+      {access.manage && <span className="money-new-invoice"><button type="button" className="money-button is-primary" data-mobile-primary="New invoice" onClick={() => setCreating(true)} disabled={!projects.length} aria-describedby={projects.length ? undefined : "money-new-invoice-why"} title={projects.length ? undefined : NEW_INVOICE_BLOCKED}><FilePlus2 aria-hidden="true" />New invoice</button>{!projects.length && <small id="money-new-invoice-why" className="money-hint">{NEW_INVOICE_BLOCKED}</small>}</span>}
     </header>
 
     <section className="money-totals" aria-label="Totals">
@@ -66,7 +66,7 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
       <section className="money-panel" aria-labelledby="receivables-title">
         <header><h2 id="receivables-title"><Building2 aria-hidden="true" />Receivables by client</h2><small>Sent and paid invoices</small></header>
         {summary.receivables.length === 0 ? <p className="money-muted">No client work is priced yet. Set a fee on a project to start.</p>
-          : <table className="money-table">
+          : <table className="money-table is-stacking is-receivables">
             <thead><tr><th>Client</th><th>Billed</th><th>Paid</th><th>Outstanding</th></tr></thead>
             <tbody>{summary.receivables.map((row) => <tr key={row.client.id}>
               <td><strong>{row.client.name}</strong><small>{row.invoice_count} {row.invoice_count === 1 ? "invoice" : "invoices"}{toMinor(row.unbilled) > 0 ? ` · ${money(row.unbilled)} not billed` : ""}</small></td>
@@ -79,7 +79,7 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
       {summary.payouts && <section className="money-panel" aria-labelledby="payouts-title">
         <header><h2 id="payouts-title"><Users aria-hidden="true" />Payouts by editor</h2><small>Earned when a task is approved</small></header>
         {summary.payouts.length === 0 ? <p className="money-muted">No editor pay yet. Set pay on a task in its detail sheet.</p>
-          : <table className="money-table">
+          : <table className="money-table is-stacking is-payouts">
             <thead><tr><th>Editor</th><th>Earned</th><th>Paid</th><th>Owed</th>{access.manage && <th><span className="sr-only">Actions</span></th>}</tr></thead>
             <tbody>{summary.payouts.map((row) => <tr key={row.membership_id}>
               <td><strong>{row.name}</strong><small>{toMinor(row.pending) > 0 ? `${money(row.pending)} pending approval` : "Nothing pending"}{row.default_rate ? ` · ${money(row.default_rate)}/task` : ""}</small></td>
@@ -101,7 +101,7 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
         </div>
       </header>
       {invoices.length === 0 ? <p className="money-muted">{summary.invoices.length ? "No invoices match this filter." : "No invoices yet. Create one from a priced project."}</p>
-        : <table className="money-table is-invoices">
+        : <table className="money-table is-stacking is-invoices">
           <thead><tr><th>Invoice</th><th>Client · project</th><th>Status</th><th>Total</th><th>Outstanding</th><th><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>{invoices.map((invoice) => {
             const badge = invoiceBadge(invoice);
@@ -161,3 +161,6 @@ function NewInvoiceDialog({ workspaceId, projects, onClose, onCreated }: { works
     </DialogContent>
   </Dialog>;
 }
+
+/** Why "New invoice" is disabled: invoices are raised against a project that has a client. */
+const NEW_INVOICE_BLOCKED = "Link a project to a client (Projects → … → Move to client) and set its fee in Pricing to invoice it.";
