@@ -136,7 +136,9 @@ export type WorkspaceMembership = {
   id: string; principal_type: string; user: CurrentUser | null; client_team: ClientTeam | null;
   role: Role | null; project_access_mode: string; is_primary_owner: boolean; status: string; joined_at: string;
 };
-export type WorkspaceInvite = { id: string; email: string; role_id: string; project_access_mode: string; expires_at: string; created_at: string; token?: string };
+export type WorkspaceInvite = { id: string; email: string; role_id: string; project_access_mode: string; expires_at: string; created_at: string; token?: string; email_sent?: boolean };
+/** A pending invitation as listed on Team & Roles (never carries the token). */
+export type PendingInvite = WorkspaceInvite & { role_name: string; invited_by_name: string | null; expired: boolean };
 export type ResourceAccess = { id: string; membership: WorkspaceMembership; created_at: string };
 export type AnnotationElement = { id?: string; element_type: "POINT" | "RECTANGLE" | "ELLIPSE" | "ARROW" | "PATH" | "TEXT"; geometry: Record<string, unknown>; style: Record<string, unknown>; payload: Record<string, unknown> };
 export type Annotation = { id: string; review_comment_id: string | null; author_user_id: string | null; start_time_ms: number | null; end_time_ms: number | null; elements: AnnotationElement[]; revision_count: number; created_at: string; updated_at: string };
@@ -261,6 +263,9 @@ export const createRole = (workspaceId: string, payload: { name: string; descrip
 export const listWorkspaceMembers = cache((workspaceId: string) => request<WorkspaceMembership[]>(`/workspaces/${workspaceId}/members/`));
 export const updateWorkspaceMember = (workspaceId: string, membershipId: string, payload: { role_id?: string; project_access_mode?: string; status?: string }) =>
   request<WorkspaceMembership>(`/workspaces/${workspaceId}/members/${membershipId}/`, { ...jsonBody(payload), method: "PATCH" });
+export const listPendingInvites = (workspaceId: string) => request<PendingInvite[]>(`/workspaces/${workspaceId}/invitations/`);
+export const resendWorkspaceInvite = (workspaceId: string, inviteId: string) => request<WorkspaceInvite>(`/workspaces/${workspaceId}/invitations/${inviteId}/resend/`, { method: "POST" });
+export const revokeWorkspaceInvite = (workspaceId: string, inviteId: string) => request<void>(`/workspaces/${workspaceId}/invitations/${inviteId}/`, { method: "DELETE" });
 export const createWorkspaceInvite = (workspaceId: string, payload: { email: string; role_id: string; project_access_mode: string; expires_in_days: number }) =>
   request<WorkspaceInvite>(`/workspaces/${workspaceId}/invitations/`, jsonBody(payload));
 export const listProjectAccess = (workspaceId: string, projectId: string) => request<ResourceAccess[]>(`/workspaces/${workspaceId}/projects/${projectId}/access/`);

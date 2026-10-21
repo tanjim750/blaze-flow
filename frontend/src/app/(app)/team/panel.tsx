@@ -2,10 +2,11 @@
 import { useEscapeKey } from "@/lib/use-escape";
 
 import { useActionState, useState, useTransition } from "react";
-import { BadgePlus, Copy, MailPlus, ShieldCheck, TriangleAlert, UserRoundCog, Users, X } from "lucide-react";
-import type { Role, WorkspaceMembership } from "@/lib/api";
+import { BadgePlus, Check, Copy, Mail, MailCheck, MailPlus, ShieldCheck, TriangleAlert, UserRoundCog, Users, X } from "lucide-react";
+import { expiryLabel, inviteLink } from "@/lib/invites";
+import type { PendingInvite, Role, WorkspaceMembership } from "@/lib/api";
 import type { TeamView } from "@/lib/team-view";
-import { createRoleAction, grantProjectAction, inviteMemberAction, revokeProjectAction, updateMemberAction, type TeamActionState } from "./actions";
+import { createRoleAction, grantProjectAction, inviteMemberAction, resendInviteAction, revokeInviteAction, revokeProjectAction, updateMemberAction, type TeamActionState } from "./actions";
 
 const initial: TeamActionState = { error: null, message: null };
 
@@ -19,6 +20,7 @@ export function TeamPanel({ view }: { view: TeamView }) {
       {view.members.map((member) => <MemberRow key={member.id} member={member} roles={view.roles} />)}
       {!view.members.length && <p className="team-empty">No memberships are visible.</p>}
     </div></section>
+    <PendingInvites invites={view.invites} />
     <ProjectAccessPanel view={view} />
     <section className="team-card"><header><h2>Roles</h2><span>System roles are protected; custom roles can be tailored through the API.</span></header><div className="role-grid">{view.roles.map((role) => <article key={role.id}><div><ShieldCheck /><strong>{role.name}</strong>{role.is_system && <b>System</b>}</div><p>{role.description || "No description"}</p><small>{role.permissions.length} permissions</small></article>)}</div></section>
     {dialog === "invite" && <InviteDialog roles={view.roles} close={() => setDialog(null)} />}
@@ -45,7 +47,58 @@ function MemberRow({ member, roles }: { member: WorkspaceMembership; roles: Role
 
 function InviteDialog({ roles, close }: { roles: Role[]; close: () => void }) {
   const [state, action, pending] = useActionState(inviteMemberAction, initial);
-  return <Modal title="Invite workspace member" close={close}><form action={action} className="team-form"><label>Email<input name="email" type="email" required autoFocus placeholder="editor@studio.com" /></label><label>Role<select name="role_id" required>{roles.filter((role) => role.status === "ACTIVE").map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label><label>Project access<select name="project_access_mode"><option value="ALL">All projects</option><option value="SELECTED">Selected projects only</option></select></label><Feedback state={state} />{state.token && <div className="invite-token"><code>{state.token}</code><button type="button" onClick={() => navigator.clipboard.writeText(state.token!)}><Copy />Copy</button></div>}<button className="team-submit" disabled={pending}>{pending ? "Creating…" : "Create invitation"}</button></form></Modal>;
+  const errors = state.fieldErrors ?? {};
+  const done = Boolean(state.token);
+  return <Modal title="Invite workspace member" close={close}>
+    {done ? <div className="team-form invite-done" role="status">
+      <p className={state.emailSent ? "team-success" : "team-warning"}>{state.emailSent ? <MailCheck size={16} /> : <TriangleAlert size={16} />}{state.message}</p>
+      <InviteLinkCopy token={state.token!} />
+      <small className="invite-hint">The link works once and expires in 7 days. You can resend or revoke it under Pending invitations.</small>
+      <button type="button" className="team-submit" onClick={close}>Done</button>
+    </div>
+    : <form action={action} className="team-form" noValidate>
+      <label>Email<input key={state.email ?? ""} defaultValue={state.email ?? ""} name="email" type="email" autoFocus placeholder="editor@studio.com" aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? "invite-email-error" : undefined} />{errors.email && <span id="invite-email-error" className="team-field-error">{errors.email}</span>}</label>
+      <label>Role<select name="role_id" aria-invalid={Boolean(errors.role_id)}>{roles.filter((role) => role.status === "ACTIVE").map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select>{errors.role_id && <span className="team-field-error">{errors.role_id}</span>}</label>
+      <label>Project access<select name="project_access_mode"><option value="ALL">All projects</option><option value="SELECTED">Selected projects only</option></select></label>
+      <Feedback state={state} />
+      <button className="team-submit" disabled={pending}>{pending ? "Sending…" : "Send invitation"}</button>
+    </form>}
+  </Modal>;
+}
+
+function InviteLinkCopy({ token }: { token: string }) {
+  const [copied, setCopied] = useState(false);
+  const link = typeof window === "undefined" ? "" : inviteLink(token, window.location.origin);
+  return <div className="invite-token"><input readOnly value={link} aria-label="Invitation link" onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => { void navigator.clipboard?.writeText(link); setCopied(true); }}>{copied ? <Check /> : <Copy />}{copied ? "Copied" : "Copy link"}</button></div>;
+}
+
+function PendingInvites({ invites }: { invites: PendingInvite[] }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [fresh, setFresh] = useState<{ id: string; token: string; emailSent: boolean } | null>(null);
+  const [, start] = useTransition();
+  const run = (invite: PendingInvite, kind: "resend" | "revoke") => {
+    if (kind === "revoke" && !confirm(`Revoke the invitation for ${invite.email}? The link stops working.`)) return;
+    setBusy(invite.id); setError("");
+    start(async () => {
+      const result = kind === "resend" ? await resendInviteAction(invite.id) : await revokeInviteAction(invite.id);
+      setBusy(null);
+      if (result.error) { setError(result.error); return; }
+      if (kind === "resend" && result.token) setFresh({ id: invite.email, token: result.token, emailSent: Boolean(result.emailSent) });
+    });
+  };
+  return <section className="team-card" id="pending-invites"><header><h2>Pending invitations <small>{invites.length}</small></h2><span>Sent but not accepted yet.</span></header>
+    {error && <p className="team-error invite-error" role="alert">{error}</p>}
+    {fresh && <div className="invite-fresh" role="status"><p className={fresh.emailSent ? "team-success" : "team-warning"}>{fresh.emailSent ? `New invitation emailed to ${fresh.id}.` : `New link for ${fresh.id}; the email could not be sent.`}</p><InviteLinkCopy token={fresh.token} /></div>}
+    <div className="member-list">{invites.map((invite) => <article key={invite.id} className="member-row invite-row">
+      <span className="member-avatar"><Mail size={15} /></span>
+      <div><strong>{invite.email}</strong><small>{invite.role_name}{invite.invited_by_name ? ` · invited by ${invite.invited_by_name}` : ""}</small></div>
+      <span className={invite.expired ? "member-status removed" : "member-status"}>{expiryLabel(invite.expires_at)}</span>
+      <button className="member-edit" disabled={busy !== null} onClick={() => run(invite, "resend")}>{busy === invite.id ? "…" : "Resend"}</button>
+      <button className="member-edit is-danger" disabled={busy !== null} onClick={() => run(invite, "revoke")}>Revoke</button>
+    </article>)}
+    {!invites.length && <p className="team-empty">No pending invitations. Use Invite member to add someone.</p>}</div>
+  </section>;
 }
 
 function RoleDialog({ roles, close }: { roles: Role[]; close: () => void }) {

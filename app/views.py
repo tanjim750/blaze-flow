@@ -120,6 +120,7 @@ from .throttles import (
 )
 from .models import (
     ClientUpload,
+    WorkspaceInvite,
     MediaVersion,
     FileVariant,
     File,
@@ -209,6 +210,7 @@ from .services.notifications import (
 )
 from .serializers.media import MEDIA_POSTER_VARIANT_TYPES
 from .services.tasks import record_task_stage_move
+from .services.invitations import pending_invitations, resend_invitation, revoke_invitation
 from .services.review_sync import sync_file_stage
 from .services import (
     InvitationError,
@@ -944,17 +946,67 @@ def accept_client_team_invitation(request):
     return Response(ClientTeamMemberSerializer(member).data, status=status.HTTP_201_CREATED)
 
 
+def _invite_manager(request, workspace):
+    membership = memberships_with_permission(
+        user=request.user, workspace=workspace, permission_key=WORKSPACE_MEMBERS_MANAGE,
+    ).first()
+    if membership is None:
+        raise PermissionDenied('You do not have permission to invite workspace members.')
+    return membership
+
+
+def _pending_invite_data(invitation, now):
+    data = WorkspaceInviteSerializer(invitation).data
+    inviter = invitation.invited_by_membership.user if invitation.invited_by_membership_id else None
+    data.update({
+        'role_name': invitation.role.name,
+        'invited_by_name': (inviter.get_full_name() or inviter.email) if inviter else None,
+        'expired': invitation.expires_at <= now,
+    })
+    return data
+
+
+def _send_invite(request, invitation, token, status_code):
+    data = WorkspaceInviteSerializer(invitation).data
+    data['token'] = token
+    data['email_sent'] = send_workspace_invite_email(invitation=invitation, token=token, inviter=request.user)
+    return Response(data, status=status_code)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def workspace_invitation_detail(request, workspace_id, invite_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    _invite_manager(request, workspace)
+    invitation = get_object_or_404(WorkspaceInvite, id=invite_id, workspace=workspace)
+    try:
+        revoke_invitation(invitation=invitation)
+    except InvitationError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def workspace_invitation_resend(request, workspace_id, invite_id):
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    membership = _invite_manager(request, workspace)
+    invitation = get_object_or_404(WorkspaceInvite.objects.select_related('role', 'workspace'), id=invite_id, workspace=workspace)
+    try:
+        fresh, token = resend_invitation(invitation=invitation, invited_by_membership=membership)
+    except InvitationError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return _send_invite(request, fresh, token, status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def workspace_invitations(request, workspace_id):
     workspace = get_object_or_404(Workspace, id=workspace_id)
-    authorizing_membership = memberships_with_permission(
-        user=request.user,
-        workspace=workspace,
-        permission_key=WORKSPACE_MEMBERS_MANAGE,
-    ).first()
-    if authorizing_membership is None:
-        raise PermissionDenied('You do not have permission to invite workspace members.')
+    authorizing_membership = _invite_manager(request, workspace)
+    if request.method == 'GET':
+        now = timezone.now()
+        return Response([_pending_invite_data(invite, now) for invite in pending_invitations(workspace=workspace)])
     serializer = WorkspaceInviteCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     role = get_object_or_404(
@@ -974,12 +1026,7 @@ def workspace_invitations(request, workspace_id):
         )
     except InvitationError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    data = WorkspaceInviteSerializer(invitation).data
-    data['token'] = token
-    data['email_sent'] = send_workspace_invite_email(
-        invitation=invitation, token=token, inviter=request.user,
-    )
-    return Response(data, status=status.HTTP_201_CREATED)
+    return _send_invite(request, invitation, token, status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
@@ -2789,3 +2836,4 @@ def workspace_retention_policy(request, workspace_id):
         workspace=workspace, user=request.user, **serializer.validated_data
     )
     return Response(workspace_retention_policy_data(workspace=workspace))
+
