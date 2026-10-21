@@ -1742,6 +1742,7 @@ def task_list_create(request, workspace_id):
         ).order_by('sort_order', '-created_at')
         return Response(TaskSerializer(tasks, many=True, context={
             'attachment_file_ids': _task_attachment_file_ids(tasks),
+            'assignee_rows': _task_assignee_rows(tasks),
         }).data)
 
     _require_workspace_permission(request, workspace, TASK_CREATE)
@@ -1861,6 +1862,14 @@ def _task_attachment_file_ids(tasks):
     rows = TaskAttachment.objects.filter(task__in=tasks).order_by('attached_at').values_list('task_id', 'file_id')
     for task_id, file_id in rows:
         by_task.setdefault(task_id, []).append(str(file_id))
+    return by_task
+
+
+def _task_assignee_rows(tasks):
+    """``{task_id: [TaskAssignee, ...]}`` with member and user loaded, in one query."""
+    by_task = {}
+    for row in TaskAssignee.objects.filter(task__in=tasks).select_related('workspace_membership__user'):
+        by_task.setdefault(row.task_id, []).append(row)
     return by_task
 
 
@@ -2266,7 +2275,7 @@ def review_comment_list_create(request, workspace_id, project_id, media_version_
         comments = _comments_visible_to(request.user, workspace).filter(
             media_version=media_version,
             deleted_at__isnull=True,
-        ).select_related('author_user').order_by('created_at')
+        ).select_related('author_user', 'author_guest_session').order_by('created_at')
         return paginated_response(
             request=request, queryset=comments,
             serializer_class=ReviewCommentSerializer,

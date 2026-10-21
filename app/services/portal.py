@@ -26,7 +26,7 @@ from app.models import (
     ProjectRequest, ProjectRequestStatus, ProjectStatus, ResourceAccess, ReviewDecision, ReviewDecisionKind,
     UserStatus, WorkspaceMembership, WorkspaceMembershipStatus, WorkspacePrincipalType, WorkspaceProfile,
 )
-from app.serializers.media import media_poster_variant
+from app.serializers.media import media_poster_variant, prime_media_rows
 from app.serializers.projects import ASPECT_RATIOS, PLATFORMS
 
 from .audit import record_user_audit
@@ -210,7 +210,7 @@ def project_overview(*, project, can_see_media, can_download):
     cuts, history, events = [], [], []
     base = f'/api/workspaces/{project.workspace_id}/projects/{project.id}'
     if can_see_media:
-        media = list(MediaVersion.objects.filter(project=project, status=MediaVersionStatus.ACTIVE).select_related('original_file').order_by('version_number'))
+        media = prime_media_rows(MediaVersion.objects.filter(project=project, status=MediaVersionStatus.ACTIVE).select_related('original_file').order_by('version_number'))
         stages = current_stages([item.id for item in media])
         decisions = list(ReviewDecision.objects.filter(project=project, media_version__in=media).select_related('media_version').order_by('-created_at'))
         latest = {}

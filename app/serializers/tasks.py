@@ -54,7 +54,11 @@ class TaskSerializer(serializers.ModelSerializer):
         ]
 
     def get_assignees(self, task):
-        rows = TaskAssignee.objects.filter(task=task).select_related('workspace_membership__user')
+        prefetched = self.context.get('assignee_rows')
+        if prefetched is not None:
+            rows = prefetched.get(task.id, [])
+        else:
+            rows = TaskAssignee.objects.filter(task=task).select_related('workspace_membership__user')
         return [{
             'id': str(row.workspace_membership_id),
             'name': row.workspace_membership.user.get_full_name() or row.workspace_membership.user.email,

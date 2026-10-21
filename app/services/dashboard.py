@@ -28,7 +28,7 @@ from app.permissions import (
     WORKSPACE_MEMBERS_MANAGE, accessible_projects, active_memberships_for_user,
 )
 
-from app.serializers.media import media_poster_variant
+from app.serializers.media import media_poster_variant, prime_media_rows
 
 from .comments import can_see_team_notes, client_visible_comments
 
@@ -227,7 +227,7 @@ def notes_to_address(*, user, workspace, limit=20):
 def my_cuts(*, user, workspace, limit=20):
     """The viewer's own cuts, newest first, each with its workflow stage and open-note count."""
     media, reasons = my_media(user=user, workspace=workspace, permission_key=MEDIA_READ)
-    rows = list(media.select_related('project').order_by('-created_at', '-id')[:limit])
+    rows = prime_media_rows(media.select_related('project').order_by('-created_at', '-id')[:limit])
     ids = [row.id for row in rows]
     stages = current_stages(ids)
     open_notes = dict(

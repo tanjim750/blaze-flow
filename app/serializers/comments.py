@@ -72,6 +72,47 @@ class ReviewReactionWriteSerializer(serializers.Serializer):
     emoji = serializers.ChoiceField(choices=ReviewReactionEmoji.choices)
 
 
+class _CommentBulk:
+    """Everything the comment serializer reads per row, loaded once for a whole page.
+
+    The comment tables use `related_name='+'`, so Django can't prefetch them; this does the
+    same job by hand: five queries for the page instead of five per comment.
+    """
+
+    def __init__(self, comments):
+        from collections import Counter, defaultdict
+
+        ids = [comment.id for comment in comments]
+        self.contents = defaultdict(list)
+        for content in ReviewCommentContent.objects.filter(review_comment_id__in=ids).select_related('file').order_by('sort_order', 'created_at'):
+            self.contents[content.review_comment_id].append(content)
+        file_ids = {c.file_id for rows in self.contents.values() for c in rows if c.file_id and c.deleted_at is None}
+        self.variants = defaultdict(list)
+        if file_ids:
+            for variant in FileVariant.objects.filter(file_id__in=file_ids, deleted_at__isnull=True):
+                self.variants[variant.file_id].append(variant)
+        self.mentions = defaultdict(list)
+        for mention in ReviewCommentMention.objects.filter(review_comment_id__in=ids).select_related('user').order_by('created_at'):
+            self.mentions[mention.review_comment_id].append(mention)
+        self.reactions = defaultdict(list)
+        for reaction in ReviewCommentReaction.objects.filter(review_comment_id__in=ids).select_related(
+            'reacted_by_user', 'reacted_by_guest_session'
+        ).order_by('created_at', 'id'):
+            self.reactions[reaction.review_comment_id].append(reaction)
+        self.revision_counts = Counter(
+            ReviewCommentRevision.objects.filter(review_comment_id__in=ids).values_list('review_comment_id', flat=True)
+        )
+
+
+class ReviewCommentListSerializer(serializers.ListSerializer):
+    def to_representation(self, data):
+        comments = list(data.all() if hasattr(data, 'all') else data)
+        bulk = _CommentBulk(comments)
+        for comment in comments:
+            comment._bulk = bulk
+        return [self.child.to_representation(comment) for comment in comments]
+
+
 class ReviewCommentSerializer(serializers.ModelSerializer):
     parent_comment_id = serializers.UUIDField(allow_null=True)
     author = serializers.SerializerMethodField()
@@ -83,6 +124,7 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ReviewComment
+        list_serializer_class = ReviewCommentListSerializer
         fields = (
             'id', 'parent_comment_id', 'author', 'text', 'start_time_ms', 'end_time_ms',
             'resolved', 'resolved_by_user_id', 'resolved_at', 'visibility', 'source', 'mentions', 'attachments', 'reactions', 'revision_count',
@@ -103,6 +145,10 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
         }
 
     def get_text(self, comment):
+        bulk = getattr(comment, '_bulk', None)
+        if bulk is not None:
+            text = next((c for c in bulk.contents[comment.id] if c.content_type == 'TEXT'), None)
+            return text.text_content if text else None
         content = ReviewCommentContent.objects.filter(
             review_comment=comment,
             content_type='TEXT',
@@ -110,12 +156,16 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
         return content.text_content if content else None
 
     def get_revision_count(self, comment):
+        bulk = getattr(comment, '_bulk', None)
+        if bulk is not None:
+            return bulk.revision_counts[comment.id]
         return ReviewCommentRevision.objects.filter(review_comment=comment).count()
 
     def get_mentions(self, comment):
-        mentions = ReviewCommentMention.objects.filter(review_comment=comment).select_related(
-            'user'
-        ).order_by('created_at')
+        bulk = getattr(comment, '_bulk', None)
+        mentions = bulk.mentions[comment.id] if bulk is not None else ReviewCommentMention.objects.filter(
+            review_comment=comment
+        ).select_related('user').order_by('created_at')
         return [
             {
                 'id': str(mention.user.id),
@@ -126,11 +176,15 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
         ]
 
     def get_attachments(self, comment):
-        contents = ReviewCommentContent.objects.filter(
-            review_comment=comment,
-            file__isnull=False,
-            deleted_at__isnull=True,
-        ).select_related('file').order_by('sort_order', 'created_at')
+        bulk = getattr(comment, '_bulk', None)
+        if bulk is not None:
+            contents = [c for c in bulk.contents[comment.id] if c.file_id and c.deleted_at is None]
+        else:
+            contents = ReviewCommentContent.objects.filter(
+                review_comment=comment,
+                file__isnull=False,
+                deleted_at__isnull=True,
+            ).select_related('file').order_by('sort_order', 'created_at')
         return [
             {
                 'id': str(content.id),
@@ -144,7 +198,10 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
                     'status': content.file.status,
                     'previews': [
                         {'id': str(variant.id), 'mime_type': variant.mime_type, 'status': variant.status}
-                        for variant in FileVariant.objects.filter(file=content.file, deleted_at__isnull=True)
+                        for variant in (
+                            bulk.variants[content.file_id] if bulk is not None
+                            else FileVariant.objects.filter(file=content.file, deleted_at__isnull=True)
+                        )
                     ],
                 },
             }
@@ -152,11 +209,10 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
         ]
 
     def get_reactions(self, comment):
-        reactions = ReviewCommentReaction.objects.filter(
+        bulk = getattr(comment, '_bulk', None)
+        reactions = bulk.reactions[comment.id] if bulk is not None else ReviewCommentReaction.objects.filter(
             review_comment=comment
-        ).select_related('reacted_by_user', 'reacted_by_guest_session').order_by(
-            'created_at', 'id'
-        )
+        ).select_related('reacted_by_user', 'reacted_by_guest_session').order_by('created_at', 'id')
         grouped = {}
         for reaction in reactions:
             group = grouped.setdefault(
