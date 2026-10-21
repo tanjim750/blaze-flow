@@ -643,10 +643,10 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
           </nav>
           <span className="fx-total" aria-live="polite">{itemTotal} item{itemTotal === 1 ? "" : "s"}</span>
           <div className="fx-toolbar-actions">
-            <button type="button" className="fx-btn" onClick={() => setDialog("folder")}><FolderPlus /><span>New folder</span></button>
+            <button type="button" className="fx-btn" aria-label="New folder" onClick={() => setDialog("folder")}><FolderPlus aria-hidden="true" /><span>New folder</span></button>
             <button type="button" className="fx-icon-btn" onClick={() => router.refresh()} aria-label="Refresh assets"><RefreshCw /></button>
             {/* Inside the project page the page header already owns the one primary Upload. */}
-            <button type="button" className={`fx-btn ${compact ? "" : "is-primary"}`} data-mobile-primary="Upload" onClick={() => setDialog("upload")}><Upload /><span>Upload</span></button>
+            <button type="button" className={`fx-btn ${compact ? "" : "is-primary"}`} data-mobile-primary="Upload" aria-label="Upload" onClick={() => setDialog("upload")}><Upload aria-hidden="true" /><span>Upload</span></button>
           </div>
         </header>
         <div className="fx-toolbar is-secondary">

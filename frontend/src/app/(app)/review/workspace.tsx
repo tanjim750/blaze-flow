@@ -298,6 +298,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     [view.target, surface, canWriteTeam],
   );
   const aiQa = useAiQa(aiTarget);
+  // Visible on the AI QA tab as "AI QA 2"; its accessible name starts with the same words.
+  const aiOpenCount = aiQa.findings.filter((f) => f.status === "PENDING" || f.status === "ACCEPTED").length;
   const aiHighlight = panel === "ai" && aiSelected && hasRegion(aiSelected.region) ? aiSelected : null;
   const aiMarkers = useMemo(() => aiVideo
     ? aiQa.findings
@@ -497,7 +499,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           <div className="rv-actions-tools" role="group" aria-label="Tools">
             {aiQa.available && aiQa.state?.can_run && (
               <button
-                type="button" className="rv-ai-btn" onClick={openAiRun} data-testid="ai-qa-run-header"
+                type="button" className="rv-ai-btn" onClick={openAiRun} data-testid="ai-qa-run-header" aria-label="Run AI Visual QA"
                 disabled={aiQa.review?.status === "QUEUED" || aiQa.review?.status === "PROCESSING"}
                 title={aiQa.review?.status === "QUEUED" || aiQa.review?.status === "PROCESSING" ? "AI Visual QA is running" : "Check the visible text for spelling mistakes"}
               >
@@ -707,8 +709,9 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
               <SlidersHorizontal size={14} />Fields
             </button>
             {aiQa.available && (
-              <button type="button" role="tab" aria-selected={panel === "ai"} onClick={() => setPanel("ai")} data-testid="ai-qa-tab">
-                <Sparkles size={14} />AI QA{aiQa.findings.length > 0 && <span className="rv-tab-count">{aiQa.findings.filter((f) => f.status === "PENDING" || f.status === "ACCEPTED").length}</span>}
+              <button type="button" role="tab" aria-selected={panel === "ai"} onClick={() => setPanel("ai")} data-testid="ai-qa-tab"
+                aria-label={aiOpenCount > 0 ? `AI QA ${aiOpenCount} open ${aiOpenCount === 1 ? "finding" : "findings"}` : "AI QA"}>
+                <Sparkles size={14} aria-hidden="true" />AI QA{aiOpenCount > 0 && <span className="rv-tab-count" aria-hidden="true"> {aiOpenCount}</span>}
               </button>
             )}
           </div>
