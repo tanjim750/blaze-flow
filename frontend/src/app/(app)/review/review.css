@@ -1060,6 +1060,28 @@
   .rv-compare-audio { margin-left: auto; }
 }
 
+/* Mobile review polish (M4, M6, #16 / critic #10) ------------------------------------------ */
+@media (max-width: 600px) {
+  /* M4: keep the picture on screen while the notes scroll underneath. The page wrapper
+   * clips instead of hiding overflow: `hidden` makes it a scroll container, which pins
+   * sticky children to it rather than to the viewport. */
+  .universal-review-page:has(.rv) { overflow: clip; }
+  .rv-body > .rvp:not(.is-document) { position: sticky; top: var(--mobilebar-h, 56px); z-index: 5; box-shadow: 0 8px 18px -12px #000; }
+  .rv-body > .rvp:not(.is-document) .rvp-stage { min-height: clamp(180px, 50vw, 300px); max-height: 38vh; }
+  /* critic #10: the tools row keeps fullscreen on the same line; it scrolls sideways if needed. */
+  .rvp-transport { flex-wrap: wrap; }
+  .rvp-tools { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .rvp-tools::-webkit-scrollbar { display: none; }
+  .rvp-fullscreen { order: 0; margin-left: auto; }
+}
+@media (pointer: coarse), (max-width: 600px) {
+  /* M6 / #16: 44px tap targets, one line, no orphaned icons. */
+  .rvc-actions { flex-wrap: wrap; gap: 2px 4px; margin-top: 4px; }
+  .rvc-actions button { min-height: 44px; min-width: 44px; padding: 0 8px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-radius: 8px; }
+  .rvc-actions button:active { background: #ffffff10; }
+  .rvc-actions .rvc-make-task { white-space: nowrap; }
+  .rvc-actions .rvc-reactions { display: inline-flex; gap: 4px; }
+}
 /* Annotation layer error boundary: a small notice over the frame instead of a dead page. */
 .rvp-annotation-error { position: absolute; left: 12px; bottom: 12px; z-index: 6; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--bf-border-strong); border-radius: var(--bf-radius-md); background: var(--bf-popover); color: var(--bf-foreground); font-size: var(--bf-text-xs); }
 .rvp-annotation-error button { border: 0; background: none; color: var(--bf-violet-300); font: inherit; font-weight: var(--bf-weight-semibold); cursor: pointer; }
