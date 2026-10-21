@@ -31,6 +31,12 @@ def handle_support_reply_email(event):
     return deliver_reply_email(message_id=event.payload['message_id'])
 
 
+def handle_approval_requested(event):
+    from app.services.approval_requests import deliver_approval
+    return deliver_approval(event)
+
+
+subscribe('approval.requested.deliver', handle_approval_requested)
 subscribe('health.checked', handle_health_checked)
 subscribe('notification.created', handle_notification_created)
 subscribe('file.security-scan.requested', handle_file_security_scan)

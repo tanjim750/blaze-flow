@@ -6,6 +6,7 @@ from django.utils import timezone
 from app.models import MediaVersion, MediaVersionStageEntry, WorkflowStageStatusState
 
 from .audit import record_guest_audit, record_user_audit
+from .approval_requests import request_client_approval
 from .notifications import notify_stage_outcome
 
 
@@ -79,6 +80,12 @@ def transition_media_version(
         record_guest_audit(guest_session=guest_session, **audit)
     else:
         record_user_audit(user=user, **audit)
+    if current.workflow_stage_id != stage.id:
+        from .review_sync import sync_review_outcome
+        sync_review_outcome(media_version=locked_media, stage=stage, user=user)
     if notify and current.workflow_stage_id != stage.id:
         notify_stage_outcome(media_version=locked_media, entry=entry, stage=stage, actor=user, comment=comment)
+    if notify and current.workflow_stage_id != stage.id:
+        # Entering the client review stage tells the client (email, and WhatsApp if opted in).
+        request_client_approval(media_version=locked_media, entry=entry, stage=stage, actor=user)
     return entry

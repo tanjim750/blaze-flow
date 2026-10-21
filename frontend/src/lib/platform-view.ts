@@ -1,3 +1,4 @@
+import { formatMoney as formatAppMoney } from "./money";
 /**
  * Types and pure formatting for the staff-only platform admin (`/platform`).
  * No React and no fetch, so it is shared by server pages, client islands and tests.
@@ -51,8 +52,9 @@ export function parseRange(value: unknown): number {
   return (RANGES as readonly number[]).includes(n) ? n : 30;
 }
 
+/** Minor units (pence) through the app's one en-GB money formatter (`lib/money`). */
 export function formatMoney(minor: number, currency = "GBP"): string {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency, maximumFractionDigits: minor % 100 ? 2 : 0 }).format(minor / 100);
+  return formatAppMoney(minor / 100, currency, { whole: true });
 }
 
 export function percent(rate: number | null | undefined): string {

@@ -15,6 +15,9 @@ export const setProjectFee = (workspaceId: string, projectId: string, fee: strin
 export const createInvoice = (workspaceId: string, projectId: string, dueDate?: string) =>
   api<InvoiceDetail>(`${base(workspaceId)}/invoices/`, "POST", { project_id: projectId, ...(dueDate ? { due_date: dueDate } : {}) });
 export const sendInvoice = (workspaceId: string, invoiceId: string) => api<InvoiceDetail>(`${base(workspaceId)}/invoices/${invoiceId}/send/`, "POST");
+export type InvoiceEdit = { due_date?: string | null; notes?: string; tax_rate?: string; discount_amount?: string; lines?: { id?: string; description: string; amount: string }[] };
+export const updateInvoice = (workspaceId: string, invoiceId: string, edit: InvoiceEdit) => api<InvoiceDetail>(`${base(workspaceId)}/invoices/${invoiceId}/`, "PATCH", edit);
+export const revertInvoice = (workspaceId: string, invoiceId: string) => api<InvoiceDetail>(`${base(workspaceId)}/invoices/${invoiceId}/revert/`, "POST");
 export const deleteInvoice = (workspaceId: string, invoiceId: string) => api<void>(`${base(workspaceId)}/invoices/${invoiceId}/`, "DELETE");
 /**
  * Records a client payment. Leave `amount` out to pay the whole balance: that is what the

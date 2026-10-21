@@ -12,6 +12,7 @@ Order matters and is the whole point (each step only sees what the previous let 
 OCR confidence and the spelling decision's confidence are kept separate all the way through.
 """
 import hashlib
+import math
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -29,6 +30,9 @@ CONFUSIONS = (
     ('0', 'o'), ('1', 'l'), ('1', 'i'), ('5', 's'), ('8', 'b'), ('|', 'l'), ('!', 'i'),
     ('rn', 'm'), ('vv', 'w'), ('cl', 'd'), ('l', 'i'), ('i', 'l'), ('ii', 'u'),
 )
+
+# Natural-log frequency a substitution must beat a dropped-letter/swap fix by, per shape step.
+TYPO_SHAPE_PENALTY = 2.0
 
 HIGH_OCR = 0.90
 MEDIUM_OCR = 0.75
@@ -130,15 +134,46 @@ def _confusable_fix(word):
     return None
 
 
+def _is_subsequence(short, long):
+    letters = iter(long)
+    return all(ch in letters for ch in short)
+
+
+def _is_transposition(a, b):
+    if len(a) != len(b):
+        return False
+    diff = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+    return len(diff) == 2 and diff[1] == diff[0] + 1 and a[diff[0]] == b[diff[1]] and a[diff[1]] == b[diff[0]]
+
+
+def _typo_shape(typo, term):
+    """How plausible a correction is as a typing slip, best first (lower sorts first).
+
+    Most real typos drop or double a letter ("LIMTED" for LIMITED, "SHIPING" for SHIPPING) or
+    swap two neighbours; a substituted letter is a different word more often than a typo, so
+    "LISTED" must not beat LIMITED just because "listed" is the commoner word.
+    """
+    if _is_subsequence(typo, term) or _is_subsequence(term, typo):
+        return 0
+    if _is_transposition(typo, term):
+        return 1
+    return 2
+
+
 def _suggest(word):
     from symspellpy import Verbosity
 
     lower = word.lower()
-    hits = _symspell().lookup(lower, Verbosity.CLOSEST, max_edit_distance=2, transfer_casing=False)
+    hits = _symspell().lookup(lower, Verbosity.ALL, max_edit_distance=2, transfer_casing=False)
     hits = [h for h in hits if h.term != lower]
     if not hits:
         return None, None
-    best = max(hits, key=lambda h: h.count)
+    nearest = min(h.distance for h in hits)
+    # Among the nearest hits, a dropped/doubled letter or a swap beats a substituted letter
+    # unless the substitution is a far commoner word (log-frequency minus a shape penalty):
+    # LIMTED -> LIMITED (not LISTED), but teh -> the and calender -> calendar still win.
+    pool = [h for h in hits if h.distance == nearest]
+    best = max(pool, key=lambda h: math.log(max(h.count, 1)) - TYPO_SHAPE_PENALTY * _typo_shape(lower, h.term))
     return _match_case(word, best.term), best.distance
 
 
