@@ -41,3 +41,18 @@
 .notif-list small { color: var(--shell-outline); font-size: 12px; }
 .notif-list li.is-disabled strong { color: var(--shell-outline); }
 .notif-later { margin: 0; color: var(--shell-outline); font-size: 12px; }
+
+/* WhatsApp approvals */
+.whatsapp-settings { gap: 14px; }
+.whatsapp-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.whatsapp-row p { margin: 3px 0 0; color: var(--shell-outline); font-size: 12.5px; }
+.whatsapp-row label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.whatsapp-row select { padding: 7px 9px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-rail); color: var(--shell-on); }
+.whatsapp-usage span { color: var(--shell-on); font-variant-numeric: tabular-nums; font-weight: 600; }
+.whatsapp-test { margin: 0; padding: 9px 12px; border: 1px solid #705623; border-radius: 9px; color: #ffd46a; font-size: 12.5px; }
+.whatsapp-row > div { flex: 1; min-width: 0; }
+@media (max-width: 700px) { .whatsapp-row:not(:first-child) { align-items: flex-start; flex-direction: column; gap: 8px; } .whatsapp-row label { flex-wrap: wrap; } }
+/* The shell's 44px tap rule would turn the small switch into a circle; keep its shape and
+   give it the same 44px target with an invisible hit area instead. */
+.studio-main .settings-card .whatsapp-row button.ui-switch { position: relative; flex: none; min-width: 36px; min-height: 20px; }
+.whatsapp-row .ui-switch::after { content: ""; position: absolute; inset: -12px -4px; }

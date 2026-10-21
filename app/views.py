@@ -888,12 +888,20 @@ def client_team_invites(request, workspace_id, client_team_id):
         workspace=workspace,
         permission_key=CLIENT_TEAM_MANAGE,
     ).first()
+    invite_data = dict(serializer.validated_data)
+    whatsapp_phone = invite_data.pop('whatsapp_phone', '')
+    whatsapp_opt_in = invite_data.pop('whatsapp_opt_in', False)
+    invite_data.pop('whatsapp_consent_confirmed', None)
     try:
-        invite, token = create_client_team_invite(
-            client_team=client_team,
-            created_by_membership=creating_membership,
-            **serializer.validated_data,
-        )
+        with transaction.atomic():
+            invite, token = create_client_team_invite(
+                client_team=client_team,
+                created_by_membership=creating_membership,
+                **invite_data,
+            )
+            if whatsapp_phone:
+                from .services.approval_requests import set_invite_contact
+                set_invite_contact(invite=invite, phone=whatsapp_phone, opted_in=whatsapp_opt_in, recorded_by=request.user)
     except ClientTeamInviteError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     data = ClientTeamInviteSerializer(invite).data
