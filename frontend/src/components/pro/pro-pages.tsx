@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
 import { Send, TriangleAlert } from "lucide-react";
 import { siteConfig } from "@/lib/site-config";
 import { Reveal } from "./pro-home";
@@ -106,7 +107,7 @@ export function ProContactForm() {
       <p className="pro-fine" role="status">
         {opened
           ? <>Your email app should have opened. If not, write to <a href={`mailto:${siteConfig.contactEmail}`}>{siteConfig.contactEmail}</a>.</>
-          : <>This opens a pre-filled email to {siteConfig.contactEmail}. Nothing is sent until you press send. See the <a href="/privacy">privacy notice</a>.</>}
+          : <>This opens a pre-filled email to {siteConfig.contactEmail}. Nothing is sent until you press send. See the <Link href="/privacy">privacy notice</Link>.</>}
       </p>
     </form>
   );
