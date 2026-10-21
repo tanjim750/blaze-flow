@@ -15,6 +15,8 @@ import {
   changeMessageProblem, decisionLine, guestBarActions, MESSAGE_MAX_LENGTH, openNotesWarning,
 } from "@/lib/review-decisions";
 import { timecode } from "@/lib/timecode";
+import { RichBrief } from "@/components/brief/rich-brief";
+import { briefIsEmpty, briefToPlainText } from "@/lib/rich-brief";
 import { rangeLabel } from "@/lib/annotation-window";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import { Player, type PlayerHandle, type PlayerSource } from "@/app/(app)/review/player";
@@ -47,6 +49,7 @@ export function GuestReviewer({ token }: { token: string }) {
   const [loading, setLoading] = useState(false);
   const [playback, setPlayback] = useState<{ versionId: string; data: GuestPlayback | null; error: string } | null>(null);
   const [positionMs, setPositionMs] = useState(0);
+  const [briefOpen, setBriefOpen] = useState(false);
   const player = useRef<PlayerHandle>(null);
 
   useEffect(() => {
@@ -126,7 +129,11 @@ export function GuestReviewer({ token }: { token: string }) {
         <div className="gr-brand"><span><Flame size={15} /></span><strong>Blaze Flow</strong></div>
         <div className="gr-project">
           <strong>{review?.project.name ?? "Loading…"}</strong>
-          {review?.project.description && <small>{review.project.description}</small>}
+          {review?.project.description && !briefIsEmpty(review.project.description) && (
+            <button type="button" className="gr-brief-toggle" aria-expanded={briefOpen} aria-controls="gr-brief" onClick={() => setBriefOpen((open) => !open)}>
+              <small>{briefToPlainText(review.project.description)}</small><span>{briefOpen ? "Hide brief" : "Read brief"}</span>
+            </button>
+          )}
         </div>
         <div className="gr-who">
           <span>{session.name}</span>
@@ -138,6 +145,10 @@ export function GuestReviewer({ token }: { token: string }) {
           </button>
         </div>
       </header>
+
+      {briefOpen && review?.project.description && (
+        <section id="gr-brief" className="gr-brief" aria-label="Project brief"><RichBrief value={review.project.description} /></section>
+      )}
 
       {error && <p className="gr-error" role="alert"><TriangleAlert size={14} />{error}</p>}
 
