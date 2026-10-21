@@ -328,6 +328,15 @@ def task_money(request, workspace_id, task_id):
     return Response(billing.task_money(task=task, user=request.user, access=access))
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def member_rates(request, workspace_id):
+    """Settings: all active team members and their default rate per task."""
+    workspace, access = _workspace(request, workspace_id)
+    _require(access, 'rates_view', RATES_DENIED)
+    return Response({'currency': billing.workspace_currency(workspace), 'results': billing.member_rates(workspace=workspace)})
+
+
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def member_rate(request, workspace_id, membership_id):

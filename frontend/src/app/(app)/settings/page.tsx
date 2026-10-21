@@ -1,5 +1,7 @@
 import { guardRoute } from "@/lib/route-guard";
-import { Bell, Building2, CircleUserRound, MessageCircle, Palette, ShieldCheck } from "lucide-react";
+import { Bell, BookA, Building2, CircleUserRound, Coins, FileText, MessageCircle, Palette, ShieldCheck } from "lucide-react";
+import { getGlossary, getInvoiceSettings, getRates } from "@/lib/studio-settings-server";
+import { GlossaryForm, InvoiceSettingsForm, RatesForm } from "@/components/settings/studio-settings";
 import { getBranding, getNotificationPreferences, getNotificationSettings, getWhatsAppSettings, getWorkspaceProfile } from "@/lib/api";
 import { BrandingForm } from "@/components/portal/branding-form";
 import "@/components/portal/portal.css";
@@ -31,6 +33,15 @@ export default async function SettingsPage() {
     workspace ? getNotificationSettings(workspace.id) : Promise.resolve(null),
   ]);
   const profile = loadedProfile?.ok ? loadedProfile.data : null;
+  // Each section shows only when the viewer's role can load it (billing view, rates view, AI QA on).
+  const billing = workspace?.billing;
+  const [invoicing, rates, glossary] = workspace && studio
+    ? await Promise.all([
+      billing?.view ? getInvoiceSettings(workspace.id) : null,
+      billing?.rates_view ? getRates(workspace.id) : null,
+      getGlossary(workspace.id),
+    ])
+    : [null, null, null];
   const user = session.user;
 
   return <><div className="settings-page">
@@ -60,6 +71,18 @@ export default async function SettingsPage() {
     {workspace && loadedBranding?.ok && <section className="settings-card" id="branding">
       <div className="settings-title"><Palette /><div><h2>Client portal branding</h2><p>Your logo, colour and welcome line on the client portal and on upload pages.</p></div></div>
       <BrandingForm workspaceId={workspace.id} initial={loadedBranding.data} canEdit={loadedBranding.data.can_edit === true} />
+    </section>}
+    {workspace && invoicing?.ok && <section className="settings-card" id="invoicing">
+      <div className="settings-title"><FileText /><div><h2>Invoicing</h2><p>Invoice numbering, payment terms and the currency for prices and invoices.</p></div></div>
+      <InvoiceSettingsForm workspaceId={workspace.id} initial={invoicing.data} canEdit={billing?.manage === true} />
+    </section>}
+    {workspace && rates?.ok && <section className="settings-card" id="rates">
+      <div className="settings-title"><Coins /><div><h2>Editors&rsquo; default rates</h2><p>Pre-fills an editor&rsquo;s pay when they&rsquo;re assigned a task. You can still change it per task.</p></div></div>
+      <RatesForm workspaceId={workspace.id} currency={rates.data.currency} rows={rates.data.results} canEdit={billing?.manage === true} />
+    </section>}
+    {workspace && glossary?.ok && <section className="settings-card" id="glossary">
+      <div className="settings-title"><BookA /><div><h2>AI QA glossary</h2><p>Words AI QA should treat as spelled correctly: brands, products, names and acronyms.</p></div></div>
+      <GlossaryForm workspaceId={workspace.id} initial={glossary.data} canEdit />
     </section>}
     <section className="settings-card">
       <div className="settings-title"><ShieldCheck /><div><h2>Password & security</h2><p>Use a strong password you do not reuse elsewhere.</p></div></div>
