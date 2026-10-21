@@ -1058,6 +1058,10 @@
   .rv-compare-scrub { order: -1; flex: 1 1 100%; margin: 8px 0 4px; }
   .rv-compare-audio { margin-left: auto; }
 }
+
+/* Annotation layer error boundary: a small notice over the frame instead of a dead page. */
+.rvp-annotation-error { position: absolute; left: 12px; bottom: 12px; z-index: 6; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--bf-border-strong); border-radius: var(--bf-radius-md); background: var(--bf-popover); color: var(--bf-foreground); font-size: var(--bf-text-xs); }
+.rvp-annotation-error button { border: 0; background: none; color: var(--bf-violet-300); font: inherit; font-weight: var(--bf-weight-semibold); cursor: pointer; }
 /* Share panel: Copy/Open per link, and no horizontal overflow on phones. */
 .rv-share,.rv-share *{min-width:0}
 .rv-share-row-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px}
