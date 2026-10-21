@@ -182,7 +182,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
         )}
 
         {tab === "Files" && view.selectedCampaign ? (
-          <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient?.id ?? null} />
+          <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null} />
         ) : tab === "Tasks" && view.selectedCampaign ? (
           <TasksBoard compact view={tasksView} projectId={view.selectedCampaign.id} />
         ) : tab === "Brief & Specs" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (
