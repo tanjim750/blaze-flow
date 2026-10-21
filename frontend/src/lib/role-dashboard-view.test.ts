@@ -179,6 +179,16 @@ describe("owner view", () => {
     deadlines: [], activity: [], problems: { tasks: null, reviews: null, activity: null },
   } as DashboardReady;
 
+  it("counts open projects from the same set as Project health (R6)", () => {
+    const view = buildOwnerDashboard({
+      base, now: NOW, projects: [project("a", "DRAFT", null), project("b", "DRAFT", null), project("c", "ACTIVE", null), project("d", "COMPLETED", null)],
+      tasks: [], files: [], stages: STAGES as never, clients: [], workload: { status: 403, detail: "no" },
+    });
+    const open = view.strip.find((item) => item.label === "Open projects")!.value;
+    expect(open).toBe(3);
+    expect(open).toBe(view.health.healthy + view.health.counts.overdue + view.health.counts.due_week + view.health.counts.on_hold);
+  });
+
   it("puts approvals, health and workload together, and explains a 403 on workload", () => {
     const view = buildOwnerDashboard({
       base, now: NOW, projects: [project("p1", "ACTIVE", iso(-5))],
@@ -188,7 +198,7 @@ describe("owner view", () => {
     });
     expect(view.layout).toBe("owner");
     expect(view.strip.map((item) => [item.label, item.value])).toEqual([
-      ["Active projects", 2], ["Waiting on approval", 1], ["Projects at risk", 1], ["Overdue tasks", 1],
+      ["Open projects", 1], ["Waiting on approval", 1], ["Projects at risk", 1], ["Overdue tasks", 1],
     ]);
     expect(view.workload).toBeNull();
     expect(view.problems.workload).toMatch(/Only owners and admins/);

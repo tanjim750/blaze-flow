@@ -114,6 +114,24 @@ MEMBER_PERMISSION_KEYS = (
     PROJECT_FILE_UPDATE,
 )
 
+# Restricted system role for client teams: they can see and comment on their projects,
+# approve or request changes, and upload brief files, but cannot edit or manage anything.
+CLIENT_PERMISSION_KEYS = (
+    WORKSPACE_READ,
+    PROJECT_READ,
+    MEDIA_READ,
+    MEDIA_DOWNLOAD,
+    REVIEW_DECISION_CREATE,
+    REVIEW_COMMENT_READ,
+    REVIEW_COMMENT_CREATE,
+    REVIEW_REACTION_CREATE,
+    ANNOTATION_READ,
+    ANNOTATION_CREATE,
+    TASK_READ,
+    PROJECT_FILE_READ,
+    PROJECT_FILE_CREATE,
+)
+
 # review.decision.create is grantable to custom (client) roles. The system Owner and Member
 # roles do not need it: media.transition already lets them approve and request changes.
 ALL_PERMISSION_KEYS = frozenset(OWNER_PERMISSION_KEYS) | {REVIEW_DECISION_CREATE}

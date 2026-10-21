@@ -66,3 +66,11 @@
 .af-skeleton i + i { width: 22%; }
 @keyframes af-pulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .af-spin, .af-skeleton i { animation: none; } .af-go { transition: none; } }
+
+/* Approval request delivery status: one pill per channel. */
+.af-deliveries { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 0; }
+.af-delivery { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border: 1px solid #ffffff1f; border-radius: 999px; color: var(--shell-variant); font-size: 11px; font-weight: 500; white-space: nowrap; }
+.af-delivery.is-sent, .af-delivery.is-delivered { border-color: #34d39955; color: #6ee7b7; }
+.af-delivery.is-read { border-color: #60a5fa66; color: #93c5fd; }
+.af-delivery.is-failed { border-color: #f8717166; color: #fca5a5; }
+.af-delivery.is-skipped, .af-delivery.is-pending { color: var(--shell-outline); }

@@ -13,6 +13,8 @@ import { r2Transport } from "@/lib/r2-upload-transport";
 import "./upload-tray.css";
 
 const size = formatBytes;
+/** How long "Uploads complete" stays up before the tray dismisses itself. */
+export const AUTO_DISMISS_MS = 5000;
 
 function statusLine(item: UploadItem) {
   switch (item.status) {
@@ -53,6 +55,15 @@ export function UploadTray() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [busy]);
 
+  // Everything landed and nothing needs attention: get out of the way (it used to sit over
+  // primary actions such as "Send comment" until "Clear finished" was clicked).
+  const allDone = items.length > 0 && !busy && counts.processing === 0 && counts.failed === 0;
+  useEffect(() => {
+    if (!allDone) return;
+    const timer = window.setTimeout(clearFinished, AUTO_DISMISS_MS);
+    return () => window.clearTimeout(timer);
+  }, [allDone, items.length]);
+
   if (!items.length) return null;
   const title = busy
     ? `Uploading ${counts.active} ${counts.active === 1 ? "file" : "files"}`
@@ -74,6 +85,9 @@ export function UploadTray() {
         </button>
         {counts.finished > 0 && !collapsed && (
           <button type="button" className="ut-clear" onClick={clearFinished} title="Clear finished uploads"><Trash2 aria-hidden="true" /><span>Clear finished</span></button>
+        )}
+        {allDone && (
+          <button type="button" className="ut-close" onClick={clearFinished} aria-label="Close uploads" title="Close"><X aria-hidden="true" /></button>
         )}
       </header>
       {collapsed && busy && <i className="ut-overall" style={{ width: `${overall}%` }} aria-hidden="true" />}

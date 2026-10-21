@@ -17,7 +17,7 @@ from app.models import (
     WorkspaceStatus,
     WorkflowStage,
 )
-from app.permissions import MEMBER_PERMISSION_KEYS, OWNER_PERMISSION_KEYS
+from app.permissions import CLIENT_PERMISSION_KEYS, MEMBER_PERMISSION_KEYS, OWNER_PERMISSION_KEYS
 from app.services.task_stages import create_default_task_stages
 
 
@@ -100,6 +100,7 @@ def create_workspace(*, owner, name, slug, workspace_timezone):
             for permission_key in MEMBER_PERMISSION_KEYS
         ]
     )
+    ensure_client_role(workspace, created_by_user=owner)
     membership = WorkspaceMembership(
         id=uuid.uuid4(),
         workspace=workspace,
@@ -116,6 +117,34 @@ def create_workspace(*, owner, name, slug, workspace_timezone):
     membership.full_clean()
     membership.save()
     return workspace, membership
+
+
+CLIENT_ROLE_NAME = 'Client'
+
+
+def ensure_client_role(workspace, *, created_by_user=None):
+    """Return the workspace's restricted system Client role, creating it if missing.
+
+    Older workspaces were provisioned before the role existed, so it is created on demand.
+    """
+    role = Role.objects.filter(workspace=workspace, name__iexact=CLIENT_ROLE_NAME).first()
+    if role is not None:
+        return role
+    now = timezone.now()
+    role = Role.objects.create(
+        id=uuid.uuid4(),
+        workspace=workspace,
+        name=CLIENT_ROLE_NAME,
+        description='System-provisioned restricted role for client teams.',
+        is_system=True,
+        created_by_user=created_by_user or workspace.created_by_user,
+        created_at=now,
+        updated_at=now,
+    )
+    RolePermission.objects.bulk_create(
+        [RolePermission(role=role, permission_key=key) for key in CLIENT_PERMISSION_KEYS]
+    )
+    return role
 
 
 def update_workspace(*, workspace, **fields):

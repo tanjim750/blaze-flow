@@ -19,7 +19,8 @@ import type { AnnotationElement } from "@/lib/api";
 import { loadDraft, patchDraft, unsavedWarning } from "@/lib/review-drafts";
 import { DEFAULT_HOLD, displayWindow, drawingEndMs, rememberedHold, windowOpacity, type HoldChoice } from "@/lib/annotation-window";
 import { specMismatches } from "@/lib/project-brief";
-import { latestFor, openNotesWarning, proofDetail, proofLine, reviewBarActions } from "@/lib/review-decisions";
+import { latestFor, openNotesWarning, overrideWarning, proofDetail, proofLine, reviewBarActions } from "@/lib/review-decisions";
+import { useLiveDecisions } from "./live-decisions";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import { Comments, RevisionForm, type ComposerState } from "./comments";
 import { Fields } from "./fields";
@@ -239,6 +240,10 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const canShare = Boolean(view.target && view.role !== "client" && view.canManageGuests);
   // The proof of delivery: the newest client decision on exactly this version.
   const clientDecision = latestFor(view.decisions, version?.target?.versionId);
+  // R8: a guest's decision in another session shows here without a reload.
+  useLiveDecisions(view.target ?? null, clientDecision?.id ?? null, () => router.refresh());
+  const approveOverride = overrideWarning(clientDecision, "approved");
+  const reopenOverride = overrideWarning(clientDecision, "changes_requested");
   const openWarning = version ? openNotesWarning(openNotes, version.label) : null;
 
   async function approve() {
@@ -494,7 +499,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           <div className="rv-actions-tools" role="group" aria-label="Tools">
             {aiQa.available && aiQa.state?.can_run && (
               <button
-                type="button" className="rv-ai-btn" onClick={openAiRun} data-testid="ai-qa-run-header"
+                type="button" className="rv-ai-btn" onClick={openAiRun} data-testid="ai-qa-run-header" aria-label="Run AI Visual QA"
                 disabled={aiQa.review?.status === "QUEUED" || aiQa.review?.status === "PROCESSING"}
                 title={aiQa.review?.status === "QUEUED" || aiQa.review?.status === "PROCESSING" ? "AI Visual QA is running" : "Check the visible text for spelling mistakes"}
               >
@@ -563,8 +568,9 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           onConfirm={() => void approve()}
           onCancel={() => setApproveOpen(false)}
         >
-          {(openNotes > 0 || (latest && latest.id !== version.id) || writer.error) && (
+          {(openNotes > 0 || (latest && latest.id !== version.id) || writer.error || approveOverride) && (
             <div className="rv-confirm-notes">
+              {approveOverride && <p className="rv-confirm-warn" role="alert" data-testid="override-warning"><TriangleAlert size={14} /><span>{approveOverride}</span></p>}
               {openWarning && (
                 <p className="rv-confirm-warn" role="alert">
                   <TriangleAlert size={14} />
@@ -641,6 +647,9 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
         />
       )}
 
+      {revisionOpen && reopenOverride && (
+        <p className="rv-banner" role="alert" data-testid="override-warning"><TriangleAlert size={14} /><span>{reopenOverride}</span></p>
+      )}
       {revisionOpen && (
         <RevisionForm
           writer={writer} positionMs={positionMs} approved={approved}
@@ -700,8 +709,9 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
               <SlidersHorizontal size={14} />Fields
             </button>
             {aiQa.available && (
-              <button type="button" role="tab" aria-selected={panel === "ai"} onClick={() => setPanel("ai")} data-testid="ai-qa-tab">
-                <Sparkles size={14} />AI QA{aiQa.findings.length > 0 && <span className="rv-tab-count" aria-label={aiCounts.hidden ? `${aiCounts.visible} to review, ${aiCounts.hidden} lower-confidence hidden` : `${aiCounts.visible} to review`}>{aiCounts.visible}{aiCounts.hidden > 0 && <small aria-hidden="true"> +{aiCounts.hidden}</small>}</span>}
+              <button type="button" role="tab" aria-selected={panel === "ai"} onClick={() => setPanel("ai")} data-testid="ai-qa-tab"
+                aria-label={aiQa.findings.length > 0 ? (aiCounts.hidden ? `AI QA ${aiCounts.visible} to review, ${aiCounts.hidden} lower-confidence hidden` : `AI QA ${aiCounts.visible} to review`) : "AI QA"}>
+                <Sparkles size={14} aria-hidden="true" />AI QA{aiQa.findings.length > 0 && <span className="rv-tab-count" aria-hidden="true">{aiCounts.visible}{aiCounts.hidden > 0 && <small> +{aiCounts.hidden}</small>}</span>}
               </button>
             )}
           </div>
