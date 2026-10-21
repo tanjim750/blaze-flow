@@ -8,14 +8,29 @@ import type { InvitePreview } from "@/lib/auth-client";
 import { FormAlert } from "@/components/auth/text-field";
 import { acceptInviteAction } from "./actions";
 
-type Props = { token: string; invite: InvitePreview | null; userEmail: string | null };
+type Props = { token: string; invite: InvitePreview | null; userEmail: string | null; rateLimited?: boolean };
 
-export function InvitePanel({ token, invite, userEmail }: Props) {
+export function InvitePanel({ token, invite, userEmail, rateLimited = false }: Props) {
   const router = useAppRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const here = `/invite?token=${encodeURIComponent(token)}`;
+
+  if (token && rateLimited) {
+    return (
+      <div className="auth-form">
+        <div className="auth-status is-bad">
+          <span><TriangleAlert size={24} aria-hidden /></span>
+          <h2>Too many attempts</h2>
+          <p>We couldn’t check this invitation just now. Wait a minute, then try again.</p>
+        </div>
+        <div className="auth-actions">
+          <Link className="button primary" href={here}>Try again</Link>
+        </div>
+      </div>
+    );
+  }
 
   if (!token || !invite || invite.state !== "valid") {
     const accepted = invite?.state === "accepted";

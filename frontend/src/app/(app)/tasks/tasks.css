@@ -403,3 +403,12 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 .tb-source-note b { font-variant-numeric: tabular-nums; color: var(--bf-violet-300, #b69aff); font-size: 12px; }
 .tb-source-note q { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; quotes: none; }
 .tb-source-note small { color: var(--muted); font-size: 12px; }
+/* Board: fixed 272px columns that snap, with an edge fade so a cut-off column reads as
+   "scroll for more" instead of clipped. */
+@media (min-width: 761px) {
+  .tb-board { grid-auto-columns: 272px; scroll-snap-type: x proximity; scroll-padding-inline: 2px;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); padding-right: 48px; }
+  .tb-column { scroll-snap-align: start; }
+}
+.tb-column-empty { padding: 10px 12px; line-height: 1.4; overflow-wrap: anywhere; }

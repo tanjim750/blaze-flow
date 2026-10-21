@@ -71,6 +71,13 @@ class SpellingCascadeTests(TestCase):
         self.assertEqual(check_line(line('Order by 5pm on the 3rd in 4K T&Cs apply join the waitlist')), [])
         self.assertEqual([f.detected_text for f in check_line(line('the new semster'))], ['semster'])
 
+    def test_suggestions_prefer_the_likely_typo_over_the_commoner_word(self):
+        """#15: LIMTED is LIMITED with a dropped letter, not LISTED with a changed one."""
+        found = {f.detected_text: f.suggested_text for f in check_line(line('LIMTED OFFER FREE SHIPING'))}
+        self.assertEqual(found, {'LIMTED': 'LIMITED', 'SHIPING': 'SHIPPING'})
+        # Frequency still counts: a swap to a very common word beats a rarer added letter (tech).
+        self.assertEqual([f.suggested_text for f in check_line(line('Shop teh sale'))], ['the'])
+
     def test_unknown_capitalised_names_are_quiet(self):
         found = check_line(line('Meet Zorblatt today'))
         self.assertEqual(found, [])

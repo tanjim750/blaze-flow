@@ -22,7 +22,14 @@ import { Archive, ChevronRight, Clapperboard, Copy, Download, Ellipsis, Eye, Fol
 import type { ProjectFile } from "@/lib/api";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
-import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, updateAssetFile, updateAssetFolder, uploadAssetFileTracked } from "@/lib/asset-api-client";
+import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, syncedTasksMessage, updateAssetFile, updateAssetFolder, uploadAssetFileTracked, type SyncedTasks } from "@/lib/asset-api-client";
+import { toast } from "sonner";
+
+/** Moving a file to Approval etc. moves its linked tasks too; say so. */
+function announceSynced(result: SyncedTasks | null | undefined, stageName?: string) {
+  const message = syncedTasksMessage(result, stageName);
+  if (message) toast(message);
+}
 import { formatSize, groupSections, isMoveKey, libraryNavRows, moveIndex, nextSelection, pruneSelection, scopeItems, visibleOrder, type Density, type GroupBy, type LibraryNavRow, type SelectionState, type SortKey, type ViewMode } from "@/lib/files-panel";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
@@ -393,7 +400,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   };
   const setStage = (file: LibraryFile, stageId: string | null) => {
     const apply = (state: LibraryState) => ({ ...state, files: upsert(state.files, { ...file, stageId }) });
-    if (view?.workspaceId) write({ ids: [file.id], optimistic: apply, describe: `Moving ${file.name}`, send: () => updateAssetFile(view.workspaceId!, file.id, { task_stage_id: stageId }) });
+    if (view?.workspaceId) write({ ids: [file.id], optimistic: apply, describe: `Moving ${file.name}`, send: () => updateAssetFile(view.workspaceId!, file.id, { task_stage_id: stageId }).then((result) => { announceSynced(result, view?.stages?.find((item) => item.id === stageId)?.name); return result; }) });
     else updateLibrary(apply);
   };
   const showDetails = (entity: LibraryFile | LibraryFolder) => {
@@ -643,10 +650,10 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
           </nav>
           <span className="fx-total" aria-live="polite">{itemTotal} item{itemTotal === 1 ? "" : "s"}</span>
           <div className="fx-toolbar-actions">
-            <button type="button" className="fx-btn" onClick={() => setDialog("folder")}><FolderPlus /><span>New folder</span></button>
+            <button type="button" className="fx-btn" aria-label="New folder" onClick={() => setDialog("folder")}><FolderPlus aria-hidden="true" /><span>New folder</span></button>
             <button type="button" className="fx-icon-btn" onClick={() => router.refresh()} aria-label="Refresh assets"><RefreshCw /></button>
             {/* Inside the project page the page header already owns the one primary Upload. */}
-            <button type="button" className={`fx-btn ${compact ? "" : "is-primary"}`} data-mobile-primary="Upload" onClick={() => setDialog("upload")}><Upload /><span>Upload</span></button>
+            <button type="button" className={`fx-btn ${compact ? "" : "is-primary"}`} data-mobile-primary="Upload" aria-label="Upload" onClick={() => setDialog("upload")}><Upload aria-hidden="true" /><span>Upload</span></button>
           </div>
         </header>
         <div className="fx-toolbar is-secondary">
@@ -1055,7 +1062,7 @@ function StageMenu({ file, view }: { file: LibraryFile; view?: FilesView }) {
   const write = useAssetWrite();
   const set = (stageId: string | null) => {
     const apply = (state: LibraryState) => ({ ...state, files: upsert(state.files, { ...file, stageId }) });
-    if (view?.workspaceId) write({ ids: [file.id], optimistic: apply, describe: `Moving ${file.name}`, send: () => updateAssetFile(view.workspaceId!, file.id, { task_stage_id: stageId }) });
+    if (view?.workspaceId) write({ ids: [file.id], optimistic: apply, describe: `Moving ${file.name}`, send: () => updateAssetFile(view.workspaceId!, file.id, { task_stage_id: stageId }).then((result) => { announceSynced(result, view?.stages?.find((item) => item.id === stageId)?.name); return result; }) });
     else updateLibrary(apply);
   };
   return (
@@ -1135,7 +1142,7 @@ function BulkAssignmentDialog({ view, folders, selected, close, done }: { view?:
   return <Modal title={`Move / assign ${selected.size} item${selected.size === 1 ? "" : "s"}`} close={close}><form className="al-form" onSubmit={submit}><RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={project} setProject={setProject} /><label>Destination folder<select name="folder" defaultValue=""><option value="">Project or Files root</option>{destinations.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label><label>Stage<select value={stage} onChange={(event) => setStage(event.target.value)}><option value="">Leave unchanged</option>{(view?.stages ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><button>Apply to {selected.size} item{selected.size === 1 ? "" : "s"}</button></form></Modal>;
 }
 
-function FolderDialog({ view, folders, defaultProjectId, defaultClientId, parentFolderId, close }: { view?: FilesView; folders: LibraryFolder[]; defaultProjectId: string | null; defaultClientId: string | null; parentFolderId: string | null; close: () => void }) { const write = useAssetWrite(); const [client, setClient] = useState(defaultClientId ?? ""); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const projects = (view?.groups ?? []).filter((group) => !client || group.clientId === client); const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget), project = String(data.get("project") || selectedProject || "") || null; const projectRow = view?.groups.find((item) => item.projectId === project); const draft = { id: newId("folder"), name: String(data.get("name")), clientId: (projectRow?.clientId ?? client) || null, projectId: project, parentFolderId, createdAt: new Date().toISOString(), createdBy: "You" }; const add = (state: LibraryState) => ({ ...state, folders: [...state.folders, draft] });
+function FolderDialog({ view, folders, defaultProjectId, defaultClientId, parentFolderId, close }: { view?: FilesView; folders: LibraryFolder[]; defaultProjectId: string | null; defaultClientId: string | null; parentFolderId: string | null; close: () => void }) { const write = useAssetWrite(); const [client, setClient] = useState(realClientId(view, defaultClientId)); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const projects = (view?.groups ?? []).filter((group) => !client || group.clientId === client); const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget), project = String(data.get("project") || selectedProject || "") || null; const projectRow = view?.groups.find((item) => item.projectId === project); const draft = { id: newId("folder"), name: String(data.get("name")), clientId: (projectRow?.clientId ?? client) || null, projectId: project, parentFolderId, createdAt: new Date().toISOString(), createdBy: "You" }; const add = (state: LibraryState) => ({ ...state, folders: [...state.folders, draft] });
     if (view?.workspaceId) {
       write({ ids: [draft.id], optimistic: add, describe: `Creating ${draft.name}`,
         send: () => createAssetFolder(view.workspaceId!, { name: draft.name, client_team_id: draft.clientId, project_id: draft.projectId, parent_folder_id: draft.parentFolderId }),
@@ -1144,7 +1151,7 @@ function FolderDialog({ view, folders, defaultProjectId, defaultClientId, parent
     close(); }; return <Modal title="Create folder" close={close}><form onSubmit={submit} className="al-form"><label>Folder name<input name="name" required autoFocus placeholder="Footage" /></label><RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={selectedProject} setProject={setSelectedProject} /><label>Inside folder<select name="parent" value={parentFolderId ?? ""} disabled><option value="">Root Files area</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label><button>Create folder</button></form></Modal>; }
 function UploadDialog({ view, folders, defaultProjectId, defaultClientId, currentFolderId, initialFiles = [], close }: { view?: FilesView; folders: LibraryFolder[]; defaultProjectId: string | null; defaultClientId: string | null; currentFolderId: string | null; initialFiles?: File[]; close: () => void }) {
   const write = useAssetWrite();
-  const [client, setClient] = useState(defaultClientId ?? ""); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const [uploads, setUploads] = useState<File[]>(() => initialFiles.filter((file) => file.size > 0)); const [stageId, setStageId] = useState(""); const [dragging, setDragging] = useState(false); const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle"); const [progress] = useState(0); const [failure, setFailure] = useState<string | null>(null); const cancelled = useRef(false);
+  const [client, setClient] = useState(realClientId(view, defaultClientId)); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const [uploads, setUploads] = useState<File[]>(() => initialFiles.filter((file) => file.size > 0)); const [stageId, setStageId] = useState(""); const [dragging, setDragging] = useState(false); const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle"); const [progress] = useState(0); const [failure, setFailure] = useState<string | null>(null); const cancelled = useRef(false);
   const projects = (view?.groups ?? []).filter((group) => !client || group.clientId === client); const availableFolders = folders.filter((folder) => !selectedProject || folder.projectId === selectedProject);
   const busy = status === "uploading"; const totalSize = uploads.reduce((sum, file) => sum + file.size, 0); const done = Math.min(uploads.length, Math.round((progress / 100) * uploads.length));
   const stage = (items: FileList | null) => setUploads((staged) => { const next = [...staged]; Array.from(items ?? []).filter((file) => file.size > 0).forEach((file) => { if (!next.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified)) next.push(file); }); return next; });
@@ -1263,4 +1270,13 @@ function relationLabel(entity: { clientId: string | null; projectId: string | nu
 function copyName(name: string): string {
   const dot = name.lastIndexOf(".");
   return dot > 0 ? `${name.slice(0, dot)} (copy)${name.slice(dot)}` : `${name} (copy)`;
+}
+
+/**
+ * Only a real client-team id may seed the dialogs. The projects tree groups client-less
+ * projects under a pseudo-client ("unassigned"); sending that as `client_team_id` made the
+ * API answer "Must be a valid UUID", and filtering projects by it hid every project.
+ */
+function realClientId(view: FilesView | undefined, id: string | null): string {
+  return id && view?.clients.some((item) => item.id === id) ? id : "";
 }

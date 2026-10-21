@@ -68,5 +68,5 @@ def media_version_decisions(request, workspace_id, project_id, media_version_id)
     try:
         record, _ = record_decision(media_version=media, user=request.user, **serializer.validated_data)
     except ReviewDecisionError as exc:
-        return Response({'detail': str(exc)}, status=exc.status)
+        return Response(exc.payload(), status=exc.status)
     return Response(decision_data(record, include_private=False), status=status.HTTP_201_CREATED)

@@ -58,6 +58,8 @@ class MentionNotificationApiTests(WorkspaceAccessSetupMixin, TestCase):
         )
         self.assertEqual(upload_response.status_code, 201)
         self.media_id = upload_response.json()['id']
+        # The review media's own scan/preview jobs aren't what these tests are about.
+        OutboxEvent.objects.filter(aggregate_type='file').delete()
 
     def tearDown(self):
         self.settings_override.disable()

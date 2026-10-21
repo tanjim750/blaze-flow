@@ -51,6 +51,8 @@ describe("UniversalReviewLayout", () => {
     window.history.replaceState(null, "", "/?view=editor");
     render(
       <UniversalReviewLayout pathname="/">
+        {/* A plain anchor on purpose: the layout must catch links that bypass next/link. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a href="/review?media=file-2" onClick={(event) => event.preventDefault()}>Note</a>
       </UniversalReviewLayout>,
     );

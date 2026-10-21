@@ -236,13 +236,30 @@ PLAN_LIMITS = {
         'max_workspaces_owned': int(os.environ.get('PLAN_FREE_MAX_WORKSPACES_OWNED', '1')),
         'max_projects_per_workspace': int(os.environ.get('PLAN_FREE_MAX_PROJECTS_PER_WORKSPACE', '3')),
         'max_storage_bytes': int(os.environ.get('PLAN_FREE_MAX_STORAGE_BYTES', str(5 * 1024 * 1024 * 1024))),
+        'whatsapp_messages_per_month': int(os.environ.get('PLAN_FREE_WHATSAPP_MESSAGES_PER_MONTH', '50')),
     },
     'PRO': {
         'max_workspaces_owned': int(os.environ.get('PLAN_PRO_MAX_WORKSPACES_OWNED', '20')),
         'max_projects_per_workspace': int(os.environ.get('PLAN_PRO_MAX_PROJECTS_PER_WORKSPACE', '200')),
         'max_storage_bytes': int(os.environ.get('PLAN_PRO_MAX_STORAGE_BYTES', str(2 * 1024 * 1024 * 1024 * 1024))),
+        'whatsapp_messages_per_month': int(os.environ.get('PLAN_PRO_WHATSAPP_MESSAGES_PER_MONTH', '1000')),
     },
 }
+
+# WhatsApp approval messages (Meta WhatsApp Cloud API).
+# WHATSAPP_PROVIDER=log (default) never sends anything: it logs the message and records a
+# delivery as sent, so the whole flow can be tried without a Meta account. Set it to
+# "meta" with the credentials below to send for real.
+WHATSAPP_PROVIDER = os.environ.get('WHATSAPP_PROVIDER', 'log').strip().lower()
+WHATSAPP_ACCESS_TOKEN = os.environ.get('WHATSAPP_ACCESS_TOKEN', '')
+WHATSAPP_PHONE_NUMBER_ID = os.environ.get('WHATSAPP_PHONE_NUMBER_ID', '')
+WHATSAPP_WABA_ID = os.environ.get('WHATSAPP_WABA_ID', '')
+WHATSAPP_APP_SECRET = os.environ.get('WHATSAPP_APP_SECRET', '')
+WHATSAPP_WEBHOOK_VERIFY_TOKEN = os.environ.get('WHATSAPP_WEBHOOK_VERIFY_TOKEN', '')
+WHATSAPP_GRAPH_API_VERSION = os.environ.get('WHATSAPP_GRAPH_API_VERSION', 'v23.0')
+WHATSAPP_TEMPLATE_APPROVAL = os.environ.get('WHATSAPP_TEMPLATE_APPROVAL', 'deliverable_ready_for_approval')
+WHATSAPP_TEMPLATE_LANGUAGE = os.environ.get('WHATSAPP_TEMPLATE_LANGUAGE', 'en_GB')
+WHATSAPP_REQUEST_TIMEOUT_SECONDS = float(os.environ.get('WHATSAPP_REQUEST_TIMEOUT_SECONDS', '10'))
 # Platform admin revenue estimate until Stripe is connected: what one PRO seat is assumed to
 # pay per month, in minor units of PLATFORM_CURRENCY. Purely for the /platform dashboard.
 PLATFORM_PRO_PRICE_MINOR = int(os.environ.get('PLATFORM_PRO_PRICE_MINOR', '2900'))
@@ -430,6 +447,7 @@ REST_FRAMEWORK = {
         'login': os.environ.get('LOGIN_THROTTLE_RATE', '20/hour'),
         'password_reset': os.environ.get('PASSWORD_RESET_THROTTLE_RATE', '5/hour'),
         'email_verification': os.environ.get('EMAIL_VERIFICATION_THROTTLE_RATE', '5/hour'),
+        'invite_preview': os.environ.get('INVITE_PREVIEW_THROTTLE_RATE', '60/hour'),
         # Public upload links: page loads plus one request per file, per client IP.
         'upload_link': os.environ.get('UPLOAD_LINK_THROTTLE_RATE', '240/hour'),
         # "Report a problem" submissions, per signed-in user.
@@ -442,6 +460,9 @@ REST_FRAMEWORK = {
 AI_VISUAL_QA_ENABLED = os.environ.get('AI_VISUAL_QA_ENABLED', 'false').lower() == 'true'
 # 'paddleocr' needs `pip install -r requirements-ai.txt`; 'fake' is for tests and CI.
 AI_QA_ENGINE = os.environ.get('AI_QA_ENGINE', 'paddleocr')
+import json as _json
+AI_QA_EXTRA_ENGINES = _json.loads(os.environ.get('AI_QA_EXTRA_ENGINES', '{}'))
+AI_QA_EXTRA_ENGINE_LABELS = _json.loads(os.environ.get('AI_QA_EXTRA_ENGINE_LABELS', '{}'))
 AI_QA_MAX_IMAGE_BYTES = int(os.environ.get('AI_QA_MAX_IMAGE_BYTES', str(50 * 1024 * 1024)))
 AI_QA_MAX_DECODE_PIXELS = int(os.environ.get('AI_QA_MAX_DECODE_PIXELS', str(80_000_000)))
 AI_QA_MAX_PIXELS = int(os.environ.get('AI_QA_MAX_PIXELS', str(8_300_000)))

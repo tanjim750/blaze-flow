@@ -875,7 +875,7 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
   const team = effectiveVisibility === "team";
 
   return (
-    <form
+    <form data-review-composer
       className={`rvc-composer ${team ? "is-team" : ""}`}
       onSubmit={(event) => { event.preventDefault(); void submit(); }}
     >
@@ -1089,6 +1089,7 @@ export function RevisionForm({ writer, positionMs, approved = false, asClient = 
       className="rvc-revision"
       onSubmit={async (event) => {
         event.preventDefault();
+        if (!dirty) return;
         const sent = asClient
           ? await writer.decideAsClient("changes_requested", text, positionMs)
           : await writer.requestChanges(text, positionMs);
@@ -1109,7 +1110,7 @@ export function RevisionForm({ writer, positionMs, approved = false, asClient = 
       {writer.error && <p className="form-error">{writer.error}</p>}
       <div>
         <button type="button" onClick={onDone}>Cancel</button>
-        <button type="submit" disabled={writer.busy}><RotateCcw size={13} />{writer.busy ? "Requesting…" : "Request changes"}</button>
+        <button type="submit" disabled={writer.busy || !dirty} title={dirty ? undefined : "Describe what needs to change first"}><RotateCcw size={13} />{writer.busy ? "Requesting…" : "Request changes"}</button>
       </div>
     </form>
   );
