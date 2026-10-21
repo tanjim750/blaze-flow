@@ -34,8 +34,8 @@ import { TaskPanel } from "./task-panel";
 import { REVIEW_FROM_KEY } from "@/components/universal-review";
 import { returnLabel, reviewSurface, safeReturnPath } from "@/lib/open-in-review";
 import { useReviewWriter } from "./writer";
-import { AiQaPanel, useAiQa } from "./ai-qa-panel";
-import { hasRegion, type AiFinding, type AiTarget } from "@/lib/ai-qa";
+import { AiQaPanel, useAiQa, useBandScope } from "./ai-qa-panel";
+import { hasRegion, inScope, scopeCounts, type AiFinding, type AiTarget } from "@/lib/ai-qa";
 
 type Props = {
   view: ReviewView; author: string; userId?: string | null; initialShareOpen?: boolean; initialPanel?: "ai" | null; embedded?: boolean;
@@ -298,14 +298,14 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     [view.target, surface, canWriteTeam],
   );
   const aiQa = useAiQa(aiTarget);
-  // Visible on the AI QA tab as "AI QA 2"; its accessible name starts with the same words.
-  const aiOpenCount = aiQa.findings.filter((f) => f.status === "PENDING" || f.status === "ACCEPTED").length;
+  const [aiScope, setAiScope] = useBandScope(userId);
+  const aiCounts = useMemo(() => scopeCounts(aiQa.findings, aiScope), [aiQa.findings, aiScope]);
   const aiHighlight = panel === "ai" && aiSelected && hasRegion(aiSelected.region) ? aiSelected : null;
   const aiMarkers = useMemo(() => aiVideo
     ? aiQa.findings
-        .filter((f) => f.start_time_ms !== null && f.status !== "DISMISSED" && f.status !== "NOT_AN_ERROR")
+        .filter((f) => f.start_time_ms !== null && f.status !== "DISMISSED" && f.status !== "NOT_AN_ERROR" && (inScope(f, aiScope) || f.id === aiSelected?.id))
         .map((f) => ({ id: f.id, startMs: f.start_time_ms!, endMs: f.end_time_ms ?? f.start_time_ms!, label: f.detected_text, band: f.band, selected: f.id === aiSelected?.id }))
-    : [], [aiVideo, aiQa.findings, aiSelected?.id]);
+    : [], [aiVideo, aiQa.findings, aiSelected?.id, aiScope]);
   /** Selecting a video finding seeks to where it first shows; the highlight then follows it. */
   const selectAi = useCallback((finding: AiFinding | null) => {
     setAiSelected(finding);
@@ -710,8 +710,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
             </button>
             {aiQa.available && (
               <button type="button" role="tab" aria-selected={panel === "ai"} onClick={() => setPanel("ai")} data-testid="ai-qa-tab"
-                aria-label={aiOpenCount > 0 ? `AI QA ${aiOpenCount} open ${aiOpenCount === 1 ? "finding" : "findings"}` : "AI QA"}>
-                <Sparkles size={14} aria-hidden="true" />AI QA{aiOpenCount > 0 && <span className="rv-tab-count" aria-hidden="true"> {aiOpenCount}</span>}
+                aria-label={aiQa.findings.length > 0 ? (aiCounts.hidden ? `AI QA ${aiCounts.visible} to review, ${aiCounts.hidden} lower-confidence hidden` : `AI QA ${aiCounts.visible} to review`) : "AI QA"}>
+                <Sparkles size={14} aria-hidden="true" />AI QA{aiQa.findings.length > 0 && <span className="rv-tab-count" aria-hidden="true">{aiCounts.visible}{aiCounts.hidden > 0 && <small> +{aiCounts.hidden}</small>}</span>}
               </button>
             )}
           </div>
@@ -726,6 +726,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
                 onSelect={selectAi}
                 runRequest={aiRunRequest}
                 video={aiVideo}
+                scope={aiScope}
+                onScope={setAiScope}
                 taskTools={canWriteTeam && view.workspaceId && view.role !== "client" && view.taskAccess.create && !view.taskAccess.client
                   ? { workspaceId: view.workspaceId, stages: view.taskStages, assignees: view.assignees } : null}
               />

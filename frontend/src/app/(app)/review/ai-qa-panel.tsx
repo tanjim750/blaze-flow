@@ -2,7 +2,7 @@
 import { NoteTaskDialog } from "./note-task-dialog";
 import type { TaskStage } from "@/lib/api";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Check, CircleHelp, Clock3, Loader2, MessageSquarePlus, Pencil, RotateCcw, Sparkles, Square, X, FileCheck2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import {
   BAND_LABEL, CATEGORY_LABEL, FILTERS, aiQaApi, batchable, commentPreview, isCopyCategory, type AiMode, type ApprovedCopy, type CopyChoice, filterCounts, hasRegion, isActive, matchesFilter,
   pollDelay, progressLabel, readability, sortFindings, stageLabel, stageStep, suggestion, timeRangeLabel,
   type AiFinding, type AiQaState, type AiRegion, type AiReview, type AiTarget, type FindingFilter,
+  FINDINGS_PAGE, inScope, readBandScope, saveBandScope, scopeCounts, type BandScope,
 } from "@/lib/ai-qa";
 import "./ai-qa.css";
 
@@ -26,6 +27,47 @@ export type AiQa = {
   cancel: () => Promise<void>;
   update: (finding: AiFinding) => void;
 };
+
+/** The person's confidence-band choice, remembered per user in localStorage (high only by default). */
+export function useBandScope(userId: string | null | undefined): [BandScope, (scope: BandScope) => void] {
+  // An external store, so the server render (high only) and the saved choice never disagree
+  // during hydration, and other tabs pick a change up through the storage event.
+  const subscribe = useCallback((notify: () => void) => {
+    window.addEventListener("storage", notify);
+    window.addEventListener(SCOPE_EVENT, notify);
+    return () => { window.removeEventListener("storage", notify); window.removeEventListener(SCOPE_EVENT, notify); };
+  }, []);
+  const scope = useSyncExternalStore(subscribe, () => readBandScope(userId), () => "high" as BandScope);
+  const update = useCallback((next: BandScope) => { saveBandScope(userId, next); window.dispatchEvent(new Event(SCOPE_EVENT)); }, [userId]);
+  return [scope, update];
+}
+const SCOPE_EVENT = "bf:aiqa-scope";
+
+/** Horizontal chip row that fades whichever edge has more chips beyond it. */
+function ChipScroller({ children, label }: { children: React.ReactNode; label: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const left = el.scrollLeft > 2;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+    setEdges((now) => (now.left === left && now.right === right ? now : { left, right }));
+  }, []);
+  useEffect(() => {
+    measure();
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measure]);
+  return (
+    <div className="aiqa-filters-wrap" data-fade-left={edges.left || undefined} data-fade-right={edges.right || undefined}>
+      <div ref={ref} className="aiqa-filters" role="tablist" aria-label={label} onScroll={measure}>{children}</div>
+    </div>
+  );
+}
 
 /** Loads the latest run for a version and polls while one is running (paused when hidden). */
 export function useAiQa(target: AiTarget | null): AiQa {
@@ -136,11 +178,14 @@ type Props = {
   video?: boolean;
   /** Team members who can create tasks get "Make task" on each finding. */
   taskTools?: { workspaceId: string; stages: TaskStage[]; assignees: { id: string; name: string }[] } | null;
+  /** High-confidence only, or every band. Owned by the page so the tab badge agrees. */
+  scope?: BandScope;
+  onScope?: (scope: BandScope) => void;
 };
 
 const STEPS = ["Queued", "Reading text", "Checking spelling", "Done"];
 
-export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelect, runRequest = 0, video = false, taskTools = null }: Props) {
+export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelect, runRequest = 0, video = false, taskTools = null, scope = "all", onScope }: Props) {
   const [taskFor, setTaskFor] = useState<{ id: string; text: string; timecode: string | null } | null>(null);
   const router = useRouter();
   const [runOpen, setRunOpen] = useState(false);
@@ -180,8 +225,18 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
   }
   const steps = video ? ["Queued", "Reading frames", "Checking spelling", "Done"] : STEPS;
 
-  const counts = useMemo(() => filterCounts(findings), [findings]);
-  const shown = useMemo(() => sortFindings(findings.filter((f) => matchesFilter(f, filter))), [findings, filter]);
+  const counts = useMemo(() => filterCounts(findings, scope), [findings, scope]);
+  const split = useMemo(() => scopeCounts(findings, scope), [findings, scope]);
+  // A finding picked from a marker on the player stays listed even when its band is hidden.
+  const shown = useMemo(
+    () => sortFindings(findings.filter((f) => (inScope(f, scope) || f.id === selectedId) && matchesFilter(f, filter))),
+    [findings, filter, scope, selectedId],
+  );
+  const [limit, setLimit] = useState(FINDINGS_PAGE);
+  const listKey = `${filter}/${scope}/${review?.id ?? ""}`;
+  const [limitKey, setLimitKey] = useState(listKey);
+  if (limitKey !== listKey) { setLimitKey(listKey); setLimit(FINDINGS_PAGE); }
+  const page = shown.slice(0, Math.max(limit, shown.findIndex((f) => f.id === selectedId) + 1));
   const batch = useMemo(() => batchable(findings), [findings]);
 
   const run = async () => {
@@ -245,7 +300,7 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
         <div className="aiqa-empty">
           <Sparkles size={22} aria-hidden="true" />
           <p>Check the visible text on <strong>{versionLabel}</strong> for likely spelling mistakes.</p>
-          <small>Runs in the background on our own servers. Decorative fonts or low contrast can hide errors, so it won’t catch everything.</small>
+          <small>Runs in the background. Decorative fonts or low contrast can hide errors, so it won’t catch everything.</small>
         </div>
       )}
 
@@ -297,7 +352,7 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
       {review && !active && review.status !== "FAILED" && (
         <>
           <div className="aiqa-summary">
-            <span suppressHydrationWarning>Checked {versionLabel} · {review.engine === "paddleocr" ? "on our servers" : review.engine}</span>
+            <span suppressHydrationWarning>Checked {versionLabel} · {review.engine_label || review.engine}</span>
             <div className="aiqa-chips-sum">
               <span className="aiqa-pill is-high">{review.summary.by_band.high ?? 0} high</span>
               <span className="aiqa-pill is-medium">{review.summary.by_band.medium ?? 0} medium</span>
@@ -309,19 +364,38 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
               <FileCheck2 size={12} aria-hidden="true" /> {review.mode === "COMPARE" ? "Compared" : "Proofread and compared"} with {review.approved_copy.source === "project" ? `${review.approved_copy.title} v${review.approved_copy.version}` : "pasted approved copy"}
             </p>
           )}
-          <div className="aiqa-filters" role="tablist" aria-label="Filter findings">
+          <ChipScroller label="Filter findings">
             {FILTERS.filter((item) => item.id !== "copy" || review.approved_copy).map((item) => (
               <button key={item.id} type="button" role="tab" aria-selected={filter === item.id} onClick={() => setFilter(item.id)}>
                 {item.label}<span>{counts[item.id]}</span>
               </button>
             ))}
-          </div>
+          </ChipScroller>
+          {onScope && (split.hidden > 0 || scope === "all") && (
+            <div className="aiqa-scope" data-testid="ai-qa-scope">
+              {scope === "high" ? (
+                <>
+                  <span>Showing high confidence only</span>
+                  <button type="button" onClick={() => onScope("all")} aria-label={`Show ${split.medium} medium and ${split.low} low confidence findings`}>
+                    Show {[split.medium && `${split.medium} medium`, split.low && `${split.low} low`].filter(Boolean).join(" · ")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span>Showing every confidence level</span>
+                  <button type="button" onClick={() => onScope("high")}>High confidence only</button>
+                </>
+              )}
+            </div>
+          )}
           <div className="aiqa-list" data-testid="ai-qa-findings">
             {findings.length === 0 && (
               <div className="aiqa-empty is-small"><Check size={18} /><p>{review.approved_copy ? "Matches the approved copy, and no likely spelling mistakes." : "No likely spelling mistakes found."}</p><small>That isn’t a guarantee: stylised or very small text may not have been read.</small></div>
             )}
-            {findings.length > 0 && shown.length === 0 && <p className="aiqa-none">Nothing here.</p>}
-            {shown.map((finding) => (
+            {findings.length > 0 && shown.length === 0 && (
+              <p className="aiqa-none">{scope === "high" && split.hidden > 0 && filter === "open" ? "No high-confidence findings to review." : "Nothing here."}</p>
+            )}
+            {page.map((finding) => (
               <FindingCard
                 key={finding.id}
                 finding={finding}
@@ -334,6 +408,11 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
                 onMakeTask={taskTools ? () => void makeTask(finding) : undefined}
               />
             ))}
+            {page.length < shown.length && (
+              <button type="button" className="aiqa-more" onClick={() => setLimit((n) => n + FINDINGS_PAGE)} data-testid="ai-qa-more">
+                Show {Math.min(FINDINGS_PAGE, shown.length - page.length)} more <span>({shown.length - page.length} left)</span>
+              </button>
+            )}
           </div>
           {canRun && batch.length > 0 && (
             <div className="aiqa-batch">
@@ -395,7 +474,7 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
               <option value="en-US">English (US)</option>
             </select>
           </label>
-          <p className="aiqa-note">Runs in the background on our own servers; nothing is sent to an outside AI service. Comments are only added when you choose.</p>
+          <p className="aiqa-note">Runs in the background{review?.engine_label ? ` ${review.engine_label}` : ""}. Comments are only added when you choose.</p>
           {qa.error && <p className="form-error" role="alert">{qa.error}</p>}
         </div>
       </ConfirmDialog>
