@@ -2,9 +2,9 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { Check, KeyRound, Loader2, Mail, MailCheck, Save } from "lucide-react";
-import type { NotificationSettings, WorkspaceProfile } from "@/lib/api";
+import type { NotificationSettings, WhatsAppSettings, WorkspaceProfile } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
-import { changePasswordAction, resendVerificationAction, saveNotificationSettingAction, updateNotificationsAction, updateProfileAction, type SettingsState } from "./actions";
+import { changePasswordAction, resendVerificationAction, saveNotificationSettingAction, saveWhatsAppSettingsAction, updateNotificationsAction, updateProfileAction, type SettingsState } from "./actions";
 
 const initial: SettingsState = { error: null, message: null };
 
@@ -112,5 +112,33 @@ export function NotificationSettingsForm({ initial, workspaceName }: { initial: 
       </li>
     </ul>
     <p className="notif-later">Daily digests and quiet hours aren&rsquo;t available yet.</p>
+  </div>;
+}
+
+/** Workspace switch for WhatsApp approval messages, with the month's usage against the plan cap. */
+export function WhatsAppSettingsForm({ initial: start }: { initial: WhatsAppSettings }) {
+  const [settings, setSettings] = useState(start);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const save = (change: { enabled?: boolean; link_expiry_hours?: number }) => startTransition(async () => {
+    const result = await saveWhatsAppSettingsAction(change);
+    if (result.ok) { setSettings(result.settings); setError(null); } else setError(result.error);
+  });
+  const { used, limit, plan } = settings.usage;
+  return <div className="settings-form whatsapp-settings">
+    <div className="whatsapp-row">
+      <div><strong>Send WhatsApp when work is ready to approve</strong><p>Clients who agreed get a WhatsApp message with a Review now link. Email always goes too.</p></div>
+      <Switch checked={settings.enabled} onCheckedChange={(enabled) => { if (!pending) save({ enabled }); }} label="WhatsApp approval messages" />
+    </div>
+    <div className="whatsapp-row">
+      <label>Review links expire after<select value={String(settings.link_expiry_hours)} disabled={pending} onChange={(event) => save({ link_expiry_hours: Number(event.target.value) })}>
+        {[[24, "1 day"], [72, "3 days"], [168, "7 days"], [336, "14 days"], [720, "30 days"]].map(([hours, label]) => <option key={hours} value={hours}>{label}</option>)}
+        {![24, 72, 168, 336, 720].includes(settings.link_expiry_hours) && <option value={settings.link_expiry_hours}>{settings.link_expiry_hours} hours</option>}
+      </select></label>
+      <p className="whatsapp-usage"><span>{used} / {limit}</span> messages this month on the {plan} plan</p>
+    </div>
+    {settings.test_mode && <p className="whatsapp-test" role="note">Test mode: messages are logged, not sent. Nothing reaches a phone until WhatsApp is connected.</p>}
+    {pending && <p className="settings-muted"><Loader2 size={13} className="spin" /> Saving…</p>}
+    {error && <p className="form-error" role="alert">{error}</p>}
   </div>;
 }

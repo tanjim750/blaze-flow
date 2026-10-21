@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers as requestHeaders } from "next/headers";
 import { cache } from "react";
 import { describeErrorBody } from "./errors";
 import type { ActivityPage, GuestLinkActivity } from "./activity";
@@ -33,8 +33,10 @@ export type WorkspaceProfile = {
 };
 export type ClientTeamMetadata = { project_ids?: string[] } & Record<string, unknown>;
 export type ClientTeam = { id: string; name: string; description: string | null; website: string | null; email: string | null; phone: string | null; address_line_1: string | null; address_line_2: string | null; city: string | null; state_region: string | null; postal_code: string | null; country_code: string | null; metadata: ClientTeamMetadata | null; status: string; created_at: string };
-export type ClientTeamMember = { id: string; user: CurrentUser; title: string | null; status: string; joined_at: string; removed_at: string | null };
-export type ClientTeamInvite = { id: string; invite_type: "EMAIL" | "LINK"; recipient_email: string | null; label: string | null; max_uses: number | null; use_count: number; expires_at: string; revoked_at: string | null; created_at: string; token?: string };
+/** A client person's WhatsApp number and the consent trail (who, when, how). */
+export type WhatsAppContact = { phone: string; opted_in: boolean; opted_in_at: string | null; opt_in_method: "agency_recorded" | "client_self" | null; opt_in_recorded_by?: string | null; opted_out_at: string | null; opt_out_method: "stop_reply" | "client_self" | "agency" | null };
+export type ClientTeamMember = { id: string; user: CurrentUser; title: string | null; status: string; joined_at: string; removed_at: string | null; whatsapp?: WhatsAppContact };
+export type ClientTeamInvite = { id: string; invite_type: "EMAIL" | "LINK"; recipient_email: string | null; label: string | null; max_uses: number | null; use_count: number; expires_at: string; revoked_at: string | null; created_at: string; token?: string; whatsapp?: WhatsAppContact };
 export type NotificationPreference = { email_mentions_enabled: boolean };
 /** GET/PATCH /notification-preferences/ with a workspace: the email switch plus per-kind in-app switches. */
 export type NotificationSettings = NotificationPreference & {
@@ -151,7 +153,31 @@ async function authHeaders(): Promise<Record<string, string>> {
   if (cookieHeader) headers.Cookie = cookieHeader;
   const csrf = jar.get("csrftoken")?.value;
   if (csrf) headers["X-CSRFToken"] = csrf;
+  Object.assign(headers, await forwardedClientHeaders());
   return headers;
+}
+
+/**
+ * Server-side calls to Django come from the frontend container, so without these every
+ * visitor would share one throttle bucket keyed on the container IP. Pass the visitor's
+ * address on exactly as the `/api` rewrite proxy does; Django decides how far to trust it
+ * (THROTTLE_TRUSTED_PROXY_COUNT / THROTTLE_TRUST_CF_CONNECTING_IP).
+ */
+export async function forwardedClientHeaders(): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  let incoming: Headers;
+  try {
+    incoming = await requestHeaders();
+  } catch {
+    return out; // outside a request scope (build time)
+  }
+  const cfIp = incoming.get("cf-connecting-ip");
+  if (cfIp) out["CF-Connecting-IP"] = cfIp;
+  const xff = incoming.get("x-forwarded-for");
+  const realIp = incoming.get("x-real-ip");
+  if (xff) out["X-Forwarded-For"] = xff;
+  else if (cfIp || realIp) out["X-Forwarded-For"] = (cfIp || realIp)!;
+  return out;
 }
 
 /** Exported for feature modules that keep their routes in their own file (e.g. `billing-api.ts`). */
@@ -203,7 +229,11 @@ export const listClientTeamMembers = (workspaceId: string, clientTeamId: string)
 export const addClientTeamMember = (workspaceId: string, clientTeamId: string, payload: { email: string; title?: string }) => request<ClientTeamMember>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/members/`, jsonBody(payload));
 export const removeClientTeamMember = (workspaceId: string, clientTeamId: string, memberId: string) => request<void>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/members/${memberId}/`, { method: "DELETE" });
 export const listClientTeamInvites = (workspaceId: string, clientTeamId: string) => request<ClientTeamInvite[]>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/`);
-export const createClientTeamInvite = (workspaceId: string, clientTeamId: string, payload: { invite_type: "EMAIL" | "LINK"; recipient_email?: string; label?: string; max_uses?: number; expires_in_days: number }) => request<ClientTeamInvite>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/`, jsonBody(payload));
+export const createClientTeamInvite = (workspaceId: string, clientTeamId: string, payload: { invite_type: "EMAIL" | "LINK"; recipient_email?: string; label?: string; max_uses?: number; expires_in_days: number; whatsapp_phone?: string; whatsapp_opt_in?: boolean; whatsapp_consent_confirmed?: boolean }) => request<ClientTeamInvite>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/`, jsonBody(payload));
+export const setClientMemberWhatsApp = (workspaceId: string, clientTeamId: string, memberId: string, payload: { phone: string; opted_in: boolean; consent_confirmed?: boolean }) => request<WhatsAppContact>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/members/${memberId}/whatsapp/`, { ...jsonBody(payload), method: "PUT" });
+export type WhatsAppSettings = { enabled: boolean; link_expiry_hours: number; test_mode: boolean; provider: string; usage: { plan: string; used: number; limit: number }; opt_in_wording: string };
+export const getWhatsAppSettings = (workspaceId: string) => request<WhatsAppSettings>(`/workspaces/${workspaceId}/whatsapp-settings/`);
+export const updateWhatsAppSettings = (workspaceId: string, payload: { enabled?: boolean; link_expiry_hours?: number }) => request<WhatsAppSettings>(`/workspaces/${workspaceId}/whatsapp-settings/`, { ...jsonBody(payload), method: "PATCH" });
 export const revokeClientTeamInvite = (workspaceId: string, clientTeamId: string, inviteId: string) => request<void>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/${inviteId}/`, { method: "DELETE" });
 /** The client portal's upload area: projects this viewer may send files to, and what they sent. */
 export const getMessageUnread = (workspaceId: string) => request<import("./messages").UnreadSummary>(`/workspaces/${workspaceId}/messages/unread/`);
@@ -260,7 +290,7 @@ export const createProject = (workspaceId: string, payload: { name: string; clie
 export const createFolder = (workspaceId: string, projectId: string, payload: { name: string; parent_folder_id?: string }) =>
   request<ProjectFolder>(`/workspaces/${workspaceId}/projects/${projectId}/folders/`, jsonBody(payload));
 
-export const updateProject = (workspaceId: string, projectId: string, payload: { name?: string; status?: string; priority?: string }) =>
+export const updateProject = (workspaceId: string, projectId: string, payload: { name?: string; status?: string; priority?: string; client_team_id?: string | null }) =>
   request<Project>(`/workspaces/${workspaceId}/projects/${projectId}/`, { ...jsonBody(payload), method: "PATCH" });
 
 /** Archives rather than destroys: the API keeps the row and flips its status. */
@@ -407,7 +437,7 @@ export const updateGuestInvite = (workspaceId: string, projectId: string, invite
 export const listMediaDecisions = (workspaceId: string, projectId: string, mediaVersionId: string) =>
   request<{ results: ReviewDecision[]; viewer: DecisionViewer }>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/decisions/`);
 /** A client-team member's Approve / Request changes. Team members use the workflow routes. */
-export const createMediaDecision = (workspaceId: string, projectId: string, mediaVersionId: string, payload: { decision: DecisionKind; message?: string; start_time_ms?: number }) =>
+export const createMediaDecision = (workspaceId: string, projectId: string, mediaVersionId: string, payload: { decision: DecisionKind; message?: string; start_time_ms?: number; confirm_override?: boolean }) =>
   request<ReviewDecision>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/decisions/`, jsonBody(payload));
 export const revokeGuestInvite = (workspaceId: string, projectId: string, inviteId: string) =>
   request<void>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/${inviteId}/`, { method: "DELETE" });

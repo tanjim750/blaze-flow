@@ -142,3 +142,15 @@ export async function setProjectStatusAction(projectId: string, status: string):
   revalidatePath("/");
   return ok();
 }
+
+/** Links a project to a client (or unlinks it with `null`). The client then sees it in their portal. */
+export async function moveCampaignToClientAction(campaignId: string, clientId: string | null): Promise<ActionState> {
+  const workspace = await currentWorkspaceId();
+  if (isFailure(workspace)) return workspace;
+  const updated = await updateProject(workspace.id, campaignId, { client_team_id: clientId });
+  if (!updated.ok) return { error: updated.error.detail, savedAt: null };
+  revalidatePath("/projects");
+  revalidatePath("/files");
+  revalidatePath("/money");
+  return ok();
+}

@@ -116,7 +116,7 @@ from .services.retention import (
     update_workspace_retention_policy, workspace_retention_policy_data,
 )
 from .throttles import (
-    EmailVerificationThrottle, LoginThrottle, PasswordResetThrottle, RegistrationThrottle,
+    EmailVerificationThrottle, InvitePreviewThrottle, LoginThrottle, PasswordResetThrottle, RegistrationThrottle,
 )
 from .models import (
     ClientUpload,
@@ -358,7 +358,7 @@ def auth_config(request):
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@throttle_classes([EmailVerificationThrottle])
+@throttle_classes([InvitePreviewThrottle])
 def invite_preview_view(request):
     token = (request.query_params.get('token') or '').strip()
     preview = invite_preview(token) if token else None
@@ -888,12 +888,20 @@ def client_team_invites(request, workspace_id, client_team_id):
         workspace=workspace,
         permission_key=CLIENT_TEAM_MANAGE,
     ).first()
+    invite_data = dict(serializer.validated_data)
+    whatsapp_phone = invite_data.pop('whatsapp_phone', '')
+    whatsapp_opt_in = invite_data.pop('whatsapp_opt_in', False)
+    invite_data.pop('whatsapp_consent_confirmed', None)
     try:
-        invite, token = create_client_team_invite(
-            client_team=client_team,
-            created_by_membership=creating_membership,
-            **serializer.validated_data,
-        )
+        with transaction.atomic():
+            invite, token = create_client_team_invite(
+                client_team=client_team,
+                created_by_membership=creating_membership,
+                **invite_data,
+            )
+            if whatsapp_phone:
+                from .services.approval_requests import set_invite_contact
+                set_invite_contact(invite=invite, phone=whatsapp_phone, opted_in=whatsapp_opt_in, recorded_by=request.user)
     except ClientTeamInviteError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     data = ClientTeamInviteSerializer(invite).data
@@ -1067,7 +1075,11 @@ def project_detail(request, workspace_id, project_id):
                 enforce_project_creation_limit(workspace=workspace)
             except SubscriptionError as exc:
                 return Response({'detail': str(exc), 'code': 'plan_limit'}, status=status.HTTP_400_BAD_REQUEST)
-        project = update_project(project=project, **serializer.validated_data)
+        changes = dict(serializer.validated_data)
+        if changes.get('client_team_id'):
+            # Linking a project to a client: the client must be an active one of this workspace.
+            get_object_or_404(ClientTeam, id=changes['client_team_id'], workspace=workspace, status=ClientTeamStatus.ACTIVE)
+        project = update_project(project=project, **changes)
         return Response(ProjectSerializer(project, context={'viewer_can_edit': True}).data)
     archive_project(project=project)
     return Response(status=status.HTTP_204_NO_CONTENT)
@@ -2105,6 +2117,12 @@ def media_version_render_control(request, workspace_id, project_id, media_versio
             topic='file.preview.requested', aggregate_id=str(media_version.original_file_id)
         ).first()
         if event is None:
+            if action == 'retry':
+                # Uploads from before every type was queued have no job at all: start one.
+                from app.services.media import queue_media_processing
+                queue_media_processing(media_version.original_file)
+                record_user_audit(user=request.user, workspace=workspace, action='media.render.retry', entity_type='media_version', entity_id=media_version.id)
+                return Response({'status': 'PENDING'})
             return Response({'detail': 'No render job exists for this media version.'}, status=status.HTTP_404_NOT_FOUND)
         if event.status == 'PROCESSING':
             return Response({'detail': 'A running render cannot be changed safely.'}, status=status.HTTP_409_CONFLICT)

@@ -64,13 +64,23 @@ class ClientTeamUpdateSerializer(ClientTeamWriteSerializer):
     name = serializers.CharField(max_length=255, required=False)
 
 
+def _whatsapp(obj, field):
+    from app.models import WhatsAppContact
+    from app.services.approval_requests import contact_data
+    return contact_data(WhatsAppContact.objects.filter(**{field: obj}).select_related('opt_in_recorded_by').first())
+
+
 class ClientTeamMemberSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    whatsapp = serializers.SerializerMethodField()
 
     class Meta:
         model = ClientTeamMember
-        fields = ('id', 'user', 'title', 'status', 'joined_at', 'removed_at')
+        fields = ('id', 'user', 'title', 'status', 'joined_at', 'removed_at', 'whatsapp')
         read_only_fields = fields
+
+    def get_whatsapp(self, obj):
+        return _whatsapp(obj, 'client_team_member')
 
 
 class ClientTeamMemberCreateSerializer(serializers.Serializer):
@@ -109,8 +119,14 @@ class ClientTeamInviteSerializer(serializers.ModelSerializer):
             'expires_at',
             'revoked_at',
             'created_at',
+            'whatsapp',
         )
         read_only_fields = fields
+
+    whatsapp = serializers.SerializerMethodField()
+
+    def get_whatsapp(self, obj):
+        return _whatsapp(obj, 'client_team_invite')
 
 
 class ClientTeamInviteCreateSerializer(serializers.Serializer):
@@ -119,6 +135,19 @@ class ClientTeamInviteCreateSerializer(serializers.Serializer):
     label = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
     max_uses = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     expires_in_days = serializers.IntegerField(min_value=1, max_value=90, default=14)
+    # Optional WhatsApp number for the person being invited (EMAIL invites only).
+    whatsapp_phone = serializers.CharField(max_length=40, required=False, allow_blank=True, write_only=True)
+    whatsapp_opt_in = serializers.BooleanField(required=False, default=False, write_only=True)
+    whatsapp_consent_confirmed = serializers.BooleanField(required=False, default=False, write_only=True)
+
+    def validate_whatsapp_phone(self, value):
+        if not (value or '').strip():
+            return ''
+        from app.services.whatsapp import normalize_phone
+        try:
+            return normalize_phone(value)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
 
     def validate_recipient_email(self, value):
         return value.lower() if value else value
@@ -133,6 +162,12 @@ class ClientTeamInviteCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {'recipient_email': ['A LINK invitation cannot target a recipient email address.']}
             )
+        if attrs.get('whatsapp_phone') and invite_type != ClientTeamInviteType.EMAIL:
+            raise serializers.ValidationError({'whatsapp_phone': ['Add a WhatsApp number to an email invitation only.']})
+        if attrs.get('whatsapp_opt_in') and not attrs.get('whatsapp_phone'):
+            raise serializers.ValidationError({'whatsapp_phone': ['Add the number the client agreed to be messaged on.']})
+        if attrs.get('whatsapp_opt_in') and not attrs.get('whatsapp_consent_confirmed'):
+            raise serializers.ValidationError({'whatsapp_consent_confirmed': ['Confirm the client agreed to get WhatsApp messages.']})
         return attrs
 
 

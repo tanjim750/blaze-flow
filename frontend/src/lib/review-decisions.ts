@@ -135,3 +135,13 @@ export function guestBarActions(canDecide: boolean, latest: ReviewDecision | nul
   if (!canDecide) return { approve: false, requestChanges: false };
   return { approve: latest?.decision !== "approved", requestChanges: true };
 }
+
+/**
+ * The warning shown before a decision reverses the one already on this cut (R14), or null.
+ * The API refuses such a reversal unless it is confirmed, so the UI warns and then confirms.
+ */
+export function overrideWarning(latest: ReviewDecision | null | undefined, next: DecisionKind, now: Date = new Date(), timeZone?: string): string | null {
+  if (!latest || latest.decision === next) return null;
+  const replaces = next === "approved" ? "Approving replaces that request." : "Requesting changes reopens it.";
+  return `${decisionLine(latest, now, timeZone)}. ${replaces}`;
+}

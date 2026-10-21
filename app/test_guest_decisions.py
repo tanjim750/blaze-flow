@@ -303,9 +303,16 @@ class GuestDecisionFlowTests(DecisionBase, TestCase):
         again = self.decide(headers, self.v2, 'approved')
         self.assertEqual(again.status_code, 409)
         self.assertIn('already approved by Rachel Kim', again.json()['detail'])
-        self.assertEqual(self.decide(headers, self.v2, 'changes_requested', message='Actually, one more fix').status_code, 201)
+        # Reversing a decision is allowed, but only once the reviewer confirms it.
+        unconfirmed = self.decide(headers, self.v2, 'changes_requested', message='Actually, one more fix')
+        self.assertEqual((unconfirmed.status_code, unconfirmed.json()['code']), (409, 'decision_override'))
+        self.assertEqual(unconfirmed.json()['previous']['decision'], 'approved')
+        self.assertEqual(self.stage_slug(self.v2), 'approved')
+        self.assertEqual(self.decide(headers, self.v2, 'changes_requested', message='Actually, one more fix', confirm_override=True).status_code, 201)
         self.assertEqual(self.stage_slug(self.v2), 'revision')
-        self.assertEqual(self.decide(headers, self.v2, 'approved').status_code, 201)
+        self.assertEqual(self.decide(headers, self.v2, 'approved', confirm_override=True).status_code, 201)
+        overrides = AuditLog.objects.filter(action__startswith='review.decision.').order_by('created_at').last().metadata['overrides']
+        self.assertEqual(overrides['decision'], 'changes_requested')
         self.assertEqual(ReviewDecision.objects.count(), 3)
 
     def test_a_cut_the_team_already_approved_is_still_recorded_but_not_moved(self):
@@ -464,7 +471,7 @@ class ClientMemberReviewTests(DecisionBase, TestCase):
         self.assertTrue(AuditLog.objects.filter(action='review.decision.approved', actor_user=client).exists())
         self.assertEqual({n.recipient_user_id for n in Notification.objects.filter(kind='MEDIA_APPROVED')}, {self.editor.id, self.assignee.id})
         # Changes requested from the page also becomes a client-visible note.
-        response = self.client.post(url, {'decision': 'changes_requested', 'message': 'Swap the music'}, format='json')
+        response = self.client.post(url, {'decision': 'changes_requested', 'message': 'Swap the music', 'confirm_override': True}, format='json')
         self.assertEqual(response.status_code, 201)
         note = ReviewComment.objects.get(id=ReviewDecision.objects.latest('created_at').review_comment_id)
         self.assertEqual((note.visibility, note.author_user_id), ('client', client.id))
@@ -548,3 +555,27 @@ class GuestPlaybackTests(DecisionBase, TestCase):
         self.add_proxy(self.v2)
         _, headers = self.guest_link(['review.comment.read'])
         self.assertEqual(self.playback(headers, self.v2).status_code, 403)
+
+
+class ReviewOutcomeSyncTests(DecisionBase, TestCase):
+    """R10/R11: an approval or change request moves the cut's task and its Files stage."""
+
+    def test_guest_decisions_move_the_attached_task_and_library_stage(self):
+        from .models import ProjectFile, Task, TaskAttachment, TaskStage, TaskStageKind, WorkspaceMembership
+        media = MediaVersion.objects.get(id=self.v2['id'])
+        membership = WorkspaceMembership.objects.filter(workspace=self.workspace, user=self.owner).first()
+        task = Task.objects.filter(workspace=self.workspace, project_id=self.project_id).first()
+        if task is None:
+            self.as_user(self.owner)
+            created = self.client.post(reverse('api-tasks', args=[self.workspace.id]), {'title': 'Hero cut', 'project_id': str(self.project_id)}, format='json')
+            task = Task.objects.get(id=created.json()['id'])
+        TaskAttachment.objects.get_or_create(task=task, file=media.original_file, defaults={'id': uuid.uuid4(), 'attached_by_workspace_membership': membership, 'attached_at': timezone.now()})
+        _, headers = self.guest_link()
+        self.assertEqual(self.decide(headers, self.v2, 'approved').status_code, 201)
+        task.refresh_from_db()
+        self.assertEqual(task.task_stage.kind, TaskStageKind.APPROVED)
+        self.decide(headers, self.v2, 'changes_requested', message='One more pass', confirm_override=True)
+        task.refresh_from_db()
+        self.assertEqual(task.task_stage.kind, TaskStageKind.REVISIONS)
+        for row in ProjectFile.objects.filter(file=media.original_file):
+            self.assertEqual(TaskStage.objects.get(id=row.task_stage_id).kind, TaskStageKind.REVISIONS)

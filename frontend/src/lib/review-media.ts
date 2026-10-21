@@ -222,6 +222,10 @@ export function buildCatalogue(input: CatalogueInput): ReviewAsset[] {
       if (known) {
         // Same bytes, so the same cut: give the library version somewhere to keep review data.
         known.target = target;
+        // The guest page, share links, notifications, decisions and the Render Queue all name a
+        // review cut by its project version number (V9), so the picker does too; otherwise it
+        // reads "V1 · Latest" next to a share link for V9. `number` keeps the library order.
+        known.label = `V${media.version_number}`;
         known.src = previewSrc(target);
         known.qualities = media.preview_qualities ?? [];
         // The review version's own title ("Cold brew spot") reads better than the file name.

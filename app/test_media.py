@@ -350,6 +350,47 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.client.force_authenticate(outsider)
         self.assertEqual(self.client.get(preview_url).status_code, 403)
 
+    def test_image_upload_is_scanned_then_previewed(self):
+        from io import BytesIO
+        from PIL import Image
+
+        from .models import FileSecurityScan
+
+        buffer = BytesIO()
+        Image.new('RGB', (64, 32), (200, 40, 40)).save(buffer, format='PNG')
+        uploaded = self.upload(name='poster.png', content=buffer.getvalue(), content_type='image/png')
+        self.assertEqual(uploaded.status_code, 201, uploaded.content)
+        media = MediaVersion.objects.get(id=uploaded.json()['id'])
+        self.assertTrue(FileSecurityScan.objects.filter(file=media.original_file).exists())
+        self.assertTrue(OutboxEvent.objects.filter(topic='file.security-scan.requested', aggregate_id=str(media.original_file_id)).exists())
+        process_outbox_events()
+        process_outbox_events()
+        self.assertTrue(OutboxEvent.objects.filter(topic='file.preview.requested', aggregate_id=str(media.original_file_id)).exists())
+        detail = self.client.get(reverse('api-media-version-detail', args=[self.workspace.id, self.project.id, media.id]))
+        self.assertEqual(detail.json()['preview_status'], 'READY')
+
+    def test_backfill_command_queues_stuck_image_versions(self):
+        from django.core.management import call_command
+
+        from .models import FileSecurityScan
+
+        uploaded = self.upload(name='old.png')
+        media = MediaVersion.objects.get(id=uploaded.json()['id'])
+        # Simulate a version uploaded before images were queued.
+        OutboxEvent.objects.filter(aggregate_id=str(media.original_file_id)).delete()
+        FileSecurityScan.objects.filter(file=media.original_file).delete()
+        call_command('queue_missing_media_previews', stdout=open('/dev/null', 'w'))
+        self.assertTrue(OutboxEvent.objects.filter(topic='file.security-scan.requested', aggregate_id=str(media.original_file_id)).exists())
+
+    def test_retry_starts_a_job_when_none_exists(self):
+        uploaded = self.upload(name='stuck.png')
+        media = MediaVersion.objects.get(id=uploaded.json()['id'])
+        OutboxEvent.objects.filter(aggregate_id=str(media.original_file_id)).delete()
+        url = reverse('api-media-version-render-control', args=[self.workspace.id, self.project.id, media.id])
+        response = self.client.post(url, {'action': 'retry'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(OutboxEvent.objects.filter(aggregate_id=str(media.original_file_id)).exists())
+
     def test_render_job_can_be_cancelled_and_retried(self):
         uploaded = self.upload(name='queued.mp4', content=b'\x00\x00\x00\x18ftypisom-test', content_type='video/mp4')
         url = reverse('api-media-version-render-control', args=[self.workspace.id, self.project.id, uploaded.json()['id']])

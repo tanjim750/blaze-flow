@@ -52,6 +52,12 @@ class EmailVerificationThrottle(AnonRateThrottle):
     scope = 'email_verification'
 
 
+class InvitePreviewThrottle(AnonRateThrottle):
+    """Read-only invite lookups get their own, looser bucket: a page reload shouldn't
+    eat into the email-verification allowance."""
+    scope = 'invite_preview'
+
+
 class UploadLinkThrottle(AnonRateThrottle):
     """Public upload links: per client IP, signed in or not (a link is the only credential)."""
     scope = 'upload_link'

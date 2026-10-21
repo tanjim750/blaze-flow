@@ -7,11 +7,12 @@ class AIReviewSerializer(serializers.ModelSerializer):
     media_version_id = serializers.UUIDField(read_only=True)
     requested_by = serializers.SerializerMethodField()
     summary = serializers.SerializerMethodField()
+    engine_label = serializers.SerializerMethodField()
 
     class Meta:
         model = AIReview
         fields = (
-            'id', 'media_version_id', 'status', 'stage', 'progress', 'mode', 'language', 'engine',
+            'id', 'media_version_id', 'status', 'stage', 'progress', 'mode', 'language', 'engine', 'engine_label',
             'engine_version', 'pipeline_version', 'error_code', 'error_message', 'requested_by',
             'summary', 'usage', 'approved_copy', 'started_at', 'completed_at', 'created_at', 'updated_at',
         )
@@ -23,6 +24,10 @@ class AIReviewSerializer(serializers.ModelSerializer):
         if copy is None:
             return None
         return {'id': str(copy.id), 'title': copy.title, 'version': copy.version, 'source': copy.source, 'text': copy.text}
+
+    def get_engine_label(self, review):
+        from app.ai_qa.engines import engine_label
+        return engine_label(review.engine)
 
     def get_requested_by(self, review):
         user = review.requested_by
