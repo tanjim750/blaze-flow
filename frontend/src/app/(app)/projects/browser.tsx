@@ -25,7 +25,8 @@ import type { TasksView } from "@/lib/tasks-view";
 import { filterClientTree } from "@/lib/client-filter";
 import "../tasks/tasks.css";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, renameCampaignAction, renameFolderAction, type ActionState } from "./actions";
+import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, moveCampaignToClientAction, renameCampaignAction, renameFolderAction, type ActionState } from "./actions";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { startUpload } from "@/lib/upload-store";
 import { reviewHref } from "@/lib/open-in-review";
 
@@ -155,7 +156,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
               <h1>{view.selectedCampaign?.name ?? "No campaign selected"}</h1>
             </div>
             <div className="pb-title-actions">
-              <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions"><Ellipsis size={15} /></button>
+              {view.selectedCampaign && <ProjectMoreActions view={view} campaignId={view.selectedCampaign.id} />}
               {view.workspaceId && view.selectedCampaign && (
                 <ChatHeaderButton workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} unread={messagesUnread} />
               )}
@@ -185,7 +186,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
         )}
 
         {tab === "Files" && view.selectedCampaign ? (
-          <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient?.id ?? null} />
+          <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null} />
         ) : tab === "Tasks" && view.selectedCampaign ? (
           <TasksBoard compact view={tasksView} projectId={view.selectedCampaign.id} />
         ) : tab === "Brief & Specs" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (
@@ -583,3 +584,43 @@ function NestedFolders({ view }: { view: ProjectsView }) {
 
 const initials = (value: string) =>
   value.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]?.toUpperCase() ?? "").join("") || "BF";
+
+/**
+ * The project header's "…" menu: link the project to a client (or unlink it). Linking is
+ * what puts a project in that client's portal.
+ */
+function ProjectMoreActions({ view, campaignId }: { view: ProjectsView; campaignId: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const clients = view.clients.filter((client) => client.id !== "unassigned");
+  const current = view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null;
+  const move = (clientId: string | null) => start(async () => {
+    setError(null);
+    const result = await moveCampaignToClientAction(campaignId, clientId);
+    if (result.error) { setError(result.error); return; }
+    router.push(`/projects?client=${clientId ?? "unassigned"}&campaign=${campaignId}`);
+    router.refresh();
+  });
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions" disabled={pending}><Ellipsis size={15} /></button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="pb-more-menu">
+          <DropdownMenuLabel>Move to client</DropdownMenuLabel>
+          {clients.map((client) => (
+            <DropdownMenuItem key={client.id} disabled={client.id === current} onSelect={() => move(client.id)}>
+              {client.name}{client.id === current ? " (current)" : ""}
+            </DropdownMenuItem>
+          ))}
+          {!clients.length && <DropdownMenuItem disabled>No clients yet. Create one in Clients</DropdownMenuItem>}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled={!current} onSelect={() => move(null)}>No client (unassigned)</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {error && <span className="pb-inline-error" role="alert">{error}</span>}
+    </>
+  );
+}

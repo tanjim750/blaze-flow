@@ -40,7 +40,7 @@ def _hash(value):
 
 
 @transaction.atomic
-def create_guest_invite(*, project, membership, label, permissions, expires_in_hours=168, actor=None):
+def create_guest_invite(*, project, membership, permissions, label='', expires_in_hours=168, actor=None):
     requested = set(permissions)
     if not requested or not requested.issubset(GUEST_ALLOWED_PERMISSIONS):
         raise GuestAccessError('Select one or more supported guest permissions.')

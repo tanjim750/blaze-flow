@@ -76,7 +76,7 @@ class ProjectCreateSerializer(serializers.Serializer):
 
 class ProjectUpdateSerializer(ProjectCreateSerializer):
     name = serializers.CharField(max_length=200, required=False)
-    description = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=20000)
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=100000)
     deliverable_specs = DeliverableSpecsSerializer(required=False)
 
     def validate_deliverable_specs(self, value):

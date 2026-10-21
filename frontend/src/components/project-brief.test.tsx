@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Project } from "@/lib/api";
+import type { Editor } from "@tiptap/react";
 import { ProjectBrief } from "./project-brief";
 
 const project = (overrides: Partial<Project> = {}): Project => ({
@@ -40,15 +41,30 @@ describe("ProjectBrief", () => {
 
   it("debounces typing into one PATCH and then says Saved", async () => {
     render(<ProjectBrief workspaceId="w1" project={project()} />);
-    const brief = screen.getByLabelText("Brief");
-    fireEvent.change(brief, { target: { value: "Draft one" } });
-    fireEvent.change(brief, { target: { value: "Draft two" } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    const editor = (screen.getByRole("textbox", { name: "Brief" }) as HTMLElement & { editor: Editor }).editor;
+    act(() => { editor.commands.setContent("<p>Draft one</p>", { emitUpdate: true }); });
+    act(() => { editor.commands.setContent("<p>Draft <strong>two</strong></p>", { emitUpdate: true }); });
     expect(fetchMock).not.toHaveBeenCalled();
     await act(async () => { await vi.advanceTimersByTimeAsync(900); });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/workspaces/w1/projects/p1/");
-    expect(bodies()[0]).toEqual({ description: "Draft two" });
+    expect(bodies()[0]).toEqual({ description: "<p>Draft <strong>two</strong></p>" });
     expect(screen.getByText("Saved")).toBeInTheDocument();
+  });
+
+  it("opens an old plain-text brief as paragraphs in the editor", async () => {
+    render(<ProjectBrief workspaceId="w1" project={project()} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    const box = screen.getByRole("textbox", { name: "Brief" }) as HTMLElement & { editor: Editor };
+    expect(box.editor.getHTML()).toBe("<p>Three cutdowns.<br>Warm grade.</p>");
+  });
+
+  it("renders a rich brief read-only", () => {
+    render(<ProjectBrief workspaceId="w1" project={project({ viewer_can_edit: false, description: "<h2>Goal</h2><ul><li><p>Hook in 3s</p></li></ul>" })} />);
+    expect(screen.getByRole("heading", { name: "Goal" })).toBeInTheDocument();
+    expect(screen.getByText("Hook in 3s").closest("li")).not.toBeNull();
+    expect(screen.queryByText(/<h2>/)).not.toBeInTheDocument();
   });
 
   it("merges spec picks into one deliverable_specs patch", async () => {

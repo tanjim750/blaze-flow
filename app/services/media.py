@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from app.models import (
+    FileSecurityScan,
     File,
     FileStatus,
     MediaAsset,
@@ -23,7 +24,7 @@ from app.models import (
 from app.permissions import active_memberships_for_user
 
 from .audit import record_user_audit
-from .file_processing import PREVIEW_TOPIC, enqueue_file_event
+from .file_processing import PREVIEW_TOPIC, SCAN_TOPIC, enqueue_file_event
 from .notifications import notify_new_media_version
 from .subscriptions import enforce_workspace_storage_limit
 
@@ -130,6 +131,19 @@ def _add_to_project_files(*, project, file_record, title, user, now):
     )
 
 
+def queue_media_processing(file_record):
+    """Queue the security scan and the preview for a review-media file.
+
+    Images (and anything else that isn't video) are previewed once the scan comes back
+    clean, the same as project files. Videos start their proxy straight away, alongside the
+    scan, so a slow scan doesn't hold up playback; an infected result still fails the file.
+    """
+    FileSecurityScan.objects.get_or_create(file=file_record, defaults={'engine': settings.FILE_SECURITY_SCANNER})
+    enqueue_file_event(file=file_record, topic=SCAN_TOPIC)
+    if (file_record.mime_type or '').startswith('video/'):
+        enqueue_file_event(file=file_record, topic=PREVIEW_TOPIC)
+
+
 def upload_media_version(*, project, user, upload, title, note='', priority='MEDIUM', allow_download=False, initial_stage=None):
     detected_type = validate_media_upload(upload)
     enforce_workspace_storage_limit(workspace=project.workspace, additional_bytes=upload.size)
@@ -220,8 +234,7 @@ def upload_media_version(*, project, user, upload, title, note='', priority='MED
                     'checksum_sha256': checksum,
                 },
             )
-            if detected_type.startswith('video/'):
-                enqueue_file_event(file=file_record, topic=PREVIEW_TOPIC)
+            queue_media_processing(file_record)
             notify_new_media_version(media_version=media_version, actor=user)
             return media_version
     except Exception:

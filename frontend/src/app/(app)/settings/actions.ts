@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { changePassword, getCurrentUser, requestEmailVerification, updateNotificationPreferences, updateNotificationSettings, updateWorkspaceProfile } from "@/lib/api";
-import type { NotificationSettings } from "@/lib/api";
+import { changePassword, getCurrentUser, updateWhatsAppSettings, requestEmailVerification, updateNotificationPreferences, updateNotificationSettings, updateWorkspaceProfile } from "@/lib/api";
+import type { NotificationSettings, WhatsAppSettings } from "@/lib/api";
 import { loadWorkspaceContext } from "@/lib/workspace";
 
 export type SettingsState = { error: string | null; message: string | null };
@@ -59,5 +59,19 @@ export async function saveNotificationSettingAction(change: { in_app?: Record<st
   if (!workspace) return { ok: false, error: "Join a workspace before changing notification settings." };
   const result = await updateNotificationSettings({ workspace_id: workspace.id, ...change });
   if (!result.ok) return { ok: false, error: result.error.detail };
+  return { ok: true, settings: result.data };
+}
+
+export type WhatsAppSettingsResult = { ok: true; settings: WhatsAppSettings } | { ok: false; error: string };
+
+/** The workspace's WhatsApp switch, saved as it is flipped. */
+export async function saveWhatsAppSettingsAction(change: { enabled?: boolean; link_expiry_hours?: number }): Promise<WhatsAppSettingsResult> {
+  const context = await loadWorkspaceContext();
+  if (!context.ok) return { ok: false, error: context.error.detail };
+  const workspace = context.data.selected;
+  if (!workspace) return { ok: false, error: "Join a workspace first." };
+  const result = await updateWhatsAppSettings(workspace.id, change);
+  if (!result.ok) return { ok: false, error: result.error.detail };
+  revalidatePath("/settings");
   return { ok: true, settings: result.data };
 }
