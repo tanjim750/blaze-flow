@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CommandPalette, openQuickSearch } from "@/components/command-palette";
 import { LinkPending } from "@/components/nav-progress";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { BadgeCheck, Clapperboard, Inbox, ReceiptText, Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, MessagesSquare, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
@@ -29,6 +29,16 @@ const ICONS: Record<NavIcon, typeof House> = {
   invoices: ReceiptText, upload: Upload, pay: Wallet,
 };
 
+function previewAccess(workspace: Workspace, role: "client" | "editor"): Workspace {
+  return { ...workspace, dashboard_role: role, billing: { view: false, manage: false, rates_view: role === "editor" ? Boolean(workspace.billing?.rates_view) : false } };
+}
+
+function withPreview<T extends { href: string }>(link: T, role: string): T {
+  const [path, hash] = link.href.split("#");
+  const joined = `${path}${path.includes("?") ? "&" : "?"}view=${role}`;
+  return { ...link, href: hash ? `${joined}#${hash}` : joined };
+}
+
 /** Mirrors the cookie the layout reads, so a reload opens at the width you left it. */
 const RAIL_COOKIE = "blazeflow_rail";
 
@@ -48,7 +58,12 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   const selected = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? workspaces[0];
   // Owners get the whole studio; editors their own work; clients the portal. Same source as
   // the route guards, so nothing here links to a page that would bounce them.
-  const nav = navFor(selected);
+  // An owner previewing "View as client/editor" gets that role's nav too (and the links keep
+  // the preview), so the preview is faithful: no Clients, Team or Money for a client.
+  const previewParam = useSearchParams()?.get("view");
+  const previewRole = selected && navFor(selected).role === "owner" && (previewParam === "client" || previewParam === "editor") ? previewParam : null;
+  const baseNav = navFor(previewRole && selected ? previewAccess(selected, previewRole) : selected);
+  const nav = previewRole ? { ...baseNav, primary: baseNav.primary.map((link) => withPreview(link, previewRole)), secondary: baseNav.secondary.map((link) => withPreview(link, previewRole)) } : baseNav;
   const navLinks = nav.primary.map((link) => ({ ...link, icon: ICONS[link.icon] }));
   const secondaryLinks = nav.secondary.map((link) => ({ ...link, icon: ICONS[link.icon] }));
   const isActive = (href: string) => {

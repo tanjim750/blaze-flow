@@ -26,15 +26,22 @@ def create_project(*, workspace, created_by_user, authorizing_membership, **vali
             project=project,
             created_at=now,
         )
+    if project.client_team_id:
+        from .client_teams import sync_client_project_access
+        sync_client_project_access(project)
     return project
 
 
 def update_project(*, project, **validated_data):
+    previous_client_team_id = project.client_team_id
     for field, value in validated_data.items():
         setattr(project, field, value)
     project.updated_at = timezone.now()
     project.full_clean()
     project.save()
+    if project.client_team_id != previous_client_team_id:
+        from .client_teams import sync_client_project_access
+        sync_client_project_access(project, previous_client_team_id=previous_client_team_id)
     return project
 
 

@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers as requestHeaders } from "next/headers";
 import { cache } from "react";
 import { describeErrorBody } from "./errors";
 import type { ActivityPage, GuestLinkActivity } from "./activity";
@@ -153,7 +153,31 @@ async function authHeaders(): Promise<Record<string, string>> {
   if (cookieHeader) headers.Cookie = cookieHeader;
   const csrf = jar.get("csrftoken")?.value;
   if (csrf) headers["X-CSRFToken"] = csrf;
+  Object.assign(headers, await forwardedClientHeaders());
   return headers;
+}
+
+/**
+ * Server-side calls to Django come from the frontend container, so without these every
+ * visitor would share one throttle bucket keyed on the container IP. Pass the visitor's
+ * address on exactly as the `/api` rewrite proxy does; Django decides how far to trust it
+ * (THROTTLE_TRUSTED_PROXY_COUNT / THROTTLE_TRUST_CF_CONNECTING_IP).
+ */
+export async function forwardedClientHeaders(): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  let incoming: Headers;
+  try {
+    incoming = await requestHeaders();
+  } catch {
+    return out; // outside a request scope (build time)
+  }
+  const cfIp = incoming.get("cf-connecting-ip");
+  if (cfIp) out["CF-Connecting-IP"] = cfIp;
+  const xff = incoming.get("x-forwarded-for");
+  const realIp = incoming.get("x-real-ip");
+  if (xff) out["X-Forwarded-For"] = xff;
+  else if (cfIp || realIp) out["X-Forwarded-For"] = (cfIp || realIp)!;
+  return out;
 }
 
 /** Exported for feature modules that keep their routes in their own file (e.g. `billing-api.ts`). */
@@ -264,7 +288,7 @@ export const createProject = (workspaceId: string, payload: { name: string; clie
 export const createFolder = (workspaceId: string, projectId: string, payload: { name: string; parent_folder_id?: string }) =>
   request<ProjectFolder>(`/workspaces/${workspaceId}/projects/${projectId}/folders/`, jsonBody(payload));
 
-export const updateProject = (workspaceId: string, projectId: string, payload: { name?: string; status?: string; priority?: string }) =>
+export const updateProject = (workspaceId: string, projectId: string, payload: { name?: string; status?: string; priority?: string; client_team_id?: string | null }) =>
   request<Project>(`/workspaces/${workspaceId}/projects/${projectId}/`, { ...jsonBody(payload), method: "PATCH" });
 
 /** Archives rather than destroys: the API keeps the row and flips its status. */
