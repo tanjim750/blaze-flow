@@ -1,3 +1,4 @@
+import { dedupe, invalidate } from "./dedupe";
 /**
  * Project messages: types, the browser calls and the pure rules the thread uses
  * (merging polled pages, day groups, @mention parsing).
@@ -101,8 +102,14 @@ export const postMessage = (target: ThreadTarget, input: PostInput) => call<Mess
 export const editMessage = (target: ThreadTarget, id: string, body: string) =>
   call<Message>(`${messagesPath(target)}${id}/`, { ...json({ body }), method: "PATCH" });
 export const deleteMessage = (target: ThreadTarget, id: string) => call<null>(`${messagesPath(target)}${id}/`, { method: "DELETE" });
-export const markRead = (target: ThreadTarget, channel: Channel) => call<{ channel: Channel; last_read_at: string }>(`${messagesPath(target)}read/`, json({ channel }));
-export const fetchUnread = (workspaceId: string) => call<UnreadSummary>(`/workspaces/${workspaceId}/messages/unread/`);
+export const markRead = (target: ThreadTarget, channel: Channel) => {
+  invalidate("unread:");
+  return call<{ channel: Channel; last_read_at: string }>(`${messagesPath(target)}read/`, json({ channel })).finally(() => invalidate("unread:"));
+};
+// Shared by the shell badge, project browser, inbox and discuss buttons: one request per
+// page load instead of one per component (they all mount together).
+export const fetchUnread = (workspaceId: string) =>
+  dedupe(`unread:${workspaceId}`, 5000, () => call<UnreadSummary>(`/workspaces/${workspaceId}/messages/unread/`));
 export const fetchChatList = (workspaceId: string) => call<ChatList>(`/workspaces/${workspaceId}/chat/channels/`);
 export const searchChat = (workspaceId: string, query: string, extra: Record<string, string> = {}) => {
   const params = new URLSearchParams({ q: query, ...extra });
