@@ -53,7 +53,8 @@ services:
   # Long-running services do not depend on it, so a restart never re-runs migrations.
   migrate:
     <<: *backend
-    command: ["python", "manage.py", "migrate", "--noinput"]
+    # createcachetable is idempotent: it creates the shared throttle/cache table once.
+    command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py createcachetable"]
     restart: "no"
     profiles: ["release"]
     depends_on:
@@ -134,6 +135,8 @@ services:
         # Baked into the Next build (rewrites + client bundle). Rebuild after changing.
         BLAZEFLOW_API_URL: http://web:8000
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+        # Public site URL for canonical links, the sitemap and Open Graph cards.
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
     restart: unless-stopped
     environment:
       # Used at runtime by server components calling Django directly.

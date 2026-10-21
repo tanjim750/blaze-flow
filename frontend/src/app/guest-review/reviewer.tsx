@@ -12,16 +12,18 @@ import {
 } from "lucide-react";
 import { nestNotes, type ReviewNote } from "@/lib/review-notes";
 import {
-  changeMessageProblem, decisionLine, guestBarActions, MESSAGE_MAX_LENGTH, openNotesWarning,
+  changeMessageProblem, decisionLine, guestBarActions, MESSAGE_MAX_LENGTH, openNotesWarning, overrideWarning,
 } from "@/lib/review-decisions";
 import { timecode } from "@/lib/timecode";
+import { RichBrief } from "@/components/brief/rich-brief";
+import { briefIsEmpty, briefToPlainText } from "@/lib/rich-brief";
 import { rangeLabel } from "@/lib/annotation-window";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import { Player, type PlayerHandle, type PlayerSource } from "@/app/(app)/review/player";
 import {
   clearGuestSession, createGuestComment, createGuestDecision, deleteGuestComment, downloadGuestAttachment,
   editGuestComment, exchangeGuestInvite, getGuestPlayback, listGuestComments, loadGuestReview,
-  readGuestSession, setGuestReaction, uploadGuestAttachment, writeGuestSession,
+  guestEmailProblem, readGuestSession, REMEMBER_DAYS, setGuestReaction, uploadGuestAttachment, writeGuestSession,
   type GuestMediaVersion, type GuestPlayback, type GuestReview, type GuestSession,
 } from "@/lib/guest-client";
 
@@ -47,6 +49,7 @@ export function GuestReviewer({ token }: { token: string }) {
   const [loading, setLoading] = useState(false);
   const [playback, setPlayback] = useState<{ versionId: string; data: GuestPlayback | null; error: string } | null>(null);
   const [positionMs, setPositionMs] = useState(0);
+  const [briefOpen, setBriefOpen] = useState(false);
   const player = useRef<PlayerHandle>(null);
 
   useEffect(() => {
@@ -126,7 +129,11 @@ export function GuestReviewer({ token }: { token: string }) {
         <div className="gr-brand"><span><Flame size={15} /></span><strong>Blaze Flow</strong></div>
         <div className="gr-project">
           <strong>{review?.project.name ?? "Loading…"}</strong>
-          {review?.project.description && <small>{review.project.description}</small>}
+          {review?.project.description && !briefIsEmpty(review.project.description) && (
+            <button type="button" className="gr-brief-toggle" aria-expanded={briefOpen} aria-controls="gr-brief" onClick={() => setBriefOpen((open) => !open)}>
+              <small>{briefToPlainText(review.project.description)}</small><span>{briefOpen ? "Hide brief" : "Read brief"}</span>
+            </button>
+          )}
         </div>
         <div className="gr-who">
           <span>{session.name}</span>
@@ -138,6 +145,10 @@ export function GuestReviewer({ token }: { token: string }) {
           </button>
         </div>
       </header>
+
+      {briefOpen && review?.project.description && (
+        <section id="gr-brief" className="gr-brief" aria-label="Project brief"><RichBrief value={review.project.description} /></section>
+      )}
 
       {error && <p className="gr-error" role="alert"><TriangleAlert size={14} />{error}</p>}
 
@@ -261,8 +272,10 @@ function DecisionBar({ session, version, canDecide, positionMs, onDecided, onErr
 
   const decide = async (decision: "approved" | "changes_requested") => {
     setBusy(true);
+    // A reversal was shown its warning first (overrideWarning), so it goes out confirmed.
+    const confirm = latest && latest.decision !== decision ? { confirm_override: true } : {};
     const result = await createGuestDecision(session.projectId, version.id, session.accessKey,
-      decision === "approved" ? { decision } : { decision, message: message.trim(), start_time_ms: Math.max(0, Math.round(positionMs)) });
+      decision === "approved" ? { decision, ...confirm } : { decision, message: message.trim(), start_time_ms: Math.max(0, Math.round(positionMs)), ...confirm });
     setBusy(false);
     if (!result.ok) {
       if (decision === "approved") setConfirming(false);
@@ -304,6 +317,7 @@ function DecisionBar({ session, version, canDecide, positionMs, onDecided, onErr
             if (!why) void decide("changes_requested");
           }}
         >
+          {overrideWarning(latest, "changes_requested") && <p className="rv-confirm-warn" role="alert"><TriangleAlert size={14} /><span>{overrideWarning(latest, "changes_requested")}</span></p>}
           <label htmlFor="gr-request-text">What should change in {label}? <small>Pinned at {timecode(positionMs)}</small></label>
           <textarea
             id="gr-request-text"
@@ -334,6 +348,9 @@ function DecisionBar({ session, version, canDecide, positionMs, onDecided, onErr
         {warning && (
           <p className="rv-confirm-warn" role="alert"><TriangleAlert size={14} /><span>{warning}</span></p>
         )}
+        {overrideWarning(latest, "approved") && (
+          <p className="rv-confirm-warn" role="alert"><TriangleAlert size={14} /><span>{overrideWarning(latest, "approved")}</span></p>
+        )}
       </ConfirmDialog>
     </div>
   );
@@ -344,10 +361,15 @@ function Identify({ token, onIdentified }: { token: string; onIdentified: (sessi
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    const problem = guestEmailProblem(email);
+    setEmailError(problem ?? "");
+    if (problem) return;
     setBusy(true);
     setError("");
     const result = await exchangeGuestInvite(token, name.trim(), email.trim());
@@ -361,21 +383,29 @@ function Identify({ token, onIdentified }: { token: string; onIdentified: (sessi
       name: name.trim(),
     };
     // Persist before rendering the review: the key is never returned again.
-    writeGuestSession(session);
+    writeGuestSession(session, { remember });
     onIdentified(session);
   };
 
   return (
     <Card title="Join the review">
       <p className="gr-muted">Tell the team who is reviewing. Your name appears on every note you leave.</p>
-      <form onSubmit={submit} className="gr-form">
+      <form onSubmit={submit} className="gr-form" noValidate>
         <label>
           <span>Full name</span>
           <input value={name} onChange={(event) => setName(event.target.value)} required maxLength={150} autoComplete="name" />
         </label>
         <label>
           <span>Email</span>
-          <input value={email} onChange={(event) => setEmail(event.target.value)} required type="email" maxLength={255} autoComplete="email" />
+          <input value={email} onChange={(event) => { setEmail(event.target.value); if (emailError) setEmailError(guestEmailProblem(event.target.value) ?? ""); }}
+            onBlur={() => { if (email.trim()) setEmailError(guestEmailProblem(email) ?? ""); }}
+            required type="email" maxLength={255} autoComplete="email" inputMode="email"
+            aria-invalid={Boolean(emailError)} aria-describedby={emailError ? "gr-email-error" : undefined} />
+          {emailError && <small id="gr-email-error" className="gr-field-error" role="alert">{emailError}</small>}
+        </label>
+        <label className="gr-remember">
+          <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
+          <span>Remember me on this device for {REMEMBER_DAYS} days <small>Untick on a shared computer.</small></span>
         </label>
         {error && <p className="gr-error" role="alert"><TriangleAlert size={14} />{error}</p>}
         <button disabled={busy || !name.trim() || !email.trim()}>{busy ? "Opening…" : "Open review"}</button>

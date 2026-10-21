@@ -446,6 +446,7 @@
   background: #1b1b22; color: var(--text); font-size: 12px; cursor: pointer;
 }
 .rvc-revision > div button[type="submit"] { background: var(--primary); border-color: var(--primary); color: #fff; }
+.rvc-revision > div button[type="submit"]:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Recorder ---------------------------------------------------------------- */
 .rvr { display: grid; gap: 7px; }
@@ -1080,4 +1081,25 @@
   .rvc-actions button:active { background: #ffffff10; }
   .rvc-actions .rvc-make-task { white-space: nowrap; }
   .rvc-actions .rvc-reactions { display: inline-flex; gap: 4px; }
+}
+/* Annotation layer error boundary: a small notice over the frame instead of a dead page. */
+.rvp-annotation-error { position: absolute; left: 12px; bottom: 12px; z-index: 6; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--bf-border-strong); border-radius: var(--bf-radius-md); background: var(--bf-popover); color: var(--bf-foreground); font-size: var(--bf-text-xs); }
+.rvp-annotation-error button { border: 0; background: none; color: var(--bf-violet-300); font: inherit; font-weight: var(--bf-weight-semibold); cursor: pointer; }
+/* Share panel: Copy/Open per link, and no horizontal overflow on phones. */
+.rv-share,.rv-share *{min-width:0}
+.rv-share-row-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px}
+.rv-share-row-actions button{display:inline-flex;align-items:center;gap:5px}
+.rv-share-icon{display:inline-grid!important;place-items:center;width:32px;height:32px;padding:0!important;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text)}
+.rv-share-form select{width:100%;text-overflow:ellipsis}
+@media(max-width:760px){
+  .rv > .rv-share{margin:10px 8px}
+  .rv-share{padding:12px;max-width:100%;overflow:hidden}
+  .rv-share-form{grid-template-columns:1fr}
+  .rv-share-form>button,.rv-share-form input,.rv-share-form select{height:44px}
+  .rv-share-row{flex-wrap:wrap}
+  .rv-share-row>div:first-child{flex:1 1 100%}
+  .rv-share-row-actions{justify-content:flex-start}
+  .rv-share-row-actions button,.rv-share-icon{min-height:40px}
+  .rv-share-icon{width:40px;height:40px}
+  .rv-share-token>div button{width:44px;height:44px}
 }

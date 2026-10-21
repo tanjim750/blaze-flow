@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, ArrowUpRight, CircleCheckBig, Download, Film, FolderInput, Link2, ListTodo, Loader2, MessageSquareText, RotateCcw, TriangleAlert,
+  Activity, ArrowUpRight, CircleCheckBig, Download, Film, FolderInput, Link2, ListTodo, Loader2, MessageCircle, MessageSquareText, RotateCcw, TriangleAlert,
 } from "lucide-react";
 import {
-  ACTIVITY_FILTERS, activityText, clockTime, describeActivity, groupByDay, mergePages,
+  ACTIVITY_FILTERS, activityText, clockTime, deliveryBadges, describeActivity, groupByDay, mergePages,
   type ActivityCategory, type ActivityEntry, type ActivityPage,
 } from "@/lib/activity";
 import "./activity-feed.css";
@@ -24,6 +24,7 @@ function kindIcon(entry: ActivityEntry) {
     case "media": return <Film {...props} />;
     case "guests": return <Link2 {...props} />;
     case "uploads": return <FolderInput {...props} />;
+    case "notifications": return <MessageCircle {...props} />;
     default: return <Activity {...props} />;
   }
 }
@@ -64,6 +65,7 @@ function Row({ entry, showProject }: { entry: ActivityEntry; showProject: boolea
       <div className="af-body">
         <Sentence entry={entry} />
         {entry.detail.excerpt && <blockquote className="af-excerpt">{entry.detail.excerpt}</blockquote>}
+        {entry.action === "approval_request.sent" && <span className="af-deliveries">{deliveryBadges(entry).map((badge) => <span key={badge.channel} className={`af-delivery is-${badge.status.toLowerCase()}`} title={badge.error ?? undefined}>{badge.label}</span>)}</span>}
         <small className="af-sub">
           <time dateTime={entry.created_at}>{clockTime(entry.created_at)}</time>
           {showProject && entry.project && <span> · {entry.project.name}</span>}

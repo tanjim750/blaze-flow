@@ -87,6 +87,8 @@ from .views import (
     task_list_create,
     workspace_detail,
     workspace_invitations,
+    workspace_invitation_detail,
+    workspace_invitation_resend,
     workspace_list_create,
     workspace_member_detail,
     workspace_members,
@@ -109,6 +111,10 @@ from .portal_views import (
 from .client_upload_views import (
     client_portal, project_client_uploads, project_upload_link_detail, project_upload_links,
     public_upload_link, public_upload_link_file,
+)
+from .whatsapp_views import (
+    client_team_member_whatsapp, my_client_whatsapp, notification_deliveries, whatsapp_webhook,
+    workspace_whatsapp_settings,
 )
 from .guest_views import (
     guest_annotation_detail, guest_annotation_revisions, guest_annotations,
@@ -200,6 +206,8 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/members/', workspace_members, name='api-workspace-members'),
     path('workspaces/<uuid:workspace_id>/members/<uuid:membership_id>/', workspace_member_detail, name='api-workspace-member-detail'),
     path('workspaces/<uuid:workspace_id>/invitations/', workspace_invitations, name='api-workspace-invitations'),
+    path('workspaces/<uuid:workspace_id>/invitations/<uuid:invite_id>/', workspace_invitation_detail, name='api-workspace-invitation-detail'),
+    path('workspaces/<uuid:workspace_id>/invitations/<uuid:invite_id>/resend/', workspace_invitation_resend, name='api-workspace-invitation-resend'),
     path('workspaces/<uuid:workspace_id>/client-teams/', client_team_list_create, name='api-client-teams'),
     path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/', client_team_detail, name='api-client-team-detail'),
     path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/members/', client_team_members, name='api-client-team-members'),
@@ -207,6 +215,11 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/workspace-access/', client_team_workspace_access, name='api-client-team-workspace-access'),
     path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/invites/', client_team_invites, name='api-client-team-invites'),
     path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/invites/<uuid:invite_id>/', client_team_invite_detail, name='api-client-team-invite-detail'),
+    path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/members/<uuid:member_id>/whatsapp/', client_team_member_whatsapp, name='api-client-team-member-whatsapp'),
+    path('workspaces/<uuid:workspace_id>/whatsapp-settings/', workspace_whatsapp_settings, name='api-workspace-whatsapp-settings'),
+    path('workspaces/<uuid:workspace_id>/client-portal/whatsapp/', my_client_whatsapp, name='api-my-client-whatsapp'),
+    path('workspaces/<uuid:workspace_id>/notification-deliveries/', notification_deliveries, name='api-notification-deliveries'),
+    path('webhooks/whatsapp/', whatsapp_webhook, name='api-whatsapp-webhook'),
     path('client-team-invitations/accept/', accept_client_team_invitation, name='api-client-team-invite-accept'),
     path('workspaces/<uuid:workspace_id>/tasks/', task_list_create, name='api-tasks'),
     path('workspaces/<uuid:workspace_id>/note-tasks/', note_task_views.note_tasks_create, name='api-note-tasks'),
@@ -249,10 +262,12 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/billing/invoices/', billing_views.invoice_list_create, name='api-billing-invoices'),
     path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/', billing_views.invoice_detail, name='api-billing-invoice-detail'),
     path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/send/', billing_views.invoice_send, name='api-billing-invoice-send'),
+    path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/revert/', billing_views.invoice_revert, name='api-billing-invoice-revert'),
     path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/payments/', billing_views.invoice_payments, name='api-billing-invoice-payments'),
     path('workspaces/<uuid:workspace_id>/billing/payouts/', billing_views.payouts, name='api-billing-payouts'),
     path('workspaces/<uuid:workspace_id>/billing/projects/<uuid:project_id>/', billing_views.project_pricing, name='api-billing-project'),
     path('workspaces/<uuid:workspace_id>/billing/tasks/<uuid:task_id>/', billing_views.task_money, name='api-billing-task'),
+    path('workspaces/<uuid:workspace_id>/billing/rates/', billing_views.member_rates, name='api-billing-member-rates'),
     path('workspaces/<uuid:workspace_id>/billing/members/<uuid:membership_id>/rate/', billing_views.member_rate, name='api-billing-member-rate'),
     path('workspaces/<uuid:workspace_id>/billing/my-earnings/', billing_views.my_earnings, name='api-billing-my-earnings'),
     path('workspaces/<uuid:workspace_id>/billing/my-invoices/', billing_views.my_invoices, name='api-billing-my-invoices'),

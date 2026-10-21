@@ -19,7 +19,7 @@ export const uploadAssetFile = (workspaceId: string, file: File, relationships: 
   const body = new FormData(); body.append("file", file); Object.entries(relationships).forEach(([key, value]) => { if (value) body.append(key, value); });
   return call<ProjectFile>(`/workspaces/${workspaceId}/asset-files/`, { method: "POST", body });
 };
-export const updateAssetFile = (workspaceId: string, id: string, body: Record<string, unknown>) => call<ProjectFile>(`/workspaces/${workspaceId}/asset-files/${id}/`, json("PATCH", body));
+export const updateAssetFile = (workspaceId: string, id: string, body: Record<string, unknown>) => call<ProjectFile & SyncedTasks>(`/workspaces/${workspaceId}/asset-files/${id}/`, json("PATCH", body));
 /** Copies an asset in place. The server names it "… (copy)" and re-scans the bytes. */
 export const duplicateAssetFile = (workspaceId: string, id: string) =>
   call<ProjectFile>(`/workspaces/${workspaceId}/asset-files/${id}/duplicate/`, { method: "POST" });
@@ -45,4 +45,15 @@ export function uploadAssetFileTracked(workspaceId: string, file: File, relation
     onSuccess: (data) => { if (!first) onRetried?.(data as ProjectFile); },
   });
   return done.then((result) => { first = false; if (result.ok) return result.data as ProjectFile; throw new Error(result.error); });
+}
+
+/** The PATCH response also lists tasks that followed the file into an Approval/Revisions/Client review column. */
+export type SyncedTasks = { synced_tasks?: { id: string; title: string }[] };
+
+/** "Hero cut moved too" / "3 tasks moved too", or null when no task followed the file. */
+export function syncedTasksMessage(result: SyncedTasks | null | undefined, stageName?: string | null): string | null {
+  const tasks = result?.synced_tasks ?? [];
+  if (!tasks.length) return null;
+  const where = stageName ? ` to ${stageName}` : "";
+  return tasks.length === 1 ? `Task “${tasks[0].title}” moved${where} too` : `${tasks.length} linked tasks moved${where} too`;
 }

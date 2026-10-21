@@ -100,3 +100,32 @@ def accept_invitation(*, user, token):
     invitation.accepted_by_user = user
     invitation.save(update_fields=['accepted_at', 'accepted_by_user', 'updated_at'])
     return membership
+
+
+def pending_invitations(*, workspace):
+    """Invitations nobody has accepted or revoked yet, newest first. Expired ones are included
+    (flagged by the caller) so they can be resent rather than silently disappearing."""
+    return WorkspaceInvite.objects.filter(
+        workspace=workspace, accepted_at__isnull=True, revoked_at__isnull=True,
+    ).select_related('role', 'invited_by_membership__user').order_by('-created_at')
+
+
+@transaction.atomic
+def revoke_invitation(*, invitation):
+    if invitation.accepted_at is not None:
+        raise InvitationError('This invitation has already been accepted.')
+    if invitation.revoked_at is None:
+        invitation.revoked_at = timezone.now()
+        invitation.save(update_fields=['revoked_at', 'updated_at'])
+    return invitation
+
+
+def resend_invitation(*, invitation, invited_by_membership, expires_in_days=7):
+    """A fresh link (the old one stops working) with a new expiry, same email, role and scope."""
+    if invitation.accepted_at is not None or invitation.revoked_at is not None:
+        raise InvitationError('Only a pending invitation can be resent.')
+    return create_invitation(
+        workspace=invitation.workspace, email=invitation.email, role=invitation.role,
+        invited_by_membership=invited_by_membership, project_access_mode=invitation.project_access_mode,
+        expires_in_days=expires_in_days,
+    )

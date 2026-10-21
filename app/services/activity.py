@@ -48,10 +48,12 @@ CATEGORIES = {
     # Files a client sent in. Link management rows are written team-only, so clients see
     # their own uploads here but never the links.
     'uploads': ('client_upload.received', 'upload_link.created', 'upload_link.revoked'),
+    # "Asked Cleo to approve 'Hero' V2" with the live email / WhatsApp delivery status.
+    'notifications': ('approval_request.sent',),
 }
 CATEGORY_PERMISSIONS = {
     'tasks': TASK_READ, 'comments': REVIEW_COMMENT_READ, 'media': MEDIA_READ, 'guests': REVIEW_COMMENT_MANAGE,
-    'uploads': PROJECT_READ,
+    'uploads': PROJECT_READ, 'notifications': REVIEW_COMMENT_MANAGE,
 }
 CATEGORY_OF = {action: category for category, actions in CATEGORIES.items() for action in actions}
 FEED_ACTIONS = tuple(CATEGORY_OF)
@@ -387,6 +389,27 @@ def describe(row, lookups):
         obj = {'type': 'upload_link', 'id': row.entity_id, 'label': label, 'href': href}
         item['verb'] = 'created upload link' if action == 'upload_link.created' else 'turned off upload link'
         summary = f"{actor} {item['verb']} '{label}'"
+    elif action == 'approval_request.sent':
+        from app.models import NotificationDelivery
+        title, number = meta.get('media_title') or 'a cut', meta.get('version_number')
+        recipient = meta.get('recipient_name') or 'the client'
+        media = lookups.media.get(meta.get('media_version_id'))
+        if media and media.status == 'ACTIVE':
+            obj = {'type': 'media_version', 'id': str(media.id), 'label': title, 'href': _review_href(media.project_id, media.id)}
+        deliveries = NotificationDelivery.objects.filter(notification_id=row.entity_id).order_by('channel')
+        item['verb'] = 'asked for approval'
+        item['detail'] = {
+            'recipient_name': recipient, 'version_number': number, 'link_kind': meta.get('link_kind'),
+            'deliveries': [
+                {'channel': d.channel, 'status': d.status, 'attempts': d.attempts, 'error': d.last_error,
+                 'sent_at': d.sent_at, 'delivered_at': d.delivered_at, 'read_at': d.read_at}
+                for d in deliveries
+            ],
+            'queued_channels': meta.get('channels') or [],
+        }
+        summary = f"Asked {recipient} to approve '{title}' V{number} by " + ' and '.join(
+            'WhatsApp' if c == 'WHATSAPP' else 'email' for c in (meta.get('channels') or ['EMAIL'])
+        )
     else:  # pragma: no cover - FEED_ACTIONS is closed
         summary = f'{actor} {action}'
     item['object'] = obj

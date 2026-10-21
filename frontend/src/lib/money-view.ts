@@ -18,9 +18,15 @@ export type InvoiceSummary = {
   total: string; paid: string; outstanding: string; created_at: string;
 };
 export type Address = { name: string; email: string | null; address_line_1: string | null; address_line_2: string | null; city: string | null; region: string | null; postal_code: string | null; country_code: string | null };
+export type InvoiceLine = { id: string; kind: "project_fee" | "task" | "manual"; description: string; amount: string; task_id: string | null };
 export type InvoiceDetail = InvoiceSummary & {
-  notes: string; lines: { id: string; kind: "project_fee" | "task"; description: string; amount: string; task_id: string | null }[];
+  notes: string; lines: InvoiceLine[];
   payments: PaymentEntry[]; bill_to: Address; from: Address; viewer_can_manage?: boolean;
+  /** Drafts, managers only: who "Send to client" will email. */
+  client_recipients?: string[];
+  /** Only on the send response: who the invoice email went to. */
+  emailed_to?: string[];
+  subtotal?: string; discount_amount?: string; tax_rate?: string; tax?: string; can_revert?: boolean; default_due_date?: string | null;
 };
 export type Receivable = { client: { id: string; name: string }; billed: string; paid: string; outstanding: string; overdue: string; unbilled: string; invoice_count: number };
 export type PayoutRow = { membership_id: string; name: string; email: string | null; active: boolean; default_rate: string | null; pending: string; earned: string; paid: string; owed: string; payouts: PaymentEntry[] };
@@ -40,7 +46,20 @@ export type TaskMoney = { task_id: string; currency: string; can_manage: boolean
 export type ProjectPricing = {
   project_id: string; currency: string; fee: string | null; tasks_total: string; total: string; invoiced: string; uninvoiced: string;
   tasks: { id: string; title: string; client_price: string | null }[]; invoices: InvoiceSummary[]; can_manage: boolean;
+  draft_invoice?: { id: string; number: string; total: string } | null;
 };
+
+/** Draft line kinds, in the words the invoice shows. */
+export const LINE_KIND: Record<InvoiceLine["kind"], string> = { project_fee: "Project fee", task: "Deliverable", manual: "Added by hand" };
+
+/** Same maths as the API: lines, less the discount (capped at the subtotal), plus tax %. */
+export function invoiceTotals(lines: { amount: string }[], discount: string, taxRate: string) {
+  const subtotal = lines.reduce((sum, line) => sum + toMinor(line.amount), 0);
+  const off = Math.min(Math.max(toMinor(discount), 0), subtotal);
+  const rate = Number(taxRate) || 0;
+  const tax = Math.round((subtotal - off) * rate / 100);
+  return { subtotal, discount: off, tax, total: subtotal - off + tax };
+}
 
 export type Tone = "neutral" | "blue" | "danger" | "success" | "warning" | "accent";
 
@@ -127,7 +146,9 @@ export function buildTotals(summary: Pick<MoneySummary, "currency" | "totals">):
   }
   cards.push({
     id: "collected", label: "Collected", value: money(totals.collected),
-    hint: `of ${money(totals.billed)} billed${toMinor(totals.unbilled) > 0 ? ` · ${money(totals.unbilled)} not billed yet` : ""}`, tone: "accent",
+    hint: toMinor(totals.billed) > 0
+      ? `of ${money(totals.billed)} billed${toMinor(totals.unbilled) > 0 ? ` · ${money(totals.unbilled)} not billed yet` : ""}`
+      : toMinor(totals.unbilled) > 0 ? `Nothing billed yet · ${money(totals.unbilled)} priced, not billed` : "Nothing billed yet", tone: "accent",
   });
   return cards;
 }
@@ -181,4 +202,9 @@ export const methodLabel = (id: string) => PAYMENT_METHODS.find((method) => meth
 export function addressLines(address: Address): string[] {
   const cityLine = [address.city, address.region, address.postal_code].filter(Boolean).join(", ");
   return [address.address_line_1, address.address_line_2, cityLine, address.country_code, address.email].filter((line): line is string => Boolean(line && line.trim()));
+}
+
+/** R20: the one-click settle button. Once part of an invoice is paid it settles what is left. */
+export function settleLabel(invoice: Pick<InvoiceSummary, "paid" | "outstanding" | "currency">, format: (value: string, currency: string) => string): string {
+  return Number(invoice.paid) > 0 ? `Record remaining ${format(invoice.outstanding, invoice.currency)}` : "Mark as paid (demo)";
 }
