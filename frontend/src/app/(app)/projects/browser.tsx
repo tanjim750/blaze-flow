@@ -6,8 +6,8 @@ import { useActionState, useEffect, useRef, useState, useTransition, type FormEv
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
-  Activity, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
-  FolderInput, FolderOpen, MessagesSquare, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Users, Wallet, X,
+  Activity, Archive, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
+  FolderInput, FolderOpen, Gauge, MessagesSquare, Pencil, Plus, RotateCcw, Search, Share2, Sparkles, Trash2, TriangleAlert, UploadCloud, Users, Wallet, X,
 } from "lucide-react";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
@@ -26,6 +26,8 @@ import { filterClientTree } from "@/lib/client-filter";
 import "../tasks/tasks.css";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, moveCampaignToClientAction, renameCampaignAction, renameFolderAction, type ActionState } from "./actions";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { planLabel, type PlanLimit } from "@/lib/plan-limit";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { startUpload } from "@/lib/upload-store";
 import { reviewHref } from "@/lib/open-in-review";
@@ -85,9 +87,55 @@ function InlineCreate({ action, hidden, placeholder, label, onClose, nested = fa
       />
       <button type="submit" disabled={pending}>{pending ? "Adding…" : "Add"}</button>
       <button type="button" className="pb-inline-cancel" onClick={onClose} aria-label="Cancel"><X size={13} /></button>
-      {state.error && <small role="alert">{state.error}</small>}
+      {state.error && !state.planLimit && <small role="alert">{state.error}</small>}
+      {state.planLimit && <PlanLimitDialog key={state.error} limit={state.planLimit} name={value.trim()} onClose={onClose} />}
     </form>
   );
+}
+
+/**
+ * R2: hitting the plan's project limit is a decision, not a typo, so it gets a dialog that
+ * says what happened and what to do (archive a finished project, or upgrade) instead of a
+ * line of small print inside the sidebar form.
+ */
+function PlanLimitDialog({ limit, name, onClose }: { limit: PlanLimit; name: string; onClose: () => void }) {
+  const [open, setOpen] = useState(true);
+  const close = () => { setOpen(false); onClose(); };
+  const plan = planLabel(limit.plan);
+  const noun = limit.limit === 1 ? "project" : "projects";
+  return <Dialog open={open} onOpenChange={(next) => { if (!next) close(); }}>
+    <DialogContent className="pb-limit-dialog">
+      <header className="pb-limit-head">
+        <span className="pb-limit-badge" aria-hidden><Gauge /></span>
+        <div>
+          <p className="pb-limit-eyebrow">{plan} plan</p>
+          <DialogTitle className="pb-limit-title">You&rsquo;ve hit your plan&rsquo;s {limit.limit}-project limit</DialogTitle>
+        </div>
+      </header>
+      <DialogDescription className="pb-limit-body">{name ? <>&ldquo;{name}&rdquo; wasn&rsquo;t created. </> : null}Free up a slot or move to a bigger plan to keep going.</DialogDescription>
+      <div className="pb-limit-meter" role="meter" aria-label="Projects used" aria-valuemin={0} aria-valuemax={limit.limit} aria-valuenow={limit.limit}>
+        <div className="pb-limit-meter-row"><span>Open projects</span><strong>{limit.limit} of {limit.limit} {noun}</strong></div>
+        <i><b /></i>
+      </div>
+      <div className="pb-limit-options">
+        <button type="button" className="pb-limit-option" onClick={close}>
+          <span aria-hidden><Archive /></span>
+          <span><strong>Archive a project</strong><small>Archived projects keep their files and don&rsquo;t count towards the limit.</small></span>
+          <ChevronRight aria-hidden className="pb-limit-chev" />
+        </button>
+        <Link href="/help" className="pb-limit-option" onClick={close}>
+          <span aria-hidden><Sparkles /></span>
+          <span><strong>Upgrade plan</strong><small>The workspace owner can move to a plan with more projects.</small></span>
+          <ChevronRight aria-hidden className="pb-limit-chev" />
+        </Link>
+      </div>
+      <footer className="pb-limit-actions">
+        <Link href="/help" className="pb-limit-secondary" onClick={close}>Help &amp; upgrades</Link>
+        <button type="button" className="pb-limit-primary" onClick={close}>Manage projects</button>
+      </footer>
+      <DialogClose />
+    </DialogContent>
+  </Dialog>;
 }
 const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log", "Client uploads", "Pricing"] as const;
 /** "Client uploads" also answers to `?tab=client-uploads` (what notifications and the feed link to). */
