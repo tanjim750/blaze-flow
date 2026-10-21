@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
   Activity, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
-  FolderInput, FolderOpen, MessagesSquare, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Wallet, X,
+  FolderInput, FolderOpen, MessagesSquare, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Users, Wallet, X,
 } from "lucide-react";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
@@ -101,6 +101,8 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
   const [expanded, setExpanded] = useState<string[]>(view.selectedClient ? [view.selectedClient.id] : []);
   const [uploading, setUploading] = useState(false);
   const [railClosed, setRailClosed] = useState(false);
+  // Phones: the client tree is a sheet over the page instead of a column beside it.
+  const [sheetOpen, setSheetOpen] = useState(false);
   const campaignId = view.selectedCampaign?.id ?? null;
   const [unread, setUnread] = useState<{ project: string | null; count: number }>({ project: null, count: 0 });
   const messagesUnread = unread.project === campaignId ? unread.count : 0;
@@ -121,9 +123,10 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
   }, [view.workspaceId, campaignId]);
 
   return (
-    <div className={railClosed ? "pb-layout is-rail-closed" : "pb-layout"}>
+    <div className={`pb-layout${railClosed ? " is-rail-closed" : ""}${sheetOpen ? " is-sheet-open" : ""}`}>
+      {sheetOpen && <button type="button" className="pb-sheet-backdrop" aria-label="Close clients" onClick={() => setSheetOpen(false)} />}
       {/* Keyed on the query so a new sidebar search replaces the filter instead of being ignored. */}
-      <ClientRail key={initialQuery} initialFilter={initialQuery} view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} />
+      <ClientRail key={initialQuery} initialFilter={initialQuery} view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} onNavigate={() => setSheetOpen(false)} />
 
       <section className="pb-canvas">
         {view.notice && (
@@ -132,13 +135,14 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
 
         <div className="pb-canvas-head">
           <div className="pb-crumbs-row">
+            <button type="button" className="pb-sheet-open" aria-expanded={sheetOpen} onClick={() => setSheetOpen(true)}><Users size={14} aria-hidden="true" />Clients</button>
             <nav className="pb-crumbs" aria-label="Breadcrumb">
               <span>Projects</span><ChevronRight size={13} />
               <span>{view.selectedClient?.name ?? "—"}</span><ChevronRight size={13} />
               <b>{view.selectedCampaign?.name ?? "No campaign"}<Pencil size={11} /></b>
             </nav>
             {view.selectedCampaign ? (
-              <Link className="pb-ghost-button" href={`/review?project=${view.selectedCampaign.id}&share=1`}>
+              <Link className="pb-ghost-button" aria-label="Client review link" href={`/review?project=${view.selectedCampaign.id}&share=1`}>
                 <Share2 size={14} />Client Review Link
               </Link>
             ) : (
@@ -303,7 +307,7 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
   </dialog>;
 }
 
-function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onToggle }: { view: ProjectsView; initialFilter: string; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void }) {
+function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onToggle, onNavigate }: { view: ProjectsView; initialFilter: string; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void; onNavigate?: () => void }) {
   const [filter, setFilter] = useState(initialFilter);
   const [creating, setCreating] = useState(false);
   useDoParam("new", () => setCreating(true));
@@ -313,7 +317,7 @@ function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onTogg
   const toggle = (id: string) => setExpanded(expanded.includes(id) ? expanded.filter((value) => value !== id) : [...expanded, id]);
 
   return (
-    <aside className="pb-rail">
+    <aside className="pb-rail" aria-label="Clients and projects" onClick={(event) => { if ((event.target as HTMLElement).closest("a[href]")) onNavigate?.(); }}>
       {/* Same handle as the main rail, but centred on the edge: anchored to the top it
           landed on the shell's own toggle once this rail closed to nothing. The wrapper
           owns the positioning so `whileTap`'s scale does not fight a translate. */}

@@ -10,7 +10,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { FilePlus2, ReceiptText, Wallet } from "lucide-react";
-import { formatMoney, parseMoneyInput, toMinor } from "@/lib/money";
+import { formatMoney, fromMinor, parseMoneyInput, sumMoney, toMinor } from "@/lib/money";
 import { invoiceBadge, type ProjectPricing as Pricing } from "@/lib/money-view";
 import { createInvoice, getProjectPricing, setProjectFee } from "./billing-client";
 import "./project-pricing.css";
@@ -62,7 +62,7 @@ export function ProjectPricing({ workspaceId, projectId }: { workspaceId: string
         <b aria-hidden="true">=</b>
         <div className="is-total"><span>Project total</span><strong>{money(data.total)}</strong></div>
       </div>
-      <p className="pp-muted">{toMinor(data.invoiced) > 0 ? `${money(data.invoiced)} invoiced so far, ${money(data.uninvoiced)} still to invoice.` : "Nothing invoiced yet."} Set per-task prices in each task&rsquo;s detail sheet.</p>
+      <p className="pp-muted">{invoicedSummary(data, money)} Set per-task prices in each task&rsquo;s detail sheet.</p>
       {priced.length > 0 && <ul className="pp-tasks">{priced.map((task) => <li key={task.id}><span>{task.title}</span><b>{money(task.client_price)}</b></li>)}</ul>}
     </section>
 
@@ -79,4 +79,19 @@ export function ProjectPricing({ workspaceId, projectId }: { workspaceId: string
       })}</ul>}
     </section>
   </div>;
+}
+
+/**
+ * A draft isn't invoiced until it is sent: "£1,500 invoiced" for an unsent draft
+ * contradicted Money ("£0 billed · £1,500 not billed yet").
+ */
+export function invoicedSummary(data: { invoiced: string; uninvoiced: string; invoices: { status: string; total: string }[] }, money: (value: string) => string): string {
+  const drafted = sumMoney(data.invoices.filter((item) => item.status === "draft").map((item) => item.total));
+  const sent = fromMinor(Math.max(0, toMinor(data.invoiced) - toMinor(drafted)));
+  const parts = [
+    toMinor(sent) > 0 ? `${money(sent)} invoiced` : null,
+    toMinor(drafted) > 0 ? `${money(drafted)} in draft (not sent)` : null,
+    toMinor(data.uninvoiced) > 0 ? `${money(data.uninvoiced)} still to invoice` : null,
+  ].filter(Boolean);
+  return parts.length ? `${parts.join(", ")}.` : "Nothing invoiced yet.";
 }
