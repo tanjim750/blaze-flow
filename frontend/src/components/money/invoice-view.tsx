@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Banknote, CircleDollarSign, Eye, PencilLine, Plus, Printer, Save, Send, Trash2, Undo2, X } from "lucide-react";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { formatMoney, fromMinor, parseMoneyInput, toMinor } from "@/lib/money";
-import { addressLines, dueLabel, formatDate, invoiceBadge, invoiceTotals, LINE_KIND, methodLabel, type InvoiceDetail, type InvoiceLine } from "@/lib/money-view";
+import { addressLines, dueLabel, formatDate, invoiceBadge, invoiceTotals, LINE_KIND, methodLabel, settleLabel, type InvoiceDetail, type InvoiceLine } from "@/lib/money-view";
 import { deleteInvoice, recordInvoicePayment, revertInvoice, sendInvoice, updateInvoice, type InvoiceEdit } from "./billing-client";
 import { markInvoicePaid } from "./money-board";
 import { PaymentDialog } from "./payment-dialog";
@@ -101,7 +101,7 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: 
       {canManage && invoice.status === "sent" && <>
         {invoice.can_revert && <button type="button" className="money-button is-ghost" disabled={busy} onClick={() => { if (confirm(`Move ${invoice.number} back to draft? The client stops seeing it until you send it again.`)) void run(() => revertInvoice(workspaceId, invoice.id), `${invoice.number} is a draft again`); }}><Undo2 aria-hidden="true" />Revert to draft</button>}
         <button type="button" className="money-button" disabled={busy} onClick={() => setPaying(true)}><Banknote aria-hidden="true" />Record payment</button>
-        <button type="button" className="money-button is-primary" disabled={busy} onClick={() => void run(() => markInvoicePaid(workspaceId, invoice))}><CircleDollarSign aria-hidden="true" />Mark as paid (demo)</button>
+        <button type="button" className="money-button is-primary" disabled={busy} onClick={() => void run(() => markInvoicePaid(workspaceId, invoice))}><CircleDollarSign aria-hidden="true" />{settleLabel(invoice, formatMoney)}</button>
       </>}
       <button type="button" className="money-button" onClick={() => window.print()}><Printer aria-hidden="true" />Print</button>
     </div>

@@ -12,7 +12,7 @@ import { Banknote, Building2, ChevronRight, CircleDollarSign, FilePlus2, HandCoi
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { formatMoney, toMinor } from "@/lib/money";
 import {
-  buildTotals, dueLabel, filterCounts, formatDate, INVOICE_FILTERS, invoiceBadge, matchesFilter,
+  buildTotals, dueLabel, filterCounts, formatDate, INVOICE_FILTERS, invoiceBadge, matchesFilter, settleLabel,
   type BillingAccess, type InvoiceFilter, type InvoiceSummary, type MoneySummary, type PayoutRow,
 } from "@/lib/money-view";
 import { createInvoice, recordInvoicePayment, recordPayout } from "./billing-client";
@@ -113,7 +113,7 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
               <td><b className={toMinor(invoice.outstanding) > 0 && invoice.status !== "draft" ? "is-due" : ""}>{invoice.status === "draft" ? "—" : formatMoney(invoice.outstanding, invoice.currency)}</b></td>
               <td className="money-row-action">{access.manage && invoice.status === "sent" && <>
                 <button type="button" className="money-button is-sm" onClick={() => setPaying(invoice)}><Banknote aria-hidden="true" />Record payment</button>
-                <button type="button" className="money-button is-sm is-ghost" onClick={() => void markPaid(invoice)}><CircleDollarSign aria-hidden="true" />Mark as paid (demo)</button>
+                <button type="button" className="money-button is-sm is-ghost" onClick={() => void markPaid(invoice)}><CircleDollarSign aria-hidden="true" />{settleLabel(invoice, formatMoney)}</button>
               </>}</td>
             </tr>;
           })}</tbody>

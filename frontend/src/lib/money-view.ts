@@ -203,3 +203,8 @@ export function addressLines(address: Address): string[] {
   const cityLine = [address.city, address.region, address.postal_code].filter(Boolean).join(", ");
   return [address.address_line_1, address.address_line_2, cityLine, address.country_code, address.email].filter((line): line is string => Boolean(line && line.trim()));
 }
+
+/** R20: the one-click settle button. Once part of an invoice is paid it settles what is left. */
+export function settleLabel(invoice: Pick<InvoiceSummary, "paid" | "outstanding" | "currency">, format: (value: string, currency: string) => string): string {
+  return Number(invoice.paid) > 0 ? `Record remaining ${format(invoice.outstanding, invoice.currency)}` : "Mark as paid (demo)";
+}
