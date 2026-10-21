@@ -23,7 +23,7 @@ import { Player, type PlayerHandle, type PlayerSource } from "@/app/(app)/review
 import {
   clearGuestSession, createGuestComment, createGuestDecision, deleteGuestComment, downloadGuestAttachment,
   editGuestComment, exchangeGuestInvite, getGuestPlayback, listGuestComments, loadGuestReview,
-  readGuestSession, setGuestReaction, uploadGuestAttachment, writeGuestSession,
+  guestEmailProblem, readGuestSession, REMEMBER_DAYS, setGuestReaction, uploadGuestAttachment, writeGuestSession,
   type GuestMediaVersion, type GuestPlayback, type GuestReview, type GuestSession,
 } from "@/lib/guest-client";
 
@@ -361,10 +361,15 @@ function Identify({ token, onIdentified }: { token: string; onIdentified: (sessi
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    const problem = guestEmailProblem(email);
+    setEmailError(problem ?? "");
+    if (problem) return;
     setBusy(true);
     setError("");
     const result = await exchangeGuestInvite(token, name.trim(), email.trim());
@@ -378,21 +383,29 @@ function Identify({ token, onIdentified }: { token: string; onIdentified: (sessi
       name: name.trim(),
     };
     // Persist before rendering the review: the key is never returned again.
-    writeGuestSession(session);
+    writeGuestSession(session, { remember });
     onIdentified(session);
   };
 
   return (
     <Card title="Join the review">
       <p className="gr-muted">Tell the team who is reviewing. Your name appears on every note you leave.</p>
-      <form onSubmit={submit} className="gr-form">
+      <form onSubmit={submit} className="gr-form" noValidate>
         <label>
           <span>Full name</span>
           <input value={name} onChange={(event) => setName(event.target.value)} required maxLength={150} autoComplete="name" />
         </label>
         <label>
           <span>Email</span>
-          <input value={email} onChange={(event) => setEmail(event.target.value)} required type="email" maxLength={255} autoComplete="email" />
+          <input value={email} onChange={(event) => { setEmail(event.target.value); if (emailError) setEmailError(guestEmailProblem(event.target.value) ?? ""); }}
+            onBlur={() => { if (email.trim()) setEmailError(guestEmailProblem(email) ?? ""); }}
+            required type="email" maxLength={255} autoComplete="email" inputMode="email"
+            aria-invalid={Boolean(emailError)} aria-describedby={emailError ? "gr-email-error" : undefined} />
+          {emailError && <small id="gr-email-error" className="gr-field-error" role="alert">{emailError}</small>}
+        </label>
+        <label className="gr-remember">
+          <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
+          <span>Remember me on this device for {REMEMBER_DAYS} days <small>Untick on a shared computer.</small></span>
         </label>
         {error && <p className="gr-error" role="alert"><TriangleAlert size={14} />{error}</p>}
         <button disabled={busy || !name.trim() || !email.trim()}>{busy ? "Opening…" : "Open review"}</button>

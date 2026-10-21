@@ -39,39 +39,65 @@ export type GuestPlayback = {
 const STORAGE_PREFIX = "blazeflow_guest:";
 
 /**
- * The access key lives in `sessionStorage`, keyed by the invite token.
- *
- * `sessionStorage` rather than `localStorage` because a review link is frequently opened
- * on a shared or borrowed machine, and the key is a bearer credential — it should not
- * outlive the tab. Keying by token means one person can hold sessions for several
+ * The access key is kept per invite token, so one person can hold sessions for several
  * projects at once without them overwriting each other.
+ *
+ * By default it goes to `localStorage` with an expiry, so a reviewer who closes the tab and
+ * comes back to the link is still recognised (R12). On a shared or borrowed machine they can
+ * untick "Remember me on this device": the key then lives in `sessionStorage` and dies with
+ * the tab, because it is a bearer credential. "Not you?" clears both.
  */
-export function readGuestSession(token: string): GuestSession | null {
+export const REMEMBER_DAYS = 30;
+type Stored = GuestSession & { expiresAt?: number };
+
+function parse(raw: string | null, now: number): GuestSession | null {
+  if (!raw) return null;
+  const parsed = JSON.parse(raw) as Stored;
+  if (parsed.expiresAt && parsed.expiresAt <= now) return null;
+  if (!parsed.accessKey || !parsed.projectId) return null;
+  const { expiresAt: _expires, ...session } = parsed;
+  void _expires;
+  return session;
+}
+
+export function readGuestSession(token: string, now: number = Date.now()): GuestSession | null {
+  const key = `${STORAGE_PREFIX}${token}`;
   try {
-    const raw = sessionStorage.getItem(`${STORAGE_PREFIX}${token}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as GuestSession;
-    return parsed.accessKey && parsed.projectId ? parsed : null;
+    const fromTab = parse(sessionStorage.getItem(key), now);
+    if (fromTab) return fromTab;
+  } catch { /* storage disabled */ }
+  try {
+    const remembered = parse(localStorage.getItem(key), now);
+    if (!remembered) localStorage.removeItem(key);
+    return remembered;
   } catch {
     // Private mode, disabled storage, or a corrupt entry: treat as not yet identified.
     return null;
   }
 }
 
-export function writeGuestSession(session: GuestSession): void {
+export function writeGuestSession(session: GuestSession, { remember = true, now = Date.now() }: { remember?: boolean; now?: number } = {}): void {
+  const key = `${STORAGE_PREFIX}${session.token}`;
   try {
-    sessionStorage.setItem(`${STORAGE_PREFIX}${session.token}`, JSON.stringify(session));
+    if (remember) localStorage.setItem(key, JSON.stringify({ ...session, expiresAt: now + REMEMBER_DAYS * 86_400_000 }));
+    else sessionStorage.setItem(key, JSON.stringify(session));
   } catch {
-    /* The session still works for this page load; only the refresh survival is lost. */
+    /* The session still works for this page load; only surviving a reload is lost. */
   }
 }
 
 export function clearGuestSession(token: string): void {
-  try {
-    sessionStorage.removeItem(`${STORAGE_PREFIX}${token}`);
-  } catch {
-    /* Nothing to clear if storage is unavailable. */
+  for (const store of [() => sessionStorage, () => localStorage]) {
+    try { store().removeItem(`${STORAGE_PREFIX}${token}`); } catch { /* nothing to clear */ }
   }
+}
+
+/** Inline check before the exchange: the server checks too, this just says so sooner. */
+export function guestEmailProblem(email: string): string | null {
+  const value = email.trim();
+  if (!value) return "Enter your email so the team knows who left each note.";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value)) return "Enter a full email address, like name@studio.com.";
+  return null;
 }
 
 async function guestRequest<T>(path: string, accessKey: string, init?: RequestInit): Promise<GuestResult<T>> {
