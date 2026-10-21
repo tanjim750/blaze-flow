@@ -185,6 +185,8 @@ class NotificationKind(models.TextChoices):
     PROJECT_MESSAGE_NEW = 'PROJECT_MESSAGE_NEW'
     # Someone @mentioned you in a project message.
     PROJECT_MESSAGE_MENTION = 'PROJECT_MESSAGE_MENTION'
+    # A cut moved into the client review / approval stage (to the client's contacts).
+    CLIENT_APPROVAL_REQUESTED = 'CLIENT_APPROVAL_REQUESTED'
 
 
 class OutboxEventStatus(models.TextChoices):
@@ -197,6 +199,7 @@ class OutboxEventStatus(models.TextChoices):
 
 class NotificationDeliveryChannel(models.TextChoices):
     EMAIL = 'EMAIL'
+    WHATSAPP = 'WHATSAPP'
 
 
 class NotificationDeliveryStatus(models.TextChoices):
@@ -204,6 +207,22 @@ class NotificationDeliveryStatus(models.TextChoices):
     SENT = 'SENT'
     SKIPPED = 'SKIPPED'
     FAILED = 'FAILED'
+    # Provider-reported states after SENT (WhatsApp status webhooks).
+    DELIVERED = 'DELIVERED'
+    READ = 'READ'
+
+
+class WhatsAppOptInMethod(models.TextChoices):
+    # The agency recorded consent the client gave them (e.g. on a call or in writing).
+    AGENCY_RECORDED = 'agency_recorded'
+    # The client ticked the box themselves (portal or invite acceptance).
+    CLIENT_SELF = 'client_self'
+
+
+class WhatsAppOptOutMethod(models.TextChoices):
+    STOP_REPLY = 'stop_reply'
+    CLIENT_SELF = 'client_self'
+    AGENCY = 'agency'
 
 
 class SubscriptionPlan(models.TextChoices):
@@ -662,6 +681,12 @@ class Project(models.Model):
     def clean(self):
         if self.client_team_id and self.workspace_id and self.client_team.workspace_id != self.workspace_id:
             raise ValidationError({'client_team': 'The client team must belong to the project workspace.'})
+
+    def save(self, *args, **kwargs):
+        # Every write path (API, portal request, admin) stores the brief sanitised.
+        from .rich_text import sanitize_brief
+        self.description = sanitize_brief(self.description)
+        super().save(*args, **kwargs)
 
 
 class ResourceAccess(models.Model):
@@ -1655,6 +1680,12 @@ class NotificationDelivery(models.Model):
     attempts = models.PositiveIntegerField(default=0)
     last_error = models.TextField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
+    # WhatsApp (and future providers): who it went to, through what, and what came back.
+    provider = models.CharField(max_length=30, blank=True, default='')
+    provider_message_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    recipient_masked = models.CharField(max_length=64, blank=True, default='')
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -1670,6 +1701,59 @@ class NotificationDelivery(models.Model):
             models.Index(fields=['notification']),
             models.Index(fields=['status', 'updated_at']),
         ]
+
+
+class WhatsAppContact(models.Model):
+    """One client person's WhatsApp number for one workspace, with the consent trail.
+
+    Messages only go out while ``opted_in_at`` is set and ``opted_out_at`` is not. Either the
+    member (an existing client-team person) or the invite (someone not yet signed up) is set;
+    accepting the invite moves the contact onto the new member.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    client_team_member = models.OneToOneField(
+        ClientTeamMember, on_delete=models.CASCADE, db_column='client_team_member_id',
+        null=True, blank=True, related_name='whatsapp_contact',
+    )
+    client_team_invite = models.OneToOneField(
+        ClientTeamInvite, on_delete=models.CASCADE, db_column='client_team_invite_id',
+        null=True, blank=True, related_name='whatsapp_contact',
+    )
+    phone_e164 = models.CharField(max_length=20)
+    opted_in_at = models.DateTimeField(null=True, blank=True)
+    opt_in_method = models.CharField(max_length=30, choices=WhatsAppOptInMethod.choices, null=True, blank=True)
+    opt_in_recorded_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, db_column='opt_in_recorded_by_user_id', null=True, blank=True, related_name='+',
+    )
+    opt_in_wording = models.TextField(blank=True, default='')
+    opted_out_at = models.DateTimeField(null=True, blank=True)
+    opt_out_method = models.CharField(max_length=30, choices=WhatsAppOptOutMethod.choices, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'whatsapp_contacts'
+        indexes = [models.Index(fields=['phone_e164']), models.Index(fields=['workspace'])]
+
+    @property
+    def can_message(self):
+        return self.opted_in_at is not None and self.opted_out_at is None
+
+
+class WorkspaceWhatsAppSetting(models.Model):
+    """Per-workspace switch for WhatsApp approval messages. No row means off."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.OneToOneField(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    enabled = models.BooleanField(default=False)
+    link_expiry_hours = models.PositiveIntegerField(default=168)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'workspace_whatsapp_settings'
 
 
 class OutboxEvent(models.Model):
@@ -1754,6 +1838,8 @@ class InvoiceStatus(models.TextChoices):
 class InvoiceLineKind(models.TextChoices):
     PROJECT_FEE = 'project_fee'
     TASK = 'task'
+    # Typed by hand on a draft (rush fee, licence, travel); not tied to project pricing.
+    MANUAL = 'manual'
 
 
 class PaymentDirection(models.TextChoices):
@@ -1839,6 +1925,9 @@ class Invoice(models.Model):
     sent_at = models.DateTimeField(null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True, default='')
+    # Editable on a draft. Total = lines - discount, then tax (percent) on what is left.
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     created_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='created_by_user_id', null=True, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

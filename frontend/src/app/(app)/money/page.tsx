@@ -1,5 +1,6 @@
 import { guardRoute } from "@/lib/route-guard";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { LockKeyhole } from "lucide-react";
 import { MoneyBoard } from "@/components/money/money-board";
 import { listClientTeams, listProjects } from "@/lib/api";
@@ -12,8 +13,10 @@ import "./money.css";
  * Money (billing demo): what clients owe us, what we owe editors, and the margin between.
  * Needs billing.view; the API enforces that too, this page just explains a 403 nicely.
  */
-export default async function MoneyPage() {
+export default async function MoneyPage({ searchParams }: PageProps<"/money">) {
   await guardRoute("/money");
+  // "View as client": clients never see studio finances, only their own invoices on Home.
+  if ((await searchParams).view === "client") redirect("/?view=client#invoices");
   const context = await loadWorkspaceContext();
   const workspace = context.ok ? context.data.selected : null;
   if (!workspace) return <MoneyProblem title="No workspace selected" body={context.ok ? "Pick a workspace from the sidebar." : context.error.detail} />;

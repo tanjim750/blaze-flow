@@ -224,5 +224,5 @@ export const getGuestPlayback = (projectId: string, versionId: string, key: stri
  */
 export const createGuestDecision = (
   projectId: string, versionId: string, key: string,
-  payload: { decision: DecisionKind; message?: string; start_time_ms?: number },
+  payload: { decision: DecisionKind; message?: string; start_time_ms?: number; confirm_override?: boolean },
 ) => guestRequest<ReviewDecision>(`/guest/reviews/${projectId}/media-versions/${versionId}/decision/`, key, jsonInit("POST", payload));

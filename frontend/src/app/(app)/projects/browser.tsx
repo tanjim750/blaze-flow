@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
 import {
   Activity, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
-  FolderInput, FolderOpen, MessagesSquare, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Wallet, X,
+  FolderInput, FolderOpen, MessagesSquare, Pencil, Plus, RotateCcw, Search, Share2, Trash2, TriangleAlert, UploadCloud, Users, Wallet, X,
 } from "lucide-react";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
@@ -25,7 +25,8 @@ import type { TasksView } from "@/lib/tasks-view";
 import { filterClientTree } from "@/lib/client-filter";
 import "../tasks/tasks.css";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, renameCampaignAction, renameFolderAction, type ActionState } from "./actions";
+import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, moveCampaignToClientAction, renameCampaignAction, renameFolderAction, type ActionState } from "./actions";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { startUpload } from "@/lib/upload-store";
 import { reviewHref } from "@/lib/open-in-review";
 
@@ -100,6 +101,8 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
   const [expanded, setExpanded] = useState<string[]>(view.selectedClient ? [view.selectedClient.id] : []);
   const [uploading, setUploading] = useState(false);
   const [railClosed, setRailClosed] = useState(false);
+  // Phones: the client tree is a sheet over the page instead of a column beside it.
+  const [sheetOpen, setSheetOpen] = useState(false);
   const campaignId = view.selectedCampaign?.id ?? null;
   const [unread, setUnread] = useState<{ project: string | null; count: number }>({ project: null, count: 0 });
   const messagesUnread = unread.project === campaignId ? unread.count : 0;
@@ -120,9 +123,10 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
   }, [view.workspaceId, campaignId]);
 
   return (
-    <div className={railClosed ? "pb-layout is-rail-closed" : "pb-layout"}>
+    <div className={`pb-layout${railClosed ? " is-rail-closed" : ""}${sheetOpen ? " is-sheet-open" : ""}`}>
+      {sheetOpen && <button type="button" className="pb-sheet-backdrop" aria-label="Close clients" onClick={() => setSheetOpen(false)} />}
       {/* Keyed on the query so a new sidebar search replaces the filter instead of being ignored. */}
-      <ClientRail key={initialQuery} initialFilter={initialQuery} view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} />
+      <ClientRail key={initialQuery} initialFilter={initialQuery} view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} onNavigate={() => setSheetOpen(false)} />
 
       <section className="pb-canvas">
         {view.notice && (
@@ -131,13 +135,14 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
 
         <div className="pb-canvas-head">
           <div className="pb-crumbs-row">
+            <button type="button" className="pb-sheet-open" aria-expanded={sheetOpen} onClick={() => setSheetOpen(true)}><Users size={14} aria-hidden="true" />Clients</button>
             <nav className="pb-crumbs" aria-label="Breadcrumb">
               <span>Projects</span><ChevronRight size={13} />
               <span>{view.selectedClient?.name ?? "—"}</span><ChevronRight size={13} />
               <b>{view.selectedCampaign?.name ?? "No campaign"}<Pencil size={11} /></b>
             </nav>
             {view.selectedCampaign ? (
-              <Link className="pb-ghost-button" href={`/review?project=${view.selectedCampaign.id}&share=1`}>
+              <Link className="pb-ghost-button" aria-label="Client review link" href={`/review?project=${view.selectedCampaign.id}&share=1`}>
                 <Share2 size={14} />Client Review Link
               </Link>
             ) : (
@@ -151,7 +156,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
               <h1>{view.selectedCampaign?.name ?? "No campaign selected"}</h1>
             </div>
             <div className="pb-title-actions">
-              <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions"><Ellipsis size={15} /></button>
+              {view.selectedCampaign && <ProjectMoreActions view={view} campaignId={view.selectedCampaign.id} />}
               {view.workspaceId && view.selectedCampaign && (
                 <ChatHeaderButton workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} unread={messagesUnread} />
               )}
@@ -181,7 +186,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
         )}
 
         {tab === "Files" && view.selectedCampaign ? (
-          <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient?.id ?? null} />
+          <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null} />
         ) : tab === "Tasks" && view.selectedCampaign ? (
           <TasksBoard compact view={tasksView} projectId={view.selectedCampaign.id} />
         ) : tab === "Brief & Specs" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (
@@ -302,7 +307,7 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
   </dialog>;
 }
 
-function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onToggle }: { view: ProjectsView; initialFilter: string; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void }) {
+function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onToggle, onNavigate }: { view: ProjectsView; initialFilter: string; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void; onNavigate?: () => void }) {
   const [filter, setFilter] = useState(initialFilter);
   const [creating, setCreating] = useState(false);
   useDoParam("new", () => setCreating(true));
@@ -312,7 +317,7 @@ function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onTogg
   const toggle = (id: string) => setExpanded(expanded.includes(id) ? expanded.filter((value) => value !== id) : [...expanded, id]);
 
   return (
-    <aside className="pb-rail">
+    <aside className="pb-rail" aria-label="Clients and projects" onClick={(event) => { if ((event.target as HTMLElement).closest("a[href]")) onNavigate?.(); }}>
       {/* Same handle as the main rail, but centred on the edge: anchored to the top it
           landed on the shell's own toggle once this rail closed to nothing. The wrapper
           owns the positioning so `whileTap`'s scale does not fight a translate. */}
@@ -579,3 +584,43 @@ function NestedFolders({ view }: { view: ProjectsView }) {
 
 const initials = (value: string) =>
   value.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]?.toUpperCase() ?? "").join("") || "BF";
+
+/**
+ * The project header's "…" menu: link the project to a client (or unlink it). Linking is
+ * what puts a project in that client's portal.
+ */
+function ProjectMoreActions({ view, campaignId }: { view: ProjectsView; campaignId: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const clients = view.clients.filter((client) => client.id !== "unassigned");
+  const current = view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null;
+  const move = (clientId: string | null) => start(async () => {
+    setError(null);
+    const result = await moveCampaignToClientAction(campaignId, clientId);
+    if (result.error) { setError(result.error); return; }
+    router.push(`/projects?client=${clientId ?? "unassigned"}&campaign=${campaignId}`);
+    router.refresh();
+  });
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions" disabled={pending}><Ellipsis size={15} /></button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="pb-more-menu">
+          <DropdownMenuLabel>Move to client</DropdownMenuLabel>
+          {clients.map((client) => (
+            <DropdownMenuItem key={client.id} disabled={client.id === current} onSelect={() => move(client.id)}>
+              {client.name}{client.id === current ? " (current)" : ""}
+            </DropdownMenuItem>
+          ))}
+          {!clients.length && <DropdownMenuItem disabled>No clients yet. Create one in Clients</DropdownMenuItem>}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled={!current} onSelect={() => move(null)}>No client (unassigned)</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {error && <span className="pb-inline-error" role="alert">{error}</span>}
+    </>
+  );
+}

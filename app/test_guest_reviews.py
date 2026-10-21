@@ -52,6 +52,15 @@ class GuestReviewApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.latest_access_key = exchange.json()['access_key']
         return {'HTTP_X_GUEST_ACCESS_KEY': self.latest_access_key}
 
+    def test_guest_link_can_be_created_without_a_label(self):
+        response = self.client.post(
+            reverse('api-project-guest-invites', args=[self.workspace.id, self.project_id]),
+            {'permissions': ['media.read'], 'expires_in_hours': 24},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['label'], '')
+
     def test_guest_can_read_create_comment_and_annotate_with_scoped_key(self):
         headers = self.issue_access([
             'media.read', 'review.comment.read', 'review.comment.create',

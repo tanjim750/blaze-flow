@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAnnotation, createGuestInvite, createMediaDecision, createReviewComment, deleteAnnotation, deleteReviewComment, editReviewComment, requestMediaRevision, revokeGuestAccess, revokeGuestInvite, setCommentReaction, setCommentResolution, transitionMediaVersion, updateAnnotation, updateGuestInvite } from "@/lib/api";
 import { changeMessageProblem, type DecisionKind } from "@/lib/review-decisions";
-import type { AnnotationElement, CommentVisibility } from "@/lib/api";
+import type { AnnotationElement, CommentVisibility, GuestPermission } from "@/lib/api";
 import { endTimeField, startTimeField } from "@/lib/review-timing";
 import { GUEST_PRESETS, invitePermissions, type GuestInviteState, type GuestPreset } from "./guest-presets";
 
@@ -189,7 +189,23 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
   if (!created.ok) return { error: created.error.detail, token: null };
 
   revalidatePath("/review");
-  return { error: null, token: created.data.token };
+  return { error: null, token: created.data.token, inviteId: created.data.id };
+}
+
+/**
+ * A link's token is shown once and only its hash is stored, so a lost link can't be shown
+ * again. This issues a fresh link with the same label, access and remaining lifetime, then
+ * revokes the old one.
+ */
+export async function replaceGuestInviteAction(workspaceId: string, projectId: string, invite: { id: string; label: string; permissions: GuestPermission[]; expires_at: string }): Promise<GuestInviteState> {
+  const hours = Math.max(1, Math.round((new Date(invite.expires_at).getTime() - Date.now()) / 3_600_000));
+  const created = await createGuestInvite(workspaceId, projectId, {
+    ...(invite.label ? { label: invite.label } : {}), permissions: invite.permissions, expires_in_hours: Math.min(hours, 365 * 24),
+  });
+  if (!created.ok) return { error: created.error.detail, token: null };
+  const revoked = await revokeGuestInvite(workspaceId, projectId, invite.id);
+  revalidatePath("/review");
+  return { error: revoked.ok ? null : `New link created, but the old one couldn't be revoked: ${revoked.error.detail}`, token: created.data.token, inviteId: created.data.id };
 }
 
 /** Revokes the link itself. Sessions already exchanged from it stop working too. */
@@ -218,7 +234,7 @@ export async function setGuestInviteDecisionsAction(workspaceId: string, project
  * decision (the same record a review link makes) and moves the cut like the team buttons.
  */
 export async function clientDecisionAction(
-  workspaceId: string, projectId: string, versionId: string, decision: DecisionKind, message: string, startMs: number | null,
+  workspaceId: string, projectId: string, versionId: string, decision: DecisionKind, message: string, startMs: number | null, confirmOverride = false,
 ): Promise<ActionState> {
   if (!workspaceId || !projectId || !versionId) return { error: "This cut has no project review record." };
   if (decision === "changes_requested") {
@@ -228,6 +244,7 @@ export async function clientDecisionAction(
   const result = await createMediaDecision(workspaceId, projectId, versionId, {
     decision,
     ...(decision === "changes_requested" ? { message: message.trim(), ...startTimeField(startMs) } : {}),
+    ...(confirmOverride ? { confirm_override: true } : {}),
   });
   if (!result.ok) return { error: result.error.detail };
   revalidatePath("/review");
