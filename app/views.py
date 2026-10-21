@@ -2103,6 +2103,12 @@ def media_version_render_control(request, workspace_id, project_id, media_versio
             topic='file.preview.requested', aggregate_id=str(media_version.original_file_id)
         ).first()
         if event is None:
+            if action == 'retry':
+                # Uploads from before every type was queued have no job at all: start one.
+                from app.services.media import queue_media_processing
+                queue_media_processing(media_version.original_file)
+                record_user_audit(user=request.user, workspace=workspace, action='media.render.retry', entity_type='media_version', entity_id=media_version.id)
+                return Response({'status': 'PENDING'})
             return Response({'detail': 'No render job exists for this media version.'}, status=status.HTTP_404_NOT_FOUND)
         if event.status == 'PROCESSING':
             return Response({'detail': 'A running render cannot be changed safely.'}, status=status.HTTP_409_CONFLICT)
