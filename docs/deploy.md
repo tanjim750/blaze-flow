@@ -56,6 +56,29 @@ or frontend. What differs:
 
 CI builds the `web`, `ai` and frontend images on a native arm64 runner and smoke-tests them.
 
+### Sizing for a 4-core / 24 GB ARM VM
+
+There is no Celery or Redis. Background work (emails, previews, FFmpeg proxies) runs in
+the `outbox-worker`, one job at a time, and AI QA runs in `ai-qa-worker`. The values in
+`.env.production.example` share the 4 cores like this:
+
+| service | CPU | memory | notes |
+|---|---|---|---|
+| web (gunicorn) | unlimited | 2g | `GUNICORN_WORKERS=3`, `GUNICORN_THREADS=4`; mostly waits on Postgres/R2 |
+| outbox-worker | 2 | 4g | `VIDEO_PROXY_THREADS=2` so libx264 uses exactly the quota |
+| ai-qa-worker | 2 | 6g | OCR is CPU-bound; raise to 3–4 only if proxies are rarely queued |
+| frontend | unlimited | 768m | |
+| db | unlimited | — | about 10 GB is left for Postgres and the page cache |
+
+Two things to know:
+
+- **Set `VIDEO_PROXY_THREADS` to match `OUTBOX_CPU_LIMIT`.** ffmpeg counts the host's
+  cores, not the container's quota. Left unset, it starts more encoder threads than the
+  quota can run, so the encode gets throttled while competing with web for the same cores.
+- **Oversubscription:** the CPU limits add up to 4, the number of cores. If AI QA and a
+  proxy run while users are browsing, web is still served because it has no quota, but
+  every service slows down. To make proxies finish sooner, use `VIDEO_PROXY_PRESET=faster`.
+
 ## 2. Code and configuration
 
 ```sh

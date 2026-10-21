@@ -217,6 +217,8 @@ VIDEO_PROXY_CRF = int(os.environ.get('VIDEO_PROXY_CRF', '23'))
 # Caps the bitrate on noisy footage, where CRF alone can make a proxy larger than its source.
 VIDEO_PROXY_MAXRATE = os.environ.get('VIDEO_PROXY_MAXRATE', '5M')
 VIDEO_PROXY_PRESET = os.environ.get('VIDEO_PROXY_PRESET', 'medium')
+# Encoder threads for proxies; match OUTBOX_CPU_LIMIT. 0 lets ffmpeg use every core it sees.
+VIDEO_PROXY_THREADS = int(os.environ.get('VIDEO_PROXY_THREADS', '2'))
 # A keyframe every second, so scrubbing and frame-stepping land quickly and exactly.
 VIDEO_PROXY_KEYFRAME_SECONDS = float(os.environ.get('VIDEO_PROXY_KEYFRAME_SECONDS', '1'))
 # The high-quality proxy: 1080p, made after the 720p one, only for sources larger than 720p.
