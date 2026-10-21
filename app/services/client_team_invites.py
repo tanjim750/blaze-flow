@@ -123,4 +123,6 @@ def accept_client_team_invite(*, user, token):
         # The one-time token was delivered to this address, which proves ownership.
         user.email_verified_at = now
         user.save(update_fields=['email_verified_at', 'updated_at'])
+    from .approval_requests import attach_invite_contact
+    attach_invite_contact(invite=invite, member=member)
     return member

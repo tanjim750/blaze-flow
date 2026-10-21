@@ -1,0 +1,8 @@
+{% autoescape off %}Hi {{ client_name }},
+
+{{ media_title }} for {{ project_name }} from {{ studio_name }} is ready for your review.
+Watch it, then approve it or ask for changes:
+
+{{ action_url }}
+{% if expires_label %}
+This link expires on {{ expires_label }}.{% endif %}{% endautoescape %}

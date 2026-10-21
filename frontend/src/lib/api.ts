@@ -33,8 +33,10 @@ export type WorkspaceProfile = {
 };
 export type ClientTeamMetadata = { project_ids?: string[] } & Record<string, unknown>;
 export type ClientTeam = { id: string; name: string; description: string | null; website: string | null; email: string | null; phone: string | null; address_line_1: string | null; address_line_2: string | null; city: string | null; state_region: string | null; postal_code: string | null; country_code: string | null; metadata: ClientTeamMetadata | null; status: string; created_at: string };
-export type ClientTeamMember = { id: string; user: CurrentUser; title: string | null; status: string; joined_at: string; removed_at: string | null };
-export type ClientTeamInvite = { id: string; invite_type: "EMAIL" | "LINK"; recipient_email: string | null; label: string | null; max_uses: number | null; use_count: number; expires_at: string; revoked_at: string | null; created_at: string; token?: string };
+/** A client person's WhatsApp number and the consent trail (who, when, how). */
+export type WhatsAppContact = { phone: string; opted_in: boolean; opted_in_at: string | null; opt_in_method: "agency_recorded" | "client_self" | null; opt_in_recorded_by?: string | null; opted_out_at: string | null; opt_out_method: "stop_reply" | "client_self" | "agency" | null };
+export type ClientTeamMember = { id: string; user: CurrentUser; title: string | null; status: string; joined_at: string; removed_at: string | null; whatsapp?: WhatsAppContact };
+export type ClientTeamInvite = { id: string; invite_type: "EMAIL" | "LINK"; recipient_email: string | null; label: string | null; max_uses: number | null; use_count: number; expires_at: string; revoked_at: string | null; created_at: string; token?: string; whatsapp?: WhatsAppContact };
 export type NotificationPreference = { email_mentions_enabled: boolean };
 /** GET/PATCH /notification-preferences/ with a workspace: the email switch plus per-kind in-app switches. */
 export type NotificationSettings = NotificationPreference & {
@@ -227,7 +229,11 @@ export const listClientTeamMembers = (workspaceId: string, clientTeamId: string)
 export const addClientTeamMember = (workspaceId: string, clientTeamId: string, payload: { email: string; title?: string }) => request<ClientTeamMember>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/members/`, jsonBody(payload));
 export const removeClientTeamMember = (workspaceId: string, clientTeamId: string, memberId: string) => request<void>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/members/${memberId}/`, { method: "DELETE" });
 export const listClientTeamInvites = (workspaceId: string, clientTeamId: string) => request<ClientTeamInvite[]>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/`);
-export const createClientTeamInvite = (workspaceId: string, clientTeamId: string, payload: { invite_type: "EMAIL" | "LINK"; recipient_email?: string; label?: string; max_uses?: number; expires_in_days: number }) => request<ClientTeamInvite>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/`, jsonBody(payload));
+export const createClientTeamInvite = (workspaceId: string, clientTeamId: string, payload: { invite_type: "EMAIL" | "LINK"; recipient_email?: string; label?: string; max_uses?: number; expires_in_days: number; whatsapp_phone?: string; whatsapp_opt_in?: boolean; whatsapp_consent_confirmed?: boolean }) => request<ClientTeamInvite>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/`, jsonBody(payload));
+export const setClientMemberWhatsApp = (workspaceId: string, clientTeamId: string, memberId: string, payload: { phone: string; opted_in: boolean; consent_confirmed?: boolean }) => request<WhatsAppContact>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/members/${memberId}/whatsapp/`, { ...jsonBody(payload), method: "PUT" });
+export type WhatsAppSettings = { enabled: boolean; link_expiry_hours: number; test_mode: boolean; provider: string; usage: { plan: string; used: number; limit: number }; opt_in_wording: string };
+export const getWhatsAppSettings = (workspaceId: string) => request<WhatsAppSettings>(`/workspaces/${workspaceId}/whatsapp-settings/`);
+export const updateWhatsAppSettings = (workspaceId: string, payload: { enabled?: boolean; link_expiry_hours?: number }) => request<WhatsAppSettings>(`/workspaces/${workspaceId}/whatsapp-settings/`, { ...jsonBody(payload), method: "PATCH" });
 export const revokeClientTeamInvite = (workspaceId: string, clientTeamId: string, inviteId: string) => request<void>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/invites/${inviteId}/`, { method: "DELETE" });
 /** The client portal's upload area: projects this viewer may send files to, and what they sent. */
 export const getMessageUnread = (workspaceId: string) => request<import("./messages").UnreadSummary>(`/workspaces/${workspaceId}/messages/unread/`);
