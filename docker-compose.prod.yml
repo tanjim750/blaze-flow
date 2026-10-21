@@ -53,7 +53,8 @@ services:
   # Long-running services do not depend on it, so a restart never re-runs migrations.
   migrate:
     <<: *backend
-    command: ["python", "manage.py", "migrate", "--noinput"]
+    # createcachetable is idempotent: it creates the shared throttle/cache table once.
+    command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py createcachetable"]
     restart: "no"
     profiles: ["release"]
     depends_on:
