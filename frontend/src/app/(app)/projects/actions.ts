@@ -1,5 +1,6 @@
 "use server";
 import { planLimitOf, type PlanLimit } from "@/lib/plan-limit";
+import { isProjectStatus } from "@/lib/project-status";
 
 import { revalidatePath } from "next/cache";
 import { archiveProject, createClientTeam, createFolder, createProject, deleteProjectFolder, listWorkspaces, renameProjectFolder, updateProject } from "@/lib/api";
@@ -123,6 +124,22 @@ export async function deleteFolderAction(campaignId: string, folderId: string): 
   if (!removed.ok) return { error: removed.error.detail, savedAt: null };
   revalidatePath("/projects");
   revalidatePath("/files");
+  return ok();
+}
+
+/**
+ * Sets a project's status, including ARCHIVED and back. Unarchiving counts towards the plan's
+ * project limit again, so a refusal comes back as `planLimit` for the same dialog as creating.
+ */
+export async function setProjectStatusAction(projectId: string, status: string): Promise<ActionState> {
+  if (!isProjectStatus(status) && status !== "ARCHIVED") return { error: "Pick a status.", savedAt: null };
+  const workspace = await currentWorkspaceId();
+  if (isFailure(workspace)) return workspace;
+  const saved = await updateProject(workspace.id, projectId, { status });
+  if (!saved.ok) return { error: saved.error.detail, savedAt: null, planLimit: planLimitOf(saved.error.detail) };
+  revalidatePath("/projects");
+  revalidatePath("/projects/archived");
+  revalidatePath("/");
   return ok();
 }
 

@@ -1006,7 +1006,12 @@ def project_list_create(request, workspace_id):
             user=request.user,
             workspace=workspace,
             permission_key=PROJECT_READ,
-        ).exclude(status=ProjectStatus.ARCHIVED).order_by('-created_at')
+        ).order_by('-created_at')
+        # Archived projects are hidden from every list except the Archived view (?archived=1).
+        if request.query_params.get('archived') in ('1', 'true'):
+            projects = projects.filter(status=ProjectStatus.ARCHIVED)
+        else:
+            projects = projects.exclude(status=ProjectStatus.ARCHIVED)
         return Response(ProjectSerializer(projects, many=True).data)
 
     authorizing_membership = memberships_with_permission(
@@ -1061,6 +1066,15 @@ def project_detail(request, workspace_id, project_id):
     if request.method == 'PATCH':
         serializer = ProjectUpdateSerializer(project, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        new_status = serializer.validated_data.get('status')
+        if new_status == ProjectStatus.PENDING_DELETION:
+            return Response({'status': ['Deletion is not available from here.']}, status=status.HTTP_400_BAD_REQUEST)
+        if project.status == ProjectStatus.ARCHIVED and new_status and new_status != ProjectStatus.ARCHIVED:
+            # Unarchiving counts towards the plan's project limit again.
+            try:
+                enforce_project_creation_limit(workspace=workspace)
+            except SubscriptionError as exc:
+                return Response({'detail': str(exc), 'code': 'plan_limit'}, status=status.HTTP_400_BAD_REQUEST)
         changes = dict(serializer.validated_data)
         if changes.get('client_team_id'):
             # Linking a project to a client: the client must be an active one of this workspace.
