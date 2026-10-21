@@ -15,8 +15,11 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /app
 ARG BLAZEFLOW_API_URL=http://web:8000
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=
+# Public marketing site URL (canonical links, sitemap.xml, Open Graph). Empty = siteConfig default.
+ARG NEXT_PUBLIC_SITE_URL=
 ENV BLAZEFLOW_API_URL=${BLAZEFLOW_API_URL} \
     NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID} \
+    NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL} \
     NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

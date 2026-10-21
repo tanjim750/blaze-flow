@@ -36,9 +36,18 @@ DECISION_OUTCOME = {
 class ReviewDecisionError(Exception):
     """A decision that cannot be made. ``status`` is the HTTP status the view should use."""
 
-    def __init__(self, message, status=400):
+    def __init__(self, message, status=400, code=None, extra=None):
         super().__init__(message)
         self.status = status
+        self.code = code
+        self.extra = extra or {}
+
+    def payload(self):
+        data = {'detail': str(self)}
+        if self.code:
+            data['code'] = self.code
+        data.update(self.extra)
+        return data
 
 
 def decision_stage(*, workspace, decision):
@@ -80,7 +89,7 @@ def _day(value):
 
 
 @transaction.atomic
-def record_decision(*, media_version, decision, message=None, start_time_ms=None, guest_access=None, user=None):
+def record_decision(*, media_version, decision, message=None, start_time_ms=None, guest_access=None, user=None, confirm_override=False):
     """Makes and records one decision. Exactly one of ``guest_access`` / ``user`` decides."""
     if (guest_access is None) == (user is None):
         raise ReviewDecisionError('A decision needs exactly one reviewer.')
@@ -102,6 +111,15 @@ def record_decision(*, media_version, decision, message=None, start_time_ms=None
         raise ReviewDecisionError(
             f'V{media.version_number} was already approved by {previous.reviewer_name} on {_day(previous.created_at)}.',
             status=409,
+        )
+    if previous and previous.decision != decision and not confirm_override:
+        # Reversing a decision someone already made is allowed, but never silently: the
+        # reviewer is told what stands and has to confirm (the API returns 409 + a code).
+        said = 'approved' if previous.decision == ReviewDecisionKind.APPROVED else 'asked for changes on'
+        raise ReviewDecisionError(
+            f'{previous.reviewer_name} {said} V{media.version_number} on {_day(previous.created_at)}. Confirm to change that decision.',
+            status=409, code='decision_override',
+            extra={'previous': {'decision': previous.decision, 'reviewer_name': previous.reviewer_name, 'created_at': previous.created_at.isoformat()}},
         )
     stage = decision_stage(workspace=workspace, decision=decision)
     if stage is None:
@@ -168,6 +186,9 @@ def record_decision(*, media_version, decision, message=None, start_time_ms=None
         'review_comment_id': str(comment.id) if comment else None,
         'workflow_transitioned': transitioned, 'stage': {'name': stage.name, 'slug': stage.slug},
         'guest_invite_id': str(invite.id) if invite else None, 'label': invite.label if invite else None,
+        # Set when this decision reverses an earlier one, so the history shows the change.
+        'overrides': {'review_decision_id': str(previous.id), 'decision': previous.decision, 'reviewer_name': previous.reviewer_name}
+        if previous and previous.decision != decision else None,
     }
     audit = dict(
         workspace=workspace, action=f'review.decision.{decision}', entity_type='media_version',

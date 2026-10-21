@@ -116,7 +116,7 @@ from .services.retention import (
     update_workspace_retention_policy, workspace_retention_policy_data,
 )
 from .throttles import (
-    EmailVerificationThrottle, LoginThrottle, PasswordResetThrottle, RegistrationThrottle,
+    EmailVerificationThrottle, InvitePreviewThrottle, LoginThrottle, PasswordResetThrottle, RegistrationThrottle,
 )
 from .models import (
     ClientUpload,
@@ -209,6 +209,7 @@ from .services.notifications import (
 )
 from .serializers.media import MEDIA_POSTER_VARIANT_TYPES
 from .services.tasks import record_task_stage_move
+from .services.review_sync import sync_file_stage
 from .services import (
     InvitationError,
     ClientTeamError,
@@ -358,7 +359,7 @@ def auth_config(request):
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@throttle_classes([EmailVerificationThrottle])
+@throttle_classes([InvitePreviewThrottle])
 def invite_preview_view(request):
     token = (request.query_params.get('token') or '').strip()
     preview = invite_preview(token) if token else None
@@ -888,12 +889,20 @@ def client_team_invites(request, workspace_id, client_team_id):
         workspace=workspace,
         permission_key=CLIENT_TEAM_MANAGE,
     ).first()
+    invite_data = dict(serializer.validated_data)
+    whatsapp_phone = invite_data.pop('whatsapp_phone', '')
+    whatsapp_opt_in = invite_data.pop('whatsapp_opt_in', False)
+    invite_data.pop('whatsapp_consent_confirmed', None)
     try:
-        invite, token = create_client_team_invite(
-            client_team=client_team,
-            created_by_membership=creating_membership,
-            **serializer.validated_data,
-        )
+        with transaction.atomic():
+            invite, token = create_client_team_invite(
+                client_team=client_team,
+                created_by_membership=creating_membership,
+                **invite_data,
+            )
+            if whatsapp_phone:
+                from .services.approval_requests import set_invite_contact
+                set_invite_contact(invite=invite, phone=whatsapp_phone, opted_in=whatsapp_opt_in, recorded_by=request.user)
     except ClientTeamInviteError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     data = ClientTeamInviteSerializer(invite).data
@@ -998,7 +1007,12 @@ def project_list_create(request, workspace_id):
             user=request.user,
             workspace=workspace,
             permission_key=PROJECT_READ,
-        ).exclude(status=ProjectStatus.ARCHIVED).order_by('-created_at')
+        ).order_by('-created_at')
+        # Archived projects are hidden from every list except the Archived view (?archived=1).
+        if request.query_params.get('archived') in ('1', 'true'):
+            projects = projects.filter(status=ProjectStatus.ARCHIVED)
+        else:
+            projects = projects.exclude(status=ProjectStatus.ARCHIVED)
         return Response(ProjectSerializer(projects, many=True).data)
 
     authorizing_membership = memberships_with_permission(
@@ -1053,7 +1067,20 @@ def project_detail(request, workspace_id, project_id):
     if request.method == 'PATCH':
         serializer = ProjectUpdateSerializer(project, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        project = update_project(project=project, **serializer.validated_data)
+        new_status = serializer.validated_data.get('status')
+        if new_status == ProjectStatus.PENDING_DELETION:
+            return Response({'status': ['Deletion is not available from here.']}, status=status.HTTP_400_BAD_REQUEST)
+        if project.status == ProjectStatus.ARCHIVED and new_status and new_status != ProjectStatus.ARCHIVED:
+            # Unarchiving counts towards the plan's project limit again.
+            try:
+                enforce_project_creation_limit(workspace=workspace)
+            except SubscriptionError as exc:
+                return Response({'detail': str(exc), 'code': 'plan_limit'}, status=status.HTTP_400_BAD_REQUEST)
+        changes = dict(serializer.validated_data)
+        if changes.get('client_team_id'):
+            # Linking a project to a client: the client must be an active one of this workspace.
+            get_object_or_404(ClientTeam, id=changes['client_team_id'], workspace=workspace, status=ClientTeamStatus.ACTIVE)
+        project = update_project(project=project, **changes)
         return Response(ProjectSerializer(project, context={'viewer_can_edit': True}).data)
     archive_project(project=project)
     return Response(status=status.HTTP_204_NO_CONTENT)
@@ -1256,13 +1283,19 @@ def asset_file_detail(request, workspace_id, file_id):
         if project:
             _require_project_permission(request, project, PROJECT_FILE_UPDATE, 'You do not have permission to move assets into this project.')
         stage, clear_stage = _asset_stage(workspace, data)
-        item = update_project_file(
-            project_file=item, workspace=workspace, client_team=client_team, project=project,
-            folder=folder, name=data.get('name'), task_stage=stage, clear_stage=clear_stage,
-        )
+        previous_stage_id = item.task_stage_id
+        with transaction.atomic():
+            item = update_project_file(
+                project_file=item, workspace=workspace, client_team=client_team, project=project,
+                folder=folder, name=data.get('name'), task_stage=stage, clear_stage=clear_stage,
+            )
+            # Same rule as a review outcome: moving the file to Approval etc. moves its tasks.
+            moved = sync_file_stage(project_file=item, stage=stage, user=request.user) if stage and stage.id != previous_stage_id else []
     except ProjectFileError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    return Response(ProjectFileSerializer(item).data)
+    payload = ProjectFileSerializer(item).data
+    payload['synced_tasks'] = [{'id': str(task.id), 'title': task.title} for task in moved]
+    return Response(payload)
 
 
 @api_view(['GET', 'HEAD'])
@@ -2091,6 +2124,12 @@ def media_version_render_control(request, workspace_id, project_id, media_versio
             topic='file.preview.requested', aggregate_id=str(media_version.original_file_id)
         ).first()
         if event is None:
+            if action == 'retry':
+                # Uploads from before every type was queued have no job at all: start one.
+                from app.services.media import queue_media_processing
+                queue_media_processing(media_version.original_file)
+                record_user_audit(user=request.user, workspace=workspace, action='media.render.retry', entity_type='media_version', entity_id=media_version.id)
+                return Response({'status': 'PENDING'})
             return Response({'detail': 'No render job exists for this media version.'}, status=status.HTTP_404_NOT_FOUND)
         if event.status == 'PROCESSING':
             return Response({'detail': 'A running render cannot be changed safely.'}, status=status.HTTP_409_CONFLICT)

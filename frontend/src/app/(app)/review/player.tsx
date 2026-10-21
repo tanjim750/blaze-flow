@@ -1,5 +1,6 @@
 "use client";
 
+import { AnnotationBoundary } from "@/components/review/annotation-boundary";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from "react";
 import {
   AudioLines, ChevronFirst, ChevronLast, Circle, Crosshair, Download, ExternalLink, FileText, Film, Gauge, ImageOff, Loader2, Maximize2, MonitorPlay,
@@ -603,6 +604,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
           </div>
         )}
 
+        <AnnotationBoundary>
         <svg className="rvp-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden={visible.length === 0 && !aiRegion}>
           <defs>
             <marker id="rvp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
@@ -651,7 +653,13 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
             role="application"
             aria-label={`Draw ${tool.toLowerCase()} on the frame`}
             onPointerDown={(event) => { const point = at(event); setDrawStart(point); setPath([point]); }}
-            onPointerMove={(event) => { if (drawStart && tool === "PATH" && event.buttons) setPath((points) => [...points, at(event)]); }}
+            onPointerMove={(event) => {
+              if (!drawStart || tool !== "PATH" || !event.buttons) return;
+              // Read the point now: React clears event.currentTarget once the handler returns,
+              // so measuring inside the state updater threw and took the whole page down.
+              const point = at(event);
+              setPath((points) => [...points, point]);
+            }}
             onPointerUp={(event) => {
               if (!drawStart) return;
               const end = at(event);
@@ -666,6 +674,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
             }}
           />
         )}
+        </AnnotationBoundary>
 
         {still && imageFailed && (
           <div className="rvp-empty rvp-error" role="alert">
@@ -846,6 +855,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
         </button>
       </div>
 
+      <AnnotationBoundary label="The annotation list couldn’t be shown.">
       {visible.length > 0 && (
         <ul className="rvp-annotation-list">
           {visible.map((annotation, index) => (
@@ -859,6 +869,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
           ))}
         </ul>
       )}
+      </AnnotationBoundary>
     </section>
   );
 }

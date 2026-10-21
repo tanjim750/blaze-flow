@@ -65,5 +65,6 @@
 .br-priority.is-high { background: #e2725b2b; color: #ffb4a3; }
 .br-priority.is-low { background: #6f8fa82b; color: #b8d0e2; }
 
-@media (max-width: 1100px) { .br { grid-template-columns: 1fr; } .br-side { position: static; } }
+@media (max-width: 1100px) { .br { grid-template-columns: minmax(0, 1fr); } .br-side { position: static; } }
 @media (max-width: 640px) { .br-grid { grid-template-columns: 1fr; } }
+.br-main > *, .br-card { min-width: 0; }

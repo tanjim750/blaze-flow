@@ -70,6 +70,8 @@ class GuestDecisionSerializer(serializers.Serializer):
     decision = serializers.ChoiceField(choices=ReviewDecisionKind.choices)
     message = serializers.CharField(max_length=MESSAGE_MAX_LENGTH, required=False, allow_blank=True)
     start_time_ms = serializers.IntegerField(min_value=0, required=False, allow_null=True)
+    # Required (true) to reverse a decision already on this cut; see record_decision.
+    confirm_override = serializers.BooleanField(required=False, default=False)
 
 
 class GuestExchangeSerializer(serializers.Serializer):
@@ -350,7 +352,7 @@ def guest_decision(request, project_id, media_version_id):
             media_version=media, guest_access=access, **serializer.validated_data,
         )
     except ReviewDecisionError as exc:
-        return Response({'detail': str(exc)}, status=exc.status)
+        return Response(exc.payload(), status=exc.status)
     data = decision_data(record, for_guest_session_id=access.guest_session_id, include_private=False)
     return Response(data, status=status.HTTP_201_CREATED)
 

@@ -15,7 +15,7 @@ from app.models import (
     ClientTeamStatus,
 )
 
-from .client_teams import add_client_team_member
+from .client_teams import add_client_team_member, ensure_client_team_workspace_access
 
 
 class ClientTeamInviteError(Exception):
@@ -118,4 +118,11 @@ def accept_client_team_invite(*, user, token):
     invite.use_count = invite.use_count + 1
     invite.updated_at = now
     invite.save(update_fields=['use_count', 'updated_at'])
+    ensure_client_team_workspace_access(invite.client_team)
+    if invite.invite_type == ClientTeamInviteType.EMAIL and user.email_verified_at is None:
+        # The one-time token was delivered to this address, which proves ownership.
+        user.email_verified_at = now
+        user.save(update_fields=['email_verified_at', 'updated_at'])
+    from .approval_requests import attach_invite_contact
+    attach_invite_contact(invite=invite, member=member)
     return member

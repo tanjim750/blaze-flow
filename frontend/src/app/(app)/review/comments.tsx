@@ -875,7 +875,7 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
   const team = effectiveVisibility === "team";
 
   return (
-    <form
+    <form data-review-composer
       className={`rvc-composer ${team ? "is-team" : ""}`}
       onSubmit={(event) => { event.preventDefault(); void submit(); }}
     >

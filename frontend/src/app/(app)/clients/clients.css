@@ -13,3 +13,24 @@
 .clients-requests-link svg{width:15px}
 .clients-requests-link span{display:grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--shell-accent);color:#fff;font:650 11px var(--font-geist-mono)}
 @media(max-width:650px){.clients-head-actions>*{flex:1;justify-content:center}}
+/* WhatsApp: per-person number + consent, and the optional number on an email invite. */
+.client-access li.client-member{display:grid;gap:8px;align-items:stretch}
+.client-member-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.client-whatsapp{display:grid;grid-template-columns:16px minmax(0,1fr) auto auto;align-items:center;gap:7px}
+.client-whatsapp>svg{width:15px;color:#4ade80}
+.client-whatsapp input[type="tel"]{min-width:0;padding:7px 9px;border:1px solid var(--shell-highest);border-radius:7px;background:var(--shell-rail);color:var(--shell-on)}
+.client-access li .client-whatsapp button{padding:7px 10px;border:1px solid var(--shell-highest);border-radius:7px;background:var(--shell-high);color:var(--shell-on)}
+.client-whatsapp small{grid-column:2/-1}
+.client-whatsapp small.is-on{color:#80e3bb}
+.client-consent{display:flex;align-items:center;gap:6px;color:var(--shell-variant);font-size:11px;line-height:1.35}
+.client-consent input{width:15px;height:15px;flex:none;accent-color:#7c5cff}
+.client-inline:has(input[name="whatsapp_phone"]) input[name="whatsapp_phone"]{grid-column:1/2;grid-row:2}
+.client-inline:has(input[name="whatsapp_phone"]) .client-consent{grid-column:2/-1;grid-row:2}
+.client-inline:has(input[name="whatsapp_phone"]) button{grid-column:4;grid-row:1}
+@media(max-width:650px){
+  .client-inline:has(input[name="whatsapp_phone"]) input[name="whatsapp_phone"],.client-inline:has(input[name="whatsapp_phone"]) .client-consent,.client-inline:has(input[name="whatsapp_phone"]) button{grid-column:auto;grid-row:auto}
+  .client-whatsapp{grid-template-columns:16px minmax(0,1fr) auto}
+  .client-whatsapp .client-consent{grid-column:2/3}
+  .client-whatsapp small{grid-column:1/-1}
+  .client-access{padding:16px;width:calc(100% - 20px)}
+}
