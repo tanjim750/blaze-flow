@@ -1,4 +1,5 @@
 "use client";
+import "@/app/(app)/tasks/tasks.css";
 
 import { useAppRouter } from "@/lib/app-router";/**
  * One invoice as a printable page: studio and client addresses, the priced items, payments
@@ -19,6 +20,7 @@ import { addressLines, dueLabel, formatDate, invoiceBadge, invoiceTotals, LINE_K
 import { deleteInvoice, recordInvoicePayment, revertInvoice, sendInvoice, updateInvoice, type InvoiceEdit } from "./billing-client";
 import { markInvoicePaid } from "./money-board";
 import { PaymentDialog } from "./payment-dialog";
+import { sentMessage } from "@/lib/invoice-send";
 
 type DraftLine = { key: string; id?: string; kind: InvoiceLine["kind"]; description: string; amount: string };
 type Draft = { lines: DraftLine[]; discount: string; taxRate: string; dueDate: string; notes: string };
@@ -60,6 +62,9 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: 
   const editable = canManage && invoice.status === "draft";
   const editing = editable && !previewing;
   const dirty = editable && JSON.stringify(draftOf(invoice)) !== JSON.stringify(draft);
+  const [emailClient, setEmailClient] = useState(true);
+  const recipients = invoice.client_recipients ?? [];
+  const willEmail = emailClient && recipients.length > 0;
   const badge = invoiceBadge(invoice);
   const money = (value: string | number) => formatMoney(value, invoice.currency);
   // The page shows the draft as edited (a live preview); saved values otherwise.
@@ -91,7 +96,7 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: 
       {editable && <>
         <button type="button" className="money-button is-ghost" disabled={busy} onClick={() => { if (confirm(`Delete draft ${invoice.number}?`)) void run(async () => { await deleteInvoice(workspaceId, invoice.id); router.push("/money"); }, `${invoice.number} deleted`); }}><Trash2 aria-hidden="true" />Delete draft</button>
         <button type="button" className="money-button" aria-pressed={previewing} onClick={() => setPreviewing((value) => !value)}>{previewing ? <><PencilLine aria-hidden="true" />Back to editing</> : <><Eye aria-hidden="true" />Preview as client</>}</button>
-        <button type="button" className="money-button is-primary" disabled={busy} onClick={() => setConfirmSend(true)}><Send aria-hidden="true" />Mark as sent</button>
+        <button type="button" className="money-button is-primary" disabled={busy} onClick={() => setConfirmSend(true)}><Send aria-hidden="true" />{recipients.length ? "Send to client" : "Mark as sent"}</button>
       </>}
       {canManage && invoice.status === "sent" && <>
         {invoice.can_revert && <button type="button" className="money-button is-ghost" disabled={busy} onClick={() => { if (confirm(`Move ${invoice.number} back to draft? The client stops seeing it until you send it again.`)) void run(() => revertInvoice(workspaceId, invoice.id), `${invoice.number} is a draft again`); }}><Undo2 aria-hidden="true" />Revert to draft</button>}
@@ -163,19 +168,23 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: 
     {confirmSend && <Dialog open onOpenChange={(next) => { if (!next && !busy) setConfirmSend(false); }}>
       <DialogContent className="money-dialog">
         <div className="money-form">
-          <header className="money-dialog-head"><DialogTitle>Mark {invoice.number} as sent?</DialogTitle><DialogDescription>{invoice.bill_to.name} will see it in their portal. No email is sent (demo).</DialogDescription><DialogClose /></header>
+          <header className="money-dialog-head"><DialogTitle>{recipients.length ? `Send ${invoice.number}?` : `Mark ${invoice.number} as sent?`}</DialogTitle><DialogDescription>{recipients.length ? "The client gets an email with the amount, due date and a link to view the invoice in their portal." : "This client has no email address or portal contacts yet, so nothing will be emailed. The invoice is still marked as sent."}</DialogDescription><DialogClose /></header>
           <dl className="invoice-confirm is-wide">
             <div><dt>Total</dt><dd>{money(fromMinor(totals.total))}</dd></div>
             <div><dt>Due date</dt><dd>{dueOnSend ? formatDate(dueOnSend) : "—"}{!draft.dueDate && dueOnSend ? " (from your payment terms)" : ""}</dd></div>
           </dl>
+          {recipients.length > 0 && <div className="invoice-send is-wide">
+            <label className="invoice-send-toggle"><input type="checkbox" checked={emailClient} onChange={(event) => setEmailClient(event.target.checked)} />Email the invoice to the client</label>
+            {emailClient && <ul aria-label="Recipients">{recipients.map((email) => <li key={email}>{email}</li>)}</ul>}
+          </div>}
           {dirty && <p className="pp-muted is-wide">Your unsaved changes are saved first.</p>}
           <p className="pp-muted is-wide">You can revert it to a draft until a payment is recorded.</p>
           <footer className="is-wide">
             <button type="button" className="money-button" onClick={() => setConfirmSend(false)}>Cancel</button>
             <button type="button" className="money-button is-primary" disabled={busy} onClick={async () => {
               if (dirty && !(await save())) return;
-              if (await run(() => sendInvoice(workspaceId, invoice.id), `${invoice.number} marked as sent`)) setConfirmSend(false);
-            }}><Send aria-hidden="true" />Mark as sent</button>
+              if (await run(async () => { const sent = await sendInvoice(workspaceId, invoice.id, willEmail); toast(sentMessage(invoice.number, sent.emailed_to ?? [])); })) setConfirmSend(false);
+            }}><Send aria-hidden="true" />{willEmail ? "Send invoice" : "Mark as sent"}</button>
           </footer>
         </div>
       </DialogContent>

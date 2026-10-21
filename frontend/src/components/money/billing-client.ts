@@ -14,7 +14,8 @@ export const setProjectFee = (workspaceId: string, projectId: string, fee: strin
   api<ProjectPricing>(`${base(workspaceId)}/projects/${projectId}/`, "PATCH", { fee });
 export const createInvoice = (workspaceId: string, projectId: string, dueDate?: string) =>
   api<InvoiceDetail>(`${base(workspaceId)}/invoices/`, "POST", { project_id: projectId, ...(dueDate ? { due_date: dueDate } : {}) });
-export const sendInvoice = (workspaceId: string, invoiceId: string) => api<InvoiceDetail>(`${base(workspaceId)}/invoices/${invoiceId}/send/`, "POST");
+/** Marks a draft as sent. By default the backend also emails the client a portal link (`emailed_to`). */
+export const sendInvoice = (workspaceId: string, invoiceId: string, email = true) => api<InvoiceDetail>(`${base(workspaceId)}/invoices/${invoiceId}/send/`, "POST", { email });
 export type InvoiceEdit = { due_date?: string | null; notes?: string; tax_rate?: string; discount_amount?: string; lines?: { id?: string; description: string; amount: string }[] };
 export const updateInvoice = (workspaceId: string, invoiceId: string, edit: InvoiceEdit) => api<InvoiceDetail>(`${base(workspaceId)}/invoices/${invoiceId}/`, "PATCH", edit);
 export const revertInvoice = (workspaceId: string, invoiceId: string) => api<InvoiceDetail>(`${base(workspaceId)}/invoices/${invoiceId}/revert/`, "POST");
