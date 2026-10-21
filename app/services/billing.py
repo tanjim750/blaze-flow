@@ -178,20 +178,37 @@ def project_pricing(project) -> dict:
     tasks = list(_live_tasks(project).order_by('sort_order', 'created_at'))
     fee = project.client_fee or ZERO
     task_total = sum((task.client_price or ZERO for task in tasks), ZERO)
-    invoiced = _sum(InvoiceLine.objects.filter(invoice__project=project))
+    invoiced = _sum(InvoiceLine.objects.filter(invoice__project=project).exclude(kind=InvoiceLineKind.MANUAL))
+    draft = Invoice.objects.filter(project=project, status=InvoiceStatus.DRAFT).order_by('created_at').first()
     total = (fee + task_total).quantize(CENT)
     return {
         'project_id': str(project.id), 'currency': project.client_fee_currency or workspace_currency(project.workspace),
         'fee': money_str(project.client_fee), 'tasks_total': money_str(task_total), 'total': money_str(total),
         'invoiced': money_str(invoiced), 'uninvoiced': money_str(max(total - invoiced, ZERO)),
         'tasks': [{'id': str(task.id), 'title': task.title, 'client_price': money_str(task.client_price)} for task in tasks],
+        # The open draft, if any, so Pricing links to it with its real total instead of
+        # offering to invoice an amount that disagrees with it.
+        'draft_invoice': {'id': str(draft.id), 'number': draft.number, 'total': money_str(invoice_total(draft))} if draft else None,
     }
 
 
 # --- invoices -----------------------------------------------------------------------------
 
-def invoice_total(invoice) -> Decimal:
+def invoice_subtotal(invoice) -> Decimal:
     return _sum(invoice.lines.all())
+
+
+def invoice_breakdown(invoice) -> dict:
+    """Subtotal (the lines), less the discount, plus tax as a percent of what is left."""
+    subtotal = invoice_subtotal(invoice)
+    discount = min(money(invoice.discount_amount or ZERO), subtotal) if subtotal > 0 else ZERO
+    taxable = subtotal - discount
+    tax = (taxable * (invoice.tax_rate or ZERO) / Decimal('100')).quantize(CENT)
+    return {'subtotal': subtotal, 'discount': discount, 'tax': tax, 'total': (taxable + tax).quantize(CENT)}
+
+
+def invoice_total(invoice) -> Decimal:
+    return invoice_breakdown(invoice)['total']
 
 
 def invoice_paid(invoice) -> Decimal:
@@ -228,6 +245,21 @@ def create_invoice_from_project(*, project, user, due_date=None, notes=''):
     if project.client_team_id is None:
         raise BillingError('Link this project to a client before invoicing it.')
     items = _uninvoiced_items(project)
+    draft = Invoice.objects.filter(project=project, status=InvoiceStatus.DRAFT).order_by('-created_at').first()
+    if not items and draft is not None:
+        # Everything is already on the open draft: open it, keeping what was just typed (due
+        # date, notes), rather than refusing and silently dropping that input.
+        changed = []
+        if due_date:
+            draft.due_date = due_date
+            changed.append('due_date')
+        if notes:
+            draft.notes = notes
+            changed.append('notes')
+        if changed:
+            draft.save(update_fields=[*changed, 'updated_at'])
+        draft.reopened = True
+        return draft
     if not items:
         raise BillingError('Nothing to invoice: set a project fee or task prices first (or everything is already invoiced).')
     settings = WorkspaceBillingSettings.objects.select_for_update().get(pk=billing_settings(project.workspace).pk)
@@ -261,6 +293,75 @@ def send_invoice(*, invoice, user, today=None):
     # Demo: "sent" only changes the status. No email goes to the client.
     _audit(user=user, workspace=invoice.workspace, action='billing.invoice.sent', entity_type='invoice', entity_id=invoice.id,
            number=invoice.number)
+    return invoice
+
+
+MAX_INVOICE_LINES = 100
+
+
+@transaction.atomic
+def update_draft_invoice(*, invoice, user, data):
+    """Edit a draft: due date, notes, tax rate, discount and the lines.
+
+    ``data['lines']`` (when given) is the full list in order. A line with a known ``id`` keeps
+    its kind and task (a priced item) with the new description and amount; a line without one
+    is a manual line. Lines left out are removed, which puts priced items back on Pricing.
+    """
+    invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+    if invoice.status != InvoiceStatus.DRAFT:
+        raise BillingError('Only a draft invoice can be edited.', conflict=True)
+    fields = []
+    for key in ('due_date', 'notes', 'tax_rate', 'discount_amount'):
+        if key in data:
+            value = data[key]
+            if key == 'notes':
+                value = value or ''
+            elif key in ('tax_rate', 'discount_amount'):
+                value = money(value or ZERO)
+                if key == 'tax_rate' and value > 100:
+                    raise BillingError('Tax rate is a percentage between 0 and 100.')
+            setattr(invoice, key, value); fields.append(key)
+    if 'lines' in data:
+        rows = data['lines']
+        if len(rows) > MAX_INVOICE_LINES:
+            raise BillingError(f'An invoice can have at most {MAX_INVOICE_LINES} lines.')
+        existing = {str(line.id): line for line in invoice.lines.all()}
+        keep, create = [], []
+        for index, row in enumerate(rows):
+            if not str(row.get('description') or '').strip():
+                raise BillingError('Every line needs a description.')
+            line_id = str(row.get('id') or '')
+            line = existing.get(line_id)
+            if line_id and line is None:
+                raise BillingError('That line is not on this invoice.')
+            if line is None:
+                create.append(InvoiceLine(invoice=invoice, kind=InvoiceLineKind.MANUAL, description=row['description'][:255],
+                                          amount=money(row['amount']), sort_order=index))
+            else:
+                line.description, line.amount, line.sort_order = row['description'][:255], money(row['amount']), index
+                keep.append(line)
+        invoice.lines.exclude(id__in=[line.id for line in keep]).delete()
+        InvoiceLine.objects.bulk_update(keep, ['description', 'amount', 'sort_order'])
+        InvoiceLine.objects.bulk_create(create)
+    if fields:
+        invoice.save(update_fields=[*fields, 'updated_at'])
+    _audit(user=user, workspace=invoice.workspace, action='billing.invoice.updated', entity_type='invoice', entity_id=invoice.id,
+           number=invoice.number, total=money_str(invoice_total(invoice)))
+    return invoice
+
+
+@transaction.atomic
+def revert_invoice_to_draft(*, invoice, user):
+    """Undo "Mark as sent" while no payment has been recorded against it."""
+    invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+    if invoice.status != InvoiceStatus.SENT:
+        raise BillingError('Only a sent invoice can go back to draft.', conflict=True)
+    if invoice.payments.exists():
+        raise BillingError('A payment is recorded on this invoice, so it can no longer go back to draft.', conflict=True)
+    invoice.status, invoice.issue_date, invoice.sent_at = InvoiceStatus.DRAFT, None, None
+    invoice.save(update_fields=['status', 'issue_date', 'sent_at', 'updated_at'])
+    _audit(user=user, workspace=invoice.workspace, action='billing.invoice.reverted_to_draft', entity_type='invoice',
+           entity_id=invoice.id, number=invoice.number)
     return invoice
 
 
@@ -499,7 +600,8 @@ def _person(membership) -> str:
 # --- read models --------------------------------------------------------------------------
 
 def invoice_out(invoice, *, today=None, detail=False, workspace_profile=None) -> dict:
-    total = invoice_total(invoice)
+    breakdown = invoice_breakdown(invoice)
+    total = breakdown['total']
     paid = invoice_paid(invoice)
     outstanding = max(total - paid, ZERO)
     data = {
@@ -514,6 +616,14 @@ def invoice_out(invoice, *, today=None, detail=False, workspace_profile=None) ->
     if detail:
         client = invoice.client_team
         data['notes'] = invoice.notes
+        data['subtotal'] = money_str(breakdown['subtotal'])
+        data['discount_amount'] = money_str(breakdown['discount'])
+        data['tax_rate'] = str(invoice.tax_rate or ZERO)
+        data['tax'] = money_str(breakdown['tax'])
+        data['can_revert'] = invoice.status == InvoiceStatus.SENT and not invoice.payments.exists()
+        # What "Mark as sent" will set when the draft has no due date yet (shown in the confirm).
+        data['default_due_date'] = (invoice.due_date or timezone.localdate() + dt.timedelta(
+            days=billing_settings(invoice.workspace).payment_terms_days)) if invoice.status == InvoiceStatus.DRAFT else None
         data['lines'] = [{'id': str(line.id), 'kind': line.kind, 'description': line.description, 'amount': money_str(line.amount),
                           'task_id': str(line.task_id) if line.task_id else None} for line in invoice.lines.all()]
         data['payments'] = [payment_out(payment) for payment in invoice.payments.order_by('paid_on', 'created_at')]

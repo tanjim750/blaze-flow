@@ -258,6 +258,7 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/billing/invoices/', billing_views.invoice_list_create, name='api-billing-invoices'),
     path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/', billing_views.invoice_detail, name='api-billing-invoice-detail'),
     path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/send/', billing_views.invoice_send, name='api-billing-invoice-send'),
+    path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/revert/', billing_views.invoice_revert, name='api-billing-invoice-revert'),
     path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/payments/', billing_views.invoice_payments, name='api-billing-invoice-payments'),
     path('workspaces/<uuid:workspace_id>/billing/payouts/', billing_views.payouts, name='api-billing-payouts'),
     path('workspaces/<uuid:workspace_id>/billing/projects/<uuid:project_id>/', billing_views.project_pricing, name='api-billing-project'),

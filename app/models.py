@@ -1832,6 +1832,8 @@ class InvoiceStatus(models.TextChoices):
 class InvoiceLineKind(models.TextChoices):
     PROJECT_FEE = 'project_fee'
     TASK = 'task'
+    # Typed by hand on a draft (rush fee, licence, travel); not tied to project pricing.
+    MANUAL = 'manual'
 
 
 class PaymentDirection(models.TextChoices):
@@ -1917,6 +1919,9 @@ class Invoice(models.Model):
     sent_at = models.DateTimeField(null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True, default='')
+    # Editable on a draft. Total = lines - discount, then tax (percent) on what is left.
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     created_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='created_by_user_id', null=True, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
