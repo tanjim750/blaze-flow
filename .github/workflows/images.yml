@@ -52,7 +52,10 @@ jobs:
       - name: Validate production compose file
         run: |
           cp .env.production.example .env.production
+          echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)" >> .env.production
           docker compose -f docker-compose.prod.yml --env-file .env.production config --quiet
+          # db must not read the shared env file, or every env edit recreates Postgres.
+          ! docker compose -f docker-compose.prod.yml --env-file .env.production config --format json | jq -e '.services.db.env_file' >/dev/null
           rm .env.production
 
   # Production may run on ARM64 (Oracle Cloud Ampere A1). Build natively on GitHub's arm64
