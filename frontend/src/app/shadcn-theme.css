@@ -1,0 +1,66 @@
+/*
+ * Bridges shadcn/ui's token names onto the Blaze Flow palette.
+ *
+ * shadcn components are written against utilities like `bg-background`,
+ * `text-muted-foreground` and `border-border`. Mapping those here means anything added
+ * from a registry — shadcn's own or Skiper UI's — picks up the studio theme instead of
+ * arriving in shadcn's default neutral grey.
+ *
+ * The mapping is deliberately one-way. Blaze Flow's variables in `shell.css` are the
+ * source of truth and are NOT redefined here, because two of the names collide:
+ * `--muted` is a *text* colour in this app but a *surface* in shadcn, and redefining it
+ * would turn every `.muted` label into an unreadable dark block. So the shadcn names are
+ * only ever produced as `--color-*` theme tokens, never written back.
+ *
+ * The app is dark-only (`html { color-scheme: dark }`), so there is a single palette.
+ */
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+
+  --color-popover: var(--surface-2);
+  --color-popover-foreground: var(--text);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--text);
+
+  /* Surface, not text — the app's own `--muted` is the foreground below. */
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--muted);
+
+  --color-accent: var(--hover);
+  --color-accent-foreground: var(--text);
+
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: #ffffff;
+
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--primary);
+
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+/*
+ * shadcn components use a bare `border` utility and rely on a base-layer default for its
+ * colour. Without this the browser falls back to `currentColor`, which painted a stark
+ * white outline around every dropdown.
+ *
+ * It lives in `@layer base` deliberately: the app's own stylesheets are unlayered, so they
+ * still win over this for any element that sets its own border.
+ */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+}

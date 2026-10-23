@@ -1,0 +1,178 @@
+/* Slack-style chat shell. Dark violet tokens; Team only stays amber.
+ *
+ * Breakpoints (viewport):
+ *  ≥1280  — channel list (~280–320) + thread beside the app rail
+ *  ≤1279  — list OR full-screen thread (back), so nav+list+thread never squeeze
+ *  ≤900   — app rail is already off-canvas (shell.css); chat fills the frame
+ *  ≤640   — tighter padding for phone
+ */
+
+.ch-shell{
+  display:grid;
+  grid-template-columns:minmax(280px,320px) minmax(0,1fr);
+  gap:0;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  min-height:calc(100vh - 0px);
+  height:calc(100vh - 0px);
+  margin:0;
+  border-top:1px solid var(--border);
+  background:var(--bg,#0e0e14);
+  color:var(--text);
+  overflow:hidden;
+}
+.ch-shell.is-portal{
+  margin:0;
+  height:calc(100vh - 0px);
+  min-height:calc(100vh - 0px);
+  border:0;
+  border-radius:0;
+  overflow:hidden;
+}
+
+.ch-sidebar{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  max-width:100%;
+  border-right:1px solid var(--border);
+  background:var(--surface,#14141c);
+  overflow:hidden;
+}
+.ch-side-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 14px 8px;min-width:0}
+.ch-side-head h1{display:flex;align-items:center;gap:8px;margin:0;font-size:18px;letter-spacing:-.02em;min-width:0}
+.ch-side-head h1 svg{width:18px;height:18px;color:var(--primary-2);flex:none}
+.ch-side-count{flex:none;padding:3px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:11px;white-space:nowrap}
+.ch-search{display:flex;align-items:center;gap:8px;margin:0 12px 8px;padding:0 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2,#1a1a24);min-width:0}
+.ch-search svg{width:14px;height:14px;color:var(--muted);flex:none}
+.ch-search input{flex:1;min-width:0;height:34px;border:0;background:none;color:var(--text);font:inherit;font-size:13px;outline:none}
+.ch-search button{display:grid;place-items:center;width:22px;height:22px;border:0;border-radius:6px;background:none;color:var(--muted);cursor:pointer;flex:none}
+.ch-views{display:flex;flex-wrap:wrap;gap:4px;padding:0 12px 10px}
+.ch-views button{height:28px;padding:0 10px;border:1px solid transparent;border-radius:999px;background:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer}
+.ch-views button.is-on{background:var(--primary);border-color:transparent;color:#fff}
+.ch-nav{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 8px 16px}
+.ch-section{margin-bottom:8px;min-width:0}
+.ch-section-head{display:flex;align-items:center;gap:6px;width:100%;padding:6px 8px;border:0;border-radius:8px;background:none;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;text-align:left;min-width:0}
+.ch-section-head > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch-section-head.is-static{cursor:default}
+.ch-section-head svg{width:14px;height:14px;flex:none}
+.ch-section-head small{margin-left:auto;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted);flex:none}
+.ch-section-head:hover:not(.is-static){color:var(--text);background:var(--hover,#1d1d26)}
+.ch-channel{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border:0;border-radius:8px;background:none;color:var(--muted);font-size:13.5px;cursor:pointer;text-align:left;min-width:0}
+.ch-channel svg{width:14px;height:14px;flex:none;opacity:.7}
+.ch-channel-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-channel.is-unread .ch-channel-name{color:var(--text);font-weight:700}
+.ch-channel.is-active{background:var(--primary);color:#fff}
+.ch-channel.is-active svg{opacity:1;color:#fff}
+.ch-channel:hover:not(.is-active){background:var(--hover,#1d1d26);color:var(--text)}
+.ch-badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#ff5c7a;color:#fff;font-size:10.5px;font-weight:750;flex:none}
+.ch-badge.is-mention{background:#7c5cff}
+.ch-team-dot{width:8px;height:8px;border-radius:50%;background:#f5b546;flex:none}
+.ch-past-toggle{display:block;width:100%;padding:4px 10px;border:0;background:none;color:var(--muted);font-size:11.5px;text-align:left;cursor:pointer}
+.ch-past-toggle:hover{color:var(--text)}
+.ch-empty{margin:8px;color:var(--muted);font-size:12.5px}
+.ch-search-results{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 8px 16px;display:grid;align-content:start;gap:2px}
+.ch-search-label{margin:10px 8px 4px;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.ch-search-hit{display:flex;align-items:flex-start;gap:8px;width:100%;padding:8px 10px;border:0;border-radius:10px;background:none;color:var(--text);text-align:left;cursor:pointer;min-width:0}
+.ch-search-hit:hover{background:var(--hover,#1d1d26)}
+.ch-search-hit svg{width:14px;height:14px;margin-top:3px;color:var(--muted);flex:none}
+.ch-search-hit span{display:grid;gap:1px;min-width:0}
+.ch-search-hit small{color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch-search-hit em{color:var(--muted);font-style:normal;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.ch-main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg,#0e0e14);overflow:hidden}
+.ch-main-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);min-width:0;flex-wrap:wrap}
+.ch-back{display:none}
+.ch-main-title{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto}
+.ch-main-title > svg{width:16px;height:16px;color:var(--primary-2);flex:none}
+.ch-main-title > div{min-width:0}
+.ch-main-title strong{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch-main-title small{display:block;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch-open-project{flex:none;padding:6px 11px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);font-size:12.5px;text-decoration:none;white-space:nowrap}
+.ch-open-project:hover{background:var(--hover,#1d1d26)}
+.ch-thread{flex:1;min-height:0;min-width:0;padding:10px 14px 14px;overflow:hidden;display:flex;flex-direction:column}
+.ch-thread .mt-thread{height:100%;min-height:0;max-height:none}
+.ch-thread .mt-thread.is-studio,
+.ch-thread .mt-thread.is-portal{height:100%;min-height:0}
+.ch-thread .mt-list{max-height:none;flex:1}
+.ch-empty-main{display:grid;justify-items:center;align-content:center;gap:8px;height:100%;padding:40px 20px;text-align:center;color:var(--muted)}
+.ch-empty-main svg{width:32px;height:32px;color:var(--primary-2)}
+.ch-empty-main strong{color:var(--text);font-size:15px}
+.ch-empty-main p{margin:0;max-width:40ch;font-size:13px;line-height:1.5}
+
+/* Project preview card */
+.ch-preview{display:grid;gap:10px;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface);min-width:0;max-width:100%}
+.ch-preview-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;min-width:0}
+.ch-preview-head h2{display:flex;align-items:center;gap:8px;margin:0;font-size:14px;min-width:0}
+.ch-preview-head h2 svg{width:15px;height:15px;color:var(--primary-2);flex:none}
+.ch-preview-list{display:grid;gap:8px;margin:0;padding:0;list-style:none;min-width:0}
+.ch-preview-list li{display:grid;gap:2px;padding:8px 10px;border-radius:10px;background:var(--surface-2);font-size:12.5px;min-width:0}
+.ch-preview-list strong{font-size:12px}
+.ch-preview-list span{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-preview-empty{margin:0;color:var(--muted);font-size:12.5px}
+
+/* Portal pages wrap ChatShell in .pt-page — drop the page max-width so chat can fill. */
+.pt-page:has(> .ch-shell){
+  max-width:none;
+  margin:0;
+  padding:0;
+  gap:0;
+  height:calc(100vh - 0px);
+  min-height:calc(100vh - 0px);
+}
+
+/* Mid / tablet / phone: never show channel list + thread side-by-side under the rail. */
+@media (max-width:1279px){
+  .ch-shell,
+  .ch-shell.is-portal{
+    grid-template-columns:1fr;
+    height:calc(100vh - 0px);
+    min-height:calc(100vh - 0px);
+  }
+  .ch-sidebar.is-hidden-mobile{display:none}
+  .ch-main{display:none}
+  .ch-main.is-open-mobile{display:flex}
+  .ch-back{
+    display:grid;
+    place-items:center;
+    width:36px;
+    height:36px;
+    border:0;
+    border-radius:9px;
+    background:var(--surface);
+    color:var(--text);
+    cursor:pointer;
+    flex:none;
+  }
+  .ch-back svg{width:18px;height:18px}
+  .ch-thread{padding:8px 10px 12px}
+  .ch-main-head{padding:10px 12px}
+  .ch-side-head{padding-top:14px}
+}
+
+/* App rail is off-canvas here (shell.css @900). */
+@media (max-width:900px){
+  /* The mobile top bar sits above; the shell fills what is left. */
+  .ch-shell,.ch-shell.is-portal{height:calc(100dvh - var(--mobilebar-h));min-height:calc(100dvh - var(--mobilebar-h))}
+}
+
+@media (max-width:640px){
+  .ch-search{margin-inline:10px}
+  .ch-views{padding-inline:10px}
+  .ch-thread{padding:6px 8px 10px}
+  .ch-open-project{padding:6px 9px;font-size:12px}
+  .ch-main-title strong{font-size:14px}
+  .ch-preview{padding:12px}
+}
+
+/* Prefer dynamic viewport height on supporting browsers (mobile browser chrome). */
+@supports (height:100dvh){
+  .ch-shell,
+  .ch-shell.is-portal{height:100dvh;min-height:100dvh}
+  .pt-page:has(> .ch-shell){height:100dvh;min-height:100dvh}
+  @media (max-width:1279px){
+    .ch-shell,
+    .ch-shell.is-portal{height:100dvh;min-height:100dvh}
+  }
+}

@@ -1,12 +1,12 @@
 # Blaze Flow — Core Domain Features
 
-This document summarizes the features currently locked for the first five Blaze Flow domains.
+This document summarizes the currently planned Blaze Flow domains. It describes product intent; implemented behavior and delivery status are tracked in `docs/implementation-log.md`.
 
 ---
 
 ## 1. Identity & Authentication
 
-The Identity & Authentication domain manages the global identity of every registered Blaze Flow user. A user exists independently of any workspace and can authenticate using a password or a supported OAuth provider. Authentication credentials and external identities are separated from the core user profile so additional authentication methods can be introduced without changing the user model.
+The Identity & Authentication domain manages the global identity of every registered Blaze Flow user. A user exists independently of any workspace and can authenticate using a password or a supported OAuth provider. Django's custom user model is the authoritative identity and credential record; external OAuth identities remain separate records linked to it.
 
 ### Features
 
@@ -14,7 +14,7 @@ The Identity & Authentication domain manages the global identity of every regist
 Each user has one global account identified by a unique email address. The user profile stores core information such as first name, last name, avatar, timezone, account status, email verification time, and last login time.
 
 #### Email and Password Authentication
-Users can authenticate using their email address and password. Password credentials are maintained separately from the main user record, allowing an account to exist without password authentication when it was originally created through OAuth.
+Users authenticate with their email address and password. Passwords use Django's versioned password-hashing framework and are never stored in plaintext. OAuth-only accounts receive an unusable Django password until the user explicitly configures one.
 
 #### Google OAuth Authentication
 Google OAuth is supported through a generic OAuth identity model. A verified Google email can be automatically linked to an existing account with the same email, while a first-time Google login can create a new Blaze Flow user automatically.
@@ -82,6 +82,9 @@ The primary owner is represented by a boolean ownership flag on a direct user me
 
 #### Membership Lifecycle
 Workspace memberships have their own lifecycle state, allowing access to be suspended or removed without deleting the underlying user or Client Team. Membership history can therefore remain available while effective authorization is disabled.
+
+#### Direct User Invitations
+Workspace member managers can invite a registered-user email into a direct membership with a selected role and project-access mode. Invitations use expiring single-use tokens, store only token hashes, and require the accepting account's normalized email to match the invitation.
 
 #### Project Access Mode
 A membership can use either `ALL` or `SELECTED` project access mode. `ALL` provides the membership with the workspace-level project boundary, while `SELECTED` relies on explicit Resource Access records.

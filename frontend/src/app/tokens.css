@@ -1,0 +1,163 @@
+/*
+ * Blaze Flow design tokens — the single source for colour, spacing, radius and type.
+ *
+ * Every token is a `--bf-*` custom property defined here and nowhere else. Screens read
+ * them directly, or through their own scoped aliases (`.fx { --primary: var(--bf-primary) }`,
+ * `.tb-root { --tb-fg: var(--bf-foreground) }`), so a value changes in one place.
+ *
+ * Values follow design-system/blaze-flow-design-system.md (§2 colour, §3 type, §4 space,
+ * §5 radius). The app is dark-first with the violet accent; `.light` carries the DS light
+ * values for the screens that support it.
+ *
+ * The older app palette (`--bg`, `--surface`, `--primary` …, used by shell, dashboard and
+ * review CSS) is defined at the bottom, also here, so there is still one file to look in.
+ * Its names collide with the DS names inside `.fx`, which is why the DS set is namespaced.
+ */
+:root, .dark {
+  /* ---- Colour: surfaces (DS §2.2) */
+  --bf-canvas: oklch(0.13 0.004 285);
+  --bf-background: oklch(0.185 0.006 285);
+  --bf-field: oklch(0.20 0.006 285);
+  --bf-card: oklch(0.215 0.007 285);
+  --bf-muted: oklch(0.235 0.007 285);
+  --bf-popover: oklch(0.245 0.008 285);
+  --bf-secondary: oklch(0.26 0.008 285);
+  --bf-accent: oklch(0.28 0.009 285);
+  --bf-overlay: oklch(0.10 0.005 285 / 72%);
+
+  /* ---- Colour: text and lines */
+  --bf-foreground: oklch(0.955 0.005 285);
+  --bf-muted-foreground: oklch(0.72 0.018 285);
+  --bf-subtle-foreground: oklch(0.64 0.015 285);
+  --bf-border: oklch(1 0 0 / 8%);
+  --bf-border-strong: oklch(1 0 0 / 14%);
+  --bf-input: oklch(1 0 0 / 40%);
+  --bf-input-hover: oklch(1 0 0 / 50%);
+
+  /* ---- Colour: violet accent (DS §2.3). One primary fill for every primary button. */
+  --bf-brand: oklch(0.636 0.209 288.7);
+  --bf-primary: oklch(0.55 0.215 287);
+  --bf-primary-hover: oklch(0.58 0.215 287);
+  --bf-primary-foreground: oklch(1 0 0);
+  --bf-brand-foreground: oklch(0.76 0.13 290);
+  --bf-ring: oklch(0.70 0.16 290);
+  /* The accent ramp the older screens were written in (hex), kept exact. */
+  --bf-violet-300: #a995ff;
+  --bf-violet-400: #8b6cff;
+  --bf-violet-600: #6949e8;
+
+  /* ---- Colour: status and stage tones (DS §2.5, §14) */
+  --bf-success: oklch(0.78 0.14 158);
+  --bf-warning: oklch(0.82 0.15 80);
+  --bf-destructive: oklch(0.72 0.17 20);
+  --bf-destructive-solid: oklch(0.58 0.20 25);
+  --bf-info: oklch(0.74 0.13 250);
+  --bf-teal: oklch(0.80 0.12 190);
+  --bf-annotation: oklch(0.875 0.143 86.6);
+
+  /* ---- Elevation */
+  --bf-elevation-2: 0 8px 24px oklch(0 0 0 / 40%);
+  --bf-elevation-3: 0 24px 64px oklch(0 0 0 / 55%);
+
+  /* ---- Focus: one visible ring for every interactive element */
+  --bf-focus-width: 2px;
+  --bf-focus-offset: 2px;
+
+  /* ---- Spacing (DS §4, 4px grid) */
+  --bf-space-0-5: 2px;
+  --bf-space-1: 4px;
+  --bf-space-1-5: 6px;
+  --bf-space-2: 8px;
+  --bf-space-3: 12px;
+  --bf-space-4: 16px;
+  --bf-space-5: 20px;
+  --bf-space-6: 24px;
+  --bf-space-8: 32px;
+  --bf-space-10: 40px;
+
+  /* ---- Radius (DS §5) */
+  --bf-radius-xs: 4px;
+  --bf-radius-sm: 6px;
+  --bf-radius-md: 8px;
+  --bf-radius-lg: 12px;
+  --bf-radius-xl: 16px;
+  --bf-radius-pill: 999px;
+
+  /* ---- Type scale (DS §3) */
+  --bf-font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --bf-font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --bf-text-2xs: 11px;
+  --bf-text-xs: 12px;
+  --bf-text-sm: 13px;
+  --bf-text-base: 14px;
+  --bf-text-lg: 16px;
+  --bf-text-xl: 20px;
+  --bf-text-2xl: 24px;
+  --bf-text-display: 31px;
+  --bf-weight-regular: 400;
+  --bf-weight-medium: 500;
+  --bf-weight-semibold: 600;
+  --bf-weight-bold: 650;
+
+  /* ---- Motion */
+  --bf-duration-fast: 120ms;
+  --bf-duration-base: 180ms;
+  --bf-duration-slow: 240ms;
+  --bf-ease-out: cubic-bezier(.22, 1, .36, 1);
+
+  /* ---- Components */
+  --bf-control-height-sm: 32px;
+  --bf-control-height-md: 36px;
+  /* One stage pill, everywhere (Files, Tasks, sheets, dialogs). */
+  --bf-pill-height: 22px;
+
+  /* Review-stage teal, used by `[data-tone=teal]`. */
+  --teal: var(--bf-teal);
+}
+
+.light {
+  --bf-background: oklch(0.985 0.002 285);
+  --bf-field: oklch(1 0 0);
+  --bf-card: oklch(1 0 0);
+  --bf-muted: oklch(0.96 0.004 285);
+  --bf-popover: oklch(1 0 0);
+  --bf-secondary: oklch(0.955 0.005 285);
+  --bf-accent: oklch(0.945 0.006 285);
+  --bf-overlay: oklch(0.2 0.01 285 / 40%);
+  --bf-foreground: oklch(0.21 0.012 285);
+  --bf-muted-foreground: oklch(0.50 0.018 285);
+  --bf-subtle-foreground: oklch(0.54 0.015 285);
+  --bf-border: oklch(0.91 0.006 285);
+  --bf-border-strong: oklch(0.86 0.008 285);
+  --bf-input: oklch(0.62 0.010 285);
+  --bf-input-hover: oklch(0.56 0.010 285);
+  --bf-primary: oklch(0.53 0.22 287);
+  --bf-primary-hover: oklch(0.48 0.21 287);
+  --bf-brand-foreground: oklch(0.50 0.20 287);
+  --bf-ring: oklch(0.55 0.20 288);
+  --bf-success: oklch(0.48 0.11 155);
+  --bf-warning: oklch(0.50 0.11 60);
+  --bf-destructive: oklch(0.52 0.19 25);
+  --bf-info: oklch(0.49 0.14 252);
+  --bf-teal: oklch(0.48 0.078 190);
+  --bf-elevation-2: 0 8px 24px oklch(0.2 0.01 285 / 12%);
+  --bf-elevation-3: 0 24px 64px oklch(0.2 0.01 285 / 18%);
+  --teal: var(--bf-teal);
+}
+
+/* ---- The older app palette (shell, dashboard, review, auth). Same values as before. */
+:root {
+  --bg: #0d0d11;
+  --surface: #141419;
+  --surface-2: #1a1a21;
+  --hover: #21212a;
+  --border: #292933;
+  --text: #f4f3f8;
+  --muted: #9997a8;
+  --primary: var(--bf-violet-400);
+  --primary-2: var(--bf-violet-300);
+  --warning: #f4b63f;
+  --danger: #ff6874;
+  --premium-shadow: 0 24px 80px rgba(0, 0, 0, .48);
+  --premium-ring: 0 0 0 3px rgba(139, 108, 255, .18);
+}

@@ -124,6 +124,10 @@ CREATE TYPE "subscription_status" AS ENUM (
   'PAST_DUE'
 );
 
+-- HISTORICAL DESIGN REFERENCE ONLY.
+-- Django models and migrations are the executable schema source of truth.
+-- See docs/DEVELOPMENT.md before changing the database schema.
+
 CREATE TABLE "users" (
   "id" uuid PRIMARY KEY,
   "email" varchar(255) UNIQUE NOT NULL,
@@ -174,6 +178,16 @@ CREATE TABLE "password_reset_tokens" (
   "created_at" timestamp NOT NULL
 );
 
+CREATE TABLE "email_verification_tokens" (
+  "id" uuid PRIMARY KEY,
+  "user_id" uuid NOT NULL,
+  "token_hash" varchar(255) UNIQUE NOT NULL,
+  "expires_at" timestamp NOT NULL,
+  "used_at" timestamp,
+  "invalidated_at" timestamp,
+  "created_at" timestamp NOT NULL
+);
+
 CREATE TABLE "workspaces" (
   "id" uuid PRIMARY KEY,
   "name" varchar(150) NOT NULL,
@@ -200,6 +214,16 @@ CREATE TABLE "workspace_profiles" (
   "state" varchar(100),
   "postal_code" varchar(30),
   "country_code" varchar(2),
+  "created_at" timestamp NOT NULL,
+  "updated_at" timestamp NOT NULL
+);
+
+CREATE TABLE "workspace_retention_policies" (
+  "id" uuid PRIMARY KEY,
+  "workspace_id" uuid UNIQUE NOT NULL,
+  "review_file_cleanup_enabled" boolean NOT NULL DEFAULT true,
+  "review_file_retention_days" integer NOT NULL,
+  "updated_by_user_id" uuid NOT NULL,
   "created_at" timestamp NOT NULL,
   "updated_at" timestamp NOT NULL
 );
@@ -358,6 +382,19 @@ CREATE TABLE "review_comment_revisions" (
   "edited_by_guest_session_id" uuid,
   "snapshot" jsonb NOT NULL,
   "created_at" timestamp NOT NULL
+);
+
+CREATE TABLE "review_comment_reactions" (
+  "id" uuid PRIMARY KEY,
+  "review_comment_id" uuid NOT NULL,
+  "emoji" varchar(16) NOT NULL,
+  "reacted_by_user_id" uuid,
+  "reacted_by_guest_session_id" uuid,
+  "created_at" timestamp NOT NULL,
+  CONSTRAINT "review_reactions_exactly_one_actor" CHECK (
+    ("reacted_by_user_id" IS NOT NULL AND "reacted_by_guest_session_id" IS NULL)
+    OR ("reacted_by_user_id" IS NULL AND "reacted_by_guest_session_id" IS NOT NULL)
+  )
 );
 
 CREATE TABLE "annotations" (
@@ -630,6 +667,8 @@ CREATE UNIQUE INDEX ON "oauth_identities" ("user_id", "provider");
 
 CREATE INDEX ON "password_reset_tokens" ("user_id", "created_at");
 
+CREATE INDEX ON "email_verification_tokens" ("user_id", "created_at");
+
 CREATE INDEX ON "workspaces" ("created_by_user_id");
 
 CREATE INDEX ON "guest_sessions" ("workspace_id");
@@ -709,6 +748,16 @@ CREATE INDEX ON "review_comment_revisions" ("review_comment_id");
 CREATE INDEX ON "review_comment_revisions" ("edited_by_user_id");
 
 CREATE INDEX ON "review_comment_revisions" ("edited_by_guest_session_id");
+
+CREATE INDEX ON "review_comment_reactions" ("review_comment_id", "emoji");
+
+CREATE INDEX ON "review_comment_reactions" ("reacted_by_user_id");
+
+CREATE INDEX ON "review_comment_reactions" ("reacted_by_guest_session_id");
+
+CREATE UNIQUE INDEX ON "review_comment_reactions" ("review_comment_id", "emoji", "reacted_by_user_id") WHERE "reacted_by_user_id" IS NOT NULL;
+
+CREATE UNIQUE INDEX ON "review_comment_reactions" ("review_comment_id", "emoji", "reacted_by_guest_session_id") WHERE "reacted_by_guest_session_id" IS NOT NULL;
 
 CREATE INDEX ON "annotations" ("media_version_id");
 
@@ -878,7 +927,11 @@ COMMENT ON TABLE "oauth_identities" IS 'Google sub is the stable OAuth identity.
 
 COMMENT ON TABLE "password_reset_tokens" IS 'Creating a new reset request invalidates previous unused reset tokens.';
 
+COMMENT ON TABLE "email_verification_tokens" IS 'Verification secrets are hashed, expiring, single-use, and rotated on resend.';
+
 COMMENT ON TABLE "workspaces" IS 'Workspace is the tenant boundary. created_by_user_id remains immutable.';
+
+COMMENT ON TABLE "workspace_retention_policies" IS 'Workspace override for review-attachment physical cleanup; absent rows inherit the deployment default.';
 
 COMMENT ON TABLE "guest_sessions" IS 'Browser keeps the raw guest key; database stores only its hash. Email is not a guest identity key.';
 
@@ -938,6 +991,8 @@ Only the original comment author can edit.
 
 Revisions are retained internally even after the comment is deleted.
 ';
+
+COMMENT ON TABLE "review_comment_reactions" IS 'Exactly one registered-user or guest-session actor is required. Each actor may use each supported emoji once per comment.';
 
 COMMENT ON TABLE "annotations" IS 'Exactly one author is required:
 author_user_id XOR author_guest_session_id.
@@ -1199,7 +1254,13 @@ ALTER TABLE "oauth_identities" ADD FOREIGN KEY ("user_id") REFERENCES "users" ("
 
 ALTER TABLE "password_reset_tokens" ADD FOREIGN KEY ("user_id") REFERENCES "users" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
+ALTER TABLE "email_verification_tokens" ADD FOREIGN KEY ("user_id") REFERENCES "users" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+
 ALTER TABLE "workspaces" ADD FOREIGN KEY ("created_by_user_id") REFERENCES "users" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+
+ALTER TABLE "workspace_retention_policies" ADD FOREIGN KEY ("workspace_id") REFERENCES "workspaces" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+
+ALTER TABLE "workspace_retention_policies" ADD FOREIGN KEY ("updated_by_user_id") REFERENCES "users" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
 ALTER TABLE "workspaces" ADD FOREIGN KEY ("id") REFERENCES "workspace_profiles" ("workspace_id") DEFERRABLE INITIALLY IMMEDIATE;
 
@@ -1270,6 +1331,12 @@ ALTER TABLE "review_comment_revisions" ADD FOREIGN KEY ("review_comment_id") REF
 ALTER TABLE "review_comment_revisions" ADD FOREIGN KEY ("edited_by_user_id") REFERENCES "users" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
 ALTER TABLE "review_comment_revisions" ADD FOREIGN KEY ("edited_by_guest_session_id") REFERENCES "guest_sessions" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+
+ALTER TABLE "review_comment_reactions" ADD FOREIGN KEY ("review_comment_id") REFERENCES "review_comments" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+
+ALTER TABLE "review_comment_reactions" ADD FOREIGN KEY ("reacted_by_user_id") REFERENCES "users" ("id") DEFERRABLE INITIALLY IMMEDIATE;
+
+ALTER TABLE "review_comment_reactions" ADD FOREIGN KEY ("reacted_by_guest_session_id") REFERENCES "guest_sessions" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
 ALTER TABLE "annotations" ADD FOREIGN KEY ("media_version_id") REFERENCES "media_versions" ("id") DEFERRABLE INITIALLY IMMEDIATE;
 
