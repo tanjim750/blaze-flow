@@ -37,6 +37,7 @@ export function CommandPalette({ workspace }: { workspace: Workspace | null }) {
   const [query, setQuery] = useState("");
   const [server, setServer] = useState<{ query: string; groups: SearchGroup[] }>({ query: "", groups: [] });
   const [loading, setLoading] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState(false);
   const [active, setActive] = useState(0);
   const [recents, setRecents] = useState<PaletteRow[]>([]);
@@ -74,7 +75,7 @@ export function CommandPalette({ workspace }: { workspace: Workspace | null }) {
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, DEBOUNCE_MS);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [open, workspaceId, trimmed]);
+  }, [open, workspaceId, trimmed, attempt]);
 
   const actions = useMemo(() => quickActions(role), [role]);
   const pages = useMemo(() => pageRows(workspace), [workspace]);
@@ -108,7 +109,7 @@ export function CommandPalette({ workspace }: { workspace: Workspace | null }) {
     else if (event.key === "Enter") { event.preventDefault(); choose(rows[current]); }
   };
 
-  const searching = trimmed.length >= MIN_QUERY && (loading || server.query !== trimmed);
+  const searching = Boolean(workspaceId) && trimmed.length >= MIN_QUERY && (loading || server.query !== trimmed);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -153,7 +154,7 @@ export function CommandPalette({ workspace }: { workspace: Workspace | null }) {
             ))}
             {!rows.length && (
               <p className="qs-empty" role="status">
-                {failed ? "Search is unavailable right now." : searching ? "Searching…" : trimmed.length >= MIN_QUERY ? `Nothing matches “${trimmed}”.` : "Type to search."}
+                {failed ? <>Search is unavailable right now. <button type="button" className="qs-retry" onClick={() => { setFailed(false); setAttempt((n) => n + 1); }}>Try again</button></> : searching ? "Searching…" : !workspaceId && trimmed.length >= MIN_QUERY ? "Search comes back once Blaze Flow reconnects." : trimmed.length >= MIN_QUERY ? `Nothing matches “${trimmed}”.` : "Type to search."}
               </p>
             )}
           </div>
