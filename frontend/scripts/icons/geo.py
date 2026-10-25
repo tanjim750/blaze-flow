@@ -211,3 +211,5 @@ F=lambda x,y,s=2:f'<rect x="{x}" y="{y}" width="{s}" height="{s}" fill="currentC
 I['Ellipsis']=F(4,11)+F(11,11)+F(18,11); I['MoreHorizontal']=I['Ellipsis']
 I['GripVertical']=''.join(F(x,y) for x in (8,14) for y in (4,11,18))
 I['Keyboard']=R(2,5,20,14)+''.join(F(x,8.25,1.5) for x in (5.25,9.25,13.25,17.25))+F(5.25,11.75,1.5)+F(17.25,11.75,1.5)+P('M10 12.5h4M7 16h10')
+# Clients: a person beside a contact card, so it reads as people (not a building) and differs from Team (Users).
+I['Clients']=C(8,8,3.5)+P('M1.5 20.5v-2.5l2.5-3.5h8l2.5 3.5v2.5z')+P('M16 6.5h6M16 10.5h6M17.5 14.5h4.5')

@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  ArrowRight, Building2, Clapperboard, Clock, CornerDownLeft, FileText, FolderOpen, Loader2, MessagesSquare,
+  ArrowRight, Clients, Clapperboard, Clock, CornerDownLeft, FileText, FolderOpen, Loader2, MessagesSquare,
   Plus, Search, SquareKanban, User, X,
 } from "@/components/icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -18,7 +18,7 @@ import "./command-palette.css";
 
 const GROUP_ICON: Record<SearchGroupKey, ReactNode> = {
   recent: <Clock aria-hidden="true" />, actions: <Plus aria-hidden="true" />, pages: <ArrowRight aria-hidden="true" />,
-  projects: <FolderOpen aria-hidden="true" />, clients: <Building2 aria-hidden="true" />, cuts: <Clapperboard aria-hidden="true" />,
+  projects: <FolderOpen aria-hidden="true" />, clients: <Clients aria-hidden="true" />, cuts: <Clapperboard aria-hidden="true" />,
   files: <FileText aria-hidden="true" />, tasks: <SquareKanban aria-hidden="true" />, chat: <MessagesSquare aria-hidden="true" />,
   people: <User aria-hidden="true" />,
 };
