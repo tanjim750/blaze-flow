@@ -12,11 +12,13 @@
  * actions menu. See `onPointerSelect` in asset-library.tsx for the full rule.
  */
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
-import { Clapperboard, Eye, FolderOpen, GitBranch, Layers, MessageSquareText, TriangleAlert } from "lucide-react";
+import { Clapperboard, Eye, FolderOpen, GitBranch, Layers, MessageSquareText, TriangleAlert } from "@/components/icons";
 import type { LibraryFile, LibraryFolder } from "@/lib/asset-library";
 import { isProcessing } from "@/lib/asset-library";
 import { aspectLabel, formatSize, KIND_NAME, runtime, type Density, type ViewMode } from "@/lib/files-panel";
 import { FileName, KindIcon, StagePill, Thumb, type StageLike } from "./files-ui";
+import { HoverMedia, StackedFolder } from "@/components/frame/frame-ui";
+import { FolderGlyph } from "@/components/frame/icons";
 
 const shortDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
 const longDate = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
@@ -98,7 +100,9 @@ export function FileItem({ file, stage, relation, reviewable, common }: {
   );
   const frame = (
     <span className={`fx-frame ${versions.versionCount > 1 ? "is-stacked" : ""} ${working ? "is-working" : ""}`}>
-      <Thumb file={file} size={common.mode === "list" ? "sm" : "md"} />
+      {common.mode === "grid"
+        ? <HoverMedia isVideo={file.kind === "video" && !working} videoSrc={file.status === "READY" ? file.url : null} poster={<Thumb file={file} size="md" />} />
+        : <Thumb file={file} size="sm" />}
       {common.mode === "grid" && file.durationMs && !working ? <b className="fx-duration">{runtime(file.durationMs)}</b> : null}
       {common.mode === "grid" && working && <span className="fx-working" role="status"><em>{status}</em><i /></span>}
       {common.mode === "grid" && openChip}
@@ -162,7 +166,7 @@ export function FolderItem({ folder, childFiles, itemCount, relation, common }: 
       <Shell id={folder.id} common={common} kind="folder" label={label}>
         <Check checked={common.selected} name={folder.name} onToggle={common.onToggle} />
         <span className="fx-col-name">
-          <span className="fx-frame is-folder"><span className="fx-thumb is-glyph"><FolderOpen aria-hidden="true" /></span></span>
+          <span className="fx-frame is-folder"><span className="fx-thumb is-glyph"><FolderGlyph /></span></span>
           <span className="fx-name-stack"><span className="fx-name-line">{name}</span><small>{meta}</small></span>
         </span>
         <span className="fx-col-stage" /><span className="fx-col-version" /><span className="fx-col-feedback" />
@@ -175,15 +179,13 @@ export function FolderItem({ folder, childFiles, itemCount, relation, common }: 
   return (
     <Shell id={folder.id} common={common} kind="folder" label={label}>
       <Check checked={common.selected} name={folder.name} onToggle={common.onToggle} />
-      <span className="fx-frame is-folder">
-        {withMedia.length
-          ? <span className="fx-folder-strip">{withMedia.map((file) => <Thumb key={file.id} file={file} size="sm" />)}</span>
-          : <span className="fx-thumb is-glyph"><FolderOpen aria-hidden="true" /></span>}
+      <span className="fx-frame is-folder is-stack">
+        <StackedFolder previews={withMedia.map((file) => ({ id: file.id, src: file.preview! }))} />
         {openChip}
       </span>
       <span className="fx-caption">
-        <span className="fx-name-line"><FolderOpen className="fx-kind" aria-hidden="true" />{name}</span>
-        {common.density === "comfortable" && <small className="fx-meta"><span>{meta}</span></small>}
+        <span className="fx-name-line is-folder-name">{name}</span>
+        <small className="fx-meta"><span>{meta}</span></small>
       </span>
       <span className="fx-tile-actions">{common.menu}</span>
     </Shell>

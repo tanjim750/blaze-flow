@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import NextImage from "next/image";
-import { AudioLines, Clapperboard, File as FileIcon, Image as ImageIcon, Link2, Lock, Paperclip, Play, Search, Trash2, Upload, X } from "lucide-react";
+import { AudioLines, Clapperboard, File as FileIcon, Image as ImageIcon, Link2, Lock, Paperclip, Play, Search, Trash2, Upload, X } from "@/components/icons";
 import type { ProjectFile, Task, TaskAttachment } from "@/lib/api";
 import type { TasksView } from "@/lib/tasks-view";
 import { dueState, formatDueLong, PRIORITIES, type BoardStage } from "@/lib/task-board";

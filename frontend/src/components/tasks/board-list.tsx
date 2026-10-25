@@ -3,7 +3,7 @@
 import type { KeyboardEvent } from "react";
 import type { Task } from "@/lib/api";
 import type { BoardColumn } from "./board-kanban";
-import { PanelRightOpen } from "lucide-react";
+import { PanelRightOpen } from "@/components/icons";
 import { CardMenu } from "./task-card";
 import { Avatar, DueChip, PriorityIcon, StagePill } from "./stage-ui";
 

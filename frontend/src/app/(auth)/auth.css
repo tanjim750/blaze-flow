@@ -95,7 +95,7 @@
 .google-button { min-height: 44px; display: flex; justify-content: center; overflow: hidden; border-radius: 9px; }
 .google-fallback {
   display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 46px;
-  background: #1c1b22; border: 1px solid var(--border); border-radius: 9px; color: var(--text);
+  background: #0A0A0A; border: 1px solid var(--border); border-radius: 9px; color: var(--text);
   font-weight: 600; font-size: 14.5px;
 }
 .google-fallback.is-loading { position: absolute; inset: 0; }

@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useDoParam } from "@/lib/do-param";
 import { toast } from "sonner";
-import { Columns3, Eye, LayoutList, Plus, Settings2, TriangleAlert, X } from "lucide-react";
+import { Columns3, Eye, LayoutList, Plus, Settings2, TriangleAlert, X } from "@/components/icons";
 import type { ProjectFile, Task, TaskAttachment } from "@/lib/api";
 import type { TasksView } from "@/lib/tasks-view";
 import { FULL_TASK_ACCESS, isReadOnlyTasks } from "@/lib/permissions";

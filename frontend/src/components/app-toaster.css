@@ -12,7 +12,7 @@
   --bf-toast-accent: var(--accent, oklch(0.28 0.009 285));
   border: 1px solid var(--border-strong, oklch(1 0 0 / 14%));
   border-radius: 8px;
-  background: var(--popover, oklch(0.245 0.008 285));
+  background: var(--popover, #0A0A0A);
   color: var(--bf-toast-fg);
   box-shadow: var(--elevation-2, 0 8px 24px oklch(0 0 0 / 40%));
   font-size: 13px;

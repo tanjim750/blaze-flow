@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ImageUp, Plus, Trash2, TriangleAlert } from "lucide-react";
+import { CheckCircle2, ImageUp, Plus, Trash2, TriangleAlert } from "@/components/icons";
 import {
   BRAND_SWATCHES, LOGO_ACCEPT, accentStyle, isHexColor, logoProblem, removeLogo, saveBranding, uploadLogo, type Branding,
 } from "@/lib/portal";

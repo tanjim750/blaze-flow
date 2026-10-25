@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CommandPalette, openQuickSearch } from "@/components/command-palette";
 import { LinkPending } from "@/components/nav-progress";
 import { usePathname, useSearchParams } from "next/navigation";
-import { BadgeCheck, Clapperboard, Inbox, ReceiptText, Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, MessagesSquare, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "lucide-react";
+import { BadgeCheck, Clapperboard, Inbox, ReceiptText, CheckCircle2, Clients, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, MessagesSquare, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
 import type { ShellUser } from "@/lib/user";
@@ -15,7 +15,7 @@ import { NotificationBell } from "@/components/notifications/bell";
 import { fetchUnread, unreadLabel } from "@/lib/messages";
 import "@/components/messages/messages.css";
 import { mobileTitle } from "@/lib/mobile-title";
-import { LifeBuoy, Plus, ShieldCheck, Upload } from "lucide-react";
+import { LifeBuoy, Plus, ShieldCheck, Upload } from "@/components/icons";
 import { REPORT_EVENT, ReportProblemDialog } from "@/components/report-problem";
 
 type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { severity: string; code: string; count: number }[] };
@@ -23,7 +23,7 @@ type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { 
 /** Lucide icons for the role nav (see `lib/role-nav.ts` for who sees which link). */
 const ICONS: Record<NavIcon, typeof House> = {
   home: House, projects: SquareKanban, chat: MessagesSquare, tasks: CheckCircle2, files: FolderOpen,
-  clients: Building2, team: Users, money: Wallet, render: ListVideo, deliverables: PackageCheck,
+  clients: Clients, team: Users, money: Wallet, render: ListVideo, deliverables: PackageCheck,
   settings: Settings, help: CircleHelp, review: Clapperboard, approvals: BadgeCheck, requests: Inbox,
   invoices: ReceiptText, upload: Upload, pay: Wallet,
 };

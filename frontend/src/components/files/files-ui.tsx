@@ -4,7 +4,7 @@
  * Small presentational pieces shared by the Files panel's tiles, rows, tree and inspector.
  * Styles live in `files.css` under the `.fx` scope.
  */
-import { AudioLines, CircleCheck, CircleDashed, CircleDot, Eye, File, FileImage, FileText, Film, Image as ImageIcon, RotateCcw, Tag, Users } from "lucide-react";
+import { AudioLines, CircleCheck, CircleDashed, CircleDot, Eye, File, FileImage, FileText, Film, Image as ImageIcon, RotateCcw, Tag, Users } from "@/components/icons";
 import type { LibraryFile, LibraryKind } from "@/lib/asset-library";
 import type { TaskStageKind } from "@/lib/api";
 import { middleTruncate, stageTone, type StageTone } from "@/lib/files-panel";

@@ -1,4 +1,4 @@
-import { Bell, Columns2, FileCheck2, Keyboard, Lock, MessagesSquare, Mic, ShieldCheck, UploadCloud } from "lucide-react";
+import { Bell, Columns2, FileCheck2, Keyboard, Lock, MessagesSquare, Mic, ShieldCheck, UploadCloud } from "@/components/icons";
 import { ProClosing } from "@/components/pro/pro-home";
 import { ProPinnedStory, ProLiveBento } from "@/components/pro/pro-features";
 import { ProCardGrid, ProPageHero } from "@/components/pro/pro-pages";

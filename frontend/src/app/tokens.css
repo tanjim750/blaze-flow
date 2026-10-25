@@ -14,33 +14,35 @@
  * Its names collide with the DS names inside `.fx`, which is why the DS set is namespaced.
  */
 :root, .dark {
+  /* All-black theme: every surface is #0A0A0A; areas are separated by 1px #262626
+   * borders, and #181818 is used only for hover/active feedback. */
   /* ---- Colour: surfaces (DS §2.2) */
-  --bf-canvas: oklch(0.13 0.004 285);
-  --bf-background: oklch(0.185 0.006 285);
-  --bf-field: oklch(0.20 0.006 285);
-  --bf-card: oklch(0.215 0.007 285);
-  --bf-muted: oklch(0.235 0.007 285);
-  --bf-popover: oklch(0.245 0.008 285);
-  --bf-secondary: oklch(0.26 0.008 285);
-  --bf-accent: oklch(0.28 0.009 285);
+  --bf-canvas: #0A0A0A;
+  --bf-background: #0A0A0A;
+  --bf-field: #0A0A0A;
+  --bf-card: #0A0A0A;
+  --bf-muted: #0A0A0A;
+  --bf-popover: #0A0A0A;
+  --bf-secondary: #0A0A0A;
+  --bf-accent: #181818;
   --bf-overlay: oklch(0.10 0.005 285 / 72%);
 
   /* ---- Colour: text and lines */
-  --bf-foreground: oklch(0.955 0.005 285);
-  --bf-muted-foreground: oklch(0.72 0.018 285);
-  --bf-subtle-foreground: oklch(0.64 0.015 285);
-  --bf-border: oklch(1 0 0 / 8%);
-  --bf-border-strong: oklch(1 0 0 / 14%);
-  --bf-input: oklch(1 0 0 / 40%);
-  --bf-input-hover: oklch(1 0 0 / 50%);
+  --bf-foreground: #FFFFFF;
+  --bf-muted-foreground: #9CA3AF;
+  --bf-subtle-foreground: #9CA3AF;
+  --bf-border: #262626;
+  --bf-border-strong: #262626;
+  --bf-input: #262626;
+  --bf-input-hover: #3a3a3a;
 
   /* ---- Colour: violet accent (DS §2.3). One primary fill for every primary button. */
   --bf-brand: oklch(0.636 0.209 288.7);
-  --bf-primary: oklch(0.55 0.215 287);
-  --bf-primary-hover: oklch(0.58 0.215 287);
+  --bf-primary: #7C3AED;
+  --bf-primary-hover: #6D28D9;
   --bf-primary-foreground: oklch(1 0 0);
   --bf-brand-foreground: oklch(0.76 0.13 290);
-  --bf-ring: oklch(0.70 0.16 290);
+  --bf-ring: #8B5CF6;
   /* The accent ramp the older screens were written in (hex), kept exact. */
   --bf-violet-300: #a995ff;
   --bf-violet-400: #8b6cff;
@@ -56,8 +58,8 @@
   --bf-annotation: oklch(0.875 0.143 86.6);
 
   /* ---- Elevation */
-  --bf-elevation-2: 0 8px 24px oklch(0 0 0 / 40%);
-  --bf-elevation-3: 0 24px 64px oklch(0 0 0 / 55%);
+  --bf-elevation-2: none;
+  --bf-elevation-3: none;
 
   /* ---- Focus: one visible ring for every interactive element */
   --bf-focus-width: 2px;
@@ -147,17 +149,17 @@
 
 /* ---- The older app palette (shell, dashboard, review, auth). Same values as before. */
 :root {
-  --bg: #0d0d11;
-  --surface: #141419;
-  --surface-2: #1a1a21;
-  --hover: #21212a;
-  --border: #292933;
-  --text: #f4f3f8;
-  --muted: #9997a8;
-  --primary: var(--bf-violet-400);
+  --bg: #0A0A0A;
+  --surface: #0A0A0A;
+  --surface-2: #0A0A0A;
+  --hover: #181818;
+  --border: #262626;
+  --text: #FFFFFF;
+  --muted: #9CA3AF;
+  --primary: #7C3AED;
   --primary-2: var(--bf-violet-300);
   --warning: #f4b63f;
   --danger: #ff6874;
-  --premium-shadow: 0 24px 80px rgba(0, 0, 0, .48);
+  --premium-shadow: none;
   --premium-ring: 0 0 0 3px rgba(139, 108, 255, .18);
 }

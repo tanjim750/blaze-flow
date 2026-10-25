@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Loader2, RotateCcw, Trash2, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Loader2, RotateCcw, Trash2, UploadCloud, X } from "@/components/icons";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {

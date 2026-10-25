@@ -9,7 +9,7 @@ import { Placeholder } from "@tiptap/extensions";
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, Heading1, Heading2, Heading3, Italic, Link2, List, ListChecks,
   ListOrdered, Quote, Redo2, Strikethrough, Underline, Undo2, Unlink,
-} from "lucide-react";
+} from "@/components/icons";
 import { briefToEditorHtml } from "@/lib/rich-brief";
 import "./rich-text.css";
 

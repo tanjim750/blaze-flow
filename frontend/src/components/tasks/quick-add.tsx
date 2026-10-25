@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/icons";
 
 /**
  * Inline "add a task" for one column. Enter creates and keeps the composer open for the next

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Loader2, Plus, Save, X } from "lucide-react";
+import { Loader2, Plus, Save, X } from "@/components/icons";
 import { toast } from "sonner";
 import { api } from "@/components/tasks/tasks-api";
 import { setMemberRate } from "@/components/money/billing-client";

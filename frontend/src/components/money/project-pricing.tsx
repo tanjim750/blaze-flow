@@ -9,7 +9,7 @@ import Link from "next/link";
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { FilePlus2, ReceiptText, Wallet } from "lucide-react";
+import { FilePlus2, ReceiptText, Wallet } from "@/components/icons";
 import { formatMoney, fromMinor, parseMoneyInput, sumMoney, toMinor } from "@/lib/money";
 import { invoiceBadge, type ProjectPricing as Pricing } from "@/lib/money-view";
 import { createInvoice, getProjectPricing, setProjectFee } from "./billing-client";

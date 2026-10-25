@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, Minus } from "lucide-react";
+import { Check, Minus } from "@/components/icons";
 import { siteConfig } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 import { Reveal } from "./pro-home";

@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff, LockKeyhole } from "lucide-react";
+import { Eye, EyeOff, LockKeyhole } from "@/components/icons";
 import { useId, useState } from "react";
 import { passwordStrength } from "@/lib/password-strength";
 

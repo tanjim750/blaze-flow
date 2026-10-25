@@ -1,6 +1,6 @@
 /** Billing demo panels for the role dashboards. Each renders only when its data is present. */
 import Link from "next/link";
-import { ReceiptText, Wallet } from "lucide-react";
+import { ReceiptText, Wallet } from "@/components/icons";
 import type { ClientDashboard, EditorDashboard, OwnerDashboard } from "@/lib/role-dashboard-view";
 
 export function OwnerMoneyStrip({ cards }: { cards: NonNullable<OwnerDashboard["money"]> }) {

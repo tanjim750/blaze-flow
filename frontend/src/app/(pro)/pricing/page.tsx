@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Lock, ShieldCheck, UploadCloud, Users } from "lucide-react";
+import { Lock, ShieldCheck, UploadCloud, Users } from "@/components/icons";
 import { ProClosing, ProFaq, ProPlans, type FaqItem } from "@/components/pro/pro-home";
 import { ProCardGrid, ProPageHero } from "@/components/pro/pro-pages";
 import { ProCompare } from "@/components/pro/pro-pricing";

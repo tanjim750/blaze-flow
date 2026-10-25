@@ -2,7 +2,7 @@
 
 import { useAppRouter } from "@/lib/app-router";
 import Link from "next/link";
-import { Mail, User, Users } from "lucide-react";
+import { Mail, User, Users } from "@/components/icons";
 import { useState, type FormEvent } from "react";
 import { browserTimezone, safeNext, signIn, signUp, type InvitePreview } from "@/lib/auth-client";
 import { GoogleSignIn } from "@/components/google-sign-in";

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, AtSign, CheckSquare, History, ListChecks, CornerDownRight, Sparkles, Eye, Lock, MessageSquareText, Paperclip, Pencil, PencilLine, Repeat, RotateCcw, Search, Send, SmilePlus, Timer, Trash2, Users, X } from "lucide-react";
+import { Ellipsis, Link2 } from "@/components/icons";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ArrowLeftRight, AtSign, CheckSquare, History, ListChecks, CornerDownRight, Sparkles, Eye, Lock, MessageSquareText, Paperclip, Pencil, PencilLine, Repeat, RotateCcw, Search, Send, SmilePlus, Timer, Trash2, Users, X } from "@/components/icons";
 import {
   DEFAULT_HOLD, HOLD_PRESETS_MS, displayWindow, drawingEndMs, holdLabel, noteEndMs, parseTime, rangeLabel, rememberHold, validChoice, type HoldChoice,
 } from "@/lib/annotation-window";
 import type { ReviewNote } from "@/lib/review-notes";
-import { clientView, recordingOf, type NoteDrawing } from "@/lib/review-notes";
+import { clientView, NOTE_SORTS, recordingOf, sortNotes, type NoteDrawing, type NoteSort } from "@/lib/review-notes";
 import { DEFAULT_FILTER, activeFilters, filterCounts, filterNotes, isMine, type FilterContext, type NoteFilter, type NoteSide, type NoteStatus } from "@/lib/review-filters";
 import { DEFAULT_RANGE_MS, rangeOut, type MarkRange } from "@/lib/review-range";
 import type { Mentionable, ReviewView } from "@/lib/review-view";
@@ -141,6 +143,7 @@ export function Comments({
 }: Props) {
   const [replyTo, setReplyTo] = useState<ReviewNote | null>(null);
   const [filter, setFilter] = useState<NoteFilter>(DEFAULT_FILTER);
+  const [sort, setSort] = useState<NoteSort>("timecode");
   const feed = useRef<HTMLDivElement>(null);
   const row: RowContext = { viewerId, durationMs, onPlayRange };
   // A project cut the viewer can read but not comment on (a read-only role): show that,
@@ -151,8 +154,8 @@ export function Comments({
   const context: FilterContext = useMemo(() => ({ viewerId, teamIds: new Set(view.members.map((member) => member.id)) }), [view.members, viewerId]);
   const counts = useMemo(() => filterCounts(notes, filter, context), [context, filter, notes]);
   const ordered = useMemo(
-    () => filterNotes(notes, filter, context).sort((a, b) => (a.startMs ?? Number.MAX_SAFE_INTEGER) - (b.startMs ?? Number.MAX_SAFE_INTEGER)),
-    [context, filter, notes],
+    () => sortNotes(filterNotes(notes, filter, context), sort),
+    [context, filter, notes, sort],
   );
   const filtering = activeFilters(filter) > 0;
 
@@ -242,7 +245,7 @@ export function Comments({
       </header>
 
       {notes.length > 0 && (
-        <FilterBar filter={filter} onChange={setFilter} counts={counts} sides={sides} filtering={filtering} />
+        <FilterBar filter={filter} onChange={setFilter} counts={counts} sides={sides} filtering={filtering} sort={sort} onSort={setSort} />
       )}
 
       {teamTools && noteTasks.carry && noteTasks.carry.available > 0 && noteTasks.carry.previous && (
@@ -360,9 +363,10 @@ function TeamBadge() {
 }
 
 /** Status, author and drawing filters plus a search, over the comment feed. */
-function FilterBar({ filter, onChange, counts, sides, filtering }: {
+function FilterBar({ filter, onChange, counts, sides, filtering, sort, onSort }: {
   filter: NoteFilter; onChange: (filter: NoteFilter) => void;
   counts: ReturnType<typeof filterCounts>; sides: boolean; filtering: boolean;
+  sort: NoteSort; onSort: (sort: NoteSort) => void;
 }) {
   const set = (change: Partial<NoteFilter>) => onChange({ ...filter, ...change });
   const statuses: { value: NoteStatus; label: string; count: number }[] = [
@@ -390,6 +394,12 @@ function FilterBar({ filter, onChange, counts, sides, filtering }: {
           placeholder="Search comments"
           aria-label="Search comments"
         />
+      </label>
+      <label className="rvc-sort">
+        <span>Sort by</span>
+        <select value={sort} onChange={(event) => onSort(event.target.value as NoteSort)} aria-label="Sort comments">
+          {NOTE_SORTS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </select>
       </label>
       <div className="rvc-filter-row">
         <div className="rvc-status" role="radiogroup" aria-label="Show comments">
@@ -454,7 +464,7 @@ function OwnActions({ note, writer, canEdit, canDelete, deleteBlocked, editing, 
   editing: boolean; onEdit: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
-  if (note.pending || editing || (!canEdit && !canDelete)) return null;
+  if (note.pending || editing) return null;
   const replies = note.replies.length;
   if (confirming) {
     return (
@@ -465,19 +475,24 @@ function OwnActions({ note, writer, canEdit, canDelete, deleteBlocked, editing, 
       </span>
     );
   }
+  const copyLink = async () => {
+    const url = `${window.location.origin}${window.location.pathname}${window.location.search}#note-${note.id}`;
+    try { await navigator.clipboard.writeText(url); } catch { /* clipboard refused; nothing to do */ }
+  };
+  // One ⋯ menu per note: Edit / Copy link / Delete. Copy link is open to everyone who can
+  // see the note; edit and delete keep their permission checks.
   return (
-    <>
-      {canEdit && <button type="button" onClick={onEdit} aria-label={`Edit ${note.text ? "note" : "comment"}`} title="Edit"><Pencil size={11} />Edit</button>}
-      {canDelete && (
-        <button
-          type="button" className="rvc-delete" aria-label="Delete note"
-          disabled={Boolean(deleteBlocked)} title={deleteBlocked ?? "Delete"}
-          onClick={() => setConfirming(true)}
-        >
-          <Trash2 size={12} />
-        </button>
-      )}
-    </>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className="rvc-more" aria-label={`Actions for ${note.text ? "note" : "comment"} by ${note.author}`}><Ellipsis size={14} /></button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {canEdit && <DropdownMenuItem onSelect={onEdit}><Pencil size={13} />Edit</DropdownMenuItem>}
+        <DropdownMenuItem onSelect={() => { void copyLink(); }}><Link2 size={13} />Copy link</DropdownMenuItem>
+        {canDelete && <><DropdownMenuSeparator />
+          <DropdownMenuItem className="is-danger" disabled={Boolean(deleteBlocked)} title={deleteBlocked ?? undefined} onSelect={() => setConfirming(true)}><Trash2 size={13} />Delete</DropdownMenuItem></>}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -574,7 +589,7 @@ function Note({ note, view, target, writer, focused, live = false, onSeek, onRep
   const loopable = timed && note.startMs !== null && rangeEnd !== null && row?.onPlayRange;
 
   return (
-    <article className={`rvc-note ${note.resolved ? "is-resolved" : ""} ${focused ? "is-focused" : ""} ${live ? "is-live" : ""} ${note.visibility === "team" ? "is-team" : ""} ${note.pending ? "is-pending" : ""}`} data-note={note.id}>
+    <article className={`rvc-note ${note.resolved ? "is-resolved" : ""} ${focused ? "is-focused" : ""} ${live ? "is-live" : ""} ${note.visibility === "team" ? "is-team" : ""} ${note.pending ? "is-pending" : ""}`} data-note={note.id} id={`note-${note.id}`}>
       <div className="rvc-meta">
         {select && <input type="checkbox" className="rvc-select" checked={select.checked} onChange={select.onToggle} aria-label={`Select note${note.timecode ? ` at ${note.timecode}` : ""}`} />}
         <span className="rvc-avatar">{note.initials}</span>

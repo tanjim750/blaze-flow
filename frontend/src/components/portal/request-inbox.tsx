@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Building2, CalendarDays, Check, Clapperboard, Coins, Link2, Mail, MonitorPlay, TriangleAlert, X } from "lucide-react";
+import { ArrowRight, Building2, CalendarDays, Check, Clapperboard, Coins, Link2, Mail, MonitorPlay, TriangleAlert, X } from "@/components/icons";
 import {
   LENGTH_OPTIONS, REQUEST_STATUS, answerProjectRequest, budgetLabel, dayDate, deliverablesSummary, type ProjectRequest, type RequestStatus,
 } from "@/lib/portal";

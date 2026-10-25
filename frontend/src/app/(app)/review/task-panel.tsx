@@ -8,7 +8,7 @@
  */
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CalendarClock, Clapperboard, ListChecks, PanelRightOpen, TriangleAlert, UserRound } from "lucide-react";
+import { CalendarClock, Clapperboard, ListChecks, PanelRightOpen, TriangleAlert, UserRound } from "@/components/icons";
 import { toast } from "sonner";
 import type { TaskStage } from "@/lib/api";
 import type { ReviewTaskContext } from "@/lib/review-view";

@@ -55,12 +55,15 @@ describe("Files panel interactions", () => {
     expect(selectedNames()).toEqual(["alpha.mp4"]);
     fireEvent.click(row(/^charlie\.mp4/), { shiftKey: true });
     expect(selectedNames()).toEqual(["alpha.mp4", "bravo.mp4", "charlie.mp4"]);
-    // The bulk bar only appears for two or more.
+    // The selection bar counts the selection.
     expect(screen.getByText("3 selected")).toBeInTheDocument();
     fireEvent.click(row(/^bravo\.mp4/), { metaKey: true });
     expect(selectedNames()).toEqual(["alpha.mp4", "charlie.mp4"]);
     fireEvent.click(within(row(/^charlie\.mp4/)).getByRole("checkbox", { name: "Select charlie.mp4" }));
     expect(selectedNames()).toEqual(["alpha.mp4"]);
+    // It stays up for a single item too (Copy link / Download), and goes once cleared.
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
     expect(screen.queryByText(/\d selected$/)).not.toBeInTheDocument();
   });
 

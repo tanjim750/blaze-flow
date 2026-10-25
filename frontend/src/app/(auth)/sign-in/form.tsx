@@ -2,7 +2,7 @@
 
 import { useAppRouter } from "@/lib/app-router";
 import Link from "next/link";
-import { LogOut, Mail } from "lucide-react";
+import { LogOut, Mail } from "@/components/icons";
 import { useState, type FormEvent } from "react";
 import { safeNext, signIn } from "@/lib/auth-client";
 import { GoogleSignIn } from "@/components/google-sign-in";

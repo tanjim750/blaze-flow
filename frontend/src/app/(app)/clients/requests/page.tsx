@@ -1,7 +1,7 @@
 import { guardRoute } from "@/lib/route-guard";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@/components/icons";
 import { listProjectRequests } from "@/lib/api";
 import { loadWorkspaceContext } from "@/lib/workspace";
 import { RequestInbox } from "@/components/portal/request-inbox";

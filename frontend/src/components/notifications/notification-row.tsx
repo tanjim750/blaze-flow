@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AtSign, Check, CheckCheck, CircleCheckBig, FilePlus2, FolderInput, Inbox, ListTodo, MessageSquareText, MessagesSquare, Reply, RotateCcw, Bell } from "lucide-react";
+import { AtSign, Check, CheckCheck, CircleCheckBig, FilePlus2, FolderInput, Inbox, ListTodo, MessageSquareText, MessagesSquare, Reply, RotateCcw, Bell } from "@/components/icons";
 import { sentence, timeLabel, type DescribedNotification, type NotificationTone } from "@/lib/notifications";
 
 const TONE_ICON: Record<NotificationTone, typeof Bell> = {

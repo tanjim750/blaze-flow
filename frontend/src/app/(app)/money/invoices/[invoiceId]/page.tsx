@@ -1,6 +1,6 @@
 import { guardRoute } from "@/lib/route-guard";
 import Link from "next/link";
-import { ArrowLeft, FileX2 } from "lucide-react";
+import { ArrowLeft, FileX2 } from "@/components/icons";
 import { InvoiceView } from "@/components/money/invoice-view";
 import { getInvoice } from "@/lib/billing-api";
 import { NO_BILLING } from "@/lib/money-view";

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@/components/icons";
 import { AuditTable, ErrorPanel, PageHead, Pill, Stat, TicketList } from "@/components/platform/ui";
 import { getPlatformWorkspace } from "@/lib/platform-api";
 import { formatBytes, formatDate, planLabel, relativeTime } from "@/lib/platform-view";

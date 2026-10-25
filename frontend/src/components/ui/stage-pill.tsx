@@ -7,7 +7,7 @@
  * sized by `--bf-pill-height`.
  */
 import type { CSSProperties } from "react";
-import type { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "@/components/icons";
 
 export function StagePill({ name, tone, dot, icon: Icon, dataTone }: {
   name: string;

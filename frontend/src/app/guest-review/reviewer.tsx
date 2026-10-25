@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck, Check, CornerDownRight, Film, Flame, Loader, LogOut, MessageSquareText, Paperclip,
   RotateCcw, Send, SmilePlus, Trash2, TriangleAlert,
-} from "lucide-react";
+} from "@/components/icons";
 import { nestNotes, type ReviewNote } from "@/lib/review-notes";
 import {
   changeMessageProblem, decisionLine, guestBarActions, MESSAGE_MAX_LENGTH, openNotesWarning, overrideWarning,

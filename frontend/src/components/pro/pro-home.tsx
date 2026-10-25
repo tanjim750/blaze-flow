@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, 
 import Image from "next/image";
 import Link from "next/link";
 import { animate, motion, useInView, useMotionValue, useScroll, useSpring, useTransform } from "motion/react";
-import { ArrowRight, Check } from "lucide-react";
+import { ArrowRight, Check } from "@/components/icons";
 import { DemoVideo } from "@/components/marketing/demo-video";
 import { useFinePointer, useReducedMotionSafe } from "@/components/marketing/motion-prefs";
 import { SCREENS, type ScreenKey } from "@/components/marketing/screenshot";

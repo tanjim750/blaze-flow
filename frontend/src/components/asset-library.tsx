@@ -18,12 +18,15 @@ import { useDoParam } from "@/lib/do-param";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
-import { Archive, ChevronRight, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "lucide-react";
+import { Archive, ChevronRight, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "@/components/icons";
 import type { ProjectFile } from "@/lib/api";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
 import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, syncedTasksMessage, updateAssetFile, updateAssetFolder, uploadAssetFileTracked, type SyncedTasks } from "@/lib/asset-api-client";
 import { toast } from "sonner";
+import { copyText, MoreLabel, SelectionBar } from "@/components/frame/frame-ui";
+import { ShareModal } from "@/components/frame/share-modal";
+import { ShareArrow } from "@/components/frame/icons";
 
 /** Moving a file to Approval etc. moves its linked tasks too; say so. */
 function announceSynced(result: SyncedTasks | null | undefined, stageName?: string) {
@@ -505,6 +508,15 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const locationLabel = (id: string | null) => { const folder = folders.find((item) => item.id === id) ?? null; return [rootLabel, ...folderTrail(folder, folders).map((item) => item.name)].join(" / "); };
   const folderItemCount = (folder: LibraryFolder) => files.filter((file) => file.folderId === folder.id && file.versioning.isLatest).length + folders.filter((item) => item.parentFolderId === folder.id).length;
   const showRelation = !compact && groupBy !== "project";
+  const [shareOpen, setShareOpen] = useState(false);
+  const shareSingle = selected.size === 1 ? [...selectedFiles, ...selectedFolders][0] : null;
+  const shareTitle = shareSingle?.name ?? (selected.size > 1 ? `${selected.size} items` : current?.name ?? rootLabel);
+  const shareProjectId = projectId ?? shareSingle?.projectId ?? current?.projectId ?? (projectFilter || null);
+  const shareUrl = typeof window === "undefined" ? "" : `${window.location.origin}${window.location.pathname}${current || shareSingle ? `?${new URLSearchParams({ folder: (shareSingle && !("kind" in shareSingle) ? shareSingle.id : current?.id) ?? "" })}` : ""}`;
+  const copySelectionLink = async () => {
+    const links = [...selectedFiles.map((file) => reviewHref(file) ?? (file.folderId ? `/files?folder=${file.folderId}` : "/files")), ...selectedFolders.map((folder) => `/files?folder=${folder.id}`)].map((path) => `${window.location.origin}${path}`);
+    toast[(await copyText(links.join("\n"))) ? "success" : "error"](links.length === 1 ? "Link copied" : `${links.length} links copied`);
+  };
   const showChecks = selected.size > 0;
   const renameField = (entity: LibraryFile | LibraryFolder, where: "item" | "inspector") =>
     renaming?.id === entity.id && renaming.where === where
@@ -651,9 +663,11 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
           <span className="fx-total" aria-live="polite">{itemTotal} item{itemTotal === 1 ? "" : "s"}</span>
           <div className="fx-toolbar-actions">
             <button type="button" className="fx-btn" aria-label="New folder" onClick={() => setDialog("folder")}><FolderPlus aria-hidden="true" /><span>New folder</span></button>
+            <SortedBy sort={sort} setSort={setSort} />
             <button type="button" className="fx-icon-btn" onClick={() => router.refresh()} aria-label="Refresh assets"><RefreshCw /></button>
             {/* Inside the project page the page header already owns the one primary Upload. */}
             <button type="button" className={`fx-btn ${compact ? "" : "is-primary"}`} data-mobile-primary="Upload" aria-label="Upload" onClick={() => setDialog("upload")}><Upload aria-hidden="true" /><span>Upload</span></button>
+            <button type="button" className="fx-btn fx-share-btn" aria-label="Share" onClick={() => setShareOpen(true)}><ShareArrow /><span>Share</span></button>
           </div>
         </header>
         <div className="fx-toolbar is-secondary">
@@ -710,13 +724,22 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
           </div>
           {activeChips.length > 0 && <ul className="fx-chips" aria-label="Active filters">{activeChips.map((chip) => <li key={chip.key}><span>{chip.label}</span><button type="button" onClick={chip.clear} aria-label={`Remove filter ${chip.label}`}><X /></button></li>)}</ul>}
         </div>
-        {selected.size > 1 && <div className={`fx-bulk${phone ? " is-phone-sheet" : ""}`} role="region" aria-label="Selection">
-          <strong role="status" aria-live="polite">{selected.size} selected</strong>
-          <button type="button" className="fx-btn is-ghost is-sm" onClick={() => setSelection({ selected: new Set(), anchor: null })}>Clear</button>
-          <span className="fx-spacer" />
-          <button type="button" className="fx-btn is-sm" onClick={() => setMoveIds(new Set(selected))}><Move />Move / assign</button>
-          <button type="button" className="fx-btn is-sm is-danger" onClick={() => removeEntities([...selectedFiles, ...selectedFolders])}><Trash2 />Delete</button>
-        </div>}
+        <SelectionBar
+          count={selected.size}
+          onClear={() => setSelection({ selected: new Set(), anchor: null })}
+          onCopyLink={() => { void copySelectionLink(); }}
+          onDownload={() => selectedFiles.forEach((file, index) => { if (file.url) window.setTimeout(() => triggerDownload(file.url!, file.name), index * 250); })}
+          downloadDisabled={!selectedFiles.some((file) => file.url)}
+          more={<DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="frm-selbar-btn" aria-label="More actions"><MoreLabel /></button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top">
+              <DropdownMenuItem onSelect={() => setMoveIds(new Set(selected))}><Move />Move / assign</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setShareOpen(true)}><Eye />Share…</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="is-danger" onSelect={() => removeEntities([...selectedFiles, ...selectedFolders])}><Trash2 />Delete</DropdownMenuItem>
+            </DropdownMenuContent></DropdownMenu>}
+        />
+        <ShareModal open={shareOpen} onOpenChange={setShareOpen} title={shareTitle} internalUrl={shareUrl}
+          workspaceId={view?.workspaceId ?? null} projectId={shareProjectId} canCreateLinks={!offline} />
 
         <div className="fx-content">
           {writeError && <p className="fx-notice" data-tone="danger" role="alert"><TriangleAlert />{writeError}<button type="button" className="fx-icon-btn is-xs" onClick={() => setWriteError(null)} aria-label="Dismiss error"><X /></button></p>}
@@ -1279,4 +1302,30 @@ function copyName(name: string): string {
  */
 function realClientId(view: FilesView | undefined, id: string | null): string {
   return id && view?.clients.some((item) => item.id === id) ? id : "";
+}
+
+/** Starts a browser download without navigating away (several can run back to back). */
+function triggerDownload(url: string, name: string) {
+  const link = document.createElement("a"); link.href = url; link.download = name; link.rel = "noopener"; document.body.appendChild(link); link.click(); link.remove();
+}
+
+const SORT_LABEL: Record<"newest" | "name" | "size", string> = { newest: "Date uploaded", name: "Name", size: "File size" };
+
+/** Frame-style "Sorted by Date uploaded ▾" control; mirrors the Filter menu's sort field. */
+function SortedBy({ sort, setSort }: { sort: "newest" | "name" | "size"; setSort: (value: "newest" | "name" | "size") => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className="fx-btn is-ghost fx-sorted-by" aria-label={`Sorted by ${SORT_LABEL[sort]}`}>
+          <span className="fx-sorted-by-k">Sorted by</span> <strong>{SORT_LABEL[sort]}</strong><ArrowDown aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+        {(Object.keys(SORT_LABEL) as Array<keyof typeof SORT_LABEL>).map((key) => (
+          <DropdownMenuItem key={key} onSelect={() => setSort(key)} aria-checked={sort === key} role="menuitemradio">{SORT_LABEL[key]}{sort === key ? " ✓" : ""}</DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }

@@ -4,7 +4,7 @@ import { useEscapeKey } from "@/lib/use-escape";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
-import { Archive, Building2, Copy, Globe2, Inbox, Mail, MapPin, MessageCircle, Pencil, Plus, TriangleAlert, UserPlus, Users, X } from "lucide-react";
+import { Archive, Building2, Copy, Globe2, Inbox, Mail, MapPin, MessageCircle, Pencil, Plus, TriangleAlert, UserPlus, Users, X } from "@/components/icons";
 import type { ClientTeamMember } from "@/lib/api";
 import type { ClientCard, ClientsView } from "@/lib/clients-view";
 import { addClientMemberAction, archiveClientAction, createClientAction, inviteClientMemberAction, removeClientMemberAction, revokeClientInviteAction, saveMemberWhatsAppAction, updateClientAction, type ClientActionState, type ClientInviteState } from "./actions";

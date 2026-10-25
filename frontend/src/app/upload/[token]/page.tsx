@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CircleOff } from "lucide-react";
+import { CircleOff } from "@/components/icons";
 import { request } from "@/lib/api";
 import type { PublicUploadLink } from "@/lib/client-uploads";
 import { PublicUploader } from "./uploader";

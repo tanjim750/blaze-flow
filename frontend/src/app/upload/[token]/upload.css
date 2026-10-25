@@ -17,7 +17,7 @@
 .ul-sender{display:grid;gap:13px;padding:18px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2)}
 .ul-sender h2{margin:0;font-size:14px}
 .ul-sender label{display:grid;gap:6px;font-size:12px;font-weight:600}
-.ul-sender input{height:42px;padding:0 12px;background:#0c0c10;border:1px solid var(--border);border-radius:9px;color:var(--text);outline:0;font-size:14px}
+.ul-sender input{height:42px;padding:0 12px;background:#0A0A0A;border:1px solid var(--border);border-radius:9px;color:var(--text);outline:0;font-size:14px}
 .ul-sender input:focus{border-color:var(--primary);box-shadow:0 0 0 3px #8b6cff22}
 .ul-muted{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
 .ul-files{display:grid;gap:12px;min-width:0}

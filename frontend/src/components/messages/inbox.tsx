@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Lock, MessagesSquare, Users } from "lucide-react";
+import { Lock, MessagesSquare, Users } from "@/components/icons";
 import { dayLabel, clock, fetchUnread, threadHref, unreadLabel, type UnreadSummary } from "@/lib/messages";
 import "./messages.css";
 

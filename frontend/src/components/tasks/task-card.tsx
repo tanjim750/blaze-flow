@@ -6,7 +6,7 @@
  */
 import { forwardRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
 import NextImage from "next/image";
-import { ArrowDownToLine, ArrowUpToLine, AudioLines, Clapperboard, Ellipsis, File as FileIcon, Image as ImageIcon, MessageSquare, PanelRightOpen, Trash2 } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, AudioLines, Clapperboard, Ellipsis, File as FileIcon, Image as ImageIcon, MessageSquare, PanelRightOpen, Trash2 } from "@/components/icons";
 import type { ProjectFile, Task } from "@/lib/api";
 import { stageTone, type BoardStage } from "@/lib/task-board";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CircleCheck, LoaderCircle, TriangleAlert, Users } from "lucide-react";
+import { CircleCheck, LoaderCircle, TriangleAlert, Users } from "@/components/icons";
 import { useState } from "react";
 import { useAppRouter } from "@/lib/app-router";
 import type { InvitePreview } from "@/lib/auth-client";

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CheckCheck, Download, FolderKanban, Inbox, MessagesSquare, Plus } from "lucide-react";
+import { ArrowRight, CheckCheck, Download, FolderKanban, Inbox, MessagesSquare, Plus } from "@/components/icons";
 import { MessagesInbox } from "@/components/messages/inbox";
 import { DashboardPoster } from "@/components/dashboard-poster";
 import type { LayoutChoice } from "@/lib/dashboard-role";

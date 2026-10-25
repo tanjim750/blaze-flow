@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { CloudOff } from "lucide-react";
+import { CloudOff } from "@/components/icons";
 import { ClientDashboard } from "@/components/dashboards/client-dashboard";
 import { EditorDashboard } from "@/components/dashboards/editor-dashboard";
 import { OwnerDashboard } from "@/components/dashboards/owner-dashboard";

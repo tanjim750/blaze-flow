@@ -4,7 +4,7 @@ import type { TaskStage } from "@/lib/api";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, CircleHelp, Clock3, Loader2, MessageSquarePlus, Pencil, RotateCcw, Sparkles, Square, X, FileCheck2, ListChecks } from "lucide-react";
+import { AlertTriangle, Check, CircleHelp, Clock3, Loader2, MessageSquarePlus, Pencil, RotateCcw, Sparkles, Square, X, FileCheck2, ListChecks } from "@/components/icons";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import {

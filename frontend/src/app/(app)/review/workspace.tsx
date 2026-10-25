@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { BadgeCheck, Sparkles, Check, ChevronLeft, Columns2, HardDriveDownload, Info, Keyboard, Link2, MessageSquareText, MoreHorizontal, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, UploadCloud, X } from "lucide-react";
+import { BadgeCheck, Sparkles, Check, ChevronLeft, Columns2, HardDriveDownload, Info, Keyboard, Link2, MessageSquareText, MoreHorizontal, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, UploadCloud, X } from "@/components/icons";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { markIn, markOut, type LoopRange, type MarkRange } from "@/lib/review-range";

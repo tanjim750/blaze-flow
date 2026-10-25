@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Minus, Plus, Send, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Minus, Plus, Send, TriangleAlert } from "@/components/icons";
 import {
   ASPECT_OPTIONS, BUDGET_OPTIONS, DELIVERABLE_OPTIONS, LENGTH_OPTIONS, PLATFORM_OPTIONS, budgetLabel, dayDate,
   deliverablesSummary, requestProblems, submitProjectRequest, type DeliverableKind, type ProjectRequestInput,

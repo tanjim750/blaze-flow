@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { RichBrief } from "@/components/brief/rich-brief";
 import type { Metadata } from "next";
-import { ArrowLeft, CalendarClock, CheckCircle2, CircleDot, Clapperboard, Download, Eye, FileText, Flag, History, ListChecks, MessagesSquare, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowLeft, CalendarClock, CheckCircle2, CircleDot, Clapperboard, Download, Eye, Flag, History, ListChecks, MessagesSquare, RotateCcw, Sparkles } from "@/components/icons";
 import { getClientPortalData, getClientProjectOverview } from "@/lib/api";
 import { formatBytes } from "@/lib/client-uploads";
 import { CUT_STATE_LABEL, PHASE_HINT, accentStyle, dayDate, dueLabel, splitTimeline, type TimelineEvent } from "@/lib/portal";
@@ -10,10 +10,10 @@ import { PortalBrandBar } from "@/components/portal/brand-bar";
 import { ClientUploadPanel } from "@/components/client-uploads/client-upload-panel";
 import { ChatPreview } from "@/components/chat/preview";
 import { DiscussInChatButton } from "@/components/chat/discuss-button";
+import { CardGrid } from "@/components/frame/card-grid";
 import "@/components/portal/portal.css";
 
 /* Posters are small, permission-checked images from our own API (as on the dashboard); plain <img> on purpose. */
-/* eslint-disable @next/next/no-img-element */
 
 export const metadata: Metadata = { title: "Project · Client portal · Blaze Flow" };
 
@@ -79,11 +79,11 @@ export default async function ClientProjectPage({ params }: PageProps<"/portal/p
       <div className="pt-stack">
         {waiting.length > 0 && <section className="pt-card" aria-labelledby="pt-waiting">
           <div className="pt-card-head"><h2 id="pt-waiting"><Eye />Ready for your review</h2><small>{waiting.length} {waiting.length === 1 ? "cut" : "cuts"}</small></div>
-          <ul className="pt-files">{waiting.map((cut) => <li className="pt-file" key={cut.id}>
-            <span className="pt-thumb">{cut.poster_path ? <img src={cut.poster_path} alt="" /> : <Clapperboard size={16} aria-hidden="true" />}</span>
-            <span className="pt-file-copy"><strong>{cut.title} · V{cut.version_number}</strong><small>Shared {dayDate(cut.stage_entered_at ?? cut.created_at, now)}</small></span>
-            <span className="pt-file-actions"><Link className="pt-cta" href={cut.review_path}>Review</Link><DiscussInChatButton workspaceId={workspace.id} projectId={projectId} label="Discuss" quote={`${cut.title} V${cut.version_number}`} /></span>
-          </li>)}</ul>
+          <CardGrid label="Ready for your review" items={waiting.map((cut) => ({
+            id: cut.id, title: `${cut.title} · V${cut.version_number}`, subtitle: `Shared ${dayDate(cut.stage_entered_at ?? cut.created_at, now)}`,
+            poster: cut.poster_path ?? null, openHref: cut.review_path,
+            actions: <><Link className="pt-cta" href={cut.review_path}>Review</Link><DiscussInChatButton workspaceId={workspace.id} projectId={projectId} label="Discuss" quote={`${cut.title} V${cut.version_number}`} /></>,
+          }))} />
         </section>}
 
         <section className="pt-card" aria-labelledby="pt-deliverables">
@@ -92,21 +92,18 @@ export default async function ClientProjectPage({ params }: PageProps<"/portal/p
             ? <p className="pt-empty">Your access does not include the project&apos;s cuts. Ask the studio if you need them.</p>
             : deliverables.length === 0
               ? <p className="pt-empty">Approved files land here. Once the studio switches on downloads you can save them straight from this page.</p>
-              : <ul className="pt-files">{deliverables.map((cut) => <li className="pt-file" key={cut.id}>
-                <span className="pt-thumb">{cut.poster_path ? <img src={cut.poster_path} alt="" /> : <FileText size={16} aria-hidden="true" />}</span>
-                <span className="pt-file-copy">
-                  <strong>{cut.title} · V{cut.version_number}</strong>
-                  <small>{cut.file_name} · {formatBytes(cut.size_bytes)}</small>
-                  <span className={`pt-pill is-${cut.state}`}>{CUT_STATE_LABEL[cut.state]}{cut.last_decision?.decision === "approved" ? ` by ${cut.last_decision.reviewer_name}` : ""}</span>
-                </span>
-                <span className="pt-file-actions">
+              : <CardGrid label="Your deliverables" items={deliverables.map((cut) => ({
+                id: cut.id, title: `${cut.title} · V${cut.version_number}`, subtitle: `${cut.file_name} · ${formatBytes(cut.size_bytes)}`,
+                badge: <span className={`pt-pill is-${cut.state}`}>{CUT_STATE_LABEL[cut.state]}{cut.last_decision?.decision === "approved" ? ` by ${cut.last_decision.reviewer_name}` : ""}</span>,
+                poster: cut.poster_path ?? null, openHref: cut.review_path, downloadHref: cut.download_path ?? null,
+                actions: <>
                   <Link className="pt-ghost" href={cut.review_path} aria-label={`Watch ${cut.title} V${cut.version_number}`}><Eye />Watch</Link>
                   {cut.download_path
                     ? <a className="pt-cta" href={cut.download_path} download aria-label={`Download ${cut.title} V${cut.version_number}`}><Download />Download</a>
                     : <span className="pt-ghost" aria-disabled="true" title="The studio has not switched on downloads for this file yet">Not yet</span>}
                   <DiscussInChatButton workspaceId={workspace.id} projectId={projectId} label="Discuss" quote={`${cut.title} V${cut.version_number}`} />
-                </span>
-              </li>)}</ul>}
+                </>,
+              }))} />}
         </section>
 
         <section className="pt-card" aria-labelledby="pt-record">

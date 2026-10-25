@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Compass, House, FolderKanban } from "lucide-react";
+import { Compass, House, FolderKanban } from "@/components/icons";
 import "./not-found.css";
 
 /** The branded 404: says what happened and offers a way back. Used inside and outside the app shell. */

@@ -4,7 +4,7 @@ import { useAppRouter } from "@/lib/app-router";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Bell, Settings2 } from "lucide-react";
+import { Bell, Settings2 } from "@/components/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { openUniversalReview } from "@/components/universal-review";
 import { badgeCount, describeNotification, groupByDay, sentence, type DescribedNotification } from "@/lib/notifications";

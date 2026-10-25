@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronLeft, Mail, MailCheck } from "lucide-react";
+import { ChevronLeft, Mail, MailCheck } from "@/components/icons";
 import { useState, type FormEvent } from "react";
 import { requestPasswordReset } from "@/lib/auth-client";
 import { FormAlert, SubmitButton, TextField } from "@/components/auth/text-field";

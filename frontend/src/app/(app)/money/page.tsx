@@ -1,7 +1,7 @@
 import { guardRoute } from "@/lib/route-guard";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { LockKeyhole } from "lucide-react";
+import { LockKeyhole } from "@/components/icons";
 import { MoneyBoard } from "@/components/money/money-board";
 import { listClientTeams, listProjects } from "@/lib/api";
 import { getMoneySummary } from "@/lib/billing-api";

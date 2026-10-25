@@ -8,7 +8,7 @@ import Link from "next/link";
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Banknote, Building2, ChevronRight, CircleDollarSign, FilePlus2, HandCoins, Info, ReceiptText, Users } from "lucide-react";
+import { Banknote, Building2, ChevronRight, CircleDollarSign, FilePlus2, HandCoins, Info, ReceiptText, Users } from "@/components/icons";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { formatMoney, toMinor } from "@/lib/money";
 import {

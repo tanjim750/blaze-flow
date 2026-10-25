@@ -4,7 +4,7 @@
  * pill, the signal-style priority icon, the assignee avatar and the due-date chip.
  */
 import type { CSSProperties } from "react";
-import { CalendarDays, CircleCheck, CircleDashed, CircleDot, Clock, Eye, RotateCcw, Signal, SignalHigh, SignalLow, SignalMedium, TriangleAlert, UserRound, Users, type LucideIcon } from "lucide-react";
+import { CalendarDays, CircleCheck, CircleDashed, CircleDot, Clock, Eye, RotateCcw, Signal, SignalHigh, SignalLow, SignalMedium, TriangleAlert, UserRound, Users, type LucideIcon } from "@/components/icons";
 import { StagePill as SharedStagePill } from "@/components/ui/stage-pill";
 import { dueState, formatDue, formatDueLong, initials, priorityLabel, stageTone, type BoardStage, type StageKind } from "@/lib/task-board";
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, ArrowUpRight, CircleCheckBig, Download, Film, FolderInput, Link2, ListTodo, Loader2, MessageCircle, MessageSquareText, RotateCcw, TriangleAlert,
-} from "lucide-react";
+} from "@/components/icons";
 import {
   ACTIVITY_FILTERS, activityText, clockTime, deliveryBadges, describeActivity, groupByDay, mergePages,
   type ActivityCategory, type ActivityEntry, type ActivityPage,

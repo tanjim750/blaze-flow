@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, PartyPopper } from "lucide-react";
+import { ArrowRight, CheckCircle2, PartyPopper } from "@/components/icons";
 import { useState, useTransition } from "react";
 import type { Bucket, DashboardTask } from "@/lib/dashboard-view";
 import { setTaskCompletedAction } from "@/app/(app)/tasks/actions";

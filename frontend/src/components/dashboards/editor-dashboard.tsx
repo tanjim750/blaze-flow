@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, Clapperboard, MessageSquareText, MessagesSquare, Users } from "lucide-react";
+import { CheckCircle2, Clapperboard, MessageSquareText, MessagesSquare, Users } from "@/components/icons";
 import { DashboardPoster } from "@/components/dashboard-poster";
 import type { LayoutChoice } from "@/lib/dashboard-role";
 import type { EditorDashboard as EditorView, EditorTask } from "@/lib/role-dashboard-view";

@@ -1,4 +1,4 @@
-import { LifeBuoy, Mail, MessageSquareText } from "lucide-react";
+import { LifeBuoy, Mail, MessageSquareText } from "@/components/icons";
 import { ProCardGrid, ProContactForm, ProPageHero } from "@/components/pro/pro-pages";
 import { marketingMetadata } from "@/lib/marketing-metadata";
 import { siteConfig } from "@/lib/site-config";

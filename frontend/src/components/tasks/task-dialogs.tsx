@@ -1,7 +1,7 @@
 "use client";
 /** Modal dialogs for the Tasks board: confirmations, New task and Customize stages. */
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, RotateCcw, Trash2 } from "@/components/icons";
 import type { Task, TaskStage, TaskWorkflowSettings } from "@/lib/api";
 import type { TasksView } from "@/lib/tasks-view";
 import { DEFAULT_STAGES, PRIORITIES, toBoardStages, type BoardStage, type StageKind } from "@/lib/task-board";

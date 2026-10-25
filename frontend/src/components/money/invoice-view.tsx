@@ -13,7 +13,7 @@ import Link from "next/link";
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Banknote, CircleDollarSign, Eye, PencilLine, Plus, Printer, Save, Send, Trash2, Undo2, X } from "lucide-react";
+import { ArrowLeft, Banknote, CircleDollarSign, Eye, PencilLine, Plus, Printer, Save, Send, Trash2, Undo2, X } from "@/components/icons";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { formatMoney, fromMinor, parseMoneyInput, toMinor } from "@/lib/money";
 import { addressLines, dueLabel, formatDate, invoiceBadge, invoiceTotals, LINE_KIND, methodLabel, settleLabel, type InvoiceDetail, type InvoiceLine } from "@/lib/money-view";

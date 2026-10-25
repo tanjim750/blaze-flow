@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Flame, Menu, X } from "lucide-react";
+import { Flame, Menu, X } from "@/components/icons";
 import { siteConfig } from "@/lib/site-config";
 
 export const PRO_NAV = [

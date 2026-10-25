@@ -5,7 +5,7 @@ import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, 
 import {
   AtSign, Clapperboard, CornerUpLeft, Download, FileText, Link2, Loader2, Lock, MessagesSquare, Paperclip, Pencil,
   Quote, Search, Send, ShieldAlert, Trash2, Users, X,
-} from "lucide-react";
+} from "@/components/icons";
 import { call, formatBytes, sendFile } from "@/lib/client-uploads";
 import {
   BODY_MAX, CHANNEL_LABEL, MAX_ATTACHMENTS, bodyParts, clock, deleteMessage, editMessage, fetchThread, filterPeople,
