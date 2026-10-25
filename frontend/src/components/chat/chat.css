@@ -18,7 +18,7 @@
   height:calc(100vh - 0px);
   margin:0;
   border-top:1px solid var(--border);
-  background:var(--bg,#0e0e14);
+  background:var(--bg,#0A0A0A);
   color:var(--text);
   overflow:hidden;
 }
@@ -81,7 +81,7 @@
 .ch-search-hit small{color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ch-search-hit em{color:var(--muted);font-style:normal;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-.ch-main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg,#0e0e14);overflow:hidden}
+.ch-main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg,#0A0A0A);overflow:hidden}
 .ch-main-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);min-width:0;flex-wrap:wrap}
 .ch-back{display:none}
 .ch-main-title{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto}

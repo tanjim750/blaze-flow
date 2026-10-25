@@ -7,8 +7,8 @@
 .money-eyebrow { font: 600 10px var(--font-geist-mono), monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--shell-primary) !important; }
 .money-page svg { width: 15px; height: 15px; flex: none; }
 
-.money-button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 7px 12px; border: 1px solid var(--border, #2d2c35); border-radius: 9px; background: var(--surface-2, #1f1f24); color: var(--text, #e4e1e6); font: 600 12px var(--font-geist-sans), sans-serif; cursor: pointer; white-space: nowrap; }
-.money-button:hover:not(:disabled) { border-color: #4a4656; background: #29282f; }
+.money-button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 7px 12px; border: 1px solid var(--border, #2d2c35); border-radius: 9px; background: var(--surface-2, #0A0A0A); color: var(--text, #e4e1e6); font: 600 12px var(--font-geist-sans), sans-serif; cursor: pointer; white-space: nowrap; }
+.money-button:hover:not(:disabled) { border-color: #4a4656; background: #181818; }
 .money-button:disabled { opacity: .5; cursor: not-allowed; }
 /* `.money-button.is-primary` colour: app/ui.css (one primary variant). */
 .money-button.is-ghost { background: transparent; color: var(--shell-variant, #c9c4d8); }
@@ -36,7 +36,7 @@
 .money-muted { margin: 0; padding: 22px 16px; color: var(--shell-outline); }
 .money-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .money-table th { padding: 9px 16px; text-align: left; color: var(--shell-outline); font: 500 10px var(--font-geist-mono), monospace; letter-spacing: .05em; text-transform: uppercase; }
-.money-table td { padding: 11px 16px; border-top: 1px solid #2a2a2f; vertical-align: middle; font-family: var(--font-geist-mono), monospace; font-size: 12px; }
+.money-table td { padding: 11px 16px; border-top: 1px solid #262626; vertical-align: middle; font-family: var(--font-geist-mono), monospace; font-size: 12px; }
 .money-table td:first-child, .money-table td:nth-child(2) { font-family: var(--font-geist-sans), sans-serif; }
 .money-table td strong { display: block; font-size: 13px; font-weight: 600; }
 .money-table td small { display: block; margin-top: 3px; color: var(--shell-outline); font: 11px var(--font-geist-sans), sans-serif; }
@@ -71,7 +71,7 @@
 .invoice-page { max-width: 900px; }
 .invoice-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .invoice-due { color: var(--shell-outline); font-size: 12px; }
-.invoice-paper { display: grid; gap: 26px; padding: 40px 44px; border: 1px solid var(--shell-highest); border-radius: 14px; background: linear-gradient(180deg, #1c1b21, #18171c); }
+.invoice-paper { display: grid; gap: 26px; padding: 40px 44px; border: 1px solid var(--shell-highest); border-radius: 14px; background: linear-gradient(180deg, #0A0A0A, #0A0A0A); }
 .invoice-head { display: flex; justify-content: space-between; gap: 24px; }
 .invoice-head > div:first-child, .invoice-meta > div { display: grid; gap: 3px; color: var(--shell-variant); font-size: 12px; }
 .invoice-from { color: var(--shell-on); font-size: 16px; margin-bottom: 4px; }
@@ -88,7 +88,7 @@
 .invoice-lines { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .invoice-lines th, .invoice-lines td { padding: 11px 0; text-align: left; }
 .invoice-lines thead th { color: var(--shell-outline); font: 500 10px var(--font-geist-mono), monospace; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--shell-highest); }
-.invoice-lines tbody td { border-bottom: 1px solid #2a2a2f; }
+.invoice-lines tbody td { border-bottom: 1px solid #262626; }
 .invoice-lines td small { display: block; margin-top: 2px; color: var(--shell-outline); font-size: 11px; }
 .invoice-lines :is(th, td):last-child { text-align: right; font-family: var(--font-geist-mono), monospace; }
 .invoice-lines tfoot th { font-weight: 500; color: var(--shell-variant); text-align: right; padding-right: 24px; }

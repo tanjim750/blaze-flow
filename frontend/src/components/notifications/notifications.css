@@ -19,7 +19,7 @@
 .nf-group h3 { position: sticky; top: 0; z-index: 1; margin: 0; padding: 8px 14px 6px; background: var(--shell-container); color: var(--shell-outline); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
 .nf-group ul, .nf-list { margin: 0; padding: 0; list-style: none; }
 
-.nf-row { position: relative; display: flex; align-items: stretch; border-bottom: 1px solid #2a2a2d80; }
+.nf-row { position: relative; display: flex; align-items: stretch; border-bottom: 1px solid #26262680; }
 .nf-row:last-child { border-bottom: 0; }
 .nf-row.is-unread { background: #583be814; }
 .nf-row.is-unread::before { content: ""; position: absolute; left: 5px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--shell-primary); }
@@ -44,7 +44,7 @@
 .nf-line em { color: var(--shell-on); font-style: normal; font-weight: 500; }
 .nf-snippet { display: -webkit-box; overflow: hidden; color: var(--shell-outline); font-size: 12px; line-height: 1.4; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .nf-text small { color: var(--shell-outline); font-size: 11px; font-variant-numeric: tabular-nums; }
-.nf-poster { flex: none; width: 64px; height: 36px; margin-top: 1px; border-radius: 4px; background: #000; object-fit: contain; border: 1px solid var(--shell-high); }
+.nf-poster { flex: none; width: 64px; height: 36px; margin-top: 1px; border-radius: 4px; background: #0A0A0A; object-fit: contain; border: 1px solid var(--shell-high); }
 .nf-mark { flex: none; display: grid; place-items: center; width: 30px; margin: 8px 8px 8px 0; border: 0; border-radius: 6px; background: none; color: var(--shell-outline); cursor: pointer; align-self: flex-start; height: 28px; }
 .nf-mark:hover { background: var(--shell-highest); color: var(--shell-primary); }
 .nf-mark.is-done { opacity: .35; cursor: default; }

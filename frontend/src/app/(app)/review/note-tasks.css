@@ -4,15 +4,15 @@
 .ntd-head > svg { width: 20px; height: 20px; margin-top: 3px; color: var(--bf-violet-300, #b69aff); }
 .ntd-head h2 { margin: 0; font-size: 17px; }
 .ntd-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
-.ntd-source { display: grid; grid-template-columns: 96px 1fr; gap: 12px; margin: 0; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2, #1f1e25); }
-.ntd-source img { width: 96px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; background: #000; }
+.ntd-source { display: grid; grid-template-columns: 96px 1fr; gap: 12px; margin: 0; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2, #0A0A0A); }
+.ntd-source img { width: 96px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; background: #0A0A0A; }
 .ntd-source figcaption { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 12px; color: var(--muted); }
 .ntd-source figcaption b { color: var(--text); }
 .ntd-source figcaption span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: var(--text); font-size: 13px; }
 .ntd-list { display: grid; gap: 4px; max-height: 160px; overflow: auto; margin: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; list-style: none; font-size: 13px; }
 .ntd-list b { display: inline-block; min-width: 44px; margin-right: 8px; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
 .ntd-field { display: grid; gap: 6px; min-width: 0; font-size: 12px; color: var(--muted); }
-.ntd-field input, .ntd-field textarea, .ntd-field select { width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field, #15141a); color: var(--text); font: inherit; font-size: 14px; }
+.ntd-field input, .ntd-field textarea, .ntd-field select { width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field, #0A0A0A); color: var(--text); font: inherit; font-size: 14px; }
 .ntd-field textarea { resize: vertical; }
 .ntd-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .ntd-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--muted); }
@@ -34,7 +34,7 @@
 .rvc-task-chip.is-done { border-color: #3fb95055; background: #3fb9501a; color: #7ee2a8; }
 .rvc-task-chip:hover { border-color: currentColor; }
 .rvc-select { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 2px; accent-color: var(--bf-violet-400, #8b6cff); }
-.rvc-bulk { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--border); background: var(--surface, #18171c); font-size: 13px; }
+.rvc-bulk { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--border); background: var(--surface, #0A0A0A); font-size: 13px; }
 .rvc-bulk span { flex: 1; color: var(--muted); }
 .rvc-bulk button { min-height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text); cursor: pointer; }
 .rvc-bulk button.is-primary { border-color: transparent; background: var(--bf-primary, #7c5cff); color: #fff; }
