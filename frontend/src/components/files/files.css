@@ -685,42 +685,52 @@
 @keyframes fx-progress { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 @media (prefers-reduced-motion: reduce) { .fx-working i::after { animation: none; width: 100%; opacity: .6; } }
 
-/* =============================================================== Frame-style skin
- * Dark review-tool palette (bg #161616, surfaces #252525–#2d2d2d). Overrides the DS
- * tokens above for this screen only; brand accent (`--primary`, `--ring`) is kept. */
+/* =============================================================== Soft-black skin
+ * Shade-style neutral black, softened (never pure #000). Values come from the shared
+ * `--frm-*` tokens in components/frame/frame.css. Accent violet only for the 2px
+ * selection ring, active markers and primary buttons; no gradients, glows or shadows. */
 .fx {
-  --canvas: #161616; --background: #161616; --card: #1e1e1e; --muted: #252525; --popover: #2d2d2d;
-  --secondary: #2a2a2a; --accent: #252525; --field: #1e1e1e; --input: #2a2a2a; --input-hover: #303030;
-  --foreground: #f2f2f2; --muted-foreground: #a0a0a0; --subtle-foreground: #7a7a7a;
-  --border: rgba(255,255,255,.07); --border-strong: rgba(255,255,255,.16);
-  background: #161616; color: var(--foreground); color-scheme: dark;
+  --canvas: var(--frm-canvas); --background: var(--frm-canvas); --card: var(--frm-card); --muted: var(--frm-card);
+  --popover: var(--frm-chrome); --secondary: var(--frm-card); --accent: var(--frm-hover); --field: var(--frm-chrome);
+  --input: var(--frm-border); --input-hover: var(--frm-hover);
+  --foreground: var(--frm-text); --muted-foreground: var(--frm-muted); --subtle-foreground: var(--frm-muted);
+  --border: var(--frm-border); --border-strong: var(--frm-border);
+  --ring: var(--frm-accent); --primary: var(--frm-primary); --primary-hover: #6D28D9; --primary-foreground: var(--frm-primary-text);
+  --elevation-2: none; --elevation-3: none;
+  background: var(--frm-canvas); color: var(--foreground); color-scheme: dark;
 }
-.fx .fx-main, .fx .fx-toolbar, .fx .fx-content { background: #161616; }
+.fx .fx-main, .fx .fx-content { background: var(--frm-canvas); }
+.fx .fx-toolbar, .fx .fx-tree, .fx .fx-inspector { background: var(--frm-chrome); }
+.fx .fx-toolbar { border-color: var(--frm-border); }
 .fx .fx-grid.is-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px 16px; }
 .fx .fx-grid.is-grid.is-compact { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .fx .fx-item.is-tile { padding: 0 0 6px; background: transparent; }
 .fx .fx-item.is-tile:hover, .fx .fx-item.is-tile.is-selected { background: transparent; }
-.fx .fx-item.is-tile .fx-frame { border: 0; border-radius: 8px; background: #252525; }
-.fx .fx-item.is-tile:hover .fx-frame { box-shadow: 0 0 0 1px rgba(255,255,255,.14); }
-/* Selection is a thick outline in the brand accent. */
-.fx .fx-item.is-tile.is-selected .fx-frame { outline: 3px solid var(--ring); outline-offset: 2px; }
+.fx .fx-item.is-tile .fx-frame { border: 1px solid var(--frm-border); border-radius: 8px; background: var(--frm-card); box-shadow: none; }
+.fx .fx-item.is-tile:hover .fx-frame { background: var(--frm-hover); }
+/* Selection: a crisp 2px violet ring, no glow. */
+.fx .fx-item.is-tile.is-selected .fx-frame { outline: 2px solid var(--frm-accent); outline-offset: 2px; box-shadow: none; }
+.fx .fx-thumb, .fx .fx-thumb.is-glyph, .fx .fx-thumb.is-blank { background: var(--frm-card); }
 .fx .fx-thumb img { object-fit: cover; }
-.fx .fx-item.is-tile .fx-frame .frm-media { border-radius: 8px; }
+.fx .fx-item.is-tile .fx-frame .frm-media { border-radius: 8px; background: var(--frm-card); }
 /* Folder tile: no frame box, just the tabbed folder shape at 3:2. */
-.fx .fx-item.is-tile .fx-frame.is-folder.is-stack { aspect-ratio: 3 / 2; background: transparent; overflow: visible; }
+.fx .fx-item.is-tile .fx-frame.is-folder.is-stack { aspect-ratio: 3 / 2; border: 0; background: transparent; overflow: visible; }
 .fx .fx-item.is-tile.is-selected .fx-frame.is-folder.is-stack { outline-offset: 3px; border-radius: 10px; }
-.fx .fx-item.is-tile:hover .frm-folder { color: #303030; }
+.fx .fx-item.is-tile:hover .frm-folder { color: var(--frm-hover); }
 .fx .fx-name-line.is-folder-name { font-weight: 700; }
 .fx .fx-item.is-tile .fx-caption .fx-name-line { font-weight: 600; }
-.fx .fx-item.is-row:hover, .fx .fx-item.is-row.is-selected { background: #252525; }
-.fx .fx-item.is-row.is-selected { box-shadow: inset 3px 0 0 var(--ring); }
-.fx .fx-crumbs button { color: var(--muted-foreground); }
-.fx .fx-crumbs button[aria-current=page] { color: var(--foreground); font-weight: 600; }
-.fx .fx-sorted-by { gap: 4px; color: var(--muted-foreground); }
-.fx .fx-sorted-by strong { color: var(--foreground); font-weight: 600; }
+.fx .fx-meta, .fx .fx-total { color: var(--frm-muted); }
+.fx .fx-item.is-row:hover, .fx .fx-item.is-row.is-selected { background: var(--frm-hover); }
+.fx .fx-item.is-row.is-selected { box-shadow: inset 2px 0 0 var(--frm-accent); }
+.fx .fx-crumbs button { color: var(--frm-muted); }
+.fx .fx-crumbs button[aria-current=page] { color: var(--frm-text); font-weight: 600; }
+.fx .fx-btn { box-shadow: none; }
+.fx .fx-btn.is-primary, .fx .fx-share-btn { background: var(--frm-primary); color: var(--frm-primary-text); border-color: transparent; }
+.fx .fx-sorted-by { gap: 4px; color: var(--frm-muted); background: transparent; }
+.fx .fx-sorted-by strong { color: var(--frm-text); font-weight: 600; }
 .fx .fx-sorted-by svg { width: 14px; height: 14px; }
-.fx .fx-share-btn { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
 .fx .fx-share-btn svg { width: 16px; height: 16px; }
+.fx .fx-segmented .is-on { background: var(--frm-hover); color: var(--frm-text); }
 /* The selection bar floats at the bottom; leave room so it never covers the last row. */
 .fx .fx-content { padding-bottom: 96px; }
 @media (max-width: 640px) {
@@ -733,3 +743,6 @@
 .fx .fx-toolbar-actions { flex-wrap: wrap; justify-content: flex-end; }
 /* Keep the checkbox off the folder tab. */
 .fx .fx-item.is-tile[data-kind=folder] .fx-check { top: 30px; }
+/* Active nav marker: a small violet dot on the current tree row. */
+.fx .fx-tree-row { position: relative; }
+.fx .fx-tree-row.is-selected::before { content: ""; position: absolute; left: 4px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--frm-accent); }
