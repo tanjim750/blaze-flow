@@ -2,7 +2,7 @@
 import { useEscapeKey } from "@/lib/use-escape";
 
 import { useActionState, useState, useTransition } from "react";
-import { BadgePlus, Check, Copy, Mail, MailCheck, MailPlus, ShieldCheck, TriangleAlert, UserRoundCog, Users, X } from "lucide-react";
+import { BadgePlus, Check, Copy, Mail, MailCheck, MailPlus, ShieldCheck, TriangleAlert, UserRoundCog, Users, X } from "@/components/icons";
 import { expiryLabel, inviteLink } from "@/lib/invites";
 import type { PendingInvite, Role, WorkspaceMembership } from "@/lib/api";
 import type { TeamView } from "@/lib/team-view";

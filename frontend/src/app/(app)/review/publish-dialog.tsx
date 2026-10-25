@@ -12,7 +12,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { UploadCloud } from "lucide-react";
+import { UploadCloud } from "@/components/icons";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { clearLocalReview, type LocalAnnotation } from "@/lib/review-local";
 import type { ReviewNote } from "@/lib/review-notes";

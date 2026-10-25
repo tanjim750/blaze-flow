@@ -5,7 +5,7 @@ import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref
 import {
   AudioLines, ChevronFirst, ChevronLast, Circle, Crosshair, Download, ExternalLink, FileText, Film, Gauge, ImageOff, Loader2, Maximize2, MonitorPlay,
   MoveUpRight, Pause, PencilLine, Play, Repeat, RotateCw, Square, Trash2, Type, Volume2, VolumeX, X,
-} from "lucide-react";
+} from "@/components/icons";
 import { toast } from "sonner";
 import type { AnnotationElement } from "@/lib/api";
 import type { ReviewNote } from "@/lib/review-notes";

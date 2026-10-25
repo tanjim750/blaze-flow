@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { Send, TriangleAlert } from "lucide-react";
+import { Send, TriangleAlert } from "@/components/icons";
 import { siteConfig } from "@/lib/site-config";
 import { Reveal } from "./pro-home";
 

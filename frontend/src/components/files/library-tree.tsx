@@ -5,7 +5,7 @@
  * then Studio for unfiled media. Keyboard tree behaviour matches the previous flat tree.
  */
 import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { Building2, ChevronRight, Clapperboard, Folder, FolderOpen, Library } from "lucide-react";
+import { Building2, ChevronRight, Clapperboard, Folder, FolderOpen, Library } from "@/components/icons";
 import type { LibraryNavRow } from "@/lib/files-panel";
 
 function iconFor(row: LibraryNavRow, selected: boolean): ReactNode {

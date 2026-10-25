@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, CalendarDays, Check, Clapperboard, Flag, Loader2, Lock, Monitor, RotateCcw, Ruler, Timer } from "lucide-react";
+import { AlertCircle, CalendarDays, Check, Clapperboard, Flag, Loader2, Lock, Monitor, RotateCcw, Ruler, Timer } from "@/components/icons";
 import type { Project } from "@/lib/api";
 import { BriefEditor } from "@/components/brief/brief-editor";
 import { RichBrief } from "@/components/brief/rich-brief";

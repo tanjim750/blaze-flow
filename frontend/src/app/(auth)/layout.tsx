@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, Flame, MessageSquareText, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Flame, MessageSquareText, ShieldCheck } from "@/components/icons";
 import "./auth.css";
 
 /**

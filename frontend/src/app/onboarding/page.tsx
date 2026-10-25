@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Flame } from "lucide-react";
+import { Flame } from "@/components/icons";
 import { listWorkspaces } from "@/lib/api";
 import { loadSession } from "@/lib/session";
 import { OnboardingForm } from "./form";

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ChevronRight, Info, OctagonAlert } from "lucide-react";
+import { AlertTriangle, ChevronRight, Info, OctagonAlert } from "@/components/icons";
 import { ErrorPanel, PageHead, Pill, Stat } from "@/components/platform/ui";
 import { getOverview } from "@/lib/platform-api";
 import { RANGES, chartMax, firstParam, formatMoney, parseRange, percent, share } from "@/lib/platform-view";

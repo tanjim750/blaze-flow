@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState, type DragEvent } from "react";
-import { CircleAlert, CircleCheck, CloudUpload, FileText, Film, Image as ImageIcon, Music, RotateCcw, X } from "lucide-react";
+import { CircleAlert, CircleCheck, CloudUpload, FileText, Film, Image as ImageIcon, Music, RotateCcw, X } from "@/components/icons";
 import {
   acceptedSummary, formatBytes, kindOf, newBatchId, rejectReason, sendFile, type CallResult, type UploadKind,
 } from "@/lib/client-uploads";

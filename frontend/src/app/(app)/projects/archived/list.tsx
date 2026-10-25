@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArchiveRestore, Loader2 } from "lucide-react";
+import { ArchiveRestore, Loader2 } from "@/components/icons";
 import { toast } from "sonner";
 import { setProjectStatusAction } from "../actions";
 

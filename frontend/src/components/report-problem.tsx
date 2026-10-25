@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LifeBuoy } from "lucide-react";
+import { LifeBuoy } from "@/components/icons";
 import { toast } from "sonner";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { reportProblem } from "@/lib/platform-client";

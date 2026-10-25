@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import {
   ArrowRight, Building2, Clapperboard, Clock, CornerDownLeft, FileText, FolderOpen, Loader2, MessagesSquare,
   Plus, Search, SquareKanban, User, X,
-} from "lucide-react";
+} from "@/components/icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Workspace } from "@/lib/api";
 import { useAppRouter } from "@/lib/app-router";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Circle, Mic, MonitorSmartphone, Square, Trash2, Video } from "lucide-react";
+import { Camera, Circle, Mic, MonitorSmartphone, Square, Trash2, Video } from "@/components/icons";
 import type { RecordedClip } from "./writer";
 
 /**

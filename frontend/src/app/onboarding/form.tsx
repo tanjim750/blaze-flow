@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Building2, MailCheck, RefreshCw } from "lucide-react";
+import { Building2, MailCheck, RefreshCw } from "@/components/icons";
 import { createWorkspaceAction, resendOnboardingVerificationAction, type OnboardingState } from "./actions";
 
 const initial: OnboardingState = { error: null, message: null };

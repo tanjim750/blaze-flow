@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   Activity, Archive, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
   FolderInput, FolderOpen, Gauge, MessagesSquare, Pencil, Plus, RotateCcw, Search, Share2, Sparkles, Trash2, TriangleAlert, UploadCloud, Users, Wallet, X,
-} from "lucide-react";
+} from "@/components/icons";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
 import { AssetLibrary } from "@/components/asset-library";

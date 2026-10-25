@@ -11,7 +11,7 @@
  * - Nothing selected: a summary of the current location and the keyboard shortcuts.
  */
 import type { ReactNode } from "react";
-import { ChevronDown, Clapperboard, Copy, Download, Eye, FolderOpen, MessageSquareText, Move, Pencil, Trash2, X } from "lucide-react";
+import { ChevronDown, Clapperboard, Copy, Download, Eye, FolderOpen, MessageSquareText, Move, Pencil, Trash2, X } from "@/components/icons";
 import type { LibraryFile, LibraryFolder } from "@/lib/asset-library";
 import { isProcessing } from "@/lib/asset-library";
 import { aspectLabel, formatSize, KIND_NAME, runtime, summarize } from "@/lib/files-panel";

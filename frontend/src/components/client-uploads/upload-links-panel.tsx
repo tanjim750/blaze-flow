@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
-import { Check, Copy, ExternalLink, FolderInput, Link2, Loader2, Plus, Power, TriangleAlert, X } from "lucide-react";
+import { Check, Copy, ExternalLink, FolderInput, Link2, Loader2, Plus, Power, TriangleAlert, X } from "@/components/icons";
 import {
   UPLOAD_KINDS, createUploadLink, formatBytes, linkSummary, listClientUploads, listUploadLinks, localInputToIso,
   megabytesToBytes, revokeUploadLink, shortDateTime, type ClientUploadRow, type UploadKind, type UploadLink,

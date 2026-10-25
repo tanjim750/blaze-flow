@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowLeft, Inbox, Plus } from "lucide-react";
+import { ArrowLeft, Inbox, Plus } from "@/components/icons";
 import { getBranding, listProjectRequests } from "@/lib/api";
 import { accentStyle } from "@/lib/portal";
 import { loadWorkspaceContext } from "@/lib/workspace";

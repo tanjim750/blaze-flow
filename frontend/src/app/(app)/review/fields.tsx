@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CheckSquare, ExternalLink } from "lucide-react";
+import { CheckSquare, ExternalLink } from "@/components/icons";
 import type { ReviewView } from "@/lib/review-view";
 import { relativeAge } from "@/lib/review-notes";
 import { timecode } from "@/lib/timecode";

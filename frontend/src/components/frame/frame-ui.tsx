@@ -7,7 +7,7 @@
  * same everywhere files are browsed. Styles: `frame.css` (scoped under `.frm`).
  */
 import { useRef, useState, type ReactNode } from "react";
-import { Download, Ellipsis, Link2, X } from "lucide-react";
+import { Download, Ellipsis, Link2, X } from "@/components/icons";
 import { FolderShape, PlayDisc } from "./icons";
 import "./frame.css";
 

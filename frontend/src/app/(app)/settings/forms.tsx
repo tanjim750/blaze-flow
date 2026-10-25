@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { Check, KeyRound, Loader2, Mail, MailCheck, Save } from "lucide-react";
+import { Check, KeyRound, Loader2, Mail, MailCheck, Save } from "@/components/icons";
 import type { NotificationSettings, WhatsAppSettings, WorkspaceProfile } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import { changePasswordAction, resendVerificationAction, saveNotificationSettingAction, saveWhatsAppSettingsAction, updateNotificationsAction, updateProfileAction, type SettingsState } from "./actions";

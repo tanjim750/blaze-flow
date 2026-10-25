@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Mail } from "lucide-react";
+import { ArrowLeft, Mail } from "@/components/icons";
 import { TicketWorkbench } from "@/components/platform/ticket-workbench";
 import { ErrorPanel, PageHead, Pill, ticketTone } from "@/components/platform/ui";
 import { getTicket } from "@/lib/platform-api";

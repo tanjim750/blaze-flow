@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LockKeyhole, Mail } from "lucide-react";
+import { LockKeyhole, Mail } from "@/components/icons";
 
 export function SignupClosed() {
   return (

@@ -13,7 +13,7 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/icons";
 import type { ProjectFile, Task } from "@/lib/api";
 import type { BoardStage } from "@/lib/task-board";
 import { CardMenu, FileCardView, FileMenu, TaskCardView, type Cover } from "./task-card";

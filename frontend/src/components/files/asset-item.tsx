@@ -12,7 +12,7 @@
  * actions menu. See `onPointerSelect` in asset-library.tsx for the full rule.
  */
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
-import { Clapperboard, Eye, FolderOpen, GitBranch, Layers, MessageSquareText, TriangleAlert } from "lucide-react";
+import { Clapperboard, Eye, FolderOpen, GitBranch, Layers, MessageSquareText, TriangleAlert } from "@/components/icons";
 import type { LibraryFile, LibraryFolder } from "@/lib/asset-library";
 import { isProcessing } from "@/lib/asset-library";
 import { aspectLabel, formatSize, KIND_NAME, runtime, type Density, type ViewMode } from "@/lib/files-panel";

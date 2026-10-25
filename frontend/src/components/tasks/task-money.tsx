@@ -7,7 +7,7 @@
  * Pay freezes once the task reaches Approved; the API refuses edits after that.
  */
 import { useEffect, useState } from "react";
-import { Coins, Lock } from "lucide-react";
+import { Coins, Lock } from "@/components/icons";
 import { getTaskMoney, patchTaskMoney } from "@/components/money/billing-client";
 import { formatMoney, parseMoneyInput } from "@/lib/money";
 import type { EditorPayLine, TaskMoney as TaskMoneyData } from "@/lib/money-view";

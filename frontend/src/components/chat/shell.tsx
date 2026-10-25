@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft, ChevronDown, ChevronRight, Hash, Lock, MessagesSquare, Search, Users, X,
-} from "lucide-react";
+} from "@/components/icons";
 import { ProjectThread } from "@/components/messages/thread";
 import {
   fetchChatList, searchChat, unreadLabel,

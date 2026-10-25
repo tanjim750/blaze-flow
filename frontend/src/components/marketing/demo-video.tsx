@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play } from "lucide-react";
+import { Pause, Play } from "@/components/icons";
 
 /**
  * The hero's product clip: muted, looping, inline.

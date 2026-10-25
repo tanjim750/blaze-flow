@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Search } from "@/components/icons";
 import { Empty, ErrorPanel, PageHead, Pager, Pill, ticketTone } from "@/components/platform/ui";
 import { listTickets } from "@/lib/platform-api";
 import { TICKET_STATUSES, firstParam, query, relativeTime, statusLabel } from "@/lib/platform-view";

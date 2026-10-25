@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FolderInput } from "lucide-react";
+import { FolderInput } from "@/components/icons";
 import { DropUploader } from "./drop-uploader";
 import { formatBytes, portalUploadUrl, shortDateTime, type ClientPortal } from "@/lib/client-uploads";
 import "./client-uploads.css";

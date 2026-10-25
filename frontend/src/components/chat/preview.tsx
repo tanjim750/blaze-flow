@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, MessagesSquare } from "lucide-react";
+import { ArrowRight, MessagesSquare } from "@/components/icons";
 import { call } from "@/lib/client-uploads";
 import { chatHref, clock, dayLabel, fetchUnread, unreadLabel, type Channel, type Thread } from "@/lib/messages";
 import "./chat.css";

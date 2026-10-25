@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CircleCheck, TriangleAlert } from "lucide-react";
+import { CircleCheck, TriangleAlert } from "@/components/icons";
 import { useState, type FormEvent } from "react";
 import { confirmPasswordReset } from "@/lib/auth-client";
 import { PasswordField } from "@/components/auth/password-field";

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useTransition } from "react";
-import { Archive, Check, Loader2 } from "lucide-react";
+import { Archive, Check, Loader2 } from "@/components/icons";
 import { setProjectStatusAction } from "@/app/(app)/projects/actions";
 import { statusLabel } from "@/lib/project-status";
 

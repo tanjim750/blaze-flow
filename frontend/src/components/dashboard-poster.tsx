@@ -1,6 +1,6 @@
 "use client";
 
-import { Film } from "lucide-react";
+import { Film } from "@/components/icons";
 import { useState } from "react";
 
 /**

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CircleCheck, LoaderCircle, Mail, MailCheck, ShieldCheck, TriangleAlert } from "lucide-react";
+import { CircleCheck, LoaderCircle, Mail, MailCheck, ShieldCheck, TriangleAlert } from "@/components/icons";
 import { useState, type FormEvent } from "react";
 import { confirmEmailVerification, requestEmailVerification } from "@/lib/auth-client";
 import { FormAlert, TextField } from "@/components/auth/text-field";

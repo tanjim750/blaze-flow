@@ -18,7 +18,7 @@ import { useDoParam } from "@/lib/do-param";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
-import { Archive, ChevronRight, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "lucide-react";
+import { Archive, ChevronRight, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "@/components/icons";
 import type { ProjectFile } from "@/lib/api";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";

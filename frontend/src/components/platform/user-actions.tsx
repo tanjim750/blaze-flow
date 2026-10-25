@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { KeyRound, MailCheck } from "lucide-react";
+import { KeyRound, MailCheck } from "@/components/icons";
 import { platformActions } from "@/lib/platform-client";
 import { ReasonDialog } from "./reason-dialog";
 

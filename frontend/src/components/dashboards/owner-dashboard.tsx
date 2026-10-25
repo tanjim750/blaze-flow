@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, ClipboardCheck, HeartPulse } from "lucide-react";
+import { BarChart3, ClipboardCheck, HeartPulse } from "@/components/icons";
 import { DashboardPoster } from "@/components/dashboard-poster";
 import type { LayoutChoice } from "@/lib/dashboard-role";
 import type { OwnerDashboard as OwnerView } from "@/lib/role-dashboard-view";

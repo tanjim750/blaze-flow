@@ -9,7 +9,7 @@
  *  - Email invite, passphrase and watermark have no backend yet, so they render disabled.
  */
 import { useActionState, useState } from "react";
-import { Check, Copy, Globe, Lock } from "lucide-react";
+import { Check, Copy, Globe, Lock } from "@/components/icons";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { createGuestInviteAction } from "@/app/(app)/review/actions";

@@ -4,7 +4,7 @@ import { useAppRouter } from "@/lib/app-router";
 import Link from "next/link";
 import { useMemo } from "react";
 
-import { Bell, CheckCheck, ChevronLeft, ChevronRight, Settings2 } from "lucide-react";
+import { Bell, CheckCheck, ChevronLeft, ChevronRight, Settings2 } from "@/components/icons";
 import { NotificationRow } from "@/components/notifications/notification-row";
 import { useNotifications } from "@/components/notifications/use-notifications";
 import "@/components/notifications/notifications.css";

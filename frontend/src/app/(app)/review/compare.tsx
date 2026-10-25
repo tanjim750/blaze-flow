@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { ChevronFirst, ChevronLast, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { ChevronFirst, ChevronLast, Pause, Play, Volume2, VolumeX } from "@/components/icons";
 import type { ReviewVersion } from "@/lib/review-view";
 import { timecode } from "@/lib/timecode";
 import { playerShouldIgnoreKey } from "./player-keys";

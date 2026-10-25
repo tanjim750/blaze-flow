@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CommandPalette, openQuickSearch } from "@/components/command-palette";
 import { LinkPending } from "@/components/nav-progress";
 import { usePathname, useSearchParams } from "next/navigation";
-import { BadgeCheck, Clapperboard, Inbox, ReceiptText, Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, MessagesSquare, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "lucide-react";
+import { BadgeCheck, Clapperboard, Inbox, ReceiptText, Building2, CheckCircle2, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, MessagesSquare, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
 import type { ShellUser } from "@/lib/user";
@@ -15,7 +15,7 @@ import { NotificationBell } from "@/components/notifications/bell";
 import { fetchUnread, unreadLabel } from "@/lib/messages";
 import "@/components/messages/messages.css";
 import { mobileTitle } from "@/lib/mobile-title";
-import { LifeBuoy, Plus, ShieldCheck, Upload } from "lucide-react";
+import { LifeBuoy, Plus, ShieldCheck, Upload } from "@/components/icons";
 import { REPORT_EVENT, ReportProblemDialog } from "@/components/report-problem";
 
 type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { severity: string; code: string; count: number }[] };

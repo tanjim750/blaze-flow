@@ -1,7 +1,7 @@
 "use client";
 /** Search, filter menus and the active-filter chips. Filters are multi-select except Due. */
 import { useMemo, type Dispatch, type RefObject, type SetStateAction } from "react";
-import { ChevronDown, Search, X } from "lucide-react";
+import { ChevronDown, Search, X } from "@/components/icons";
 import type { Task } from "@/lib/api";
 import type { TasksView } from "@/lib/tasks-view";
 import { activeFilterCount, DUE_OPTIONS, EMPTY_FILTERS, PRIORITIES, type DueFilter, type TaskFilters } from "@/lib/task-board";

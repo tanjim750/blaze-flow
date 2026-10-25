@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarClock, CircleCheckBig, Lock } from "lucide-react";
+import { CalendarClock, CircleCheckBig, Lock } from "@/components/icons";
 import { DropUploader } from "@/components/client-uploads/drop-uploader";
 import { publicUploadUrl, shortDateTime, type PublicUploadLink } from "@/lib/client-uploads";
 import { accentStyle } from "@/lib/portal";

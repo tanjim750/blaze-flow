@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Building2, Gauge, LifeBuoy, ListRestart, ScrollText, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, Building2, Gauge, LifeBuoy, ListRestart, ScrollText, ShieldCheck, Users } from "@/components/icons";
 
 const LINKS = [
   { href: "/platform", label: "Overview", icon: Gauge },

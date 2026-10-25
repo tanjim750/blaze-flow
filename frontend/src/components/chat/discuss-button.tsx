@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { MessagesSquare } from "lucide-react";
+import { MessagesSquare } from "@/components/icons";
 import { chatHref, fetchUnread } from "@/lib/messages";
 
 /**

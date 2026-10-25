@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Ellipsis, Link2 } from "lucide-react";
+import { Ellipsis, Link2 } from "@/components/icons";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ArrowLeftRight, AtSign, CheckSquare, History, ListChecks, CornerDownRight, Sparkles, Eye, Lock, MessageSquareText, Paperclip, Pencil, PencilLine, Repeat, RotateCcw, Search, Send, SmilePlus, Timer, Trash2, Users, X } from "lucide-react";
+import { ArrowLeftRight, AtSign, CheckSquare, History, ListChecks, CornerDownRight, Sparkles, Eye, Lock, MessageSquareText, Paperclip, Pencil, PencilLine, Repeat, RotateCcw, Search, Send, SmilePlus, Timer, Trash2, Users, X } from "@/components/icons";
 import {
   DEFAULT_HOLD, HOLD_PRESETS_MS, displayWindow, drawingEndMs, holdLabel, noteEndMs, parseTime, rangeLabel, rememberHold, validChoice, type HoldChoice,
 } from "@/lib/annotation-window";

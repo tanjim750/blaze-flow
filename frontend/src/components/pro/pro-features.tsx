@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { animate, motion, useInView, useMotionValueEvent, useScroll, useSpring, useTransform, type MotionValue } from "motion/react";
-import { Check, CloudUpload, GripVertical, MessageSquareText } from "lucide-react";
+import { Check, CloudUpload, GripVertical, MessageSquareText } from "@/components/icons";
 import { useReducedMotionSafe } from "@/components/marketing/motion-prefs";
 import { cn } from "@/lib/utils";
 import { BOXES, Count, EASE, Pic, Reveal, SUMS, Shot, V3, useLiteMotion } from "./pro-home";

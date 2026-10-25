@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { Check, Copy, ExternalLink, Eye, Link2, RefreshCw, TriangleAlert, UserMinus, X } from "lucide-react";
+import { Check, Copy, ExternalLink, Eye, Link2, RefreshCw, TriangleAlert, UserMinus, X } from "@/components/icons";
 import type { GuestInvite } from "@/lib/api";
 import { guestLinkStatus } from "@/lib/activity";
 import { createGuestInviteAction, replaceGuestInviteAction, revokeGuestAccessAction, revokeGuestInviteAction, setGuestInviteDecisionsAction } from "./actions";

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { RichBrief } from "@/components/brief/rich-brief";
 import type { Metadata } from "next";
-import { ArrowLeft, CalendarClock, CheckCircle2, CircleDot, Clapperboard, Download, Eye, Flag, History, ListChecks, MessagesSquare, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowLeft, CalendarClock, CheckCircle2, CircleDot, Clapperboard, Download, Eye, Flag, History, ListChecks, MessagesSquare, RotateCcw, Sparkles } from "@/components/icons";
 import { getClientPortalData, getClientProjectOverview } from "@/lib/api";
 import { formatBytes } from "@/lib/client-uploads";
 import { CUT_STATE_LABEL, PHASE_HINT, accentStyle, dayDate, dueLabel, splitTimeline, type TimelineEvent } from "@/lib/portal";

@@ -1,6 +1,6 @@
 "use client";
 
-import { ListChecks } from "lucide-react";
+import { ListChecks } from "@/components/icons";
 import { useEffect, useState } from "react";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { TaskStage } from "@/lib/api";

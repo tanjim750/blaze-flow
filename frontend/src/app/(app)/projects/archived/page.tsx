@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft } from "@/components/icons";
 import { guardRoute } from "@/lib/route-guard";
 import { listArchivedProjects, listClientTeams, listWorkspaces } from "@/lib/api";
 import { selectWorkspace } from "@/lib/workspace";

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CircleHelp, Files, MessageSquareText, ShieldCheck, Users } from "lucide-react";
+import { ArrowRight, CircleHelp, Files, MessageSquareText, ShieldCheck, Users } from "@/components/icons";
 import { ReportProblemButton } from "@/components/report-problem";
 import "./help.css";
 const topics = [{ icon: Files, title: "Projects & files", text: "Create campaigns, upload working files, and follow proxy progress.", href: "/projects" }, { icon: MessageSquareText, title: "Review & approval", text: "Leave timecoded comments, draw annotations, and move cuts through workflow.", href: "/review" }, { icon: Users, title: "People & clients", text: "Invite collaborators, scope project access, and manage client contacts.", href: "/team" }, { icon: ShieldCheck, title: "Account & notifications", text: "Update workspace details, security, and email preferences.", href: "/settings" }];

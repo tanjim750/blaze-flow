@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Search } from "@/components/icons";
 import { Empty, ErrorPanel, PageHead, Pager, Pill } from "@/components/platform/ui";
 import { listPlatformUsers } from "@/lib/platform-api";
 import { firstParam, planLabel, query, relativeTime } from "@/lib/platform-view";

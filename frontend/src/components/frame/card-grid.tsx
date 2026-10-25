@@ -8,7 +8,7 @@
  */
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Clapperboard } from "lucide-react";
+import { Clapperboard } from "@/components/icons";
 import { toast } from "sonner";
 import { copyText, HoverMedia, SelectionBar } from "./frame-ui";
 

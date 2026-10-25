@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Send, StickyNote } from "lucide-react";
+import { Send, StickyNote } from "@/components/icons";
 import type { TicketDetail, TicketStatus } from "@/lib/platform-view";
 import { TICKET_STATUSES, statusLabel } from "@/lib/platform-view";
 import { platformActions } from "@/lib/platform-client";

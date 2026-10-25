@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Eye, Film, Layers2, TriangleAlert } from "lucide-react";
+import { ArrowRight, Eye, Film, Layers2, TriangleAlert } from "@/components/icons";
 import type { ReactNode } from "react";
 import { DashboardPoster } from "@/components/dashboard-poster";
 import type { ActivityItem, ReviewQueueItem } from "@/lib/dashboard-view";

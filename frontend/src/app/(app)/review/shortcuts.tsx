@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Keyboard, X } from "lucide-react";
+import { Keyboard, X } from "@/components/icons";
 import { REVIEW_SHORTCUTS } from "@/lib/review-shortcuts";
 
 /** The `?` overlay: every review shortcut, grouped. Esc, the close button or the backdrop close it. */

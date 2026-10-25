@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw } from "@/components/icons";
 import type { JobRow } from "@/lib/platform-view";
 import { formatDate, relativeTime } from "@/lib/platform-view";
 import { platformActions } from "@/lib/platform-client";

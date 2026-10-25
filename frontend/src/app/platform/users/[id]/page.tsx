@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@/components/icons";
 import { UserActions } from "@/components/platform/user-actions";
 import { AuditTable, Empty, ErrorPanel, PageHead, Pill, Stat, TicketList } from "@/components/platform/ui";
 import { getPlatformUser } from "@/lib/platform-api";
