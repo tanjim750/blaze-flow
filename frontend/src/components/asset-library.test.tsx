@@ -223,7 +223,9 @@ describe("AssetLibrary", () => {
     render(<AssetLibrary view={view} />);
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible" }));
-    fireEvent.click(screen.getByRole("button", { name: /Delete/ }));
+    // Bulk delete moved into the selection bar's More menu; the Delete key does the same.
+    expect(screen.getByRole("button", { name: "More actions" })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("row", { name: /^keep-me\.mov/ }), { key: "Delete" });
 
     // The optimistic removal is undone and the reason is shown, rather than swallowed.
     expect(await screen.findByRole("alert")).toHaveTextContent("You do not have permission to delete this asset.");

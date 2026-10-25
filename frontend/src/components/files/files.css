@@ -684,3 +684,52 @@
 .fx-working i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 40%; background: var(--brand, #7c5cff); animation: fx-progress 1.4s ease-in-out infinite; }
 @keyframes fx-progress { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 @media (prefers-reduced-motion: reduce) { .fx-working i::after { animation: none; width: 100%; opacity: .6; } }
+
+/* =============================================================== Frame-style skin
+ * Dark review-tool palette (bg #161616, surfaces #252525–#2d2d2d). Overrides the DS
+ * tokens above for this screen only; brand accent (`--primary`, `--ring`) is kept. */
+.fx {
+  --canvas: #161616; --background: #161616; --card: #1e1e1e; --muted: #252525; --popover: #2d2d2d;
+  --secondary: #2a2a2a; --accent: #252525; --field: #1e1e1e; --input: #2a2a2a; --input-hover: #303030;
+  --foreground: #f2f2f2; --muted-foreground: #a0a0a0; --subtle-foreground: #7a7a7a;
+  --border: rgba(255,255,255,.07); --border-strong: rgba(255,255,255,.16);
+  background: #161616; color: var(--foreground); color-scheme: dark;
+}
+.fx .fx-main, .fx .fx-toolbar, .fx .fx-content { background: #161616; }
+.fx .fx-grid.is-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px 16px; }
+.fx .fx-grid.is-grid.is-compact { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.fx .fx-item.is-tile { padding: 0 0 6px; background: transparent; }
+.fx .fx-item.is-tile:hover, .fx .fx-item.is-tile.is-selected { background: transparent; }
+.fx .fx-item.is-tile .fx-frame { border: 0; border-radius: 8px; background: #252525; }
+.fx .fx-item.is-tile:hover .fx-frame { box-shadow: 0 0 0 1px rgba(255,255,255,.14); }
+/* Selection is a thick outline in the brand accent. */
+.fx .fx-item.is-tile.is-selected .fx-frame { outline: 3px solid var(--ring); outline-offset: 2px; }
+.fx .fx-thumb img { object-fit: cover; }
+.fx .fx-item.is-tile .fx-frame .frm-media { border-radius: 8px; }
+/* Folder tile: no frame box, just the tabbed folder shape at 3:2. */
+.fx .fx-item.is-tile .fx-frame.is-folder.is-stack { aspect-ratio: 3 / 2; background: transparent; overflow: visible; }
+.fx .fx-item.is-tile.is-selected .fx-frame.is-folder.is-stack { outline-offset: 3px; border-radius: 10px; }
+.fx .fx-item.is-tile:hover .frm-folder { color: #303030; }
+.fx .fx-name-line.is-folder-name { font-weight: 700; }
+.fx .fx-item.is-tile .fx-caption .fx-name-line { font-weight: 600; }
+.fx .fx-item.is-row:hover, .fx .fx-item.is-row.is-selected { background: #252525; }
+.fx .fx-item.is-row.is-selected { box-shadow: inset 3px 0 0 var(--ring); }
+.fx .fx-crumbs button { color: var(--muted-foreground); }
+.fx .fx-crumbs button[aria-current=page] { color: var(--foreground); font-weight: 600; }
+.fx .fx-sorted-by { gap: 4px; color: var(--muted-foreground); }
+.fx .fx-sorted-by strong { color: var(--foreground); font-weight: 600; }
+.fx .fx-sorted-by svg { width: 14px; height: 14px; }
+.fx .fx-share-btn { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
+.fx .fx-share-btn svg { width: 16px; height: 16px; }
+/* The selection bar floats at the bottom; leave room so it never covers the last row. */
+.fx .fx-content { padding-bottom: 96px; }
+@media (max-width: 640px) {
+  .fx .fx-grid.is-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 10px; }
+  .fx .fx-sorted-by { display: none; } /* sort stays in the Filters menu on phones */
+  .fx .fx-share-btn { display: inline-flex !important; }
+  .fx .fx-share-btn span { display: none; }
+}
+.fx .fx-toolbar:not(.is-secondary) { flex-wrap: wrap; row-gap: 8px; }
+.fx .fx-toolbar-actions { flex-wrap: wrap; justify-content: flex-end; }
+/* Keep the checkbox off the folder tab. */
+.fx .fx-item.is-tile[data-kind=folder] .fx-check { top: 30px; }

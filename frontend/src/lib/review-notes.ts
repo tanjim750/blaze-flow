@@ -31,6 +31,8 @@ export type ReviewNote = {
   drawingWindow?: DisplayWindow | null;
   text: string;
   age: string;
+  /** ISO time it was posted, for the oldest/newest sorts. Absent on optimistic/local rows (treated as now). */
+  createdAt?: string;
   resolved: boolean;
   reactions: { emoji: string; count: number }[];
   /** `mimeType` is what decides whether an attachment plays inline or offers a download. */
@@ -105,6 +107,7 @@ export function toNote(comment: ReviewComment): ReviewNote {
     endMs: comment.start_time_ms !== null && comment.end_time_ms !== null && comment.end_time_ms > comment.start_time_ms ? comment.end_time_ms : null,
     text: comment.text ?? "",
     age: relativeAge(comment.created_at),
+    createdAt: comment.created_at,
     resolved: comment.resolved,
     reactions: comment.reactions?.map(({ emoji, count }) => ({ emoji, count })) ?? [],
     attachments: comment.attachments?.map((item) => ({ id: item.id, name: item.file.name, status: item.file.status, mimeType: item.file.mime_type })) ?? [],
@@ -144,4 +147,33 @@ export function clientView(notes: ReviewNote[]): ReviewNote[] {
   return notes
     .filter((note) => note.visibility !== "team")
     .map((note) => ({ ...note, replies: note.replies.filter((reply) => reply.visibility !== "team") }));
+}
+
+/** How the comment panel orders its feed (Frame.io-style "Sort by"). */
+export type NoteSort = "timecode" | "oldest" | "newest" | "commenter" | "completed";
+export const NOTE_SORTS: { value: NoteSort; label: string }[] = [
+  { value: "timecode", label: "Timecode" },
+  { value: "oldest", label: "Oldest" },
+  { value: "newest", label: "Newest" },
+  { value: "commenter", label: "Commenter" },
+  { value: "completed", label: "Completed" },
+];
+
+/**
+ * Orders notes without mutating the input. Ties always fall back to timecode then posting
+ * time, so the order is stable. Notes with no timecode sort after timed ones; "completed"
+ * puts open notes first and resolved ones last.
+ */
+export function sortNotes(notes: ReviewNote[], sort: NoteSort): ReviewNote[] {
+  const posted = (note: ReviewNote) => { const time = note.createdAt ? Date.parse(note.createdAt) : NaN; return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time; };
+  const at = (note: ReviewNote) => note.startMs ?? Number.MAX_SAFE_INTEGER;
+  const base = (a: ReviewNote, b: ReviewNote) => at(a) - at(b) || posted(a) - posted(b);
+  const compare: Record<NoteSort, (a: ReviewNote, b: ReviewNote) => number> = {
+    timecode: base,
+    oldest: (a, b) => posted(a) - posted(b) || base(a, b),
+    newest: (a, b) => posted(b) - posted(a) || base(a, b),
+    commenter: (a, b) => a.author.localeCompare(b.author) || base(a, b),
+    completed: (a, b) => Number(a.resolved) - Number(b.resolved) || base(a, b),
+  };
+  return [...notes].sort(compare[sort]);
 }

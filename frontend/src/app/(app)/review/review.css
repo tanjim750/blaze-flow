@@ -1103,3 +1103,9 @@
   .rv-share-icon{width:40px;height:40px}
   .rv-share-token>div button{width:44px;height:44px}
 }
+
+/* Comment sort (Frame.io-style "Sort by"). */
+.rvc-sort { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--muted-foreground, #9a9a9a); }
+.rvc-sort select { min-height: 32px; padding: 0 8px; border: 1px solid var(--border, #333); border-radius: 6px; background: var(--surface, #252525); color: var(--text, #fff); font: inherit; font-size: 12px; color-scheme: dark; }
+.rvc-more{display:inline-grid;place-items:center;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:inherit;opacity:.7;cursor:pointer}
+.rvc-more:hover,.rvc-more[data-state=open]{opacity:1;background:rgba(255,255,255,.08)}
