@@ -716,7 +716,10 @@
 /* Folder tile: no frame box, just the tabbed folder shape at 3:2. */
 .fx .fx-item.is-tile .fx-frame.is-folder.is-stack { aspect-ratio: 3 / 2; border: 0; background: transparent; overflow: visible; }
 .fx .fx-item.is-tile.is-selected .fx-frame.is-folder.is-stack { outline-offset: 3px; border-radius: 10px; }
-.fx .fx-item.is-tile:hover .frm-folder { color: var(--frm-hover); }
+.fx .fx-item.is-tile:hover .frm-folder { color: var(--frm-folder-hover); }
+.fx .fx-item.is-tile:hover .frm-folder-shape path { stroke: var(--frm-folder-hover); }
+/* List view: folder glyph in a visible grey. */
+.fx .fx-item.is-row .fx-frame.is-folder .fx-thumb.is-glyph { background: var(--frm-folder); color: var(--frm-muted); }
 .fx .fx-name-line.is-folder-name { font-weight: 700; }
 .fx .fx-item.is-tile .fx-caption .fx-name-line { font-weight: 600; }
 .fx .fx-meta, .fx .fx-total { color: var(--frm-muted); }
