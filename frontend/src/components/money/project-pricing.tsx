@@ -20,6 +20,7 @@ export function ProjectPricing({ workspaceId, projectId }: { workspaceId: string
   const [data, setData] = useState<Pricing | null>(null);
   const [problem, setProblem] = useState("");
   const [fee, setFee] = useState("");
+  const [feeError, setFeeError] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -37,7 +38,8 @@ export function ProjectPricing({ workspaceId, projectId }: { workspaceId: string
 
   async function saveFee() {
     const parsed = parseMoneyInput(fee);
-    if ("error" in parsed) return toast.error(parsed.error);
+    if ("error" in parsed) { setFeeError(parsed.error); return; }
+    setFeeError("");
     if ((parsed.amount ?? null) === (data!.fee ?? null)) return;
     try { const next = await setProjectFee(workspaceId, projectId, parsed.amount); setData(next); setFee(next.fee ?? ""); toast("Project fee saved"); }
     catch (reason) { toast.error(reason instanceof Error ? reason.message : "Not saved."); }
@@ -54,8 +56,9 @@ export function ProjectPricing({ workspaceId, projectId }: { workspaceId: string
       <div className="pp-sum">
         <label><span>Project fee</span>
           {data.can_manage
-            ? <span className="pp-input"><i>{data.currency}</i><input inputMode="decimal" value={fee} placeholder="0.00" aria-label="Project fee" onChange={(event) => setFee(event.target.value)} onBlur={() => void saveFee()} onKeyDown={(event) => { if (event.key === "Enter") (event.target as HTMLInputElement).blur(); }} /></span>
+            ? <span className="pp-input"><i>{data.currency}</i><input inputMode="decimal" min={0} value={fee} placeholder="0.00" aria-label="Project fee" aria-invalid={Boolean(feeError)} aria-describedby={feeError ? "pp-fee-error" : undefined} onChange={(event) => { setFee(event.target.value); if (feeError) setFeeError(""); }} onBlur={() => void saveFee()} onKeyDown={(event) => { if (event.key === "Enter") (event.target as HTMLInputElement).blur(); }} /></span>
             : <strong>{money(data.fee)}</strong>}
+          {feeError && <small id="pp-fee-error" className="pp-field-error" role="alert">{feeError}</small>}
         </label>
         <b aria-hidden="true">+</b>
         <div><span>Task prices ({priced.length})</span><strong>{money(data.tasks_total)}</strong></div>

@@ -15,6 +15,9 @@ export async function updateProfileAction(_previous: SettingsState, form: FormDa
   const workspace = context.data.selected;
   if (!workspace) return fail("Create a workspace before editing its profile.");
   const value = (name: string) => String(form.get(name) ?? "").trim() || null;
+  if (!value("business_name")) return fail("Business name is required.");
+  const country = value("country_code");
+  if (country && !/^[A-Za-z]{2}$/.test(country)) return fail("Country code must be two letters, like GB.");
   const updated = await updateWorkspaceProfile(workspace.id, {
     business_name: value("business_name"), description: value("description"),
     email: value("email"), phone: value("phone"), website_url: value("website_url"),

@@ -48,7 +48,7 @@ export type KanbanProps = {
 
 const EMPTY_COPY: Record<string, string> = {
   todo: "Nothing queued", in_progress: "Nothing in production", review: "Nothing waiting for internal review",
-  client_review: "No cuts with the client", revisions: "No revisions requested", approved: "Approved work lands here",
+  client_review: "No cuts with the client. Only tasks with a client can move here", revisions: "No revisions requested", approved: "Approved work lands here",
 };
 
 const taskKey = (id: string) => `task:${id}`;
@@ -195,7 +195,7 @@ function Column({ column, isOver, dropBeforeId, activeId, ...props }: KanbanProp
         stageName={stage.name} open={props.quickAddStage === stage.id}
         onOpenChange={(open) => props.setQuickAddStage(open ? stage.id : null)}
         onCreate={(title) => props.onCreate(stage.id, title)}
-        disabledReason={guarded ? `Add tasks in an earlier stage, then move them to ${stage.name}.` : null}
+        disabledReason={guarded ? (stage.kind === "client_review" ? `Add tasks in an earlier stage, then move them to ${stage.name}. Only tasks with a client can go to the client.` : `Add tasks in an earlier stage, then move them to ${stage.name}.`) : null}
       />
     </footer>}
   </section>;

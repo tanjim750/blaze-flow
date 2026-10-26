@@ -1,23 +1,25 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
-import { Check, KeyRound, Loader2, Mail, MailCheck, Save } from "@/components/icons";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { Check, KeyRound, Loader2, Mail, MailCheck, Save, TriangleAlert } from "@/components/icons";
 import type { NotificationSettings, WhatsAppSettings, WorkspaceProfile } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import { changePasswordAction, resendVerificationAction, saveNotificationSettingAction, saveWhatsAppSettingsAction, updateNotificationsAction, updateProfileAction, type SettingsState } from "./actions";
 
 const initial: SettingsState = { error: null, message: null };
+const BUSINESS_NAME_REQUIRED = "Business name is required.";
 
 function Feedback({ state }: { state: SettingsState }) {
   if (state.error) return <p className="form-error" role="alert">{state.error}</p>;
   return state.message ? <p className="settings-success" role="status">{state.message}</p> : null;
 }
 
-export function WorkspaceProfileForm({ profile }: { profile: WorkspaceProfile | null }) {
+export function WorkspaceProfileForm({ profile, workspaceName = "" }: { profile: WorkspaceProfile | null; workspaceName?: string }) {
   const [state, action, pending] = useActionState(updateProfileAction, initial);
+  const nameError = state.error === BUSINESS_NAME_REQUIRED;
   return <form action={action} className="settings-form">
     <div className="settings-grid">
-      <label>Business name<input name="business_name" defaultValue={profile?.business_name ?? ""} /></label>
+      <label>Business name <small className="settings-required">Required</small><input name="business_name" required maxLength={255} defaultValue={profile?.business_name || workspaceName} aria-invalid={nameError} /></label>
       <label>Contact email<input name="email" type="email" defaultValue={profile?.email ?? ""} /></label>
       <label>Phone<input name="phone" defaultValue={profile?.phone ?? ""} /></label>
       <label>Website<input name="website_url" type="url" placeholder="https://" defaultValue={profile?.website_url ?? ""} /></label>
@@ -32,7 +34,10 @@ export function WorkspaceProfileForm({ profile }: { profile: WorkspaceProfile | 
 
 export function PasswordForm() {
   const [state, action, pending] = useActionState(changePasswordAction, initial);
-  return <form action={action} className="settings-form compact">
+  const form = useRef<HTMLFormElement>(null);
+  // Every result (mismatch, wrong current password or success) starts the three fields over together.
+  useEffect(() => { if (state.error || state.message) form.current?.reset(); }, [state]);
+  return <form ref={form} action={action} className="settings-form compact">
     <label>Current password<input name="current_password" type="password" autoComplete="current-password" required /></label>
     <label>New password<input name="new_password" type="password" autoComplete="new-password" required /></label>
     <label>Confirm new password<input name="confirmation" type="password" autoComplete="new-password" required /></label>
@@ -41,10 +46,14 @@ export function PasswordForm() {
   </form>;
 }
 
-export function VerificationForm({ verified }: { verified: boolean }) {
+export function VerificationForm({ verified, email }: { verified: boolean; email?: string }) {
   const [state, action, pending] = useActionState(resendVerificationAction, initial);
   return <form action={action} className="verification-row">
-    <div><strong>{verified ? "Email verified" : "Email verification required"}</strong><p>{verified ? "Your account can create workspaces." : "Verify your email to unlock workspace creation."}</p></div>
+    <div>
+      <span className={`verification-badge ${verified ? "is-verified" : "is-pending"}`}>{verified ? <><MailCheck size={13} />Verified</> : <><TriangleAlert size={13} />Not verified</>}</span>
+      <strong>{verified ? "Email verified" : "Email verification required"}</strong>
+      <p>{email && <><span className="verification-email">{email}</span> · </>}{verified ? "Your account can create workspaces." : "Verify your email to unlock workspace creation."}</p>
+    </div>
     {!verified && <button className="settings-button" disabled={pending}><MailCheck size={15} />{pending ? "Requesting…" : "Resend email"}</button>}
     <Feedback state={state} />
   </form>;
@@ -119,11 +128,12 @@ export function NotificationSettingsForm({ initial, workspaceName }: { initial: 
 export function WhatsAppSettingsForm({ initial: start }: { initial: WhatsAppSettings }) {
   const [settings, setSettings] = useState(start);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
-  const save = (change: { enabled?: boolean; link_expiry_hours?: number }) => startTransition(async () => {
+  const save = (change: { enabled?: boolean; link_expiry_hours?: number }) => { setSaved(false); startTransition(async () => {
     const result = await saveWhatsAppSettingsAction(change);
-    if (result.ok) { setSettings(result.settings); setError(null); } else setError(result.error);
-  });
+    if (result.ok) { setSettings(result.settings); setError(null); setSaved(true); } else setError(result.error);
+  }); };
   const { used, limit, plan } = settings.usage;
   return <div className="settings-form whatsapp-settings">
     <div className="whatsapp-row">
@@ -138,7 +148,8 @@ export function WhatsAppSettingsForm({ initial: start }: { initial: WhatsAppSett
       <p className="whatsapp-usage"><span>{used} / {limit}</span> messages this month on the {plan} plan</p>
     </div>
     {settings.test_mode && <p className="whatsapp-test" role="note">Test mode: messages are logged, not sent. Nothing reaches a phone until WhatsApp is connected.</p>}
-    {pending && <p className="settings-muted"><Loader2 size={13} className="spin" /> Saving…</p>}
+    {pending && <p className="settings-muted" role="status"><Loader2 size={13} className="spin" /> Saving…</p>}
+    {!pending && saved && !error && <p className="settings-success" role="status"><Check size={13} /> Saved</p>}
     {error && <p className="form-error" role="alert">{error}</p>}
   </div>;
 }

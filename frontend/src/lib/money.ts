@@ -66,6 +66,7 @@ export function formatMoney(amount: string | number | null | undefined, currency
 export function parseMoneyInput(raw: string): { amount: string | null } | { error: string } {
   const cleaned = raw.replace(/[£$€,\s]/g, "");
   if (cleaned === "") return { amount: null };
+  if (cleaned.startsWith("-")) return { error: "The amount can't be negative. Enter 0 or more." };
   if (!/^\d+(\.\d{0,2})?$/.test(cleaned)) return { error: "Enter an amount like 1250 or 1250.50." };
   return { amount: fromMinor(toMinor(cleaned)) };
 }

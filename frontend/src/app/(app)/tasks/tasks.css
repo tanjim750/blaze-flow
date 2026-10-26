@@ -412,3 +412,6 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
   .tb-column { scroll-snap-align: start; }
 }
 .tb-column-empty { padding: 10px 12px; line-height: 1.4; overflow-wrap: anywhere; }
+
+.tb-field-error{color:#ff9ba3;font-size:12px;line-height:1.4}
+.tb-field input[aria-invalid="true"]{border-color:#ff9ba3}

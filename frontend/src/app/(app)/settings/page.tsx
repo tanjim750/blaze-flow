@@ -62,7 +62,7 @@ export default async function SettingsPage() {
     </section>
     {(studio || !workspace) && <section className="settings-card">
       <div className="settings-title"><Building2 /><div><h2>Workspace profile</h2><p>{workspace ? `Public business details for ${workspace.name}.` : "Create a workspace to add business details."}</p></div></div>
-      {workspace ? <WorkspaceProfileForm profile={profile} /> : <p className="settings-muted">No workspace is available.</p>}
+      {workspace ? <WorkspaceProfileForm profile={profile} workspaceName={workspace.name} /> : <p className="settings-muted">No workspace is available.</p>}
     </section>}
     {workspace && loadedWhatsApp?.ok && <section className="settings-card" id="whatsapp">
       <div className="settings-title"><MessageCircle /><div><h2>WhatsApp approvals</h2><p>Message clients on WhatsApp when a cut is waiting for their approval.</p></div></div>
