@@ -692,7 +692,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
               <button type="button" className={mode === "list" ? "is-on" : ""} onClick={() => setMode("list")} aria-label="List view" aria-pressed={mode === "list"} title="List view"><List /></button>
               <ToolbarMenu label="View options" className="fx-view-more" trigger={<ChevronDown aria-hidden="true" />}>
                 {(close) => <>
-                  <p className="fx-menu-label">Size</p>
+                  <p className="fx-tb-label">Size</p>
                   <button type="button" role="menuitemradio" aria-checked={density === "comfortable"} title="Comfortable" onClick={() => { setDensity("comfortable"); close(); }}>{density === "comfortable" ? <Check aria-hidden="true" /> : <i />}Large</button>
                   <button type="button" role="menuitemradio" aria-checked={density === "compact"} title="Compact" onClick={() => { setDensity("compact"); close(); }}>{density === "compact" ? <Check aria-hidden="true" /> : <i />}Small</button>
                   <hr />
@@ -1316,8 +1316,8 @@ function ToolbarMenu({ label, className = "", trigger, children }: { label: stri
     document.addEventListener("keydown", onKeyDown);
     return () => { document.removeEventListener("pointerdown", onPointerDown); document.removeEventListener("keydown", onKeyDown); };
   }, [open]);
-  return <div className={`fx-menu-wrap ${className}`} ref={root}>
-    <button type="button" className="fx-menu-trigger" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} data-state={open ? "open" : "closed"} onClick={() => setOpen(!open)}>{trigger}</button>
-    {open && <div className="fx-menu" role="menu" aria-label={label}>{children(() => setOpen(false))}</div>}
+  return <div className={`fx-tb-wrap ${className}`} ref={root}>
+    <button type="button" className="fx-tb-trigger" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} data-state={open ? "open" : "closed"} onClick={() => setOpen(!open)}>{trigger}</button>
+    {open && <div className="fx-tb-menu" role="menu" aria-label={label}>{children(() => setOpen(false))}</div>}
   </div>;
 }
