@@ -23,7 +23,7 @@ import { TasksBoard } from "@/app/(app)/tasks/board";
 import type { TasksView } from "@/lib/tasks-view";
 import { filterClientTree } from "@/lib/client-filter";
 import "../tasks/tasks.css";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, moveCampaignToClientAction, renameCampaignAction, renameFolderAction, type ActionState } from "./actions";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { planLabel, type PlanLimit } from "@/lib/plan-limit";
@@ -451,6 +451,8 @@ function ClientBranch({ client, campaigns = client.campaigns, view, open, onTogg
   const [adding, setAdding] = useState(false);
   const { renaming, setRenaming, error, setError, remove } = useRowActions();
   const isSelected = view.selectedClient?.id === client.id;
+  const mover = useMoveToClient();
+  const clientTargets = view.clients.filter((item) => item.id !== "unassigned").map((item) => ({ id: item.id, name: item.name }));
 
   return (
     <div className={open || isSelected ? "pb-client open" : "pb-client"}>
@@ -489,6 +491,7 @@ function ClientBranch({ client, campaigns = client.campaigns, view, open, onTogg
                 label={campaign.name}
                 onRename={() => setRenaming(campaign.id)}
                 onDelete={() => remove(() => deleteCampaignAction(campaign.id))}
+                move={view.workspaceId ? { clients: clientTargets, current: client.id === "unassigned" ? null : client.id, onMove: (clientId) => mover.move(campaign.id, clientId) } : undefined}
               >
                 <Link href={`/projects?client=${client.id}&campaign=${campaign.id}`} className={active ? "pb-sub active" : "pb-sub"}>
                   {active ? <FolderOpen size={14} /> : <Folder size={14} />}
@@ -516,6 +519,7 @@ function ClientBranch({ client, campaigns = client.campaigns, view, open, onTogg
           )}
 
           {error && <p className="pb-row-error" role="alert">{error}<button type="button" onClick={() => setError(null)} aria-label="Dismiss"><X size={11} /></button></p>}
+          {mover.error && <p className="pb-row-error" role="alert">{mover.error}</p>}
 
           {view.selectedCampaign && isSelected && <NestedFolders view={view} />}
         </div>
@@ -545,14 +549,29 @@ function useRowActions() {
  * outside click, keyboard navigation, and the Shift+F10 / menu-key route for anyone not
  * using a mouse.
  */
-function RowMenu({ label, onRename, onDelete, children }: {
-  label: string; onRename: () => void; onDelete: () => void; children: React.ReactNode;
+type MoveTargets = { clients: { id: string; name: string }[]; current: string | null; onMove: (clientId: string | null) => void };
+
+function RowMenu({ label, onRename, onDelete, move, children }: {
+  label: string; onRename: () => void; onDelete: () => void; move?: MoveTargets; children: React.ReactNode;
 }) {
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="pb-context-menu">
         <ContextMenuItem onSelect={onRename}><Pencil />Rename</ContextMenuItem>
+        {move && <ContextMenuSub>
+          <ContextMenuSubTrigger><FolderInput />Move to client</ContextMenuSubTrigger>
+          <ContextMenuSubContent className="pb-context-menu">
+            {move.clients.map((client) => (
+              <ContextMenuItem key={client.id} disabled={client.id === move.current} onSelect={() => move.onMove(client.id)}>
+                {client.name}{client.id === move.current ? " (current)" : ""}
+              </ContextMenuItem>
+            ))}
+            {!move.clients.length && <ContextMenuItem disabled>No clients yet</ContextMenuItem>}
+            <ContextMenuSeparator />
+            <ContextMenuItem disabled={!move.current} onSelect={() => move.onMove(null)}>No client (unassigned)</ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>}
         <ContextMenuItem variant="destructive" onSelect={() => { if (confirm(`Delete ${label}?`)) onDelete(); }}>
           <Trash2 />Delete
         </ContextMenuItem>
@@ -663,27 +682,37 @@ const initials = (value: string) =>
  * The project header's "…" menu: link the project to a client (or unlink it). Linking is
  * what puts a project in that client's portal.
  */
-function ProjectMoreActions({ view, campaignId }: { view: ProjectsView; campaignId: string }) {
+function useMoveToClient() {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const clients = view.clients.filter((client) => client.id !== "unassigned");
-  const current = view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null;
-  const move = (clientId: string | null) => start(async () => {
+  const move = (campaignId: string, clientId: string | null) => start(async () => {
     setError(null);
     const result = await moveCampaignToClientAction(campaignId, clientId);
     if (result.error) { setError(result.error); return; }
     router.push(`/projects?client=${clientId ?? "unassigned"}&campaign=${campaignId}`);
     router.refresh();
   });
+  return { move, pending, error };
+}
+
+function ProjectMoreActions({ view, campaignId }: { view: ProjectsView; campaignId: string }) {
+  const { move: moveTo, pending, error } = useMoveToClient();
+  const clients = view.clients.filter((client) => client.id !== "unassigned");
+  const current = view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null;
+  const currentName = current ? view.selectedClient?.name : null;
+  const move = (clientId: string | null) => moveTo(campaignId, clientId);
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="pb-ghost-button pb-icon-only" type="button" aria-label="Move to client" title="Move to client" disabled={pending}><FolderInput size={15} /></button>
+          {/* Labelled, not icon-only: linking a project to a client is how it reaches their portal (R1). */}
+          <button className="pb-ghost-button pb-client-link" type="button" aria-label={currentName ? `Client: ${currentName}. Change client` : "Link to a client"} title={currentName ? "Change client" : "Link to a client"} disabled={pending}>
+            <FolderInput size={15} /><span>{pending ? "Moving…" : currentName ?? "Link to client"}</span><ChevronDown size={13} />
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="pb-more-menu">
-          <DropdownMenuLabel>Move to client</DropdownMenuLabel>
+          <DropdownMenuLabel>{current ? "Move to client" : "Link to client"}</DropdownMenuLabel>
           {clients.map((client) => (
             <DropdownMenuItem key={client.id} disabled={client.id === current} onSelect={() => move(client.id)}>
               {client.name}{client.id === current ? " (current)" : ""}
