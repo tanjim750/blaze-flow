@@ -17,6 +17,7 @@ import "@/components/messages/messages.css";
 import { mobileTitle } from "@/lib/mobile-title";
 import { LifeBuoy, Plus, ShieldCheck, Upload } from "@/components/icons";
 import { REPORT_EVENT, ReportProblemDialog } from "@/components/report-problem";
+import { ShellReconnect } from "@/components/shell-reconnect";
 
 type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { severity: string; code: string; count: number }[] };
 
@@ -41,8 +42,10 @@ function withPreview<T extends { href: string }>(link: T, role: string): T {
 /** Mirrors the cookie the layout reads, so a reload opens at the width you left it. */
 const RAIL_COOKIE = "blazeflow_rail";
 
-export function AppShell({ children, user = null, workspaces = [], selectedWorkspaceId = null, railCollapsed = false }: {
+export function AppShell({ children, user = null, workspaces = [], selectedWorkspaceId = null, railCollapsed = false, degraded = false }: {
   children: React.ReactNode; user?: ShellUser | null;
+  /** The layout could not load the user or their workspaces (API briefly down). */
+  degraded?: boolean;
   workspaces?: Workspace[]; selectedWorkspaceId?: string | null;
   /** Read from a cookie by the layout, so the first paint is already the right width. */
   railCollapsed?: boolean;
@@ -60,7 +63,11 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   // the preview), so the preview is faithful: no Clients, Team or Money for a client.
   const previewParam = useSearchParams()?.get("view");
   const previewRole = selected && navFor(selected).role === "owner" && (previewParam === "client" || previewParam === "editor") ? previewParam : null;
-  const baseNav = navFor(previewRole && selected ? previewAccess(selected, previewRole) : selected);
+  // With no workspace because the API failed (not because there is none), don't guess a role:
+  // falling back to the editor nav made an owner's sidebar look like someone else's (B8).
+  const baseNav = degraded && !selected
+    ? { role: "unknown" as const, primary: [{ href: "/", label: "Home", icon: "home" as const }], secondary: [{ href: "/help", label: "Help", icon: "help" as const }] }
+    : navFor(previewRole && selected ? previewAccess(selected, previewRole) : selected);
   const nav = previewRole ? { ...baseNav, primary: baseNav.primary.map((link) => withPreview(link, previewRole)), secondary: baseNav.secondary.map((link) => withPreview(link, previewRole)) } : baseNav;
   const navLinks = nav.primary.map((link) => ({ ...link, icon: ICONS[link.icon] }));
   const secondaryLinks = nav.secondary.map((link) => ({ ...link, icon: ICONS[link.icon] }));
@@ -163,7 +170,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
 
         <div className="studio-sidebar-top">
           <div className="studio-brand"><span><Flame size={17} /></span><strong>Blaze Flow</strong></div>
-          <WorkspacePicker workspaces={workspaces} selectedWorkspaceId={selectedWorkspaceId} pathname={pathname} />
+          <WorkspacePicker workspaces={workspaces} selectedWorkspaceId={selectedWorkspaceId} pathname={pathname} degraded={degraded} />
 
           {/* Opens the ⌘K palette (everyone, clients included: it is scoped to what they can see). */}
           <button type="button" className="studio-rail-search" onClick={openQuickSearch} aria-label="Search (⌘K)" aria-keyshortcuts="Meta+K Control+K">
@@ -207,6 +214,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
       </aside>
 
       <div className="studio-main">
+        {degraded && <ShellReconnect />}
         <UniversalReviewLayout pathname={pathname}>
           <main key={pathname} className={flush ? "flush studio-page-enter" : "studio-page-enter"}>{children}</main>
         </UniversalReviewLayout>
@@ -223,7 +231,8 @@ function healthLabel(health: OperationsHealth | "restricted" | "unavailable" | n
   return health.status === "critical" ? "Action required" : "Needs attention";
 }
 
-function WorkspacePicker({ workspaces, selectedWorkspaceId, pathname }: { workspaces: Workspace[]; selectedWorkspaceId: string | null; pathname: string }) {
+function WorkspacePicker({ workspaces, selectedWorkspaceId, pathname, degraded = false }: { workspaces: Workspace[]; selectedWorkspaceId: string | null; pathname: string; degraded?: boolean }) {
+  if (!workspaces.length && degraded) return <div className="studio-workspace-label is-loading"><span>Workspace</span><b>Reconnecting…</b></div>;
   if (!workspaces.length) return <div className="studio-workspace-label"><span>Workspace</span><b>PRO</b></div>;
   return <form action={switchWorkspaceAction} className="studio-workspace-picker">
     <input type="hidden" name="returnTo" value={pathname} />

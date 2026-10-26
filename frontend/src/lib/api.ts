@@ -182,17 +182,23 @@ export async function forwardedClientHeaders(): Promise<Record<string, string>> 
   return out;
 }
 
-/** Exported for feature modules that keep their routes in their own file (e.g. `billing-api.ts`). */
-export async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
+/** Statuses that mean "the API is briefly unavailable", worth one quiet retry on a read. */
+export const TRANSIENT_STATUSES = new Set([0, 502, 503, 504]);
+/** A server render must not hang on a stuck API call; past this it fails like an outage. */
+const REQUEST_TIMEOUT_MS = 15_000;
+const RETRY_DELAY_MS = 300;
+
+async function requestOnce<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
   let response: Response;
   try {
     response = await fetch(`${API_ORIGIN}/api${path}`, {
       ...init,
       headers: { ...(await authHeaders()), ...(init?.headers ?? {}) },
       cache: "no-store",
+      signal: init?.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {
-    // Django unreachable — surfaced to the page so it can explain itself rather than crash.
+    // Django unreachable (or too slow) — surfaced to the page so it can explain itself rather than crash.
     return failure(0, `Cannot reach the Blaze Flow API at ${API_ORIGIN}.`);
   }
   if (!response.ok) {
@@ -200,6 +206,23 @@ export async function request<T>(path: string, init?: RequestInit): Promise<ApiR
   }
   if (response.status === 204) return { ok: true, data: undefined as T };
   return { ok: true, data: (await response.json()) as T };
+}
+
+/**
+ * Exported for feature modules that keep their routes in their own file (e.g. `billing-api.ts`).
+ *
+ * Reads (GET/HEAD) are retried once after a short pause when the API is briefly unavailable
+ * (unreachable, 502/503/504). A Postgres restart or a stale pooled connection used to fail
+ * the shell's `/auth/me/` and `/workspaces/` calls together, and because the layout persists
+ * across navigation that degraded shell stuck until a full reload (B8). Writes are never
+ * retried, since they might already have happened.
+ */
+export async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
+  const first = await requestOnce<T>(path, init);
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (first.ok || !TRANSIENT_STATUSES.has(first.error.status) || (method !== "GET" && method !== "HEAD")) return first;
+  await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+  return requestOnce<T>(path, init);
 }
 
 const jsonBody = (payload: unknown): RequestInit => ({
