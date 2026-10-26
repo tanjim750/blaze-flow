@@ -435,3 +435,8 @@
 @media (max-width: 760px) and (prefers-reduced-motion: reduce) { .pb-rail { transition: none; } }
 @media (max-width: 760px) { .pb-crumbs-row > .pb-ghost-button { flex: none; font-size: 0; gap: 0; min-height: 40px; min-width: 40px; justify-content: center; } }
 .pb-inline-error{color:#ff8f98;font-size:12px;align-self:center}
+
+/* R1: the header's client link is labelled so linking a project to a client is findable. */
+.pb-client-link { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; }
+.pb-client-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+@media (max-width: 520px) { .pb-client-link { max-width: 150px; } .pb-title-actions { flex-wrap: wrap; flex-shrink: 1; min-width: 0; max-width: 100%; } }
