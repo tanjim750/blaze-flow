@@ -56,7 +56,6 @@ export function returnLabel(path: string | null): string {
   if (route.startsWith("/tasks")) return "Tasks";
   if (route.startsWith("/projects")) return "Project";
   if (route.startsWith("/notifications")) return "Notifications";
-  if (route.startsWith("/deliverables")) return "Deliverables";
   return "Back";
 }
 

@@ -8,18 +8,18 @@ const labels = (w: Parameters<typeof navFor>[0]) => { const n = navFor(w); retur
 
 describe("role sidebars", () => {
   it("owners keep the whole studio", () => {
-    expect(labels(owner)).toEqual(["Home", "Projects", "Chat", "Tasks", "Files", "Clients", "Team & Roles", "Money", "Render Queue", "Deliverables", "Settings", "Help"]);
+    expect(labels(owner)).toEqual(["Home", "Projects", "Chat", "Tasks", "Files", "Clients", "Team & Roles", "Money", "Settings", "Help"]);
   });
   it("editors get their own work, their pay, and no studio admin", () => {
     const l = labels(editor);
-    expect(l).toEqual(["My work", "My tasks", "Cuts to fix", "Projects", "Chat", "Files", "My pay", "Render Queue", "Deliverables", "My profile", "Help"]);
+    expect(l).toEqual(["My work", "My tasks", "Cuts to fix", "Projects", "Chat", "Files", "My pay", "My profile", "Help"]);
     expect(navFor(editor).primary[1].href).toBe("/tasks?assignee=m1");
     expect(labels({ ...editor, billing: { view: false, manage: false, rates_view: false } })).not.toContain("My pay");
   });
   it("clients get the portal and nothing internal", () => {
     const l = labels(client);
-    expect(l).toEqual(["Home", "Projects", "Approvals", "Deliverables", "Messages", "Requests", "Invoices", "Send files", "Help"]);
-    for (const hidden of ["Tasks", "Team & Roles", "Clients", "Money", "Render Queue", "Settings", "Files", "Chat"]) expect(l).not.toContain(hidden);
+    expect(l).toEqual(["Home", "Projects", "Approvals", "Messages", "Requests", "Invoices", "Send files", "Help"]);
+    for (const hidden of ["Tasks", "Team & Roles", "Clients", "Money", "Render Queue", "Deliverables", "Settings", "Files", "Chat"]) expect(l).not.toContain(hidden);
   });
   it("every sidebar link passes its own route guard", () => {
     for (const w of [owner, editor, client]) {

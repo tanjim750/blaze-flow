@@ -11,7 +11,7 @@ import { roleFor } from "./dashboard-role";
  */
 export type NavIcon =
   | "home" | "projects" | "chat" | "tasks" | "files" | "clients" | "team" | "money"
-  | "render" | "deliverables" | "settings" | "help" | "review" | "approvals" | "requests"
+  | "settings" | "help" | "review" | "approvals" | "requests"
   | "invoices" | "upload" | "pay";
 export type NavLink = { href: string; label: string; icon: NavIcon };
 export type RoleNav = { role: DashboardRole; primary: NavLink[]; secondary: NavLink[] };
@@ -28,7 +28,6 @@ export function navFor(workspace: Access | null | undefined): RoleNav {
         { href: "/", label: "Home", icon: "home" },
         { href: "/#projects", label: "Projects", icon: "projects" },
         { href: "/#approvals", label: "Approvals", icon: "approvals" },
-        { href: "/deliverables", label: "Deliverables", icon: "deliverables" },
         { href: "/portal/chat", label: "Messages", icon: "chat" },
         { href: "/portal/requests", label: "Requests", icon: "requests" },
         { href: "/#invoices", label: "Invoices", icon: "invoices" },
@@ -53,8 +52,6 @@ export function navFor(workspace: Access | null | undefined): RoleNav {
         ...(billing?.view ? [{ href: "/money", label: "Money", icon: "money" as const }] : []),
       ],
       secondary: [
-        { href: "/render-queue", label: "Render Queue", icon: "render" },
-        { href: "/deliverables", label: "Deliverables", icon: "deliverables" },
         { href: "/settings", label: "My profile", icon: "settings" },
         { href: "/help", label: "Help", icon: "help" },
       ],
@@ -73,8 +70,6 @@ export function navFor(workspace: Access | null | undefined): RoleNav {
       ...(billing?.view ? [{ href: "/money", label: "Money", icon: "money" as const }] : []),
     ],
     secondary: [
-      { href: "/render-queue", label: "Render Queue", icon: "render" },
-      { href: "/deliverables", label: "Deliverables", icon: "deliverables" },
       { href: "/settings", label: "Settings", icon: "settings" },
       { href: "/help", label: "Help", icon: "help" },
     ],
