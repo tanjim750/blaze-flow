@@ -19,9 +19,9 @@ export function KindIcon({ kind, className }: { kind: LibraryKind; className?: s
  * A filename that truncates in the middle, so `spring_launch…_v3_9x16.mp4` keeps both ends.
  * The full name is always in `title` and in the accessible name of the item that owns it.
  */
-export function FileName({ name, max = 32, className }: { name: string; max?: number; className?: string }) {
+export function FileName({ name, max = 32, className, title }: { name: string; max?: number; className?: string; title?: string }) {
   const short = middleTruncate(name, max);
-  return <strong className={className} title={short === name ? undefined : name}>{short}</strong>;
+  return <strong className={className} title={title ?? (short === name ? undefined : name)}>{short}</strong>;
 }
 
 /**

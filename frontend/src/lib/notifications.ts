@@ -232,6 +232,49 @@ export function groupByDay<T extends { createdAt: string }>(rows: T[], now: Date
   return [...groups.values()];
 }
 
+export type CollapsedNotification = DescribedNotification & {
+  /** Every notification id folded into this row (the newest first). */
+  ids: string[];
+  /** How many identical events this row stands for (1 when not grouped). */
+  repeat: number;
+  /** Distinct actor names, newest first. */
+  actors: string[];
+};
+
+/**
+ * Folds identical events (same kind of event on the same subject and destination) into one
+ * row: "2 × found 3 possible mistakes in poster.png". Rows keep the newest event's time and
+ * text; a grouped row is unread when any event in it is. Expects rows newest first, as one
+ * `groupByDay` bucket gives them, so grouping never spans a day heading.
+ */
+export function collapseRepeats(rows: DescribedNotification[]): CollapsedNotification[] {
+  const out: CollapsedNotification[] = [];
+  const byKey = new Map<string, CollapsedNotification>();
+  for (const row of rows) {
+    const key = [row.tone, row.verb, row.subject ?? "", row.href ?? ""].join("\u0000");
+    const hit = byKey.get(key);
+    if (hit) {
+      hit.ids.push(row.id);
+      hit.repeat += 1;
+      hit.unread = hit.unread || row.unread;
+      if (!hit.actors.includes(row.actor)) hit.actors.push(row.actor);
+      if (!hit.posterUrl) hit.posterUrl = row.posterUrl;
+      continue;
+    }
+    const next: CollapsedNotification = { ...row, ids: [row.id], repeat: 1, actors: [row.actor] };
+    byKey.set(key, next);
+    out.push(next);
+  }
+  return out;
+}
+
+/** "Ana", "Ana and Ben", "Ana and 2 others". */
+export function actorsLabel(actors: string[]): string {
+  if (actors.length <= 1) return actors[0] ?? "Someone";
+  if (actors.length === 2) return `${actors[0]} and ${actors[1]}`;
+  return `${actors[0]} and ${actors.length - 1} others`;
+}
+
 /** Marks rows read locally after the API agreed, without refetching. */
 export function markRead<T extends { id: string; unread: boolean; read_at: string | null }>(items: T[], ids: Set<string> | "all", at: string): T[] {
   return items.map((item) => (ids === "all" || ids.has(item.id)) && item.unread ? { ...item, unread: false, read_at: at } : item);
