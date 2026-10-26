@@ -82,7 +82,8 @@ export function CommandPalette({ workspace }: { workspace: Workspace | null }) {
   // Below the minimum, server groups are dropped; above it, the last answer stays until the next lands.
   const groups = useMemo(() => {
     const long = trimmed.length >= MIN_QUERY;
-    const built = buildGroups({ query: long ? trimmed : "", server: long ? server.groups : [], recents, actions, pages });
+    // Any typed text hides Recent at once (M9: it used to flash back for 1-char queries).
+    const built = buildGroups({ query: trimmed, server: long ? server.groups : [], recents, actions, pages });
     const starts = built.map((_, i) => built.slice(0, i).reduce((sum, group) => sum + group.rows.length, 0));
     return built.map((group, i) => ({ ...group, start: starts[i] }));
   }, [trimmed, server.groups, recents, actions, pages]);
