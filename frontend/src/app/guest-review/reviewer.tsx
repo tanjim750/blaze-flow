@@ -19,16 +19,15 @@ import { RichBrief } from "@/components/brief/rich-brief";
 import { briefIsEmpty, briefToPlainText } from "@/lib/rich-brief";
 import { rangeLabel } from "@/lib/annotation-window";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
-import { Player, type PlayerHandle, type PlayerSource } from "@/app/(app)/review/player";
+import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } from "@/app/(app)/review/player";
 import {
   clearGuestSession, createGuestComment, createGuestDecision, deleteGuestComment, downloadGuestAttachment,
-  editGuestComment, exchangeGuestInvite, getGuestPlayback, listGuestComments, loadGuestReview,
+  editGuestComment, exchangeGuestInvite, getGuestPlayback, listGuestAnnotations, listGuestComments, loadGuestReview,
   guestEmailProblem, readGuestSession, REMEMBER_DAYS, setGuestReaction, uploadGuestAttachment, writeGuestSession,
   type GuestMediaVersion, type GuestPlayback, type GuestReview, type GuestSession,
 } from "@/lib/guest-client";
 
 const REACTIONS = ["👍", "🎉", "👀"];
-const NO_ANNOTATIONS: never[] = [];
 const noop = () => {};
 
 /**
@@ -38,6 +37,8 @@ const noop = () => {};
  * the access key exchanged from the invite token — so no part of this page can be
  * rendered on the server with the reviewer's identity attached.
  */
+const NO_ANNOTATIONS: DrawnAnnotation[] = [];
+
 export function GuestReviewer({ token }: { token: string }) {
   /** sessionStorage is browser-only, so the stored session is read after hydration. */
   const [mounted, setMounted] = useState(false);
@@ -85,6 +86,19 @@ export function GuestReviewer({ token }: { token: string }) {
   }, [session, versionId]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  // B4: drawings are part of the notes, so a guest sees them on every link, view-only included.
+  const [drawings, setDrawings] = useState<{ versionId: string; items: DrawnAnnotation[] } | null>(null);
+  useEffect(() => {
+    if (!session || !versionId) return;
+    let live = true;
+    void listGuestAnnotations(session.projectId, versionId, session.accessKey).then((result) => {
+      if (!live || !result.ok) return;
+      setDrawings({ versionId, items: result.data.map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: item.end_time_ms, noteId: item.review_comment_id })) });
+    });
+    return () => { live = false; };
+  }, [session, versionId, notes]);
+  const annotations = drawings && drawings.versionId === versionId ? drawings.items : NO_ANNOTATIONS;
 
   // The player source is a signed URL for this guest and this cut, fetched per cut.
   useEffect(() => {
@@ -193,7 +207,7 @@ export function GuestReviewer({ token }: { token: string }) {
                 sources={sources}
                 title={version.title}
                 notes={notes}
-                annotations={NO_ANNOTATIONS}
+                annotations={annotations}
                 pending={null}
                 canDraw={false}
                 onTime={setPositionMs}
@@ -219,13 +233,14 @@ export function GuestReviewer({ token }: { token: string }) {
           </header>
 
           <div className="gr-feed">
-            {notes.length === 0 && <p className="gr-muted">No notes yet. Add the first one below.</p>}
+            {notes.length === 0 && <p className="gr-muted">{canComment ? "No notes yet. Add the first one below." : "No notes yet."}</p>}
             {notes.map((note) => (
               <Note
                 key={note.id}
                 note={note}
                 session={session}
                 versionId={versionId}
+                canComment={canComment}
                 onSeek={(ms) => player.current?.seek(ms)}
                 onChanged={refresh}
                 onError={setError}
@@ -233,6 +248,9 @@ export function GuestReviewer({ token }: { token: string }) {
             ))}
           </div>
 
+          {versionId && !canComment && (
+            <p className="gr-readonly-note" data-testid="guest-view-only">This link is view-only, so you can watch and read notes but not add or reply to them.</p>
+          )}
           {versionId && canComment && (
             <Composer
               session={session}
@@ -414,7 +432,9 @@ function Identify({ token, onIdentified }: { token: string; onIdentified: (sessi
   );
 }
 
-function Note({ note, session, versionId, onSeek, onChanged, onError, depth = 0 }: {
+function Note({ note, session, versionId, canComment, onSeek, onChanged, onError, depth = 0 }: {
+  /** B4: reply and react only when the link grants comments; counts still show read-only. */
+  canComment: boolean;
   note: ReviewNote; session: GuestSession; versionId: string | null; onSeek: (ms: number) => void;
   onChanged: () => Promise<void>; onError: (message: string) => void; depth?: number;
 }) {
@@ -494,21 +514,26 @@ function Note({ note, session, versionId, onSeek, onChanged, onError, depth = 0 
       <div className="gr-note-actions">
         {REACTIONS.map((emoji) => {
           const count = note.reactions.find((reaction) => reaction.emoji === emoji)?.count ?? 0;
+          if (!canComment && count === 0) return null;
           return (
             <button
               key={emoji}
               type="button"
               disabled={busy}
-              aria-label={`React ${emoji}`}
-              onClick={() => void run(() => setGuestReaction(session.projectId, versionId, session.accessKey, note.id, emoji))}
+              aria-disabled={!canComment || undefined}
+              className={canComment ? undefined : "is-readonly"}
+              aria-label={canComment ? `React ${emoji}` : `${count} ${emoji}`}
+              onClick={() => canComment && void run(() => setGuestReaction(session.projectId, versionId, session.accessKey, note.id, emoji))}
             >
               {emoji}{count > 0 && <b>{count}</b>}
             </button>
           );
         })}
-        <button type="button" onClick={() => setReplying(!replying)} aria-expanded={replying}>
-          <CornerDownRight size={12} />Reply
-        </button>
+        {canComment && (
+          <button type="button" onClick={() => setReplying(!replying)} aria-expanded={replying}>
+            <CornerDownRight size={12} />Reply
+          </button>
+        )}
         {mine && !editing && (
           <>
             <button type="button" onClick={() => setEditing(true)}>Edit</button>
@@ -535,10 +560,10 @@ function Note({ note, session, versionId, onSeek, onChanged, onError, depth = 0 
             />
           </>
         )}
-        {!note.reactions.length && <SmilePlus size={12} className="gr-hint" aria-hidden />}
+        {canComment && !note.reactions.length && <SmilePlus size={12} className="gr-hint" aria-hidden />}
       </div>
 
-      {replying && (
+      {canComment && replying && (
         <Composer
           session={session}
           versionId={versionId}
@@ -551,7 +576,7 @@ function Note({ note, session, versionId, onSeek, onChanged, onError, depth = 0 
       )}
 
       {note.replies.map((reply) => (
-        <Note key={reply.id} note={reply} session={session} versionId={versionId} onSeek={onSeek} onChanged={onChanged} onError={onError} depth={depth + 1} />
+        <Note key={reply.id} note={reply} session={session} versionId={versionId} canComment={canComment} onSeek={onSeek} onChanged={onChanged} onError={onError} depth={depth + 1} />
       ))}
     </article>
   );
