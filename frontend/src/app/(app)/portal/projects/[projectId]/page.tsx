@@ -7,6 +7,7 @@ import { formatBytes } from "@/lib/client-uploads";
 import { CUT_STATE_LABEL, PHASE_HINT, accentStyle, dayDate, dueLabel, splitTimeline, type TimelineEvent } from "@/lib/portal";
 import { loadWorkspaceContext } from "@/lib/workspace";
 import { PortalBrandBar } from "@/components/portal/brand-bar";
+import { BrandingSync } from "@/components/portal/branding-sync";
 import { ClientUploadPanel } from "@/components/client-uploads/client-upload-panel";
 import { ChatPreview } from "@/components/chat/preview";
 import { DiscussInChatButton } from "@/components/chat/discuss-button";
@@ -53,6 +54,7 @@ export default async function ClientProjectPage({ params }: PageProps<"/portal/p
 
   return <div className="pt-page pt-scope" style={accentStyle(view.branding.brand_color)}>
     <Link className="pt-back" href="/"><ArrowLeft size={14} />Back to your portal</Link>
+    <BrandingSync />
     <PortalBrandBar branding={view.branding} eyebrow={view.project.client_team_name ? `Prepared for ${view.project.client_team_name}` : "Client portal"} />
 
     <section className="pt-hero" aria-labelledby="pt-title">
