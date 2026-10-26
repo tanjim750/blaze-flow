@@ -8,6 +8,7 @@ import { ClientUploadPanel } from "@/components/client-uploads/client-upload-pan
 import { ActivityPanel, CounterStrip, DashboardHeading, EmptyState, InlineProblem, ReviewQueuePanel } from "./parts";
 import { ClientInvoicesPanel } from "./money-panels";
 import { PortalBrandBar } from "@/components/portal/brand-bar";
+import { BrandingSync } from "@/components/portal/branding-sync";
 import { ClientRequestList } from "@/components/portal/request-list";
 import { accentStyle } from "@/lib/portal";
 import "@/components/portal/portal.css";
@@ -26,6 +27,7 @@ function subline(view: ClientView): string {
 export function ClientDashboard({ view, choice }: { view: ClientView; choice: LayoutChoice }) {
   const pending = view.requests?.items.filter((row) => row.status === "pending").length ?? 0;
   return <div className="home-shell role-client pt-scope" style={accentStyle(view.branding?.brand_color)}>
+    <BrandingSync />
     {view.branding && <PortalBrandBar branding={view.branding}>
       <Link className="pt-ghost" href="/portal/chat" style={{ height: 36, padding: "0 12px" }}><MessagesSquare size={14} />Messages</Link>
       {view.requests && <Link className="pt-cta" href="/portal/requests/new"><Plus />Start a new project</Link>}

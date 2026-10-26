@@ -7,6 +7,7 @@ import {
   BRAND_SWATCHES, LOGO_ACCEPT, accentStyle, isHexColor, logoProblem, removeLogo, saveBranding, uploadLogo, type Branding,
 } from "@/lib/portal";
 import { PortalBrandBar } from "./brand-bar";
+import { announceBrandingChange } from "./branding-sync";
 
 /**
  * Settings → Client portal branding. The logo saves as soon as it is picked; colour and
@@ -37,6 +38,7 @@ export function BrandingForm({ workspaceId, initial, canEdit }: { workspaceId: s
     if (!result.ok) { setError(result.error); return; }
     setBranding(result.data);
     router.refresh();
+    announceBrandingChange(workspaceId);
   }
 
   async function dropLogo() {
@@ -46,6 +48,7 @@ export function BrandingForm({ workspaceId, initial, canEdit }: { workspaceId: s
     if (!result.ok) { setError(result.error); return; }
     setBranding(result.data);
     router.refresh();
+    announceBrandingChange(workspaceId);
   }
 
   async function save(event: React.FormEvent) {
@@ -60,6 +63,7 @@ export function BrandingForm({ workspaceId, initial, canEdit }: { workspaceId: s
     setBranding(result.data);
     setSaved(true);
     router.refresh();
+    announceBrandingChange(workspaceId);
   }
 
   return <form className="pt-branding" onSubmit={save}>
@@ -87,7 +91,7 @@ export function BrandingForm({ workspaceId, initial, canEdit }: { workspaceId: s
         <textarea value={welcome} onChange={(event) => setWelcome(event.target.value)} maxLength={280} rows={2} style={{ minHeight: 70 }} disabled={!canEdit} placeholder="Everything for your projects with us, in one place." />
       </label>
       {error && <p className="pt-alert is-error" role="alert"><TriangleAlert />{error}</p>}
-      {saved && !error && <p className="pt-alert is-success" role="status"><CheckCircle2 />Branding saved. Clients see it on their next visit.</p>}
+      {saved && !error && <p className="pt-alert is-success" role="status"><CheckCircle2 />Branding saved. Open portal pages update right away.</p>}
       <div><button className="pt-cta" style={accentStyle(preview.brand_color)} disabled={!canEdit || busy !== null}>{busy === "save" ? "Saving…" : "Save branding"}</button></div>
       {!canEdit && <small style={{ color: "var(--muted)" }}>Only people who manage the workspace can change branding.</small>}
     </div>
