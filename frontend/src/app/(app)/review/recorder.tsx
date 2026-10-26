@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Circle, Mic, MonitorSmartphone, Square, Trash2, Video } from "@/components/icons";
+import { Camera, Mic, MonitorSmartphone, Plus, Square, Trash2, Video } from "@/components/icons";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { RecordedClip } from "./writer";
 
 /**
@@ -134,19 +135,26 @@ export function Recorder({ onClip, disabled }: { onClip: (clip: RecordedClip) =>
     );
   }
 
+  // Idle: one "+" button. Its menu holds the four capture modes, so the composer stays one line.
   return (
-    <div className="rvr">
-      <div className="rvr-modes" role="group" aria-label="Record feedback">
-        {MODES.map(({ mode: value, icon: Icon, label, hint }) => (
-          <button key={value} type="button" disabled={disabled} title={hint} onClick={() => void start(value)}>
-            <Icon />
-            <span>{label}</span>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild disabled={disabled}>
+          <button type="button" className="rvr-attach-btn" aria-label="Attach a recording" title="Attach a voice, screen or camera recording">
+            <Plus aria-hidden="true" />
           </button>
-        ))}
-        <Circle className="rvr-dot" aria-hidden="true" />
-      </div>
-      {error && <p className="form-error">{error}</p>}
-    </div>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side="top" className="rvr-menu">
+          <DropdownMenuLabel>Record feedback</DropdownMenuLabel>
+          {MODES.map(({ mode: value, icon: Icon, label, hint }) => (
+            <DropdownMenuItem key={value} onSelect={() => void start(value)}>
+              <Icon aria-hidden="true" /><span>{label}</span><small>{hint}</small>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {error && <p className="form-error rvr-error">{error}</p>}
+    </>
   );
 }
 

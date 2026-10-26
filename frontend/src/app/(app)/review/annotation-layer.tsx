@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AnnotationElement } from "@/lib/api";
+import { GripVertical } from "@/components/icons";
 import { bounds, handleAt, handles, hitIndex, resize, shapeFrom, textOf, textSize, translate, type Handle, type Pt } from "@/lib/annotation-geometry";
 
 export type LayerTool = "SELECT" | AnnotationElement["element_type"];
@@ -24,7 +25,7 @@ type Drag =
   | { kind: "draw"; tool: LayerAnnotation["elements"][number]["element_type"]; from: Pt; to: Pt; path: Pt[] }
   | { kind: "move"; sel: NonNullable<Selection>; origin: AnnotationElement; from: Pt; to: Pt; moved: boolean }
   | { kind: "resize"; sel: NonNullable<Selection>; origin: AnnotationElement; handle: Handle; to: Pt };
-type TextEdit = { scope: "draft" | string; index: number | null; at: Pt; value: string; color: string; size: number };
+type TextEdit = { scope: "draft" | string; index: number | null; at: Pt; value: string; color: string; size: number; moved?: boolean };
 
 type Props = {
   annotations: LayerAnnotation[];
@@ -53,6 +54,8 @@ export function AnnotationLayer({ annotations, draft, draftOpacity, tool, color,
   /** Saved drawings edited here show their new shape until the refreshed data arrives. */
   const [rawOverrides, setOverrides] = useState<Record<string, AnnotationElement[]>>({});
   const dragRef = useRef<Drag | null>(null);
+  /** Dragging the text box itself while it is being typed into (its grip or its border). */
+  const textDrag = useRef<{ from: Pt; at: Pt; id: number } | null>(null);
   const frame = useRef(0);
   const past = useRef<AnnotationElement[][]>([]);
   const future = useRef<AnnotationElement[][]>([]);
@@ -61,7 +64,7 @@ export function AnnotationLayer({ annotations, draft, draftOpacity, tool, color,
   const emitted = useRef<AnnotationElement[] | null>(null);
   const [prevTool, setPrevTool] = useState(tool);
   // Switching tools drops the selection; a drawing tool can't hold one.
-  if (tool !== prevTool) { setPrevTool(tool); if (tool !== "SELECT") setSelection(null); }
+  if (tool !== prevTool) { setPrevTool(tool); if (tool !== "SELECT" && tool !== "TEXT") setSelection(null); }
 
   useLayoutEffect(() => {
     const el = host.current; if (!el) return;
@@ -184,10 +187,16 @@ export function AnnotationLayer({ annotations, draft, draftOpacity, tool, color,
       return;
     }
     if (tool === "TEXT") {
-      // Clicking existing text with the text tool edits it rather than stacking a new one.
+      // Pressing on existing text with the text tool selects it and drags it; a
+      // double-click edits it. Only empty frame places a new box.
       const hit = pick(p);
       const hitEl = hit ? elementsOf(hit.scope)[hit.index] : null;
-      if (hit && hitEl?.element_type === "TEXT") { editText(hit); return; }
+      if (hit && hitEl?.element_type === "TEXT") {
+        setSelection(hit);
+        dragRef.current = { kind: "move", sel: hit, origin: hitEl, from: p, to: p, moved: false }; setDrag(dragRef.current);
+        return;
+      }
+      setSelection(null);
       setText({ scope: "draft", index: null, at: p, value: "", color, size: 0.045 });
       return;
     }
@@ -243,11 +252,14 @@ export function AnnotationLayer({ annotations, draft, draftOpacity, tool, color,
       if (!value) return;
       const created: AnnotationElement = { element_type: "TEXT", geometry: { x: t.at.x, y: clamp(t.at.y + t.size * 0.4) }, style: { color: t.color, font_size: t.size }, payload: { text: value.slice(0, 280) } };
       commitDraft([...draft, created]);
-      if (tool === "SELECT") setSelection({ scope: "draft", index: draft.length });
+      // Committed text stays selected, so the next press on it drags it.
+      setSelection({ scope: "draft", index: draft.length });
       return;
     }
     const el = elementsOf(t.scope)[t.index]; if (!el) return;
-    replace({ scope: t.scope, index: t.index }, value ? { ...el, style: { ...el.style, color: t.color }, payload: { ...el.payload, text: value.slice(0, 280) } } : null);
+    const geometry = t.moved ? { ...el.geometry, x: t.at.x, y: t.at.y } : el.geometry;
+    replace({ scope: t.scope, index: t.index }, value ? { ...el, geometry, style: { ...el.style, color: t.color }, payload: { ...el.payload, text: value.slice(0, 280) } } : null);
+    setSelection({ scope: t.scope, index: t.index });
   };
 
   // What to paint: committed shapes, with the dragged one swapped for its live position.
@@ -259,6 +271,27 @@ export function AnnotationLayer({ annotations, draft, draftOpacity, tool, color,
   const selectedLive = selection ? live(selection.scope, elementsOf(selection.scope))[selection.index] : null;
   const S = { w: size.w || 1, h: size.h || 1 };
   const armed = Boolean(tool && canDraw);
+  const showSelection = tool === "SELECT" || (tool === "TEXT" && selectedLive?.element_type === "TEXT");
+
+  // Moving the box while typing: the grip (or the dashed border) drags it, the text stays.
+  const onTextGripDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (!text || event.button > 0 || (event.target as Element).closest("textarea")) return;
+    event.preventDefault(); event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    textDrag.current = { from: toNorm(event), at: text.at, id: event.pointerId };
+  };
+  const onTextGripMove = (event: React.PointerEvent<HTMLElement>) => {
+    const d = textDrag.current; if (!d || !text || d.id !== event.pointerId) return;
+    const p = toNorm(event);
+    setText({ ...text, moved: true, at: { x: clamp(d.at.x + p.x - d.from.x), y: clamp(d.at.y + p.y - d.from.y) } });
+  };
+  const onTextGripUp = (event: React.PointerEvent<HTMLElement>) => {
+    if (!textDrag.current) return;
+    textDrag.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    // Typing carries on after a move.
+    event.currentTarget.querySelector("textarea")?.focus();
+  };
 
   return (
     <div ref={host} className={`rvp-layer ${armed ? "is-armed" : ""} ${tool === "SELECT" ? "is-select" : ""}`} data-tool={tool ?? undefined}>
@@ -288,25 +321,33 @@ export function AnnotationLayer({ annotations, draft, draftOpacity, tool, color,
           ))}
           {preview && <ShapePx element={preview} S={S} preview />}
         </g>
-        {selectedLive && tool === "SELECT" && <SelectionBox element={selectedLive} S={S} aspect={aspect} />}
+        {selectedLive && showSelection && <SelectionBox element={selectedLive} S={S} aspect={aspect} />}
       </svg>
       {text && (
-        <input
-          className="rvp-text-input"
-          autoFocus
-          aria-label="Annotation text"
-          placeholder="Type, then Enter"
-          value={text.value}
-          maxLength={280}
-          style={{ left: text.at.x * S.w, top: text.at.y * S.h - text.size * S.h * (text.index === null ? 0.6 : 0.82), color: text.color, fontSize: text.size * S.h }}
-          onChange={(e) => setText({ ...text, value: e.target.value })}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Enter") { e.preventDefault(); finishText(); }
-            if (e.key === "Escape") { e.preventDefault(); finishText(true); }
-          }}
-          onBlur={() => finishText()}
-        />
+        <div
+          className="rvp-text-edit"
+          style={{ left: text.at.x * S.w, top: text.at.y * S.h - text.size * S.h * (text.index === null ? 0.6 : 0.82), maxWidth: Math.max(80, (1 - text.at.x) * S.w - 8) }}
+          onPointerDown={onTextGripDown} onPointerMove={onTextGripMove} onPointerUp={onTextGripUp} onPointerCancel={onTextGripUp}
+        >
+          <span className="rvp-text-grip" role="presentation" title="Drag to move the text" aria-hidden="true"><GripVertical /></span>
+          <textarea
+            className="rvp-text-input"
+            autoFocus
+            rows={1}
+            aria-label="Annotation text"
+            placeholder="Type, then Enter"
+            value={text.value}
+            maxLength={280}
+            style={{ color: text.color, fontSize: text.size * S.h }}
+            onChange={(e) => setText({ ...text, value: e.target.value.replace(/\n/g, " ") })}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              // Enter and Esc both commit what was typed and leave edit mode.
+              if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); finishText(); }
+            }}
+            onBlur={() => { if (!textDrag.current) finishText(); }}
+          />
+        </div>
       )}
     </div>
   );
