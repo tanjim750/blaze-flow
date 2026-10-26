@@ -16,12 +16,12 @@
 /* The tokens also go on `.ui-popover`, whose content is portalled to <body>, outside the shell. */
 .studio-shell,
 .ui-popover {
-  --shell-bg: #141414;
-  --shell-rail: #101010;
-  --shell-low: #141414;
-  --shell-container: #1C1C1C;
-  --shell-high: #242424;
-  --shell-highest: #2A2A2A;
+  --shell-bg: #12151D;
+  --shell-rail: #0E1117;
+  --shell-low: #151922;
+  --shell-container: #1A1E28;
+  --shell-high: #222733;
+  --shell-highest: #262B37;
   --shell-primary: #cabeff;
   --shell-accent: #583be8;
   --shell-on: #e4e1e6;

@@ -1,10 +1,10 @@
 /* Dashboard composition based on the Northstar Creative Stitch reference. */
 .home-shell {
-  --bg: #0A0A0A;
-  --surface: #0A0A0A;
-  --surface-2: #0A0A0A;
-  --border: #262630;
-  --muted: #8b889d;
+  --bg: #12151D;
+  --surface: #1A1E28;
+  --surface-2: #151922;
+  --border: #262B37;
+  --muted: #9AA3B5;
   --primary: #8056ff;
   --primary-2: #b69aff;
   /* Shared tokens where the page defines them, with the same fallbacks tasks.css uses. */
@@ -20,7 +20,7 @@
 .dashboard-heading h1 { margin: 0 0 7px; font-size: 30px; line-height: 1.1; letter-spacing: -.035em; font-weight: 700; }
 .dashboard-heading > div { color: #aba7bd; font-size: 12px; }
 /* C-D2 today strip: one 56px row of inline counters replacing the four stat cards. */
-.today-strip { display: flex; align-items: center; min-height: 56px; padding: 0 6px; background: #0A0A0A; border: 1px solid var(--border); border-radius: 12px; }
+.today-strip { display: flex; align-items: center; min-height: 56px; padding: 0 6px; background: #1A1E28; border: 1px solid var(--border); border-radius: 12px; }
 .today-counter { display: flex; align-items: baseline; gap: 8px; padding: 0 20px; border-left: 1px solid var(--border); }
 .today-counter:first-child { border-left: 0; }
 .today-counter strong { font: 600 20px/1 var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; color: var(--text); }
@@ -35,7 +35,7 @@
 .home-shell .section-heading > p { font-size: 10px; color: #777388; }
 .home-shell .section-heading > a { display: flex; align-items: center; gap: 5px; color: var(--primary-2); font-size: 11px; }
 .home-shell .attention-grid { gap: 16px; }
-.home-shell .attention-card { padding: 18px 18px 14px; border-radius: 12px; background: #0A0A0A; }
+.home-shell .attention-card { padding: 18px 18px 14px; border-radius: 12px; background: #1A1E28; }
 .home-shell .attention-card:before { content: none; }
 .attention-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .attention-meta > small { font-size: 9px; color: var(--muted); text-align: right; }
@@ -52,11 +52,11 @@
 .attention-card footer > span { display: flex; align-items: center; gap: 5px; color: #9a94ad; font: 9px var(--font-geist-mono), monospace; }
 .home-shell .attention-card footer a { padding: 5px 8px; background: #1b1922; border: 1px solid #302a3d; border-radius: 7px; font-size: 9px; white-space: nowrap; }
 .home-shell .dashboard-columns { margin-top: 24px; grid-template-columns: 1.4fr 1fr; gap: 22px; }
-.home-shell .panel { border-radius: 12px; background: #0A0A0A; }
+.home-shell .panel { border-radius: 12px; background: #1A1E28; }
 .home-shell .panel-title { padding: 16px 17px; gap: 8px; }
 .home-shell .panel-title small { font: 9px var(--font-geist-mono), monospace; color: var(--muted); white-space: nowrap; font-weight: 400; }
 .home-shell .panel-title h2 small { font-family: inherit; font-size: 10px; }
-.task-tabs { display: flex; padding: 3px; background: #0A0A0A; border: 1px solid #262626; border-radius: 6px; }
+.task-tabs { display: flex; padding: 3px; background: #151922; border: 1px solid #262B37; border-radius: 6px; }
 .task-tabs button { border: 0; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: var(--muted); background: transparent; cursor: pointer; }
 .task-tabs .selected { color: #f7f5fb; background: #24212d; }
 .task-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
@@ -77,7 +77,7 @@
 /* C-D4: the whole row is the link; 64x36 poster, title, version + stage pill, project, age. */
 .home-shell .review-row { grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; padding: 10px; gap: 12px; border: 1px solid transparent; border-bottom: 0; border-radius: 9px; }
 .home-shell .review-row:hover { background: var(--surface-2); border-color: var(--border); filter: none; }
-.review-thumbnail { position: relative; display: grid; place-items: center; width: 64px; height: 36px; border-radius: 5px; overflow: hidden; background: #0A0A0A; box-shadow: inset 0 0 0 1px #ffffff14; }
+.review-thumbnail { position: relative; display: grid; place-items: center; width: 64px; height: 36px; border-radius: 5px; overflow: hidden; background: #151922; box-shadow: inset 0 0 0 1px #ffffff14; }
 /* Letterboxed: the whole frame shows, a 9:16 story sits pillarboxed on black. */
 .review-thumbnail img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
 .review-description { min-width: 0; }
@@ -88,7 +88,7 @@
 .home-shell .review-row .home-badge { font-size: 10px; padding: 2px 6px; }
 .review-row time { font: 11px var(--font-geist-mono), monospace; color: var(--hs-subtle); white-space: nowrap; align-self: start; }
 .home-project-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-.home-project-card { padding: 17px; background: #0A0A0A; border: 1px solid var(--border); border-radius: 12px; }
+.home-project-card { padding: 17px; background: #1A1E28; border: 1px solid var(--border); border-radius: 12px; }
 .home-project-meta { display: flex; align-items: center; justify-content: space-between; gap: 5px; }
 .home-project-meta .home-badge { font-size: 8px; text-transform: uppercase; }
 .home-project-meta > span:last-child { font: 9px var(--font-geist-mono), monospace; color: var(--muted); }
@@ -162,13 +162,13 @@ a.activity-row:hover p { color: var(--text); }
 }
 
 /* No poster yet (or it failed to load): a neutral plate in the same 16:9 slot. */
-.review-plate { color: var(--hs-subtle); background: #0A0A0A; }
+.review-plate { color: var(--hs-subtle); background: #151922; }
 /* C-D5 empty states: a title, one line, and at most one action. */
 .home-empty-state { display: grid; justify-items: center; gap: 6px; padding: 28px 16px; text-align: center; color: var(--muted); }
 .home-empty-state > svg { color: var(--hs-subtle); }
 .home-empty-state strong { color: var(--text); font-size: 13px; font-weight: 600; }
 .home-empty-state p { margin: 0; font-size: 12px; color: var(--muted); max-width: 34ch; }
-.home-empty-state.is-panel { background: #0A0A0A; border: 1px solid var(--border); border-radius: 12px; }
+.home-empty-state.is-panel { background: #1A1E28; border: 1px solid var(--border); border-radius: 12px; }
 .home-empty-state.is-error strong { color: var(--hs-danger); }
 .home-empty-action { margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; font-size: 12px; font-weight: 550; color: var(--primary-2); background: transparent; border: 1px solid var(--border); border-radius: 7px; cursor: pointer; }
 .home-empty-action:hover { background: var(--surface-2); }
@@ -176,7 +176,7 @@ a.activity-row:hover p { color: var(--text); }
 .home-empty-action.is-danger { color: var(--hs-danger); }
 .home-inline-problem { display: flex; align-items: center; gap: 6px; margin: 4px 4px 8px; padding: 8px 10px; font-size: 12px; color: #f0d9a1; background: #2c2412; border: 1px solid #5a4719; border-radius: 8px; }
 /* Error state: the page could not load, so it shows no numbers at all. */
-.home-error { display: grid; justify-items: center; gap: 8px; max-width: 520px; margin: 40px auto 0; padding: 36px 28px; text-align: center; background: #0A0A0A; border: 1px solid var(--border); border-radius: 12px; }
+.home-error { display: grid; justify-items: center; gap: 8px; max-width: 520px; margin: 40px auto 0; padding: 36px 28px; text-align: center; background: #1A1E28; border: 1px solid var(--border); border-radius: 12px; }
 .home-error > svg { color: var(--hs-danger); }
 .home-error h2 { margin: 4px 0 0; font-size: 18px; font-weight: 600; }
 .home-error p { margin: 0; font-size: 13px; color: var(--muted); }
@@ -209,7 +209,7 @@ a.activity-row:hover p { color: var(--text); }
 
 /* Project health */
 .health-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 0 16px 6px; }
-.health-counts > div { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px; background: #0A0A0A; border: 1px solid var(--border); border-radius: 9px; }
+.health-counts > div { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px; background: #151922; border: 1px solid var(--border); border-radius: 9px; }
 .health-counts strong { font: 600 20px/1 var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; }
 .health-counts span { font-size: 11px; color: var(--muted); }
 .health-counts .is-zero strong, .health-counts .is-zero span { color: var(--hs-subtle); }
@@ -292,7 +292,7 @@ a.activity-row:hover p { color: var(--text); }
 
 /* Billing demo panels (components/dashboards/money-panels.tsx). */
 .money-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-.money-strip-card { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: #0A0A0A; color: inherit; text-decoration: none; }
+.money-strip-card { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: #1A1E28; color: inherit; text-decoration: none; }
 .money-strip-card:hover { border-color: #3a3846; }
 .money-strip-card span { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 12px; }
 .money-strip-card strong { font: 600 22px var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; }
@@ -308,7 +308,7 @@ a.activity-row:hover p { color: var(--text); }
 .earnings-track { height: 6px; margin: 12px 16px 4px; border-radius: 99px; background: #24232c; overflow: hidden; }
 .earnings-track i { display: block; height: 100%; background: linear-gradient(90deg, var(--bf-violet-600), var(--bf-violet-400)); }
 .earnings-lines, .client-invoice-list { display: grid; margin: 0; padding: 4px 16px 12px; list-style: none; }
-.earnings-lines li, .client-invoice-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid #262626; color: inherit; text-decoration: none; }
+.earnings-lines li, .client-invoice-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid #262B37; color: inherit; text-decoration: none; }
 .earnings-lines li > div, .client-invoice-row > div:first-child { display: grid; flex: 1; min-width: 0; }
 .earnings-lines small, .client-invoice-row small { color: var(--muted-foreground); font-size: 11px; }
 .earnings-lines b, .client-invoice-amount b { font: 600 13px var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; }
