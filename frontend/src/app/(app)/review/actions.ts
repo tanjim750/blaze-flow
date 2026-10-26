@@ -25,8 +25,9 @@ export async function addPointAnnotationAction(workspaceId: string, projectId: s
  * along with the note.
  */
 /** `untilMs` is how long the drawing stays on screen: `atMs` itself for one frame, later to hold it. */
-export async function addAnnotationAction(workspaceId: string, projectId: string, versionId: string, element: Omit<AnnotationElement, "id">, atMs: number | null, reviewCommentId?: string, untilMs: number | null = null): Promise<ActionState> {
-  const result = await createAnnotation(workspaceId, projectId, versionId, { ...startTimeField(atMs), ...endTimeField(atMs, untilMs), ...(reviewCommentId ? { review_comment_id: reviewCommentId } : {}), elements: [element] });
+export async function addAnnotationAction(workspaceId: string, projectId: string, versionId: string, element: Omit<AnnotationElement, "id"> | Omit<AnnotationElement, "id">[], atMs: number | null, reviewCommentId?: string, untilMs: number | null = null): Promise<ActionState> {
+  const elements = (Array.isArray(element) ? element : [element]).slice(0, 50).map(({ element_type, geometry, style, payload }) => ({ element_type, geometry, style, payload }));
+  const result = await createAnnotation(workspaceId, projectId, versionId, { ...startTimeField(atMs), ...endTimeField(atMs, untilMs), ...(reviewCommentId ? { review_comment_id: reviewCommentId } : {}), elements });
   if (!result.ok) return { error: result.error.detail }; revalidatePath("/review"); return ok;
 }
 

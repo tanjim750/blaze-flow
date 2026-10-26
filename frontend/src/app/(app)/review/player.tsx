@@ -4,12 +4,14 @@ import { AnnotationBoundary } from "@/components/review/annotation-boundary";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from "react";
 import {
   AudioLines, ChevronFirst, ChevronLast, Circle, Crosshair, Download, ExternalLink, FileText, Film, Gauge, ImageOff, Loader2, Maximize2, MonitorPlay,
-  MoveUpRight, Pause, PencilLine, Play, Repeat, RotateCw, Square, Trash2, Type, Volume2, VolumeX, X,
+  Move, MoveUpRight, Pause, PencilLine, Play, Redo2, Repeat, RotateCw, Square, Trash2, Type, Undo2, Volume2, VolumeX, X,
 } from "@/components/icons";
 import { toast } from "sonner";
 import type { AnnotationElement } from "@/lib/api";
 import type { ReviewNote } from "@/lib/review-notes";
 import { timecode } from "@/lib/timecode";
+import { PALETTE } from "@/lib/annotation-geometry";
+import { AnnotationLayer, type LayerTool } from "./annotation-layer";
 import { displayWindow, holdLabel, rangeLabel, windowOpacity } from "@/lib/annotation-window";
 import { dragRange, leavesLoop, loopSeek, moveHandle, rangeOut, type LoopRange, type MarkRange } from "@/lib/review-range";
 import type { ReviewSurface } from "@/lib/open-in-review";
@@ -20,7 +22,7 @@ import {
   positionFromPointer, sameSpans, seekLanded, type BufferedSpan,
 } from "./player-state";
 
-export type DrawTool = "POINT" | "RECTANGLE" | "ELLIPSE" | "ARROW" | "PATH" | "TEXT";
+export type DrawTool = LayerTool;
 const QUALITY_KEY = "bf.review.quality";
 
 export type PlayerHandle = {
@@ -36,9 +38,12 @@ export type DrawnAnnotation = {
   endMs?: number | null;
   /** The note the drawing belongs to, so clicking it can bring that note into view. */
   noteId?: string | null;
+  /** The viewer drew it, so they may move, resize, retype or delete it in place. */
+  editable?: boolean;
 };
 
 const TOOLS: { tool: DrawTool; icon: typeof Crosshair; label: string }[] = [
+  { tool: "SELECT", icon: Move, label: "Select" },
   { tool: "POINT", icon: Crosshair, label: "Point" },
   { tool: "RECTANGLE", icon: Square, label: "Rectangle" },
   { tool: "ELLIPSE", icon: Circle, label: "Ellipse" },
@@ -64,13 +69,16 @@ type Props = {
   notes: ReviewNote[];
   annotations: DrawnAnnotation[];
   /** Held in the composer until the note is posted, so a drawing arrives with its comment. */
-  pending: AnnotationElement | null;
+  pending: AnnotationElement[] | null;
   /** The span the pending drawing will cover once posted, previewed on the timeline. */
   pendingWindow?: { startMs: number; endMs: number } | null;
   canDraw: boolean;
   onTime: (ms: number) => void;
   onMeta: (meta: { durationMs: number; width: number; height: number }) => void;
-  onDraw: (element: AnnotationElement) => void;
+  /** The whole drawing being composed, replaced on every edit (null once emptied). */
+  onDraw: (elements: AnnotationElement[] | null) => void;
+  /** Saves an edit (move, resize, retype, recolour) to one of the viewer's posted drawings. */
+  onEditAnnotation?: (annotationId: string, elements: AnnotationElement[]) => void;
   onDeleteAnnotation: (annotationId: string) => void;
   onFocusNote: (noteId: string) => void;
   /** The composer's in/out points, drawn on the timeline with draggable handles. */
@@ -131,7 +139,7 @@ function DocumentViewer({ sources, title, surface, downloadHref }: Props & { sur
   );
 }
 
-function MediaPlayer({ handle, sources, title, notes, annotations, pending, pendingWindow = null, canDraw, onTime, onMeta, onDraw, onDeleteAnnotation, onFocusNote, surface, mark = null, onMark, loop = null, onStopLoop, highlight = null, aiMarkers = [], onAiMarker }: Props & { surface: "video" | "audio" | "image" }) {
+function MediaPlayer({ handle, sources, title, notes, annotations, pending, pendingWindow = null, canDraw, onTime, onMeta, onDraw, onEditAnnotation, onDeleteAnnotation, onFocusNote, surface, mark = null, onMark, loop = null, onStopLoop, highlight = null, aiMarkers = [], onAiMarker }: Props & { surface: "video" | "audio" | "image" }) {
   const still = surface === "image";
   const image = useRef<HTMLImageElement>(null);
   const [imageFailed, setImageFailed] = useState(false);
@@ -175,10 +183,11 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
     if (still && image.current?.complete) imageLoaded();
   }, [still, imageLoaded]);
   const [tool, setTool] = useState<DrawTool | null>(null);
-  const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
+  const [color, setColor] = useState<string>(PALETTE[0]);
+  const layer = useRef<{ undo: () => void; redo: () => void; recolor: (color: string) => void } | null>(null);
+  const [layerState, setLayerState] = useState({ canUndo: false, canRedo: false, selectedColor: null as string | null });
   const toolRef = useRef<DrawTool | null>(null);
   useEffect(() => { toolRef.current = tool; }, [tool]);
-  const [path, setPath] = useState<{ x: number; y: number }[]>([]);
   const fps = useRef(DEFAULT_FPS);
   // A seek requested before the metadata arrived, applied as soon as it does.
   const queuedSeek = useRef<number | null>(null);
@@ -420,7 +429,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
       // Escape puts the pen down: an armed tool otherwise stays over the frame, swallowing
       // clicks, until another shape is drawn.
       if (event.key === "Escape" && toolRef.current) {
-        setTool(null); setDrawStart(null); setPath([]);
+        setTool(null);
         return;
       }
       if (playerShouldIgnoreKey(event)) return;
@@ -605,37 +614,25 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
         )}
 
         <AnnotationBoundary>
-        <svg className="rvp-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden={visible.length === 0 && !aiRegion}>
-          <defs>
-            <marker id="rvp-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffcf5a" />
-            </marker>
-          </defs>
-          {timedAnnotations.map((annotation) => (
-            <g
-              key={annotation.id}
-              className={`rvp-drawing ${annotation.opacity > 0 ? "is-shown" : ""}`}
-              style={{ opacity: annotation.opacity }}
-              data-annotation={annotation.id}
-              data-note={annotation.noteId ?? undefined}
-            >
-              {annotation.elements.map((element, index) => (
-                <Shape
-                  key={index}
-                  element={element}
-                  onActivate={() => {
-                    if (annotation.startMs !== null) seek(annotation.startMs);
-                    if (annotation.noteId) onFocusNote(annotation.noteId);
-                  }}
-                />
-              ))}
-            </g>
-          ))}
-          {pending && (
-            <g className="rvp-pending" data-shown={pendingOpacity > 0 ? "true" : "false"} style={{ opacity: pendingOpacity }}>
-              <Shape element={pending} onActivate={() => undefined} />
-            </g>
-          )}
+        <AnnotationLayer
+          annotations={timedAnnotations}
+          draft={pending ?? []}
+          draftOpacity={pendingOpacity}
+          tool={canDraw ? tool : null}
+          color={color}
+          canDraw={canDraw}
+          onDraft={(elements) => onDraw(elements.length ? elements : null)}
+          onEditSaved={onEditAnnotation}
+          onDeleteSaved={onDeleteAnnotation}
+          onActivate={(annotation) => {
+            const item = timedAnnotations.find((entry) => entry.id === annotation.id);
+            if (item && item.startMs !== null) seek(item.startMs);
+            if (annotation.noteId) onFocusNote(annotation.noteId);
+          }}
+          onState={(next) => setLayerState((current) => current.canUndo === next.canUndo && current.canRedo === next.canRedo && current.selectedColor === next.selectedColor ? current : next)}
+          commands={layer}
+        />
+        <svg className="rvp-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden={!aiRegion}>
           {aiRegion && (
             <rect
               className="aiqa-highlight" data-testid="ai-qa-highlight" data-shown={aiOpacity > 0 ? "true" : "false"}
@@ -647,33 +644,6 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
           )}
         </svg>
 
-        {tool && canDraw && (
-          <div
-            className="rvp-draw"
-            role="application"
-            aria-label={`Draw ${tool.toLowerCase()} on the frame`}
-            onPointerDown={(event) => { const point = at(event); setDrawStart(point); setPath([point]); }}
-            onPointerMove={(event) => {
-              if (!drawStart || tool !== "PATH" || !event.buttons) return;
-              // Read the point now: React clears event.currentTarget once the handler returns,
-              // so measuring inside the state updater threw and took the whole page down.
-              const point = at(event);
-              setPath((points) => [...points, point]);
-            }}
-            onPointerUp={(event) => {
-              if (!drawStart) return;
-              const end = at(event);
-              const geometry = geometryFor(tool, drawStart, end, path);
-              setDrawStart(null);
-              setPath([]);
-              if (!geometry) return;
-              const text = tool === "TEXT" ? window.prompt("Annotation text")?.trim() : "";
-              if (tool === "TEXT" && !text) return;
-              onDraw({ element_type: tool, geometry, style: { color: "#ffcf5a", stroke_width: 2 }, payload: text ? { text } : {} });
-              setTool(null);
-            }}
-          />
-        )}
         </AnnotationBoundary>
 
         {still && imageFailed && (
@@ -836,8 +806,8 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
                 type="button"
                 className={tool === value ? "is-active" : ""}
                 aria-pressed={tool === value}
-                aria-label={`Draw ${label.toLowerCase()}`}
-                title={`${label} annotation`}
+                aria-label={value === "SELECT" ? "Select and move drawings" : `Draw ${label.toLowerCase()}`}
+                title={value === "SELECT" ? "Select, move and resize" : `${label} annotation`}
                 onClick={() => {
                   // A drawing belongs to one frame, so arming a tool stops playback there.
                   if (tool !== value) video.current?.pause();
@@ -847,6 +817,21 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
                 <Icon />
               </button>
             ))}
+            <span className="rvp-tools-sep" aria-hidden="true" />
+            <div className="rvp-palette" role="radiogroup" aria-label="Drawing colour">
+              {PALETTE.map((swatch) => {
+                const active = (layerState.selectedColor ?? color).toLowerCase() === swatch;
+                return (
+                  <button key={swatch} type="button" role="radio" aria-checked={active} aria-label={`Colour ${swatch}`} className={active ? "is-active" : ""}
+                    onClick={() => { setColor(swatch); layer.current?.recolor(swatch); }}>
+                    <i style={{ background: swatch }} />
+                  </button>
+                );
+              })}
+            </div>
+            <span className="rvp-tools-sep" aria-hidden="true" />
+            <button type="button" aria-label="Undo drawing" title="Undo (⌘Z)" disabled={!layerState.canUndo} onClick={() => layer.current?.undo()}><Undo2 /></button>
+            <button type="button" aria-label="Redo drawing" title="Redo (⇧⌘Z)" disabled={!layerState.canRedo} onClick={() => layer.current?.redo()}><Redo2 /></button>
           </div>
         )}
 
@@ -861,7 +846,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
           {visible.map((annotation, index) => (
             <li key={annotation.id}>
               <button type="button" onClick={() => { if (annotation.startMs !== null) seek(annotation.startMs); if (annotation.noteId) onFocusNote(annotation.noteId); }}>
-                #{index + 1} {annotation.elements[0]?.element_type.toLowerCase()}
+                #{index + 1} {annotation.elements.length > 1 ? `${annotation.elements.length} shapes` : annotation.elements[0]?.element_type.toLowerCase()}
                 {annotation.window && <span> · {annotation.window.frameOnly ? timecode(annotation.window.startMs) : rangeLabel(annotation.window.startMs, annotation.window.endMs)} ({holdLabel(annotation.window)})</span>}
               </button>
               <button type="button" onClick={() => onDeleteAnnotation(annotation.id)} aria-label="Delete annotation"><Trash2 /></button>
@@ -874,37 +859,3 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
   );
 }
 
-function at(event: React.PointerEvent<HTMLElement>) {
-  const bounds = event.currentTarget.getBoundingClientRect();
-  return {
-    x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
-    y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)),
-  };
-}
-
-function geometryFor(tool: DrawTool, start: { x: number; y: number }, end: { x: number; y: number }, path: { x: number; y: number }[]): Record<string, unknown> | null {
-  if (tool === "POINT" || tool === "TEXT") return end;
-  if (tool === "ARROW") return { start, end };
-  if (tool === "PATH") return path.length > 1 ? { points: [...path, end].slice(0, 500) } : null;
-  const x = Math.min(start.x, end.x), y = Math.min(start.y, end.y);
-  const width = Math.abs(end.x - start.x), height = Math.abs(end.y - start.y);
-  return width > 0.005 && height > 0.005 ? { x, y, width, height } : null;
-}
-
-/** Renders one annotation element in the 0–100 overlay space. Never touches the video. */
-function Shape({ element, onActivate }: { element: AnnotationElement; onActivate: () => void }) {
-  const g = element.geometry;
-  const color = String(element.style.color ?? "#ffcf5a");
-  const common = { fill: "none", stroke: color, strokeWidth: Number(element.style.stroke_width ?? 2), vectorEffect: "non-scaling-stroke" as const };
-  let shape: React.ReactNode = null;
-  if (element.element_type === "POINT") shape = <circle cx={Number(g.x) * 100} cy={Number(g.y) * 100} r="1.5" {...common} fill="#121216" />;
-  if (element.element_type === "RECTANGLE") shape = <rect x={Number(g.x) * 100} y={Number(g.y) * 100} width={Number(g.width) * 100} height={Number(g.height) * 100} {...common} />;
-  if (element.element_type === "ELLIPSE") shape = <ellipse cx={(Number(g.x) + Number(g.width) / 2) * 100} cy={(Number(g.y) + Number(g.height) / 2) * 100} rx={Number(g.width) * 50} ry={Number(g.height) * 50} {...common} />;
-  if (element.element_type === "ARROW") {
-    const start = g.start as Record<string, number>, end = g.end as Record<string, number>;
-    shape = <line x1={start.x * 100} y1={start.y * 100} x2={end.x * 100} y2={end.y * 100} markerEnd="url(#rvp-arrow)" {...common} />;
-  }
-  if (element.element_type === "PATH") shape = <polyline points={(g.points as { x: number; y: number }[]).map((point) => `${point.x * 100},${point.y * 100}`).join(" ")} {...common} />;
-  if (element.element_type === "TEXT") shape = <text x={Number(g.x) * 100} y={Number(g.y) * 100} fill={color} stroke="none" fontSize="4">{String(element.payload.text ?? "")}</text>;
-  return <g className="rvp-shape" onClick={onActivate}>{shape}</g>;
-}

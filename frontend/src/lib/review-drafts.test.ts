@@ -13,10 +13,16 @@ describe("review drafts", () => {
 
   it("merges the drawing and the text without either clobbering the other", () => {
     patchDraft("v2", { text: "Here" });
-    patchDraft("v2", { annotation: { element_type: "POINT", geometry: { x: 0.1, y: 0.2 }, style: {}, payload: {} } });
+    patchDraft("v2", { annotation: [{ element_type: "POINT", geometry: { x: 0.1, y: 0.2 }, style: {}, payload: {} }] });
     const draft = loadDraft("v2");
     expect(draft?.text).toBe("Here");
-    expect(draft?.annotation?.element_type).toBe("POINT");
+    expect(draft?.annotation?.[0].element_type).toBe("POINT");
+  });
+
+  it("reads a draft saved before drawings held several shapes", () => {
+    window.localStorage.setItem("bf.review.draft.v1.old", JSON.stringify({ text: "", annotation: { element_type: "ELLIPSE", geometry: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 }, style: {}, payload: {} }, savedAt: "2026-01-01" }));
+    expect(loadDraft("old")?.annotation).toHaveLength(1);
+    expect(loadDraft("old")?.annotation?.[0].element_type).toBe("ELLIPSE");
   });
 
   it("drops the entry once nothing is left to keep", () => {

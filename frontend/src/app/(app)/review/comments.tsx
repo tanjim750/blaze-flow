@@ -34,7 +34,7 @@ type Props = {
   notes: ReviewNote[];
   positionMs: number;
   focusedId: string | null;
-  pendingAnnotation: AnnotationElement | null;
+  pendingAnnotation: AnnotationElement[] | null;
   /** Where the playhead was when the pending drawing was made; the note is pinned there. */
   drawnAtMs?: number | null;
   onClearAnnotation: () => void;
@@ -65,7 +65,7 @@ type Props = {
   /** Seeks to a range note and plays it on repeat until Esc. */
   onPlayRange?: (startMs: number, endMs: number) => void;
   /** Puts a drawing back on the frame when an optimistic post fails. */
-  onRestoreAnnotation?: (annotation: AnnotationElement) => void;
+  onRestoreAnnotation?: (annotation: AnnotationElement[]) => void;
 };
 
 /** What a note row needs beyond the note itself; shared by the feed and the compare feeds. */
@@ -748,12 +748,12 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\
 function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWriteTeam, onCancelReply, pendingAnnotation, drawnAtMs = null, onClearAnnotation, hold, onHold, durationMs, onChange: report, timed = true, mark = null, onMark, onPlayRange, onRestoreAnnotation }: {
   timed?: boolean; view: ReviewView; writer: ReviewWriter; positionMs: number; replyTo: ReviewNote | null;
   onReplyTo: (note: ReviewNote) => void; notes: ReviewNote[]; canWriteTeam: boolean;
-  onCancelReply: () => void; pendingAnnotation: AnnotationElement | null; drawnAtMs?: number | null; onClearAnnotation: () => void;
+  onCancelReply: () => void; pendingAnnotation: AnnotationElement[] | null; drawnAtMs?: number | null; onClearAnnotation: () => void;
   hold: HoldChoice; onHold: (choice: HoldChoice) => void; durationMs: number;
   onChange: (state: ComposerState) => void;
   mark?: MarkRange | null; onMark?: (range: MarkRange | null) => void;
   onPlayRange?: (startMs: number, endMs: number) => void;
-  onRestoreAnnotation?: (annotation: AnnotationElement) => void;
+  onRestoreAnnotation?: (annotation: AnnotationElement[]) => void;
 }) {
   const mediaId = view.version?.id ?? null;
   const [text, setText] = useState("");
@@ -916,7 +916,7 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
 
       {pendingAnnotation && (
         <div className="rvc-chip">
-          <span>Drawing attached · {pendingAnnotation.element_type.toLowerCase()}</span>
+          <span>Drawing attached · {pendingAnnotation.length === 1 ? pendingAnnotation[0].element_type.toLowerCase() : `${pendingAnnotation.length} shapes`}</span>
           <button type="button" onClick={onClearAnnotation} aria-label="Remove drawing"><X size={12} /></button>
         </div>
       )}

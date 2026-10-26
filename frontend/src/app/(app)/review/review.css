@@ -1120,3 +1120,38 @@
   .rvp-transport > .rvp-tools button { flex: 0 0 auto; width: 44px; height: 28px; border-radius: 6px; scroll-snap-align: start; }
   .rvc-composer { position: sticky; bottom: 0; z-index: 4; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
 }
+
+/* ── Drawing layer: real-pixel SVG over the frame, editable in place ───────────────────── */
+.rvp-layer { position: absolute; inset: 0; z-index: 5; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+.rvp-layer-svg { position: absolute; inset: 0; display: block; overflow: visible; shape-rendering: geometricPrecision; text-rendering: geometricPrecision; }
+.rvp-layer.is-armed { pointer-events: auto; cursor: crosshair; background: #ffcf5a08; }
+.rvp-layer.is-armed .rvp-layer-svg { pointer-events: all; }
+.rvp-layer.is-select { cursor: default; background: transparent; }
+.rvp-layer[data-tool="TEXT"] { cursor: text; }
+.rvp-layer:not(.is-armed) .rvp-drawing.is-shown .rvp-shape { pointer-events: visiblePainted; cursor: pointer; }
+.rvp-layer .rvp-shape { transition: filter .12s ease; }
+.rvp-layer .rvp-shape.is-hover, .rvp-layer:not(.is-armed) .rvp-shape:hover { filter: drop-shadow(0 0 4px #8b6cffcc); cursor: move; }
+.rvp-layer:not(.is-armed) .rvp-shape:hover { cursor: pointer; }
+.rvp-layer .rvp-shape.is-preview { opacity: .85; }
+.rvp-layer .rvp-text { font-family: inherit; letter-spacing: .01em; }
+.rvp-selection > rect:first-child { fill: #8b6cff14; stroke: #a78bff; stroke-width: 1; stroke-dasharray: 4 3; }
+.rvp-selection .rvp-grip { fill: #12151d; stroke: #a78bff; stroke-width: 1.5; }
+.rvp-text-input {
+  position: absolute; z-index: 6; min-width: 120px; max-width: 80%; padding: 0 4px; margin: 0;
+  border: 1px dashed #a78bff; border-radius: 4px; background: #12151dcc; font-weight: 600; line-height: 1.15;
+  outline: none; box-shadow: 0 0 0 3px #8b6cff33; pointer-events: auto;
+}
+.rvp-text-input::placeholder { color: #ffffff66; font-weight: 400; }
+.rvp-tools-sep { width: 1px; align-self: stretch; background: var(--rv-line); flex: 0 0 1px; }
+.rvp-palette { display: flex; align-items: center; }
+.rvp-tools .rvp-palette button { width: 24px; display: grid; place-items: center; }
+.rvp-palette i { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1px #0006; transition: transform .12s ease, box-shadow .12s ease; }
+.rvp-palette button:hover i { transform: scale(1.15); }
+.rvp-palette button.is-active { background: transparent; }
+.rvp-palette button.is-active i { box-shadow: 0 0 0 2px #12151d, 0 0 0 3.5px #a78bff; }
+.rvp-tools button:disabled { opacity: .35; cursor: default; }
+@media (max-width: 640px) {
+  .rvp-transport > .rvp-tools .rvp-palette button { width: 30px; }
+  .rvp-selection .rvp-grip { stroke-width: 2; }
+}
+@media (prefers-reduced-motion: reduce) { .rvp-layer .rvp-shape, .rvp-palette i { transition: none; } }
