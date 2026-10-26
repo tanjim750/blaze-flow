@@ -7,7 +7,7 @@ import { useAppRouter } from "@/lib/app-router";/**
  */
 import Link from "next/link";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { FilePlus2, ReceiptText, Wallet } from "@/components/icons";
 import { formatMoney, fromMinor, parseMoneyInput, sumMoney, toMinor } from "@/lib/money";
@@ -22,6 +22,17 @@ export function ProjectPricing({ workspaceId, projectId }: { workspaceId: string
   const [fee, setFee] = useState("");
   const [feeError, setFeeError] = useState("");
   const [busy, setBusy] = useState(false);
+  const feeRef = useRef<HTMLInputElement>(null);
+  const invoicesRef = useRef<HTMLElement>(null);
+
+  // `?focus=fee` / `?focus=invoices` (the "New invoice" dialog links here) lands on that part.
+  const loaded = data !== null;
+  useEffect(() => {
+    if (!loaded) return;
+    const focus = new URLSearchParams(window.location.search).get("focus");
+    if (focus === "fee") { feeRef.current?.focus(); feeRef.current?.scrollIntoView({ block: "center" }); }
+    if (focus === "invoices") invoicesRef.current?.scrollIntoView({ block: "start" });
+  }, [loaded]);
 
   useEffect(() => {
     let active = true;
@@ -56,7 +67,7 @@ export function ProjectPricing({ workspaceId, projectId }: { workspaceId: string
       <div className="pp-sum">
         <label><span>Project fee</span>
           {data.can_manage
-            ? <span className="pp-input"><i>{data.currency}</i><input inputMode="decimal" min={0} value={fee} placeholder="0.00" aria-label="Project fee" aria-invalid={Boolean(feeError)} aria-describedby={feeError ? "pp-fee-error" : undefined} onChange={(event) => { setFee(event.target.value); if (feeError) setFeeError(""); }} onBlur={() => void saveFee()} onKeyDown={(event) => { if (event.key === "Enter") (event.target as HTMLInputElement).blur(); }} /></span>
+            ? <span className="pp-input"><i>{data.currency}</i><input ref={feeRef} id="pp-fee" inputMode="decimal" min={0} value={fee} placeholder="0.00" aria-label="Project fee" aria-invalid={Boolean(feeError)} aria-describedby={feeError ? "pp-fee-error" : undefined} onChange={(event) => { setFee(event.target.value); if (feeError) setFeeError(""); }} onBlur={() => void saveFee()} onKeyDown={(event) => { if (event.key === "Enter") (event.target as HTMLInputElement).blur(); }} /></span>
             : <strong>{money(data.fee)}</strong>}
           {feeError && <small id="pp-fee-error" className="pp-field-error" role="alert">{feeError}</small>}
         </label>
@@ -69,7 +80,7 @@ export function ProjectPricing({ workspaceId, projectId }: { workspaceId: string
       {priced.length > 0 && <ul className="pp-tasks">{priced.map((task) => <li key={task.id}><span>{task.title}</span><b>{money(task.client_price)}</b></li>)}</ul>}
     </section>
 
-    <section className="pp-card">
+    <section className="pp-card" ref={invoicesRef} id="pp-invoices">
       <header><h2><ReceiptText aria-hidden="true" />Invoices for this project</h2>
         {data.can_manage && (data.draft_invoice && toMinor(data.uninvoiced) <= 0
           ? <Link className="money-button is-primary is-sm" href={`/money/invoices/${data.draft_invoice.id}`}><ReceiptText aria-hidden="true" />Open draft {data.draft_invoice.number} · {money(data.draft_invoice.total)}</Link>

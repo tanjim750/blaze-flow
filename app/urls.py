@@ -2,6 +2,7 @@ from django.urls import path
 from . import ai_qa_views
 from . import note_task_views
 from . import direct_upload_views
+from .client_overview_views import client_team_overview
 
 from .views import (
     asset_file_detail,
@@ -210,6 +211,7 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/invitations/<uuid:invite_id>/resend/', workspace_invitation_resend, name='api-workspace-invitation-resend'),
     path('workspaces/<uuid:workspace_id>/client-teams/', client_team_list_create, name='api-client-teams'),
     path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/', client_team_detail, name='api-client-team-detail'),
+    path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/overview/', client_team_overview, name='api-client-team-overview'),
     path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/members/', client_team_members, name='api-client-team-members'),
     path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/members/<uuid:member_id>/', client_team_member_detail, name='api-client-team-member-detail'),
     path('workspaces/<uuid:workspace_id>/client-teams/<uuid:client_team_id>/workspace-access/', client_team_workspace_access, name='api-client-team-workspace-access'),
