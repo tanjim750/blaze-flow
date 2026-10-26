@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { Check, KeyRound, Loader2, Mail, MailCheck, Save, TriangleAlert } from "@/components/icons";
 import type { NotificationSettings, WhatsAppSettings, WorkspaceProfile } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
@@ -16,10 +16,18 @@ function Feedback({ state }: { state: SettingsState }) {
 
 export function WorkspaceProfileForm({ profile, workspaceName = "" }: { profile: WorkspaceProfile | null; workspaceName?: string }) {
   const [state, action, pending] = useActionState(updateProfileAction, initial);
-  const nameError = state.error === BUSINESS_NAME_REQUIRED;
-  return <form action={action} className="settings-form">
+  const [blank, setBlank] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const nameError = blank || (!dirty && state.error === BUSINESS_NAME_REQUIRED);
+  // noValidate: our inline message replaces the browser's native "Please fill out this field" bubble.
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    const input = event.currentTarget.elements.namedItem("business_name") as HTMLInputElement | null;
+    if (input && !input.value.trim()) { event.preventDefault(); setBlank(true); input.focus(); return; }
+    setBlank(false); setDirty(false);
+  };
+  return <form action={action} onSubmit={onSubmit} noValidate className="settings-form">
     <div className="settings-grid">
-      <label>Business name <small className="settings-required">Required</small><input name="business_name" required maxLength={255} defaultValue={profile?.business_name || workspaceName} aria-invalid={nameError} /></label>
+      <label><span className="settings-label-row">Business name<small className="settings-required">Required</small></span><input name="business_name" required aria-required="true" maxLength={255} defaultValue={profile?.business_name || workspaceName} aria-invalid={nameError} aria-describedby={nameError ? "business-name-error" : undefined} onChange={(e) => { setDirty(true); if (blank && e.currentTarget.value.trim()) setBlank(false); }} />{nameError && <span id="business-name-error" className="settings-field-error" role="alert">{BUSINESS_NAME_REQUIRED}</span>}</label>
       <label>Contact email<input name="email" type="email" defaultValue={profile?.email ?? ""} /></label>
       <label>Phone<input name="phone" defaultValue={profile?.phone ?? ""} /></label>
       <label>Website<input name="website_url" type="url" placeholder="https://" defaultValue={profile?.website_url ?? ""} /></label>
@@ -27,7 +35,7 @@ export function WorkspaceProfileForm({ profile, workspaceName = "" }: { profile:
       <label>Country code<input name="country_code" maxLength={2} placeholder="GB" defaultValue={profile?.country_code ?? ""} /></label>
     </div>
     <label>Description<textarea name="description" rows={4} defaultValue={profile?.description ?? ""} /></label>
-    <Feedback state={state} />
+    {state.error !== BUSINESS_NAME_REQUIRED && <Feedback state={state} />}
     <button className="settings-button" disabled={pending}><Save size={15} />{pending ? "Saving…" : "Save profile"}</button>
   </form>;
 }

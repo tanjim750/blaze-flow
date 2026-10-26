@@ -82,7 +82,10 @@
 .studio-main .settings-card .whatsapp-row button.ui-switch { position: relative; flex: none; min-width: 36px; min-height: 20px; }
 .whatsapp-row .ui-switch::after { content: ""; position: absolute; inset: -12px -4px; }
 
-.settings-required{margin-left:6px;color:var(--shell-outline);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+.settings-label-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.settings-field-error{color:#ff9ba3;font-size:12px;font-weight:500;line-height:1.4}
+.settings-form input[aria-invalid="true"]{border-color:#ff9ba3}
+.settings-required{padding:1px 6px;border:1px solid var(--shell-outline-variant,currentColor);border-radius:999px;line-height:1.5;color:var(--shell-outline);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.04em}
 .settings-form input[aria-invalid="true"]{border-color:#ff9ba3}
 .verification-badge{display:inline-flex;align-items:center;gap:5px;margin-bottom:6px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;line-height:18px}
 .verification-badge.is-verified{color:#7ee2a8;background:rgba(46,160,90,.16);border:1px solid rgba(126,226,168,.35)}
