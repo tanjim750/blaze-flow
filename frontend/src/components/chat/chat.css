@@ -176,3 +176,24 @@
     .ch-shell.is-portal{height:100dvh;min-height:100dvh}
   }
 }
+
+/* Loading skeletons: same boxes as the real layout, navy shimmer, shapes delayed ~150ms. */
+.ch-shell.sk-body{padding:0!important;animation:none}
+.ch-sk .sk{border-radius:8px;background:linear-gradient(90deg,#1A1E28 0%,#222733 50%,#1A1E28 100%);background-size:200% 100%;animation:ch-sk-shimmer 1.4s linear infinite,ch-sk-in 180ms ease-out 150ms both}
+@keyframes ch-sk-shimmer{from{background-position:100% 0}to{background-position:-100% 0}}
+@keyframes ch-sk-in{from{opacity:0}to{opacity:1}}
+.ch-sk-msgs{display:grid;gap:18px;margin-top:auto;padding:14px 12px}
+.ch-sk-msg{display:flex;gap:10px;align-items:flex-start}
+.ch-sk-avatar{flex:none;width:32px;height:32px;border-radius:50%!important}
+.ch-sk-lines{flex:1;display:grid;gap:7px;min-width:0}
+.ch-sk-name{width:110px;height:10px}
+.ch-sk-bubble{height:34px;border-radius:12px!important}
+.ch-sk-msg.is-short .ch-sk-bubble{height:22px}
+.ch-sk-input{display:block;height:40px}
+.ch-sk-section{display:block;width:44%;height:10px;margin:12px 8px 10px}
+.ch-sk-row{display:flex;align-items:center;gap:9px;height:32px;padding:0 10px}
+.ch-sk-hash{flex:none;width:14px;height:14px;border-radius:4px!important}
+.ch-sk-label{height:10px}
+.ch-sk-title{display:block;width:180px;height:16px}
+.ch-ready{animation:ch-sk-in 180ms ease-out both}
+@media (prefers-reduced-motion:reduce){.ch-sk .sk{animation:ch-sk-in 1ms linear 150ms both}.ch-ready{animation:none}}
