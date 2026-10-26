@@ -1,6 +1,6 @@
 /* Soft-black theme tokens (Shade-style, not pure black). One source for every surface
  * that uses the frame primitives: Files, project Files tab, client portal, share modal. */
-:root{--frm-canvas:#0A0A0A;--frm-chrome:#0A0A0A;--frm-card:#0A0A0A;--frm-hover:#181818;--frm-border:#262626;--frm-folder:#262626;--frm-folder-hover:#2E2E2E;--frm-folder-edge:#333333;--frm-text:#FFFFFF;--frm-muted:#9CA3AF;--frm-accent:#8B5CF6;--frm-primary:#7C3AED;--frm-primary-text:#FFFFFF}
+:root{--frm-canvas:#141414;--frm-chrome:#101010;--frm-card:#1C1C1C;--frm-hover:#242424;--frm-border:#2A2A2A;--frm-folder:#2E2E2E;--frm-folder-hover:#363636;--frm-folder-edge:#404040;--frm-text:#FFFFFF;--frm-muted:#9CA3AF;--frm-accent:#8B5CF6;--frm-primary:#7C3AED;--frm-primary-text:#FFFFFF}
 /* Frame-style browsing primitives. Dark palette: bg var(--frm-canvas), surfaces var(--frm-card)–var(--frm-hover). */
 .frm-folder{position:relative;display:block;width:100%;aspect-ratio:3/2;color:var(--frm-folder)}
 .frm-folder-shape{position:absolute;inset:0;width:100%;height:100%;}

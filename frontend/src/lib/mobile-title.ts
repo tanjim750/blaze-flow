@@ -12,8 +12,6 @@ const TITLES: [string, string][] = [
   ["/clients", "Clients"],
   ["/team", "Team & Roles"],
   ["/money", "Money"],
-  ["/render-queue", "Render Queue"],
-  ["/deliverables", "Deliverables"],
   ["/notifications", "Notifications"],
   ["/settings", "Settings"],
   ["/help", "Help"],

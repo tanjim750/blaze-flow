@@ -14,27 +14,27 @@
  * Its names collide with the DS names inside `.fx`, which is why the DS set is namespaced.
  */
 :root, .dark {
-  /* All-black theme: every surface is #0A0A0A; areas are separated by 1px #262626
-   * borders, and #181818 is used only for hover/active feedback. */
+  /* Greyish-black layered theme: canvas #141414, sidebar #101010, cards/panels #1C1C1C,
+   * separated by subtle 1px #2A2A2A borders; #242424 is hover/active feedback. */
   /* ---- Colour: surfaces (DS §2.2) */
-  --bf-canvas: #0A0A0A;
-  --bf-background: #0A0A0A;
-  --bf-field: #0A0A0A;
-  --bf-card: #0A0A0A;
-  --bf-muted: #0A0A0A;
-  --bf-popover: #0A0A0A;
-  --bf-secondary: #0A0A0A;
-  --bf-accent: #181818;
+  --bf-canvas: #141414;
+  --bf-background: #141414;
+  --bf-field: #171717;
+  --bf-card: #1C1C1C;
+  --bf-muted: #1C1C1C;
+  --bf-popover: #1C1C1C;
+  --bf-secondary: #1C1C1C;
+  --bf-accent: #242424;
   --bf-overlay: oklch(0.10 0.005 285 / 72%);
 
   /* ---- Colour: text and lines */
   --bf-foreground: #FFFFFF;
   --bf-muted-foreground: #9CA3AF;
   --bf-subtle-foreground: #9CA3AF;
-  --bf-border: #262626;
-  --bf-border-strong: #262626;
-  --bf-input: #262626;
-  --bf-input-hover: #3a3a3a;
+  --bf-border: #2A2A2A;
+  --bf-border-strong: #333333;
+  --bf-input: #2A2A2A;
+  --bf-input-hover: #3d3d3d;
 
   /* ---- Colour: violet accent (DS §2.3). One primary fill for every primary button. */
   --bf-brand: oklch(0.636 0.209 288.7);
@@ -149,11 +149,11 @@
 
 /* ---- The older app palette (shell, dashboard, review, auth). Same values as before. */
 :root {
-  --bg: #0A0A0A;
-  --surface: #0A0A0A;
-  --surface-2: #0A0A0A;
-  --hover: #181818;
-  --border: #262626;
+  --bg: #141414;
+  --surface: #1C1C1C;
+  --surface-2: #1C1C1C;
+  --hover: #242424;
+  --border: #2A2A2A;
   --text: #FFFFFF;
   --muted: #9CA3AF;
   --primary: #7C3AED;

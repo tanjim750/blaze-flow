@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CommandPalette, openQuickSearch } from "@/components/command-palette";
 import { LinkPending } from "@/components/nav-progress";
 import { usePathname, useSearchParams } from "next/navigation";
-import { BadgeCheck, Clapperboard, Inbox, ReceiptText, CheckCircle2, Clients, ChevronLeft, CircleHelp, Flame, FolderOpen, House, ListVideo, LogOut, Mail, Menu, MessagesSquare, PackageCheck, Search, Settings, SquareKanban, Users, Wallet, X } from "@/components/icons";
+import { BadgeCheck, Inbox, ReceiptText, CheckCircle2, Clients, ChevronLeft, CircleHelp, Flame, FolderOpen, House, LogOut, Mail, Menu, MessagesSquare, Search, Settings, SquareKanban, Users, Wallet, X } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
 import type { ShellUser } from "@/lib/user";
@@ -24,8 +24,8 @@ type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { 
 /** Lucide icons for the role nav (see `lib/role-nav.ts` for who sees which link). */
 const ICONS: Record<NavIcon, typeof House> = {
   home: House, projects: SquareKanban, chat: MessagesSquare, tasks: CheckCircle2, files: FolderOpen,
-  clients: Clients, team: Users, money: Wallet, render: ListVideo, deliverables: PackageCheck,
-  settings: Settings, help: CircleHelp, review: Clapperboard, approvals: BadgeCheck, requests: Inbox,
+  clients: Clients, team: Users, money: Wallet,
+  settings: Settings, help: CircleHelp, approvals: BadgeCheck, requests: Inbox,
   invoices: ReceiptText, upload: Upload, pay: Wallet,
 };
 
