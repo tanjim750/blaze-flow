@@ -412,3 +412,18 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
   .tb-column { scroll-snap-align: start; }
 }
 .tb-column-empty { padding: 10px 12px; line-height: 1.4; overflow-wrap: anywhere; }
+
+/* M9 (390px polish) */
+@media (max-width: 767px) {
+  /* The mobile top bar already mirrors New task (data-mobile-primary): one entry point. */
+  .tb-head .tb-button.is-primary[data-mobile-primary] { display: none; }
+  /* Columns fill the screen height instead of leaving the lower half empty. */
+  .tb-board { align-items: stretch; min-height: calc(100dvh - 260px); }
+  .tb-column { min-height: 100%; }
+  /* Keep Delete a deliberate reach away from the stage list. */
+  .tb-menu [data-variant="destructive"] { margin-top: 8px; }
+}
+/* Number-key shortcuts don't exist on touch screens. */
+@media (hover: none) and (pointer: coarse) {
+  .tb-menu-meta kbd { display: none; }
+}

@@ -1109,3 +1109,14 @@
 .rvc-sort select { min-height: 32px; padding: 0 8px; border: 1px solid var(--border, #333); border-radius: 6px; background: var(--surface, #0A0A0A); color: var(--text, #fff); font: inherit; font-size: 12px; color-scheme: dark; }
 .rvc-more{display:inline-grid;place-items:center;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:inherit;opacity:.7;cursor:pointer}
 .rvc-more:hover,.rvc-more[data-state=open]{opacity:1;background:rgba(255,255,255,.08)}
+
+/* critic #10 (phones): fullscreen rides in the transport row; the annotation tools get their
+ * own full-width, sideways-scrolling 28px segmented row on the muted fill; the comment
+ * composer stays pinned above the home indicator. */
+@media (max-width: 600px) {
+  .rvp-transport { flex-wrap: wrap; row-gap: 8px; }
+  .rvp-transport > .rvp-fullscreen { order: 10; margin-left: auto; }
+  .rvp-transport > .rvp-tools { order: 20; flex: 1 1 100%; margin-left: 0; justify-content: flex-start; padding: 2px; gap: 2px; border-radius: 8px; background: #17171c; overflow-x: auto; scroll-snap-type: x proximity; }
+  .rvp-transport > .rvp-tools button { flex: 0 0 auto; width: 44px; height: 28px; border-radius: 6px; scroll-snap-align: start; }
+  .rvc-composer { position: sticky; bottom: 0; z-index: 4; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+}

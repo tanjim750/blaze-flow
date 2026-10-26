@@ -49,4 +49,14 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(input, { key: "ArrowUp" });
     expect(screen.getAllByRole("option").at(-1)!.getAttribute("aria-selected")).toBe("true");
   });
+  it("hides Recent as soon as one character is typed (M9: no flash back to Recent)", async () => {
+    window.localStorage.setItem("bf-quick-search-recent:w1", JSON.stringify([{ id: "p1", title: "Spring Launch", href: "/projects?campaign=p1", group: "recent" }]));
+    render(<CommandPalette workspace={workspace} />);
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+    const input = await screen.findByRole("combobox", { name: "Quick search" });
+    await screen.findByText("Recent");
+    fireEvent.change(input, { target: { value: "s" } });
+    expect(screen.queryByText("Recent")).toBeNull();
+    expect((input as HTMLInputElement).value).toBe("s");
+  });
 });
