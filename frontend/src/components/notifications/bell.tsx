@@ -29,6 +29,7 @@ export function NotificationBell({ workspaceId }: { workspaceId: string | null }
   // On a phone the bell sits in the top bar, so the popover drops below it instead of opening to the right.
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
     const query = window.matchMedia("(max-width: 768px)");
     const sync = () => setNarrow(query.matches);
     sync();
