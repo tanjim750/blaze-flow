@@ -1108,13 +1108,16 @@ export function RevisionForm({ writer, positionMs, approved = false, asClient = 
   return (
     <form
       className="rvc-revision"
-      onSubmit={async (event) => {
+      onSubmit={(event) => {
         event.preventDefault();
         if (!dirty) return;
-        const sent = asClient
-          ? await writer.decideAsClient("changes_requested", text, positionMs)
-          : await writer.requestChanges(text, positionMs);
-        if (sent) onDone();
+        // R15: confirmed with a toast carrying Undo; nothing is sent until its window passes.
+        const message = text;
+        writer.deferDecision(`Changes requested on ${versionLabel ?? "this version"}`, () => asClient
+          ? writer.decideAsClient("changes_requested", message, positionMs)
+          : writer.requestChanges(message, positionMs));
+        setText("");
+        onDone();
       }}
     >
       <label htmlFor="rv-revision">What needs to change?</label>
