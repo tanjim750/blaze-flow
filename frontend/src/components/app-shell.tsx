@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CommandPalette, openQuickSearch } from "@/components/command-palette";
 import { LinkPending } from "@/components/nav-progress";
 import { usePathname, useSearchParams } from "next/navigation";
+import { PageTransition } from "@/components/page-transition";
 import { BadgeCheck, Inbox, ReceiptText, CheckCircle2, Clients, ChevronLeft, CircleHelp, Flame, FolderOpen, House, LogOut, Mail, Menu, MessagesSquare, Search, Settings, SquareKanban, Users, Wallet, X } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
@@ -216,7 +217,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
       <div className="studio-main">
         {degraded && <ShellReconnect />}
         <UniversalReviewLayout pathname={pathname}>
-          <main key={pathname} className={flush ? "flush studio-page-enter" : "studio-page-enter"}>{children}</main>
+          <PageTransition routeKey={pathname} className={flush ? "flush" : undefined}>{children}</PageTransition>
         </UniversalReviewLayout>
       </div>
     </div>

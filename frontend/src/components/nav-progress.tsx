@@ -55,8 +55,24 @@ export function NavProgress() {
     return () => { document.removeEventListener("click", onClick, true); window.removeEventListener(NAV_START_EVENT, onStart); };
   }, []);
 
-  if (!active) return null;
-  return <div className="nav-progress" role="status" aria-label="Loading page"><i /></div>;
+  // When the navigation lands, the bar runs to the end and fades rather than vanishing
+  // mid-way, which read as the page cutting in. Tracked during render (React's "storing
+  // information from previous renders" pattern) so no effect has to set state.
+  const [finishing, setFinishing] = useState(false);
+  const [lastActive, setLastActive] = useState(active);
+  if (lastActive !== active) {
+    setLastActive(active);
+    setFinishing(lastActive && !active);
+  }
+  useEffect(() => {
+    if (!finishing) return;
+    const timer = window.setTimeout(() => setFinishing(false), 320);
+    return () => window.clearTimeout(timer);
+  }, [active, finishing]);
+
+  if (active) return <div className="nav-progress" role="status" aria-label="Loading page"><i /></div>;
+  if (finishing) return <div className="nav-progress is-done" aria-hidden="true"><i /></div>;
+  return null;
 }
 
 /**
