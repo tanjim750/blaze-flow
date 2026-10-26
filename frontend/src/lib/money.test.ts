@@ -38,6 +38,10 @@ describe("formatMoney", () => {
 });
 
 describe("parseMoneyInput", () => {
+  it("rejects negative amounts with a message", () => {
+    expect(parseMoneyInput("-5")).toEqual({ error: "The amount can't be negative. Enter 0 or more." });
+    expect(parseMoneyInput("£-5.00")).toEqual({ error: "The amount can't be negative. Enter 0 or more." });
+  });
   it("accepts typed amounts and clears on blank", () => {
     expect(parseMoneyInput("£1,250")).toEqual({ amount: "1250.00" });
     expect(parseMoneyInput(" 99.5 ")).toEqual({ amount: "99.50" });

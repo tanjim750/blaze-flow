@@ -48,12 +48,18 @@ export function NewTaskDialog({ open, view, stages, defaultProjectId, defaultSta
   const [project, setProject] = useState(defaultProjectId ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [titleError, setTitleError] = useState("");
   const startable = stages.filter((stage) => stage.kind !== "client_review" && !stage.isDone);
   const projects = view.projects.filter((item) => !client || item.client_team_id === client);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
+    if (!String(data.get("title") ?? "").trim()) {
+      setTitleError("Give the task a title.");
+      (event.currentTarget.elements.namedItem("title") as HTMLInputElement | null)?.focus();
+      return;
+    }
     const chosen = view.projects.find((item) => item.id === project);
     setBusy(true); setError("");
     try {
@@ -69,9 +75,9 @@ export function NewTaskDialog({ open, view, stages, defaultProjectId, defaultSta
 
   return <Dialog open={open} onOpenChange={(next) => { if (!next && !busy) onClose(); }}>
     {open && <DialogContent className="tb-dialog">
-      <form onSubmit={submit} className="tb-form">
+      <form onSubmit={submit} className="tb-form" noValidate>
         <header className="tb-dialog-head"><DialogTitle>New task</DialogTitle><DialogDescription>Add a piece of production work to the board.</DialogDescription><DialogClose /></header>
-        <label className="tb-field is-wide"><span>Title</span><input name="title" required autoFocus maxLength={255} /></label>
+        <label className="tb-field is-wide"><span>Title</span><input name="title" required autoFocus maxLength={255} aria-invalid={Boolean(titleError)} aria-describedby={titleError ? "task-title-error" : undefined} onChange={() => { if (titleError) setTitleError(""); }} />{titleError && <small id="task-title-error" className="tb-field-error" role="alert">{titleError}</small>}</label>
         <label className="tb-field is-wide"><span>Description</span><textarea name="description" rows={3} /></label>
         <label className="tb-field"><span>Client</span><select value={client} onChange={(event) => { setClient(event.target.value); setProject(""); }}><option value="">No client</option>{view.clients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label className="tb-field"><span>Project</span><select value={project} onChange={(event) => { setProject(event.target.value); const match = view.projects.find((item) => item.id === event.target.value); if (match?.client_team_id) setClient(match.client_team_id); }}><option value="">No project</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>

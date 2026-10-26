@@ -15,14 +15,14 @@ export function TeamPanel({ view }: { view: TeamView }) {
   return <div className="team-page">
     {view.notice && <p className="team-notice"><TriangleAlert />{view.notice}</p>}
     <header className="team-heading"><div><p className="eyebrow">Workspace administration</p><h1>Team & Roles</h1><p>Manage who can enter {view.workspaceName} and what they can do.</p></div><div><button onClick={() => setDialog("role")}><BadgePlus />New role</button><button className="primary" onClick={() => setDialog("invite")}><MailPlus />Invite member</button></div></header>
-    <section className="team-stats"><article><Users /><span><strong>{view.members.length}</strong> members</span></article><article><ShieldCheck /><span><strong>{view.roles.filter((role) => role.status === "ACTIVE").length}</strong> active roles</span></article><article><UserRoundCog /><span><strong>{view.members.filter((member) => member.status === "ACTIVE").length}</strong> active access</span></article></section>
+    <section className="team-stats"><article><Users /><span><strong>{view.members.length}</strong> people<small>Everyone with a membership, any status</small></span></article><article><UserRoundCog /><span><strong>{view.members.filter((member) => member.status === "ACTIVE").length}</strong> can sign in<small>Active members; suspended and removed excluded</small></span></article><article><ShieldCheck /><span><strong>{view.roles.filter((role) => role.status === "ACTIVE").length}</strong> roles<small>{view.roles.filter((role) => role.status === "ACTIVE" && !role.is_system).length} custom, the rest built in</small></span></article></section>
     <section className="team-card"><header><h2>Workspace members</h2><span>Role and project scope changes apply immediately.</span></header><div className="member-list">
       {view.members.map((member) => <MemberRow key={member.id} member={member} roles={view.roles} />)}
       {!view.members.length && <p className="team-empty">No memberships are visible.</p>}
     </div></section>
     <PendingInvites invites={view.invites} />
     <ProjectAccessPanel view={view} />
-    <section className="team-card"><header><h2>Roles</h2><span>System roles are protected; custom roles can be tailored through the API.</span></header><div className="role-grid">{view.roles.map((role) => <article key={role.id}><div><ShieldCheck /><strong>{role.name}</strong>{role.is_system && <b>System</b>}</div><p>{role.description || "No description"}</p><small>{role.permissions.length} permissions</small></article>)}</div></section>
+    <section className="team-card"><header><h2>Roles</h2><span>System roles are protected. Use New role to add a custom role with its own permissions.</span></header><div className="role-grid">{view.roles.map((role) => <article key={role.id}><div><ShieldCheck /><strong>{role.name}</strong>{role.is_system && <b>System</b>}</div><p>{role.description || "No description"}</p><small>{role.permissions.length} permissions</small></article>)}</div></section>
     {dialog === "invite" && <InviteDialog roles={view.roles} close={() => setDialog(null)} />}
     {dialog === "role" && <RoleDialog roles={view.roles} close={() => setDialog(null)} />}
   </div>;

@@ -81,3 +81,12 @@
    give it the same 44px target with an invisible hit area instead. */
 .studio-main .settings-card .whatsapp-row button.ui-switch { position: relative; flex: none; min-width: 36px; min-height: 20px; }
 .whatsapp-row .ui-switch::after { content: ""; position: absolute; inset: -12px -4px; }
+
+.settings-required{margin-left:6px;color:var(--shell-outline);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+.settings-form input[aria-invalid="true"]{border-color:#ff9ba3}
+.verification-badge{display:inline-flex;align-items:center;gap:5px;margin-bottom:6px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;line-height:18px}
+.verification-badge.is-verified{color:#7ee2a8;background:rgba(46,160,90,.16);border:1px solid rgba(126,226,168,.35)}
+.verification-badge.is-pending{color:#ffc46b;background:rgba(255,170,60,.12);border:1px solid rgba(255,196,107,.35)}
+.verification-row>div>strong{display:block}
+.verification-email{color:var(--shell-on);overflow-wrap:anywhere}
+.settings-success svg{vertical-align:-2px}

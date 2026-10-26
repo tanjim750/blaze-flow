@@ -27,3 +27,6 @@
 .pp-shell .money-badge.tone-success { color: #7de9bd; background: #183e31; border-color: #2d6550; }
 .pp-shell .money-badge.tone-blue { color: #b7c5ff; background: #242b46; border-color: #3c486e; }
 @media (max-width: 960px) { .pp-shell { grid-template-columns: 1fr; } }
+
+.pp-field-error{display:block;margin-top:4px;color:#ff9ba3;font-size:12px;line-height:1.4;font-weight:500}
+.pp-input:has(input[aria-invalid="true"]){border-color:#ff9ba3}

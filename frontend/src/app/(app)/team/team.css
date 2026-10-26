@@ -19,3 +19,5 @@
 .invite-fresh p, .invite-error { margin: 0; padding: 0 0; }
 .invite-error { padding: 10px 17px; }
 @media(max-width:760px){.invite-row{grid-template-columns:auto 1fr auto auto}.invite-row > div{grid-column:2 / -1}.invite-row .member-status{grid-column:2;grid-row:2;justify-self:start}.invite-row .member-edit{grid-row:2;grid-column:3;min-height:36px;padding:0 6px}.invite-row .member-edit.is-danger{grid-column:4}}
+
+.team-stats small{color:var(--shell-outline);font-size:11px;line-height:1.35}
