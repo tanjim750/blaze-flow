@@ -508,6 +508,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const folderItemCount = (folder: LibraryFolder) => files.filter((file) => file.folderId === folder.id && file.versioning.isLatest).length + folders.filter((item) => item.parentFolderId === folder.id).length;
   const showRelation = !compact && groupBy !== "project";
   const [shareOpen, setShareOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   // The project header's single Share menu opens this panel's share dialog.
   useEffect(() => {
     const open = () => setShareOpen(true);
@@ -658,13 +659,16 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
 
       <section className="fx-main" aria-label="Files" {...osDragProps}>
         {/* One toolbar row: search on the left; filters, view, details and New on the right. */}
-        <header className="fx-toolbar fx-toolbar-one">
+        <header className={`fx-toolbar fx-toolbar-one${searchOpen || query ? " is-search-open" : ""}`}>
           {hasTree && !treeDocked && <button type="button" className="fx-icon-btn" onClick={() => setTreeDrawer(true)} aria-label="Open library panel" aria-expanded={treeDrawer}><PanelLeft /></button>}
-          <label className="fx-search">
+          {/* Phones: search starts as an icon and expands over the whole toolbar row. */}
+          <button type="button" className="fx-icon-btn fx-search-toggle" aria-label="Search files" aria-expanded={searchOpen} onClick={() => { setSearchOpen(true); window.setTimeout(() => searchRef.current?.focus(), 0); }}><Search aria-hidden="true" /></button>
+          <label className={`fx-search${searchOpen ? " is-open" : ""}`}>
             <Search aria-hidden="true" />
             <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this location" aria-label={searchEverywhere ? "Search all folders" : "Search this location"}
-              onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (query) setQuery(""); else event.currentTarget.blur(); } }} />
-            {query && <button type="button" className="fx-icon-btn is-xs" onClick={() => { setQuery(""); searchRef.current?.focus(); }} aria-label="Clear search text"><X /></button>}
+              onBlur={(event) => { if (!event.currentTarget.value && !event.currentTarget.parentElement?.contains(event.relatedTarget as Node)) setSearchOpen(false); }}
+              onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (query) setQuery(""); else { setSearchOpen(false); event.currentTarget.blur(); } } }} />
+            {(query || searchOpen) && <button type="button" className="fx-icon-btn is-xs" onClick={() => { if (query) { setQuery(""); searchRef.current?.focus(); } else setSearchOpen(false); }} aria-label={query ? "Clear search text" : "Close search"}><X /></button>}
           </label>
           {/* The folder trail only appears inside a subfolder; at the root the page header names the project. */}
           {current && <nav className="fx-crumbs" aria-label="Breadcrumb">
@@ -684,7 +688,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
               projectFilter={projectFilter} setProjectFilter={setProjectFilter}
               kindFilter={kindFilter} setKindFilter={setKindFilter}
               stageFilter={stageFilter} setStageFilter={setStageFilter}
-              sort={sort} setSort={setSort} onReset={resetFilters}
+              sort={sort} setSort={setSort} onReset={resetFilters} onRefresh={() => router.refresh()}
               groupBy={groupBy} setGroupBy={setGroupBy} density={density} setDensity={setDensity}
             />
             <div className="fx-segmented fx-view" role="group" aria-label="Layout">
@@ -839,7 +843,7 @@ function SheetFocus({ active, onClose, children }: { active: boolean; onClose: (
 function FilterMenu({
   view, groups, stages, showRelations, activeCount,
   searchEverywhere, setSearchEverywhere, fromClient, setFromClient, clientFilter, setClientFilter, projectFilter, setProjectFilter,
-  kindFilter, setKindFilter, stageFilter, setStageFilter, sort, setSort, onReset,
+  kindFilter, setKindFilter, stageFilter, setStageFilter, sort, setSort, onReset, onRefresh,
   groupBy, setGroupBy, density, setDensity,
 }: {
   view?: FilesView;
@@ -855,6 +859,8 @@ function FilterMenu({
   stageFilter: string; setStageFilter: (value: string) => void;
   sort: "newest" | "name" | "size"; setSort: (value: "newest" | "name" | "size") => void;
   onReset: () => void;
+  /** Refresh lives here too so phones (no View options menu) can reach it. */
+  onRefresh?: () => void;
   groupBy: GroupBy; setGroupBy: (value: GroupBy) => void;
   density: Density; setDensity: (value: Density) => void;
 }) {
@@ -863,6 +869,7 @@ function FilterMenu({
         <header>
           <strong>Filters</strong>
           {activeCount > 0 && <button type="button" onClick={onReset}><RotateCcw />Reset</button>}
+          {onRefresh && <button type="button" className="al-filter-refresh" onClick={onRefresh} aria-label="Refresh files"><RefreshCw />Refresh</button>}
         </header>
 
         <label className="al-filter-switch">

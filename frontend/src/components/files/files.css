@@ -846,3 +846,15 @@
   /* Size lives in Filters → Density on phones. */
   .fx-toolbar-one .fx-view-more { display: none; }
 }
+/* Phone search: an icon that expands over the whole toolbar row (no clipped placeholder). */
+.fx-search-toggle { display: none; }
+.al-filter-refresh { margin-left: auto; }
+@media (max-width: 640px) {
+  .fx-toolbar-one { position: relative; }
+  .fx-toolbar-one .fx-search-toggle { display: grid; }
+  .fx-toolbar-one .fx-search { display: none; }
+  .fx-toolbar-one .fx-toolbar-actions { margin-left: auto; }
+  .fx-toolbar-one.is-search-open .fx-search { position: absolute; inset: 0 12px; z-index: 5; display: flex; align-items: center; max-width: none; background: var(--background); }
+  .fx-toolbar-one.is-search-open .fx-search input { padding-right: 44px; }
+  .fx-toolbar-one.is-search-open .fx-search > .fx-icon-btn { width: 36px; min-height: 36px; height: 36px; }
+}
