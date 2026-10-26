@@ -339,7 +339,6 @@ class Workspace(models.Model):
 
     class Meta:
         db_table = 'workspaces'
-        indexes = [models.Index(fields=['created_by_user'])]
 
 
 class WorkspaceProfile(models.Model):
@@ -397,7 +396,6 @@ class GuestSession(models.Model):
     class Meta:
         db_table = 'guest_sessions'
         indexes = [
-            models.Index(fields=['workspace']),
             models.Index(fields=['workspace', 'email']),
         ]
 
@@ -439,8 +437,6 @@ class File(models.Model):
         db_table = 'files'
         constraints = [models.UniqueConstraint(fields=['storage_backend', 'object_key'], name='files_storage_backend_object_key_uniq')]
         indexes = [
-            models.Index(fields=['workspace']),
-            models.Index(fields=['storage_backend']),
             models.Index(fields=['mime_type']),
             models.Index(fields=['status']),
             models.Index(fields=['deleted_at']),
@@ -506,7 +502,6 @@ class ClientTeam(models.Model):
     class Meta:
         db_table = 'client_teams'
         indexes = [
-            models.Index(fields=['workspace']),
             models.Index(fields=['status']),
         ]
 
@@ -565,11 +560,6 @@ class WorkspaceMembership(models.Model):
                 ),
                 name='workspace_memberships_one_active_owner',
             ),
-        ]
-        indexes = [
-            models.Index(fields=['workspace']),
-            models.Index(fields=['user']),
-            models.Index(fields=['client_team']),
         ]
 
     def clean(self):
@@ -672,9 +662,6 @@ class Project(models.Model):
     class Meta:
         db_table = 'projects'
         indexes = [
-            models.Index(fields=['workspace']),
-            models.Index(fields=['client_team']),
-            models.Index(fields=['created_by_user']),
             models.Index(fields=['status']),
         ]
 
@@ -698,7 +685,6 @@ class ResourceAccess(models.Model):
     class Meta:
         db_table = 'resource_access'
         constraints = [models.UniqueConstraint(fields=['workspace_membership', 'project'], name='resource_access_membership_project_uniq')]
-        indexes = [models.Index(fields=['project'])]
 
     def clean(self):
         if (
@@ -726,7 +712,6 @@ class WorkflowStage(models.Model):
         db_table = 'workflow_stages'
         constraints = [models.UniqueConstraint(fields=['workspace', 'slug'], name='workflow_stages_workspace_slug_uniq')]
         indexes = [
-            models.Index(fields=['workspace']),
             models.Index(fields=['sort_order']),
         ]
 
@@ -746,7 +731,6 @@ class WorkflowStageStatus(models.Model):
         db_table = 'workflow_stage_statuses'
         constraints = [models.UniqueConstraint(fields=['workflow_stage', 'slug'], name='workflow_stage_statuses_stage_slug_uniq')]
         indexes = [
-            models.Index(fields=['workflow_stage']),
             models.Index(fields=['sort_order']),
         ]
 
@@ -769,11 +753,6 @@ class MediaVersion(models.Model):
     class Meta:
         db_table = 'media_versions'
         constraints = [models.UniqueConstraint(fields=['project', 'version_number'], name='media_versions_project_version_number_uniq')]
-        indexes = [
-            models.Index(fields=['project']),
-            models.Index(fields=['original_file']),
-            models.Index(fields=['created_by_user']),
-        ]
 
 
 class MediaVersionStageEntry(models.Model):
@@ -800,9 +779,6 @@ class MediaVersionStageEntry(models.Model):
             )
         ]
         indexes = [
-            models.Index(fields=['media_version']),
-            models.Index(fields=['workflow_stage']),
-            models.Index(fields=['workflow_stage_status']),
             models.Index(fields=['media_version', 'entered_at']),
         ]
 
@@ -867,10 +843,6 @@ class ReviewComment(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=['media_version']),
-            models.Index(fields=['parent_comment']),
-            models.Index(fields=['author_user']),
-            models.Index(fields=['author_guest_session']),
             models.Index(fields=['resolved']),
             models.Index(fields=['deleted_at']),
             models.Index(fields=['media_version', 'visibility'], name='review_comments_visibility_idx'),
@@ -893,8 +865,6 @@ class ReviewCommentContent(models.Model):
     class Meta:
         db_table = 'review_comment_contents'
         indexes = [
-            models.Index(fields=['review_comment']),
-            models.Index(fields=['file']),
             models.Index(fields=['review_comment', 'sort_order']),
             models.Index(fields=['deleted_at']),
         ]
@@ -910,11 +880,6 @@ class ReviewCommentRevision(models.Model):
 
     class Meta:
         db_table = 'review_comment_revisions'
-        indexes = [
-            models.Index(fields=['review_comment']),
-            models.Index(fields=['edited_by_user']),
-            models.Index(fields=['edited_by_guest_session']),
-        ]
 
 
 class ReviewCommentMention(models.Model):
@@ -932,7 +897,6 @@ class ReviewCommentMention(models.Model):
             )
         ]
         indexes = [
-            models.Index(fields=['review_comment']),
             models.Index(fields=['user', 'created_at']),
         ]
 
@@ -968,8 +932,6 @@ class ReviewCommentReaction(models.Model):
         ]
         indexes = [
             models.Index(fields=['review_comment', 'emoji']),
-            models.Index(fields=['reacted_by_user']),
-            models.Index(fields=['reacted_by_guest_session']),
         ]
 
 
@@ -1007,10 +969,6 @@ class Annotation(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=['media_version']),
-            models.Index(fields=['review_comment']),
-            models.Index(fields=['author_user']),
-            models.Index(fields=['author_guest_session']),
             models.Index(fields=['deleted_at']),
         ]
 
@@ -1029,7 +987,6 @@ class AnnotationElement(models.Model):
     class Meta:
         db_table = 'annotation_elements'
         indexes = [
-            models.Index(fields=['annotation']),
             models.Index(fields=['element_type']),
             models.Index(fields=['annotation', 'sort_order']),
         ]
@@ -1045,11 +1002,6 @@ class AnnotationRevision(models.Model):
 
     class Meta:
         db_table = 'annotation_revisions'
-        indexes = [
-            models.Index(fields=['annotation']),
-            models.Index(fields=['edited_by_user']),
-            models.Index(fields=['edited_by_guest_session']),
-        ]
 
 
 class TaskStage(models.Model):
@@ -1110,11 +1062,6 @@ class Task(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=['workspace']),
-            models.Index(fields=['project']),
-            models.Index(fields=['client_team']),
-            models.Index(fields=['task_stage']),
-            models.Index(fields=['created_by_workspace_membership']),
             models.Index(fields=['status']),
             models.Index(fields=['priority']),
             models.Index(fields=['due_at']),
@@ -1154,10 +1101,6 @@ class TaskAssignee(models.Model):
     class Meta:
         db_table = 'task_assignees'
         constraints = [models.UniqueConstraint(fields=['task', 'workspace_membership'], name='task_assignees_task_membership_uniq')]
-        indexes = [
-            models.Index(fields=['task']),
-            models.Index(fields=['workspace_membership']),
-        ]
 
     def clean(self):
         if (
@@ -1180,11 +1123,6 @@ class TaskAttachment(models.Model):
     class Meta:
         db_table = 'task_attachments'
         constraints = [models.UniqueConstraint(fields=['task', 'file'], name='task_attachments_task_file_uniq')]
-        indexes = [
-            models.Index(fields=['task']),
-            models.Index(fields=['file']),
-            models.Index(fields=['attached_by_workspace_membership']),
-        ]
 
     def clean(self):
         if (
@@ -1217,8 +1155,6 @@ class FileVariant(models.Model):
         db_table = 'file_variants'
         constraints = [models.UniqueConstraint(fields=['storage_backend', 'object_key'], name='file_variants_storage_backend_object_key_uniq')]
         indexes = [
-            models.Index(fields=['file']),
-            models.Index(fields=['storage_backend']),
             models.Index(fields=['mime_type']),
             models.Index(fields=['status']),
             models.Index(fields=['deleted_at']),
@@ -1267,11 +1203,6 @@ class ProjectFolder(models.Model):
             ),
         ]
         indexes = [
-            models.Index(fields=['workspace']),
-            models.Index(fields=['client_team']),
-            models.Index(fields=['project']),
-            models.Index(fields=['parent_folder']),
-            models.Index(fields=['created_by_workspace_membership']),
             models.Index(fields=['deleted_at']),
         ]
 
@@ -1352,14 +1283,6 @@ class ProjectFile(models.Model):
             models.UniqueConstraint(fields=['media_asset', 'version_number'], name='project_files_asset_version_uniq'),
         ]
         indexes = [
-            models.Index(fields=['workspace']),
-            models.Index(fields=['media_asset']),
-            models.Index(fields=['client_team']),
-            models.Index(fields=['project']),
-            models.Index(fields=['folder']),
-            models.Index(fields=['file']),
-            models.Index(fields=['task_stage']),
-            models.Index(fields=['added_by_workspace_membership']),
             models.Index(fields=['deleted_at']),
         ]
 
@@ -1409,8 +1332,6 @@ class ClientTeamMember(models.Model):
         db_table = 'client_team_members'
         constraints = [models.UniqueConstraint(fields=['client_team', 'user'], name='client_team_members_team_user_uniq')]
         indexes = [
-            models.Index(fields=['client_team']),
-            models.Index(fields=['user']),
             models.Index(fields=['status']),
         ]
 
@@ -1434,7 +1355,6 @@ class ClientTeamInvite(models.Model):
     class Meta:
         db_table = 'client_team_invites'
         indexes = [
-            models.Index(fields=['client_team']),
             models.Index(fields=['recipient_email']),
             models.Index(fields=['expires_at']),
             models.Index(fields=['revoked_at']),
@@ -1451,11 +1371,6 @@ class ClientTeamInviteAcceptance(models.Model):
     class Meta:
         db_table = 'client_team_invite_acceptances'
         constraints = [models.UniqueConstraint(fields=['invite', 'user'], name='client_team_invite_acceptances_invite_user_uniq')]
-        indexes = [
-            models.Index(fields=['invite']),
-            models.Index(fields=['user']),
-            models.Index(fields=['client_team_member']),
-        ]
 
 
 class GuestInvite(models.Model):
@@ -1473,7 +1388,6 @@ class GuestInvite(models.Model):
     class Meta:
         db_table = 'guest_invites'
         indexes = [
-            models.Index(fields=['project']),
             models.Index(fields=['expires_at']),
             models.Index(fields=['revoked_at']),
         ]
@@ -1506,8 +1420,6 @@ class GuestReviewAccess(models.Model):
         db_table = 'guest_review_access'
         constraints = [models.UniqueConstraint(fields=['guest_session', 'guest_invite'], name='guest_review_access_session_invite_uniq')]
         indexes = [
-            models.Index(fields=['guest_invite']),
-            models.Index(fields=['guest_session']),
             models.Index(fields=['revoked_at']),
         ]
 
@@ -1571,7 +1483,6 @@ class ReviewDecision(models.Model):
         indexes = [
             models.Index(fields=['media_version', 'created_at'], name='review_decisions_media_idx'),
             models.Index(fields=['project', 'created_at'], name='review_decisions_project_idx'),
-            models.Index(fields=['guest_invite'], name='review_decisions_invite_idx'),
         ]
 
 
@@ -1600,8 +1511,6 @@ class AuditLog(models.Model):
         indexes = [
             models.Index(fields=['workspace', 'created_at']),
             models.Index(fields=['entity_type', 'entity_id']),
-            models.Index(fields=['actor_user']),
-            models.Index(fields=['actor_guest_session']),
             models.Index(fields=['action']),
             models.Index(fields=['request_id']),
             models.Index(fields=['project', 'created_at']),
@@ -1698,7 +1607,6 @@ class NotificationDelivery(models.Model):
             )
         ]
         indexes = [
-            models.Index(fields=['notification']),
             models.Index(fields=['status', 'updated_at']),
         ]
 
@@ -1735,7 +1643,7 @@ class WhatsAppContact(models.Model):
 
     class Meta:
         db_table = 'whatsapp_contacts'
-        indexes = [models.Index(fields=['phone_e164']), models.Index(fields=['workspace'])]
+        indexes = [models.Index(fields=['phone_e164'])]
 
     @property
     def can_message(self):
@@ -1777,6 +1685,7 @@ class OutboxEvent(models.Model):
         indexes = [
             models.Index(fields=['status', 'available_at']),
             models.Index(fields=['aggregate_type', 'aggregate_id']),
+            models.Index(fields=['topic', 'aggregate_id'], name='outbox_topic_aggregate_idx'),
             models.Index(fields=['created_at']),
         ]
 
@@ -1813,7 +1722,6 @@ class UserSubscription(models.Model):
             )
         ]
         indexes = [
-            models.Index(fields=['user']),
             models.Index(fields=['provider_subscription_id']),
             models.Index(fields=['user', 'status']),
         ]
@@ -1937,7 +1845,6 @@ class Invoice(models.Model):
         constraints = [models.UniqueConstraint(fields=['workspace', 'number'], name='invoices_workspace_number_uniq')]
         indexes = [
             models.Index(fields=['workspace', 'status']),
-            models.Index(fields=['client_team']),
         ]
 
 
@@ -1997,7 +1904,6 @@ class Payment(models.Model):
         ]
         indexes = [
             models.Index(fields=['workspace', 'direction']),
-            models.Index(fields=['payee_membership']),
         ]
 
 
@@ -2199,7 +2105,7 @@ class ProjectMessageAttachment(models.Model):
 
     class Meta:
         db_table = 'project_message_attachments'
-        indexes = [models.Index(fields=['message']), models.Index(fields=['chat_channel', 'created_at']), models.Index(fields=['project', 'created_at'])]
+        indexes = [models.Index(fields=['chat_channel', 'created_at']), models.Index(fields=['project', 'created_at'])]
 
 
 class ProjectMessageMention(models.Model):
@@ -2498,7 +2404,7 @@ class SupportTicket(models.Model):
     class Meta:
         db_table = 'support_tickets'
         ordering = ('-created_at',)
-        indexes = [models.Index(fields=['status', 'created_at']), models.Index(fields=['user'])]
+        indexes = [models.Index(fields=['status', 'created_at'])]
         # The platform admin gate. Deliberately not is_staff (that only opens Django admin).
         permissions = [('access_platform_admin', 'Can use the Blaze Flow platform admin')]
 
