@@ -23,7 +23,8 @@ export type ReviewDraft = {
   replyToId: string | null;
   visibility: CommentVisibility;
   mentions: { id: string; name: string; email: string }[];
-  annotation: AnnotationElement | null;
+  /** The drawing's shapes. Drafts saved before multi-shape drawings held one element. */
+  annotation: AnnotationElement[] | null;
   /** How long that drawing should stay on screen once posted. */
   hold?: HoldChoice | null;
   savedAt: string;
@@ -38,7 +39,7 @@ export const EMPTY_DRAFT: Omit<ReviewDraft, "savedAt"> = {
 
 /** A draft worth keeping: something the reviewer wrote or drew. Settings alone are not. */
 export function hasContent(draft: Partial<ReviewDraft> | null | undefined): boolean {
-  return Boolean(draft && ((draft.text ?? "").trim() || draft.annotation));
+  return Boolean(draft && ((draft.text ?? "").trim() || (Array.isArray(draft.annotation) ? draft.annotation.length : draft.annotation)));
 }
 
 function storage(): Storage | null {
@@ -57,6 +58,8 @@ export function loadDraft(mediaId: string | null): ReviewDraft | null {
     const raw = store.getItem(draftKey(mediaId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<ReviewDraft>;
+    if (parsed.annotation && !Array.isArray(parsed.annotation)) parsed.annotation = [parsed.annotation as unknown as AnnotationElement];
+    if (Array.isArray(parsed.annotation) && !parsed.annotation.length) parsed.annotation = null;
     if (!hasContent(parsed)) return null;
     return {
       ...EMPTY_DRAFT,

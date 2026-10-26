@@ -243,16 +243,18 @@ describe("Review page QA fixes", () => {
     const onDraw = vi.fn();
     const { container } = mount({ onDraw });
     fireEvent.click(within(container).getByRole("button", { name: /freehand/i }));
-    const layer = container.querySelector<HTMLElement>(".rvp-draw")!;
-    layer.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100, x: 0, y: 0, toJSON: () => ({}) });
+    const host = container.querySelector<HTMLElement>(".rvp-layer.is-armed")!;
+    const layer = host.querySelector("svg")!;
+    host.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100, x: 0, y: 0, toJSON: () => ({}) });
     fireEvent.pointerDown(layer, { clientX: 10, clientY: 10, buttons: 1 });
     fireEvent.pointerMove(layer, { clientX: 20, clientY: 30, buttons: 1 });
     fireEvent.pointerMove(layer, { clientX: 40, clientY: 50, buttons: 1 });
     fireEvent.pointerUp(layer, { clientX: 50, clientY: 60 });
     expect(container.querySelector(".rvp-annotation-error")).toBeNull();
     expect(onDraw).toHaveBeenCalledTimes(1);
-    expect(onDraw.mock.calls[0][0].element_type).toBe("PATH");
-    expect(onDraw.mock.calls[0][0].geometry.points.length).toBeGreaterThan(2);
+    expect(onDraw.mock.calls[0][0]).toHaveLength(1);
+    expect(onDraw.mock.calls[0][0][0].element_type).toBe("PATH");
+    expect(onDraw.mock.calls[0][0][0].geometry.points.length).toBeGreaterThan(2);
   });
 
   it("keeps a failing annotation inside its boundary instead of crashing the page", () => {
@@ -267,13 +269,13 @@ describe("Review page QA fixes", () => {
   it("Escape puts an armed drawing tool down", () => {
     const { container } = mount();
     fireEvent.click(within(container).getByRole("button", { name: /rectangle/i }));
-    expect(container.querySelector(".rvp-draw")).not.toBeNull();
+    expect(container.querySelector(".rvp-layer.is-armed")).not.toBeNull();
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(container.querySelector(".rvp-draw")).toBeNull();
+    expect(container.querySelector(".rvp-layer.is-armed")).toBeNull();
   });
 
   it("hides a pending drawing away from the moment it was drawn at", () => {
-    const { container, media } = mount({ pending: rect, pendingWindow: { startMs: 1000, endMs: 3000 } });
+    const { container, media } = mount({ pending: [rect], pendingWindow: { startMs: 1000, endMs: 3000 } });
     act(() => media.loadMetadata());
     act(() => media.playTo(2));
     expect(container.querySelector("g.rvp-pending")!.getAttribute("data-shown")).toBe("true");

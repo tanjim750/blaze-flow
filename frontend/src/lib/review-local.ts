@@ -176,6 +176,10 @@ export function addLocalAnnotation(mediaId: string, elements: AnnotationElement[
   }));
 }
 
+export function updateLocalAnnotation(mediaId: string, annotationId: string, elements: AnnotationElement[]) {
+  mutate(mediaId, (media) => ({ ...media, annotations: media.annotations.map((item) => item.id === annotationId ? { ...item, elements, revision_count: item.revision_count + 1, updated_at: new Date().toISOString() } : item) }));
+}
+
 export function removeLocalAnnotation(mediaId: string, annotationId: string) {
   mutate(mediaId, (media) => ({ ...media, annotations: media.annotations.filter((item) => item.id !== annotationId) }));
 }

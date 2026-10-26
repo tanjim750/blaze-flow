@@ -9,7 +9,7 @@ import { initialsFrom, type NoteDrawing, type ReviewNote } from "@/lib/review-no
 import { timecode } from "@/lib/timecode";
 import { EMPTY_OVERLAY, applyOverlay, dropEntry, pruneOverlay, type Overlay } from "@/lib/review-optimistic";
 import type { ReviewView } from "@/lib/review-view";
-import { addLocalAnnotation, addLocalNote, editLocalNote, removeLocalAnnotation, removeLocalNote, setLocalAnnotationWindow, setLocalNoteResolved, toggleLocalReaction } from "@/lib/review-local";
+import { addLocalAnnotation, addLocalNote, editLocalNote, removeLocalAnnotation, removeLocalNote, setLocalAnnotationWindow, setLocalNoteResolved, toggleLocalReaction, updateLocalAnnotation } from "@/lib/review-local";
 import { syncedTasksMessage, updateAssetFile } from "@/lib/asset-api-client";
 import {
   addAnnotationAction, deleteAnnotationAction, deleteNoteAction, editNoteAction, postNoteAction, reactToCommentAction, setAnnotationWindowAction,
@@ -39,7 +39,8 @@ export type ComposeInput = {
   mentions: { id: string; name: string }[];
   recording: RecordedClip | null;
   /** Drawn over the frame while composing; saved with the note rather than on the video. */
-  annotation: AnnotationElement | null;
+  /** Every shape in the drawing attached to the note. */
+  annotation: AnnotationElement[] | null;
   /**
    * Where that drawing stops being shown: `startMs` itself for "just this frame", later to
    * hold it on screen. Null leaves it to the player's default hold.
@@ -152,7 +153,7 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
         parentId: input.parentId,
         mentions: input.mentions,
         recording: input.recording ? { url: input.recording.url, mimeType: input.recording.mimeType, kind: input.recording.kind } : null,
-        annotation: input.annotation ? { elements: [input.annotation], endMs: input.annotationEndMs ?? null } : null,
+        annotation: input.annotation?.length ? { elements: input.annotation, endMs: input.annotationEndMs ?? null } : null,
       });
       return Boolean(note);
     }
@@ -181,7 +182,7 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
       // The note exists from here on: a failed recording or drawing is reported, not rolled back.
       try {
         if (input.recording) await attachRecording(commentId, input.recording);
-        if (input.annotation) {
+        if (input.annotation?.length) {
           const drawn = await addAnnotationAction(target.workspaceId, target.projectId, target.versionId, input.annotation, input.startMs, commentId, input.annotationEndMs ?? null);
           if (drawn.error) throw new Error(drawn.error);
         }
@@ -275,9 +276,9 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
   }, [mediaId, run, target]);
 
   const moveAnnotation = useCallback((annotationId: string, elements: AnnotationElement[]) => {
-    if (!target || annotationId.startsWith("local-")) return;
+    if (!target || annotationId.startsWith("local-")) { if (mediaId) updateLocalAnnotation(mediaId, annotationId, elements); return; }
     void run(() => updateAnnotationElementsAction(target.workspaceId, target.projectId, target.versionId, annotationId, elements));
-  }, [run, target]);
+  }, [mediaId, run, target]);
 
   const recolorAnnotation = useCallback((annotationId: string, elements: AnnotationElement[], color: string) => {
     if (!target || annotationId.startsWith("local-")) return;

@@ -77,7 +77,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const [positionMs, setPositionMs] = useState(0);
   const [meta, setMeta] = useState<{ durationMs: number; width: number; height: number } | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(initialCommentId);
-  const [pending, setPending] = useState<AnnotationElement | null>(null);
+  const [pending, setPending] = useState<AnnotationElement[] | null>(null);
   const [shareOpen, setShareOpen] = useState(initialShareOpen);
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
@@ -187,11 +187,11 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     ...view.annotations
       .filter((item) => !item.review_comment_id || existingNoteIds.has(item.review_comment_id))
       .filter((item) => !clientPreview || !item.review_comment_id || !teamNoteIds.has(item.review_comment_id))
-      .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: endOf(item.id, item.end_time_ms), noteId: item.review_comment_id })),
+      .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: endOf(item.id, item.end_time_ms), noteId: item.review_comment_id, editable: Boolean(view.target && view.canComment && userId && item.author_user_id === userId) })),
     ...local.annotations
       .filter((item) => !item.review_comment_id || existingNoteIds.has(item.review_comment_id))
-      .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: item.end_time_ms, noteId: item.review_comment_id })),
-  ], [clientPreview, endOf, existingNoteIds, local.annotations, teamNoteIds, view.annotations]);
+      .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: item.end_time_ms, noteId: item.review_comment_id, editable: true })),
+  ], [clientPreview, endOf, existingNoteIds, local.annotations, teamNoteIds, userId, view.annotations, view.canComment, view.target]);
   // A library file with no review version yet can be published into a project from here.
   const canPublish = Boolean(!view.target && view.publish && view.workspaceId);
   const canWriteTeam = Boolean(view.target && userId && view.members.some((member) => member.id === userId));
@@ -267,9 +267,11 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const clearPending = useCallback(() => setPending(null), []);
   // Where the playhead was when the pending drawing was made.
   const [pendingAt, setPendingAt] = useState<number | null>(null);
-  const drawPending = useCallback((element: AnnotationElement | null) => {
-    setPending(element);
-    setPendingAt(element ? Math.round(player.current?.position() ?? positionMs) : null);
+  const drawPending = useCallback((elements: AnnotationElement[] | null) => {
+    const next = elements?.length ? elements : null;
+    // Further shapes join the drawing at the moment its first shape was made.
+    setPendingAt((at) => (next ? at ?? Math.round(player.current?.position() ?? positionMs) : null));
+    setPending(next);
   }, [positionMs]);
   // The drawing being composed, previewed on the timeline as the span it will cover.
   const pendingWindow = useMemo(() => {
@@ -684,6 +686,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           onAiMarker={(id) => { setPanel("ai"); setAiSelected(aiQa.findings.find((f) => f.id === id) ?? null); }}
           onDraw={drawPending}
           onDeleteAnnotation={writer.eraseAnnotation}
+          onEditAnnotation={writer.moveAnnotation}
           onFocusNote={setFocusedId}
           mark={mark}
           onMark={setMark}

@@ -27,7 +27,7 @@ function Harness({ compose, notes = [] }: { compose: ReviewWriter["compose"]; no
   return (
     <Comments
       view={view} writer={writer} compareWriter={writer} notes={notes} positionMs={2000} focusedId={null}
-      pendingAnnotation={circle} onClearAnnotation={() => {}} hold={hold} onHold={setHold} durationMs={30_000}
+      pendingAnnotation={[circle]} onClearAnnotation={() => {}} hold={hold} onHold={setHold} durationMs={30_000}
       onSeek={() => {}} onCompareSeek={() => {}} canWriteTeam={false} clientPreview={false} hiddenTeamNotes={0}
       onClientPreview={() => {}} onComposerChange={() => {}}
     />
