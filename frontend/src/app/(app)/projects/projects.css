@@ -442,3 +442,7 @@
 .pb-client-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 @media (max-width: 520px) { .pb-client-link { max-width: 150px; } .pb-title-actions { flex-wrap: wrap; flex-shrink: 1; min-width: 0; max-width: 100%; } }
 .ch-preview-head .pt-ghost { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: 4px; }
+
+/* Client link: a quiet text chip beside the title, not a toolbar button. */
+.pb-title .pb-client-link{height:28px;padding:0 8px;border:1px solid transparent;background:none;color:var(--muted,#9aa0ad);font-size:12px;font-weight:500}
+.pb-title .pb-client-link:hover,.pb-title .pb-client-link[data-state=open]{border-color:#262B37;background:#1A1E28;color:var(--text,#e8e9ee)}

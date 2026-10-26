@@ -18,7 +18,7 @@ import { useDoParam } from "@/lib/do-param";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
-import { Archive, ChevronRight, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "@/components/icons";
+import { Archive, Check, ChevronDown, ChevronRight, Plus, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "@/components/icons";
 import type { ProjectFile } from "@/lib/api";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
@@ -508,6 +508,12 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const folderItemCount = (folder: LibraryFolder) => files.filter((file) => file.folderId === folder.id && file.versioning.isLatest).length + folders.filter((item) => item.parentFolderId === folder.id).length;
   const showRelation = !compact && groupBy !== "project";
   const [shareOpen, setShareOpen] = useState(false);
+  // The project header's single Share menu opens this panel's share dialog.
+  useEffect(() => {
+    const open = () => setShareOpen(true);
+    window.addEventListener(FILES_SHARE_EVENT, open);
+    return () => window.removeEventListener(FILES_SHARE_EVENT, open);
+  }, []);
   const shareSingle = selected.size === 1 ? [...selectedFiles, ...selectedFolders][0] : null;
   const shareTitle = shareSingle?.name ?? (selected.size > 1 ? `${selected.size} items` : current?.name ?? rootLabel);
   const shareProjectId = projectId ?? shareSingle?.projectId ?? current?.projectId ?? (projectFilter || null);
@@ -651,33 +657,25 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
       {tree && !treeDocked && treeDrawer && <><button type="button" className="fx-scrim" aria-label="Close library panel" tabIndex={-1} onClick={() => setTreeDrawer(false)} /><SheetFocus active onClose={() => setTreeDrawer(false)}>{tree}</SheetFocus></>}
 
       <section className="fx-main" aria-label="Files" {...osDragProps}>
-        <header className="fx-toolbar">
+        {/* One toolbar row: search on the left; filters, view, details and New on the right. */}
+        <header className="fx-toolbar fx-toolbar-one">
           {hasTree && !treeDocked && <button type="button" className="fx-icon-btn" onClick={() => setTreeDrawer(true)} aria-label="Open library panel" aria-expanded={treeDrawer}><PanelLeft /></button>}
-          <nav className="fx-crumbs" aria-label="Breadcrumb">
-            <ol>
-              <li><button type="button" onClick={() => setFolderId(null)} aria-current={!current ? "page" : undefined}>{rootLabel}</button></li>
-              {crumbs.map((folder) => <li key={folder.id}><ChevronRight aria-hidden="true" /><button type="button" onClick={() => setFolderId(folder.id)} aria-current={folder.id === folderId ? "page" : undefined}>{folder.name}</button></li>)}
-            </ol>
-          </nav>
-          <span className="fx-total" aria-live="polite">{itemTotal} item{itemTotal === 1 ? "" : "s"}</span>
-          <div className="fx-toolbar-actions">
-            <button type="button" className="fx-btn" aria-label="New folder" onClick={() => setDialog("folder")}><FolderPlus aria-hidden="true" /><span>New folder</span></button>
-            <SortedBy sort={sort} setSort={setSort} />
-            <button type="button" className={`fx-btn fx-details-toggle${inspectorVisible ? " is-on" : ""}`} onClick={toggleInspector} aria-pressed={inspectorVisible} aria-label="Details" title="Show details panel (])"><PanelRight aria-hidden="true" /><span>Details</span></button>
-            <button type="button" className="fx-icon-btn" onClick={() => router.refresh()} aria-label="Refresh assets"><RefreshCw /></button>
-            {/* Inside the project page the page header already owns the one primary Upload. */}
-            <button type="button" className={`fx-btn ${compact ? "" : "is-primary"}`} data-mobile-primary="Upload" aria-label="Upload" onClick={() => setDialog("upload")}><Upload aria-hidden="true" /><span>Upload</span></button>
-            <button type="button" className="fx-btn fx-share-btn" aria-label="Share" onClick={() => setShareOpen(true)}><ShareArrow /><span>Share</span></button>
-          </div>
-        </header>
-        <div className="fx-toolbar is-secondary">
           <label className="fx-search">
             <Search aria-hidden="true" />
             <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this location" aria-label={searchEverywhere ? "Search all folders" : "Search this location"}
               onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (query) setQuery(""); else event.currentTarget.blur(); } }} />
             {query && <button type="button" className="fx-icon-btn is-xs" onClick={() => { setQuery(""); searchRef.current?.focus(); }} aria-label="Clear search text"><X /></button>}
           </label>
-          <div className="fx-toolbar-trail">
+          {/* The folder trail only appears inside a subfolder; at the root the page header names the project. */}
+          {current && <nav className="fx-crumbs" aria-label="Breadcrumb">
+            <ol>
+              <li><button type="button" onClick={() => setFolderId(null)}>{rootLabel}</button></li>
+              {crumbs.map((folder) => <li key={folder.id}><ChevronRight aria-hidden="true" /><button type="button" onClick={() => setFolderId(folder.id)} aria-current={folder.id === folderId ? "page" : undefined}>{folder.name}</button></li>)}
+            </ol>
+          </nav>}
+          <span className="fx-total" aria-live="polite">{itemTotal} item{itemTotal === 1 ? "" : "s"}</span>
+          <div className="fx-toolbar-actions">
+            {order.length > 0 && <label className="fx-select-all"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} />Select all visible</label>}
             <FilterMenu
               view={view} groups={filteredProjects} stages={stages} showRelations={!projectId} activeCount={activeFilters}
               searchEverywhere={searchEverywhere} setSearchEverywhere={setSearchEverywhere}
@@ -689,38 +687,30 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
               sort={sort} setSort={setSort} onReset={resetFilters}
               groupBy={groupBy} setGroupBy={setGroupBy} density={density} setDensity={setDensity}
             />
-            {order.length > 0 && <label className="fx-select-all"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} />Select all visible</label>}
-            <div className="fx-segmented" role="group" aria-label="Layout">
-              <button type="button" className={mode === "grid" ? "is-on" : ""} onClick={() => setMode("grid")} aria-label="Grid view" aria-pressed={mode === "grid"}><LayoutGrid /></button>
-              <button type="button" className={mode === "list" ? "is-on" : ""} onClick={() => setMode("list")} aria-label="List view" aria-pressed={mode === "list"}><List /></button>
+            <div className="fx-segmented fx-view" role="group" aria-label="Layout">
+              <button type="button" className={mode === "grid" ? "is-on" : ""} onClick={() => setMode("grid")} aria-label="Grid view" aria-pressed={mode === "grid"} title="Grid view"><LayoutGrid /></button>
+              <button type="button" className={mode === "list" ? "is-on" : ""} onClick={() => setMode("list")} aria-label="List view" aria-pressed={mode === "list"} title="List view"><List /></button>
+              <ToolbarMenu label="View options" className="fx-view-more" trigger={<ChevronDown aria-hidden="true" />}>
+                {(close) => <>
+                  <p className="fx-menu-label">Size</p>
+                  <button type="button" role="menuitemradio" aria-checked={density === "comfortable"} title="Comfortable" onClick={() => { setDensity("comfortable"); close(); }}>{density === "comfortable" ? <Check aria-hidden="true" /> : <i />}Large</button>
+                  <button type="button" role="menuitemradio" aria-checked={density === "compact"} title="Compact" onClick={() => { setDensity("compact"); close(); }}>{density === "compact" ? <Check aria-hidden="true" /> : <i />}Small</button>
+                  <hr />
+                  <button type="button" role="menuitem" onClick={() => { router.refresh(); close(); }}><RefreshCw aria-hidden="true" />Refresh</button>
+                </>}
+              </ToolbarMenu>
             </div>
-            <div className="fx-segmented is-density" role="group" aria-label="Density">
-              <button type="button" className={density === "comfortable" ? "is-on" : ""} onClick={() => setDensity("comfortable")} aria-pressed={density === "comfortable"} title="Comfortable">L</button>
-              <button type="button" className={density === "compact" ? "is-on" : ""} onClick={() => setDensity("compact")} aria-pressed={density === "compact"} title="Compact">S</button>
-            </div>
+            <button type="button" className={`fx-icon-btn fx-details-toggle${inspectorVisible ? " is-on" : ""}`} onClick={toggleInspector} aria-pressed={inspectorVisible} aria-label="Details" title="Details panel (])"><PanelRight aria-hidden="true" /></button>
+            {!compact && <button type="button" className="fx-icon-btn fx-share-btn" aria-label="Share" title="Share" onClick={() => setShareOpen(true)}><ShareArrow /></button>}
+            <ToolbarMenu label="New" className={`fx-new${compact ? "" : " is-primary"}`} trigger={<><Plus aria-hidden="true" /><span>New</span></>}>
+              {(close) => <>
+                <button type="button" role="menuitem" onClick={() => { close(); setDialog("folder"); }}><FolderPlus aria-hidden="true" />New folder<kbd>N</kbd></button>
+                <button type="button" role="menuitem" onClick={() => { close(); setDialog("upload"); }}><Upload aria-hidden="true" />Upload files<kbd>U</kbd></button>
+              </>}
+            </ToolbarMenu>
           </div>
-          <div className="fx-filter-strip" role="toolbar" aria-label="Quick filters">
-            <button type="button" className={fromClient ? "is-on" : ""} aria-pressed={fromClient} onClick={() => setFromClient(!fromClient)}>From client</button>
-            <label className="fx-filter-select">
-              <span className="fx-sr-only">Type</span>
-              <select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as LibraryKind | "")} aria-label="Filter by type">
-                <option value="">All types</option>
-                <option value="video">Video</option>
-                <option value="image">Images</option>
-                <option value="audio">Audio</option>
-                <option value="document">Documents</option>
-                <option value="source">Source files</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-            {!projectId && (view?.clients?.length ?? 0) > 0 && <label className="fx-filter-select">
-              <span className="fx-sr-only">Client</span>
-              <select value={clientFilter} onChange={(event) => { setClientFilter(event.target.value); if (!event.target.value) setProjectFilter(""); setFolderId(null); }} aria-label="Filter by client">
-                <option value="">All clients</option>
-                {(view?.clients ?? []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
-              </select>
-            </label>}
-          </div>
+        </header>
+        <div className="fx-toolbar is-secondary fx-chip-row" hidden={activeChips.length === 0}>
           {activeChips.length > 0 && <ul className="fx-chips" aria-label="Active filters">{activeChips.map((chip) => <li key={chip.key}><span>{chip.label}</span><button type="button" onClick={chip.clear} aria-label={`Remove filter ${chip.label}`}><X /></button></li>)}</ul>}
         </div>
         <SelectionBar
@@ -1308,23 +1298,26 @@ function triggerDownload(url: string, name: string) {
   const link = document.createElement("a"); link.href = url; link.download = name; link.rel = "noopener"; document.body.appendChild(link); link.click(); link.remove();
 }
 
-const SORT_LABEL: Record<"newest" | "name" | "size", string> = { newest: "Date uploaded", name: "Name", size: "File size" };
+/** Fired by the project header's Share menu to open the files share dialog. */
+export const FILES_SHARE_EVENT = "bf:files-share";
 
-/** Frame-style "Sorted by Date uploaded ▾" control; mirrors the Filter menu's sort field. */
-function SortedBy({ sort, setSort }: { sort: "newest" | "name" | "size"; setSort: (value: "newest" | "name" | "size") => void }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button type="button" className="fx-btn is-ghost fx-sorted-by" aria-label={`Sorted by ${SORT_LABEL[sort]}`}>
-          <span className="fx-sorted-by-k">Sorted by</span> <strong>{SORT_LABEL[sort]}</strong><ArrowDown aria-hidden="true" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-        {(Object.keys(SORT_LABEL) as Array<keyof typeof SORT_LABEL>).map((key) => (
-          <DropdownMenuItem key={key} onSelect={() => setSort(key)} aria-checked={sort === key} role="menuitemradio">{SORT_LABEL[key]}{sort === key ? " ✓" : ""}</DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+/**
+ * A small click-to-open menu for the toolbar (New, View options). Hand-rolled like the filter
+ * panel so it stays fast and deterministic under jsdom; closes on outside pointer and Escape.
+ */
+function ToolbarMenu({ label, className = "", trigger, children }: { label: string; className?: string; trigger: React.ReactNode; children: (close: () => void) => React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => { document.removeEventListener("pointerdown", onPointerDown); document.removeEventListener("keydown", onKeyDown); };
+  }, [open]);
+  return <div className={`fx-menu-wrap ${className}`} ref={root}>
+    <button type="button" className="fx-menu-trigger" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} data-state={open ? "open" : "closed"} onClick={() => setOpen(!open)}>{trigger}</button>
+    {open && <div className="fx-menu" role="menu" aria-label={label}>{children(() => setOpen(false))}</div>}
+  </div>;
 }

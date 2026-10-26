@@ -788,3 +788,47 @@
 /* Details panel toggle: closed by default, violet while the panel is open. */
 .fx-btn.fx-details-toggle svg { width: 15px; height: 15px; }
 .fx-btn.fx-details-toggle.is-on { border-color: #7c5cff; background: #7c5cff26; color: #cabeff; }
+
+/* ── One-row toolbar (Frame-style): search left; Filters, view, Details, New right. ── */
+.fx-toolbar-one { gap: 8px; min-height: 52px; }
+.fx-toolbar-one .fx-search { flex: 0 1 220px; min-width: 160px; max-width: 220px; transition: flex-basis 180ms var(--bf-ease-out, ease), max-width 180ms var(--bf-ease-out, ease); }
+.fx-toolbar-one .fx-search:focus-within, .fx-toolbar-one .fx-search:has(input:not(:placeholder-shown)) { flex-basis: 340px; max-width: 340px; }
+.fx-toolbar-one .fx-search input, .fx-toolbar-one .al-filter-trigger, .fx-toolbar-one .fx-icon-btn, .fx-toolbar-one .fx-menu-trigger { height: 36px; }
+.fx-toolbar-one .fx-search input { border-color: var(--border); background: transparent; }
+.fx-toolbar-one .fx-total { padding-left: 2px; color: var(--subtle-foreground); }
+.fx-toolbar-one .fx-toolbar-actions { gap: 6px; }
+.fx-toolbar-one .al-filter-trigger { border-color: transparent; background: none; padding: 0 10px; }
+.fx-toolbar-one .al-filter-trigger:hover, .fx-toolbar-one .al-filter-trigger[data-state=open] { background: var(--accent); }
+.fx-toolbar-one .fx-icon-btn { width: 36px; border-radius: var(--radius-md); }
+.fx-view { align-items: center; height: 36px; padding: 3px; border-color: var(--border); }
+.fx-view > button { width: 28px; height: 28px; }
+.fx-view .fx-menu-trigger { width: 20px; height: 28px; padding: 0; border: 0; background: none; color: var(--muted-foreground); }
+.fx-view .fx-menu-trigger svg { width: 14px; height: 14px; }
+.fx-menu-wrap { position: relative; display: inline-flex; }
+.fx-menu-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: none; color: var(--foreground); font: inherit; font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+.fx-menu-trigger:hover, .fx-menu-trigger[data-state=open] { background: var(--accent); }
+.fx-menu-trigger svg { width: 16px; height: 16px; }
+.fx-new.is-primary .fx-menu-trigger { border-color: transparent; background: #7c5cff; color: #fff; }
+.fx-new.is-primary .fx-menu-trigger:hover { background: #8b6dff; }
+.fx-menu { position: absolute; z-index: 40; top: calc(100% + 6px); right: 0; display: grid; min-width: 190px; padding: 5px; border: 1px solid #262B37; border-radius: 10px; background: #1A1E28; box-shadow: 0 12px 32px rgb(0 0 0 / .45); animation: bf-fade-in 140ms ease-out both; }
+.fx-menu > button { display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 10px; border: 0; border-radius: 7px; background: none; color: var(--foreground); font: inherit; font-size: var(--text-sm); text-align: left; cursor: pointer; }
+.fx-menu > button:hover, .fx-menu > button:focus-visible { background: #222733; outline: none; }
+.fx-menu > button svg { width: 15px; height: 15px; color: var(--muted-foreground); }
+.fx-menu > button[aria-checked=true] { color: #c9b8ff; }
+.fx-menu > button[aria-checked=true] svg { color: #a48bff; }
+.fx-menu > button > i { width: 15px; }
+.fx-menu kbd { margin-left: auto; padding: 1px 6px; border: 1px solid #262B37; border-radius: 5px; color: var(--muted-foreground); font: inherit; font-size: 11px; }
+.fx-menu hr { margin: 4px 2px; border: 0; border-top: 1px solid #262B37; }
+.fx-menu-label { margin: 4px 10px 2px; color: var(--subtle-foreground); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.fx-chip-row[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .fx-menu { animation: none; } .fx-toolbar-one .fx-search { transition: none; } }
+/* Phones: search plus icon buttons only. */
+@media (max-width: 640px) {
+  .fx-toolbar-one { flex-wrap: nowrap; gap: 6px; padding: 8px 12px; }
+  .fx-toolbar-one .fx-search, .fx-toolbar-one .fx-search:focus-within { flex: 1 1 auto; min-width: 0; max-width: none; }
+  .fx-toolbar-one .fx-total, .fx-toolbar-one .fx-crumbs, .fx-toolbar-one .fx-select-all { display: none; }
+  .fx-toolbar-one .al-filter-trigger span, .fx-new .fx-menu-trigger span { display: none; }
+  .fx-toolbar-one .al-filter-trigger, .fx-new .fx-menu-trigger { width: 40px; padding: 0; justify-content: center; }
+  .fx-toolbar-one .fx-search input, .fx-toolbar-one .al-filter-trigger, .fx-toolbar-one .fx-icon-btn, .fx-toolbar-one .fx-menu-trigger, .fx-view { min-height: 40px; height: 40px; }
+  .fx-view > button { width: 32px; height: 32px; }
+}
