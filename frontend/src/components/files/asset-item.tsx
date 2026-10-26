@@ -17,7 +17,7 @@ import type { LibraryFile, LibraryFolder } from "@/lib/asset-library";
 import { isProcessing } from "@/lib/asset-library";
 import { aspectLabel, formatSize, KIND_NAME, runtime, type Density, type ViewMode } from "@/lib/files-panel";
 import { FileName, KindIcon, StagePill, Thumb, type StageLike } from "./files-ui";
-import { HoverMedia, StackedFolder } from "@/components/frame/frame-ui";
+import { HoverMedia } from "@/components/frame/frame-ui";
 import { FolderGlyph } from "@/components/frame/icons";
 
 const shortDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
@@ -151,11 +151,11 @@ export function FileItem({ file, stage, relation, reviewable, common }: {
   );
 }
 
-export function FolderItem({ folder, childFiles, itemCount, relation, common }: {
+export function FolderItem({ folder, itemCount, relation, common }: {
   folder: LibraryFolder; childFiles: LibraryFile[]; itemCount: number; relation: string | null; common: Common;
 }) {
   const label = `${folder.name}, folder, ${itemCount} item${itemCount === 1 ? "" : "s"}`;
-  const withMedia = childFiles.filter((file) => file.preview).slice(0, 3);
+  const tileMeta = `${itemCount} Item${itemCount === 1 ? "" : "s"}${relation ? ` · ${relation}` : ""}`;
   const meta = `${itemCount} item${itemCount === 1 ? "" : "s"}${relation ? ` · ${relation}` : ""}`;
   const name = common.renaming ?? <FileName name={folder.name} max={common.mode === "list" ? 48 : 30} />;
   const openChip = (
@@ -176,16 +176,19 @@ export function FolderItem({ folder, childFiles, itemCount, relation, common }: 
       </Shell>
     );
   }
+  // Frame.io-style folder card: a tab on the top left, a lighter rounded preview panel with a
+  // centred folder glyph, then the name, "N Items" and the menu button underneath.
   return (
     <Shell id={folder.id} common={common} kind="folder" label={label}>
+      <span className="fx-fcard-tab" aria-hidden="true" />
       <Check checked={common.selected} name={folder.name} onToggle={common.onToggle} />
-      <span className="fx-frame is-folder is-stack">
-        <StackedFolder previews={withMedia.map((file) => ({ id: file.id, src: file.preview! }))} />
+      <span className="fx-frame is-folder is-fcard">
+        <span className="fx-fcard-icon" aria-hidden="true"><FolderGlyph /></span>
         {openChip}
       </span>
       <span className="fx-caption">
         <span className="fx-name-line is-folder-name">{name}</span>
-        <small className="fx-meta"><span>{meta}</span></small>
+        <small className="fx-meta"><span>{tileMeta}</span></small>
       </span>
       <span className="fx-tile-actions">{common.menu}</span>
     </Shell>

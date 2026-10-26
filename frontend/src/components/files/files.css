@@ -759,3 +759,30 @@
   .fx-item.is-tile .fx-meta { display: flex; }
   .fx-item.is-tile .fx-meta .fx-feedback { display: none; }
 }
+
+/* =============================================================== folder card (Frame.io reference) */
+.fx .fx-item.is-tile[data-kind=folder] { --fcard: #1A1E28; --fcard-tab: #20242F; --fcard-panel: #2A2F3C; margin-top: 10px; padding: 6px 6px 8px; border: 1px solid var(--bf-border, #262B37); border-radius: 10px; border-top-left-radius: 0; background: var(--fcard); }
+.fx .fx-item.is-tile[data-kind=folder]:hover { --fcard: #222733; --fcard-tab: #272C38; border-color: #323849; background: var(--fcard); }
+.fx .fx-item.is-tile[data-kind=folder].is-selected { border-color: var(--bf-ring, #8B5CF6); }
+.fx-fcard-tab { position: absolute; top: -10px; left: -1px; width: 38%; height: 10px; border: 1px solid var(--bf-border, #262B37); border-bottom: 0; border-radius: 8px 8px 0 0; background: var(--fcard-tab); clip-path: polygon(0 0, 82% 0, 100% 100%, 0 100%); pointer-events: none; }
+.fx .fx-item.is-tile[data-kind=folder]:hover .fx-fcard-tab { border-color: #323849; }
+.fx .fx-item.is-tile .fx-frame.is-folder.is-fcard { display: grid; place-items: center; aspect-ratio: 16 / 9; border: 0; border-radius: 8px; background: var(--fcard-panel); overflow: hidden; }
+.fx-fcard-icon { display: grid; place-items: center; color: #8A92A6; }
+.fx-fcard-icon svg { width: 22px; height: 22px; }
+.fx .fx-item.is-tile[data-kind=folder] .fx-check { top: 12px; left: 12px; width: 20px; height: 20px; border-radius: 5px; background: #3A4152; opacity: 1; }
+.fx .fx-item.is-tile[data-kind=folder] .fx-check input { width: 14px; height: 14px; margin: 0; opacity: 0; cursor: pointer; }
+.fx .fx-item.is-tile[data-kind=folder].is-selected .fx-check { background: var(--bf-primary, #7C3AED); }
+.fx .fx-item.is-tile[data-kind=folder].is-selected .fx-check::after { content: ""; position: absolute; width: 8px; height: 4px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: translateY(-1px) rotate(-45deg); pointer-events: none; }
+.fx .fx-item.is-tile[data-kind=folder] .fx-caption { padding: 8px 4px 0; }
+.fx .fx-item.is-tile[data-kind=folder] .fx-name-line.is-folder-name { color: #FFFFFF; font-weight: 500; }
+.fx .fx-item.is-tile[data-kind=folder] .fx-meta { color: var(--bf-muted-foreground, #9AA3B5); }
+.fx .fx-item.is-tile[data-kind=folder] .fx-tile-actions { align-self: end; padding-top: 0; }
+@media (max-width: 640px) {
+  .fx .fx-item.is-tile[data-kind=folder] .fx-check { top: 8px; left: 8px; width: 32px; height: 32px; background: transparent; }
+  .fx .fx-item.is-tile[data-kind=folder] .fx-check::before { content: ""; position: absolute; width: 20px; height: 20px; border-radius: 5px; background: #3A4152; }
+  .fx .fx-item.is-tile[data-kind=folder].is-selected .fx-check::before { background: var(--bf-primary, #7C3AED); }
+  .fx .fx-item.is-tile[data-kind=folder].is-selected .fx-check::after { z-index: 1; }
+  .fx .fx-item.is-tile[data-kind=folder] .fx-check input { width: 32px; height: 32px; }
+}
+.fx .fx-item.is-tile[data-kind=folder] .fx-menu-trigger { opacity: 1; }
+.fx .fx-item.is-tile[data-kind=folder] .fx-meta, .fx .fx-item.is-tile[data-kind=folder] .fx-meta span { font-family: var(--font-geist-sans), sans-serif; font-size: 12px; }
