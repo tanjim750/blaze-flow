@@ -5,7 +5,7 @@
  * drops, Escape cancels). There is deliberately no touch sensor: on phones a swipe scrolls,
  * and moving is done from the card menu. Every drop calls the board's single `onMove`.
  */
-import { useId, useMemo, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
+import { Fragment, useId, useMemo, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
 import {
   closestCorners, DndContext, DragOverlay, KeyboardSensor, MouseSensor, useDroppable, useSensor, useSensors,
   type Announcements, type DragEndEvent, type DragOverEvent, type DragStartEvent, type UniqueIdentifier,
@@ -44,6 +44,9 @@ export type KanbanProps = {
   canCreate?: boolean;
   canMove?: boolean;
   canDelete?: boolean;
+  /** Last move that was refused (e.g. Client Review without a client): explained inline on the card and column. */
+  blockedHint?: { taskId: string; stageId: string; reason: string } | null;
+  onDismissHint?: () => void;
 };
 
 const EMPTY_COPY: Record<string, string> = {
@@ -183,8 +186,15 @@ function Column({ column, isOver, dropBeforeId, activeId, ...props }: KanbanProp
       {!guarded && props.canCreate !== false && <button type="button" className="tb-icon-button" aria-label={`Add task to ${stage.name}`} onClick={() => props.setQuickAddStage(stage.id)}><Plus aria-hidden="true" /></button>}
     </header>
     <div ref={setNodeRef} className="tb-column-body">
+      {props.blockedHint?.stageId === stage.id && <p className="tb-blocked-hint is-column" role="status" data-no-dnd>
+        <span><strong>Can&apos;t move here.</strong> {props.blockedHint.reason}</span>
+        {props.onDismissHint && <button type="button" className="tb-blocked-hint-close" aria-label="Dismiss" onClick={props.onDismissHint}>×</button>}
+      </p>}
       <SortableContext id={stage.id} items={[...tasks.map((task) => taskKey(task.id)), ...files.map((file) => fileKey(file.id))]} strategy={verticalListSortingStrategy}>
-        {tasks.map((task, position) => <SortableTask key={task.id} task={task} stage={stage} position={position} size={tasks.length} counts={counts} stages={allStages} dropBefore={dropBeforeId === task.id} {...props} />)}
+        {tasks.map((task, position) => <Fragment key={task.id}>
+          <SortableTask task={task} stage={stage} position={position} size={tasks.length} counts={counts} stages={allStages} dropBefore={dropBeforeId === task.id} {...props} />
+          {props.blockedHint?.taskId === task.id && <p className="tb-blocked-hint is-card" data-no-dnd>Needs a client to go to {props.columns.find((item) => item.stage.id === props.blockedHint?.stageId)?.stage.name ?? "the client"}. Open details to add a client or client project.</p>}
+        </Fragment>)}
         {files.map((file) => <SortableFile key={file.id} file={file} stage={stage} stages={allStages} {...props} />)}
       </SortableContext>
       {!shown && <p className={`tb-column-empty ${activeId ? "is-target" : ""}`}>{props.filtersActive ? "No matches" : EMPTY_COPY[stage.kind] ?? "No tasks yet"}</p>}

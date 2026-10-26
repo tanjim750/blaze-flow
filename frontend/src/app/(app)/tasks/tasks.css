@@ -429,3 +429,11 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 @media (hover: none) and (pointer: coarse) {
   .tb-menu-meta kbd { display: none; }
 }
+
+/* Inline explanation for a refused move (e.g. Client Review without a client). */
+.tb-blocked-hint { margin: 0; border: 1px solid color-mix(in oklch, #ff9ba3 55%, transparent); background: color-mix(in oklch, #ff9ba3 10%, transparent); color: #ffc7cc; border-radius: 8px; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.tb-blocked-hint.is-column { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; margin-bottom: 8px; }
+.tb-blocked-hint.is-column > span { flex: 1; min-width: 0; }
+.tb-blocked-hint.is-card { padding: 6px 10px; margin: -2px 0 8px; }
+.tb-blocked-hint-close { flex: none; min-width: 28px; min-height: 28px; margin: -6px -6px -6px 0; border: 0; background: transparent; color: inherit; font-size: 16px; line-height: 1; cursor: pointer; border-radius: 6px; }
+.tb-blocked-hint-close:focus-visible { outline: 2px solid var(--tb-ring); }
