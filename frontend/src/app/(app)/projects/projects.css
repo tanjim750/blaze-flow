@@ -344,7 +344,8 @@
 .pb-tabs button > b.pb-tab-count { font: 700 10.5px var(--font-geist-sans, inherit); min-width: 18px; text-align: center; background: #ff5c7a; color: #fff; padding: 2px 5px; border-radius: 999px; }
 .pb-messages { padding: 4px 0 8px; }
 
-.pb-chat-preview { padding: 0 0 12px; max-width: 720px; }
+.pb-chat-preview { padding: 16px 0 12px; max-width: 720px; }
+.pb-tabs button > b.pb-tab-unread { font: 700 10.5px var(--font-geist-sans, inherit); min-width: 18px; text-align: center; background: #7c5cff; color: #fff; padding: 2px 5px; border-radius: 999px; }
 
 /* R2: plan-limit dialog */
 .ui-dialog-content.pb-limit-dialog { display: grid; gap: var(--bf-space-5); width: min(calc(100% - 32px), 480px); padding: var(--bf-space-6); font-family: var(--bf-font-sans); color: var(--bf-foreground); background: var(--bf-popover); border: 1px solid var(--bf-border-strong); border-radius: var(--bf-radius-xl); box-shadow: var(--bf-elevation-3); }
@@ -440,3 +441,4 @@
 .pb-client-link { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; }
 .pb-client-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 @media (max-width: 520px) { .pb-client-link { max-width: 150px; } .pb-title-actions { flex-wrap: wrap; flex-shrink: 1; min-width: 0; max-width: 100%; } }
+.ch-preview-head .pt-ghost { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: 4px; }

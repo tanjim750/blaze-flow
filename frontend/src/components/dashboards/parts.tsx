@@ -1,25 +1,20 @@
 import Link from "next/link";
 import { ArrowRight, Eye, Film, Layers2, TriangleAlert } from "@/components/icons";
 import type { ReactNode } from "react";
+import { accountTitle } from "@/lib/user";
 import { DashboardPoster } from "@/components/dashboard-poster";
 import type { ActivityItem, ReviewQueueItem } from "@/lib/dashboard-view";
 import { DASHBOARD_LAYOUTS, LAYOUT_LABELS, previewNotice, viewAsHref, type LayoutChoice } from "@/lib/dashboard-role";
 import type { StripItem } from "@/lib/role-dashboard-view";
 
-export function partOfDay(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return "morning";
-  return hour < 18 ? "afternoon" : "evening";
-}
 
-export function DashboardHeading({ workspaceName, today, greetingName, subline, choice }: {
-  workspaceName: string; today: string; greetingName: string; subline: string; choice: LayoutChoice;
+export function DashboardHeading({ greetingName, subline, choice }: {
+  greetingName: string; subline: string; choice: LayoutChoice;
 }) {
   return <>
     <div className="dashboard-heading has-switch">
       <div>
-        <p><span>{workspaceName.toUpperCase()}</span><b>·</b>{today}</p>
-        <h1>Good {partOfDay()}, {greetingName}</h1>
+        <h1>{accountTitle(greetingName)}</h1>
         <div>{subline}</div>
       </div>
       {choice.canSwitch && <ViewAsSwitch choice={choice} />}

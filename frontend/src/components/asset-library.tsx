@@ -192,7 +192,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const [groupBy, setGroupBy] = useStoredChoice<GroupBy>(compact ? "bf.files.group.project" : "bf.files.group", compact ? "type" : "project", GROUPINGS);
   const [collapsed, setCollapsed] = useStoredSet("bf.files.collapsed");
   const [expandedFolders, setExpandedFolders] = useStoredSet("bf.files.tree");
-  const [inspectorPref, setInspectorPref] = useStoredChoice<"open" | "closed">("bf.files.inspector", "open", ["open", "closed"] as const);
+  const [inspectorPref, setInspectorPref] = useStoredChoice<"open" | "closed">("bf.files.inspector.v2", "closed", ["open", "closed"] as const);
   const [treeWidthPref, setTreeWidth] = useStoredNumber("bf.files.treeWidth");
   const [inspectorWidthPref, setInspectorWidth] = useStoredNumber("bf.files.inspectorWidth");
   const [sheetOpen, setSheetOpen] = useState(false); const [treeDrawer, setTreeDrawer] = useState(false);
@@ -485,7 +485,6 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
     const selectMode = event.shiftKey ? "range" : event.metaKey || event.ctrlKey ? "toggle" : "replace";
     if (selectMode === "replace" && !renaming && isTouchClick(event)) { setFocusedId(entity.id); openEntity(entity); return; }
     select(entity.id, selectMode);
-    if (selectMode === "replace" && inspectorDocked && inspectorPref !== "open") setInspectorPref("open");
   };
 
   // Page-level shortcuts: N new folder, U upload, / search, ] details panel.
@@ -664,6 +663,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
           <div className="fx-toolbar-actions">
             <button type="button" className="fx-btn" aria-label="New folder" onClick={() => setDialog("folder")}><FolderPlus aria-hidden="true" /><span>New folder</span></button>
             <SortedBy sort={sort} setSort={setSort} />
+            <button type="button" className={`fx-btn fx-details-toggle${inspectorVisible ? " is-on" : ""}`} onClick={toggleInspector} aria-pressed={inspectorVisible} aria-label="Details" title="Show details panel (])"><PanelRight aria-hidden="true" /><span>Details</span></button>
             <button type="button" className="fx-icon-btn" onClick={() => router.refresh()} aria-label="Refresh assets"><RefreshCw /></button>
             {/* Inside the project page the page header already owns the one primary Upload. */}
             <button type="button" className={`fx-btn ${compact ? "" : "is-primary"}`} data-mobile-primary="Upload" aria-label="Upload" onClick={() => setDialog("upload")}><Upload aria-hidden="true" /><span>Upload</span></button>
@@ -698,7 +698,6 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
               <button type="button" className={density === "comfortable" ? "is-on" : ""} onClick={() => setDensity("comfortable")} aria-pressed={density === "comfortable"} title="Comfortable">L</button>
               <button type="button" className={density === "compact" ? "is-on" : ""} onClick={() => setDensity("compact")} aria-pressed={density === "compact"} title="Compact">S</button>
             </div>
-            <button type="button" className={`fx-icon-btn fx-details-toggle ${inspectorVisible ? "is-on" : ""}`} onClick={toggleInspector} aria-pressed={inspectorVisible} aria-label="Details panel" title="Details panel (])"><PanelRight /></button>
           </div>
           <div className="fx-filter-strip" role="toolbar" aria-label="Quick filters">
             <button type="button" className={fromClient ? "is-on" : ""} aria-pressed={fromClient} onClick={() => setFromClient(!fromClient)}>From client</button>

@@ -36,7 +36,7 @@ export function EditorDashboard({ view, choice }: { view: EditorView; choice: La
   const feedback = view.notes.filter((note) => note.client).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 4);
   const extra = [tasks.later ? `${tasks.later} later` : "", tasks.undated ? `${tasks.undated} undated` : ""].filter(Boolean).join(" · ");
   return <div className="home-shell role-editor">
-    <DashboardHeading workspaceName={view.workspaceName} today={view.today} greetingName={view.greetingName} subline={subline(view)} choice={choice} />
+    <DashboardHeading greetingName={view.greetingName} subline={subline(view)} choice={choice} />
     <CounterStrip items={view.strip} />
 
     <div className="dashboard-columns">

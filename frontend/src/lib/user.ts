@@ -13,6 +13,12 @@ export type ShellUser = { name: string; email: string; initials: string; isPlatf
 export const displayName = (user: NamedUser) =>
   `${user.first_name} ${user.last_name}`.trim() || user.email;
 
+/** The first name, or the email handle when there is none ("sam@x.co" → "sam"). */
+export const accountName = (user: NamedUser) => user.first_name.trim() || user.email.split("@")[0] || user.email;
+
+/** "Shamim" → "Shamim's account"; names ending in s take a bare apostrophe ("James' account"). */
+export const accountTitle = (name: string) => !name ? "Your account" : `${name}${/s$/i.test(name) ? "'" : "'s"} account`;
+
 /** "Ada Lovelace" → "AL"; falls back to the email's first letter. */
 export function initialsFor(user: NamedUser): string {
   const initials = `${user.first_name.charAt(0)}${user.last_name.charAt(0)}`.trim();

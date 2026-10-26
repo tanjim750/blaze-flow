@@ -156,7 +156,7 @@ function PlanLimitDialog({ limit, name, onClose, onRetry }: { limit: PlanLimit; 
     </DialogContent>
   </Dialog>;
 }
-const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log", "Client uploads", "Pricing"] as const;
+const TABS = ["Files", "Tasks", "Chat", "Brief & Specs", "Activity Log", "Client uploads", "Pricing"] as const;
 /** "Client uploads" also answers to `?tab=client-uploads` (what notifications and the feed link to). */
 const tabSlug = (value: string) => value.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
 
@@ -245,11 +245,13 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
               {TABS.filter((value) => value !== "Pricing" || view.canSeeBilling).map((value) => (
                 <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? "selected" : ""} onClick={() => setTab(value)}>
                   {value === "Files" && <FolderOpen size={14} />}
+                  {value === "Chat" && <MessagesSquare size={14} />}
                   {value === "Brief & Specs" && <FileText size={14} />}
                   {value === "Activity Log" && <Activity size={14} />}
                   {value === "Client uploads" && <FolderInput size={14} />}
                   {value === "Pricing" && <Wallet size={14} />}
                   <span>{value}</span>
+                  {value === "Chat" && messagesUnread > 0 && <b className="pb-tab-unread" aria-label={`${messagesUnread} unread`}>{unreadLabel(messagesUnread)}</b>}
                 </button>
               ))}
             </div>
@@ -257,12 +259,11 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
           </div>
         </div>
 
-        {view.selectedCampaign && view.workspaceId && tab === "Files" && (
-          <div className="pb-chat-preview"><ChatPreview workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} /></div>
-        )}
 
         {tab === "Files" && view.selectedCampaign ? (
           <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null} />
+        ) : tab === "Chat" && view.selectedCampaign && view.workspaceId ? (
+          <div className="pb-chat-preview"><ChatPreview workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} /></div>
         ) : tab === "Tasks" && view.selectedCampaign ? (
           <TasksBoard compact view={tasksView} projectId={view.selectedCampaign.id} />
         ) : tab === "Brief & Specs" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (

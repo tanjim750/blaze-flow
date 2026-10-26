@@ -590,8 +590,6 @@
   .fx-filter-strip { display: none !important; }
   .fx-toolbar-trail { margin-left: 0; }
   .fx-total { display: none; }
-  /* On a phone the details open as a bottom sheet when an item is tapped. */
-  .fx-details-toggle { display: none; }
   /* Labels collapse visually but stay the accessible name. */
   .fx-toolbar-actions .fx-btn:not(.is-primary) > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .fx-toolbar-actions .fx-btn:not(.is-primary) { width: 40px; padding: 0; }
@@ -786,3 +784,7 @@
 }
 .fx .fx-item.is-tile[data-kind=folder] .fx-menu-trigger { opacity: 1; }
 .fx .fx-item.is-tile[data-kind=folder] .fx-meta, .fx .fx-item.is-tile[data-kind=folder] .fx-meta span { font-family: var(--font-geist-sans), sans-serif; font-size: 12px; }
+
+/* Details panel toggle: closed by default, violet while the panel is open. */
+.fx-btn.fx-details-toggle svg { width: 15px; height: 15px; }
+.fx-btn.fx-details-toggle.is-on { border-color: #7c5cff; background: #7c5cff26; color: #cabeff; }
