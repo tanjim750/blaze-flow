@@ -62,6 +62,9 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
   const [quickAddStage, setQuickAddStage] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [live, setLive] = useState("");
+  // Inline "why it bounced" hint on the card and the target column, so a blocked drop isn't explained only by a toast.
+  const [blockedHint, setBlockedHint] = useState<{ taskId: string; stageId: string; reason: string } | null>(null);
+  useEffect(() => { if (!blockedHint) return; const timer = window.setTimeout(() => setBlockedHint(null), 8000); return () => window.clearTimeout(timer); }, [blockedHint]);
   const tasksRef = useRef(tasks);
   useLayoutEffect(() => { tasksRef.current = tasks; }, [tasks]);
   const commitRef = useRef<(taskId: string, stageId: string, index: number | null, options?: { undo?: boolean }) => void>(() => undefined);
@@ -160,7 +163,8 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
     const to = stageById.get(stageId);
     if (!to) return;
     const guard = moveGuard(task, from, to, { clientId: clientOf(task) });
-    if (guard.kind === "blocked") { toast.error(`Can't move to ${to.name}`, { description: guard.reason }); setLive(guard.reason); return; }
+    setBlockedHint(null);
+    if (guard.kind === "blocked") { setBlockedHint({ taskId: task.id, stageId, reason: guard.reason }); toast.error(`Can't move to ${to.name}`, { description: guard.reason }); setLive(guard.reason); return; }
     if (guard.kind === "confirm") { setPendingMove({ task, stageId, index, guard }); return; }
     commitMove(task.id, stageId, index);
   }, [clientOf, commitMove, stageById, stageOf]);
@@ -301,6 +305,7 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
           onMove={requestMove} onMoveFile={(file, stageId) => void moveFile(file, stageId)} onDelete={setPendingDelete}
           onCreate={quickCreate} quickAddStage={quickAddStage} setQuickAddStage={setQuickAddStage} menuFor={menuFor} setMenuFor={setMenuFor}
           canCreate={access.create} canMove={access.update} canDelete={access.delete}
+          blockedHint={blockedHint} onDismissHint={() => setBlockedHint(null)}
         />
       : <BoardList columns={columns} contextOf={contextOf} onOpen={activate} onDetails={(task) => setOpenTaskId(task.id)} onMove={requestMove} onDelete={setPendingDelete} menuFor={menuFor} setMenuFor={setMenuFor} canMove={access.update} canDelete={access.delete} />}
 

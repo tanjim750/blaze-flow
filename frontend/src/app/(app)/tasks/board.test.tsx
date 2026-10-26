@@ -172,6 +172,11 @@ describe("TasksBoard", () => {
     await act(async () => {});
     expect(within(column("Revisions")).getByText("Edit Summer Campaign V3")).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
+    // Explained inline, not only by a toast: on the target column and under the card.
+    expect(within(column("Client Review")).getByRole("status").textContent).toMatch(/Can't move here\..*needs a client/);
+    expect(within(column("Revisions")).getByText(/Needs a client to go to Client Review/)).toBeInTheDocument();
+    fireEvent.click(within(column("Client Review")).getByRole("button", { name: "Dismiss" }));
+    expect(within(column("Revisions")).queryByText(/Needs a client/)).toBeNull();
   });
 
   it("opens task details in a sheet and loads its attachments on demand", async () => {
