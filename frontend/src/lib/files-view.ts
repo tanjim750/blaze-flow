@@ -11,7 +11,8 @@ export async function loadFilesView(): Promise<FilesView> {
   const workspace = context.data.selected; const [projects, clients, files, folders, workflow] = await Promise.all([listProjects(workspace.id), listClientTeams(workspace.id), listAssetFiles(workspace.id), listAssetFolders(workspace.id), listTaskStages(workspace.id)]);
   if (!projects.ok) return { workspaceId: workspace.id, clients: clients.ok ? clients.data : [], groups: [], files: [], folders: [], stages: workflow.ok ? workflow.data.stages : [], notice: projects.error.detail };
   const fileRows = files.ok ? files.data : []; const folderRows = folders.ok ? folders.data : [];
-  const groups = projects.data.map((project) => ({ projectId: project.id, projectName: project.name, clientId: project.client_team_id, files: fileRows.filter((item) => item.project_id === project.id), folders: folderRows.filter((item) => item.project_id === project.id) }));
+  const labels = distinctProjectLabels(projects.data);
+  const groups = projects.data.map((project) => ({ projectId: project.id, projectName: labels.get(project.id) ?? project.name, clientId: project.client_team_id, files: fileRows.filter((item) => item.project_id === project.id), folders: folderRows.filter((item) => item.project_id === project.id) }));
   const notice = [clients, files, folders].find((result) => !result.ok);
   return { workspaceId: workspace.id, clients: clients.ok ? clients.data : [], groups, files: fileRows, folders: folderRows, stages: workflow.ok ? workflow.data.stages : [], notice: notice && !notice.ok ? notice.error.detail : null };
 }
@@ -23,4 +24,17 @@ export async function loadDeliverables(): Promise<{ items: Deliverable[]; notice
   if (!projects.ok) return { items: [], notice: projects.error.detail };
   const scans = await Promise.all(projects.data.map(async (project) => ({ project, media: await listMediaVersions(workspace.id, project.id) })));
   return { items: scans.flatMap(({ project, media }) => media.ok ? media.data.filter((item) => item.allow_download).map((item) => ({ id: item.id, workspaceId: workspace.id, projectId: project.id, projectName: project.name, media: item })) : []), notice: null };
+}
+
+/** Labels that keep same-named projects apart: "Name", "Name (2)", … in list order. */
+export function distinctProjectLabels(projects: { id: string; name: string }[]): Map<string, string> {
+  const seen = new Map<string, number>();
+  const labels = new Map<string, string>();
+  for (const project of projects) {
+    const key = project.name.trim().toLowerCase();
+    const count = (seen.get(key) ?? 0) + 1;
+    seen.set(key, count);
+    labels.set(project.id, count > 1 ? `${project.name} (${count})` : project.name);
+  }
+  return labels;
 }

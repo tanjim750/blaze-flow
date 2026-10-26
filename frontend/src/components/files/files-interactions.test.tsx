@@ -32,7 +32,7 @@ beforeEach(() => {
     folders: [{ id: "folder", name: "Selects", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-12", createdBy: "Ada" }],
     files: [
       file("a", "alpha.mp4", { width: 1080, height: 1920, commentCount: 3, stageId: "s-review", preview: "/poster-a.jpg" }),
-      file("b", "bravo.mp4"),
+      file("b", "bravo.mp4", { uploadedAt: new Date().toISOString() }),
       file("c", "charlie.mp4"),
       file("d", "delta.mp4", { folderId: "folder" }),
     ],
