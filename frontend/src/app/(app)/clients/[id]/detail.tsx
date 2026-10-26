@@ -11,6 +11,7 @@ import { ClientAccessDialog, ClientDialog } from "../panel";
 const STATUS: Record<string, string> = { DRAFT: "Draft", ACTIVE: "Active", ON_HOLD: "On hold", COMPLETED: "Completed", ARCHIVED: "Archived" };
 const initials = (name: string) => name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((part) => part[0]!.toUpperCase()).join("") || "?";
 const shortDate = (value: string) => new Date(value).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const projectHref = (clientId: string, projectId: string) => `/projects?client=${clientId}&campaign=${projectId}`;
 
 function dueLabel(due: string | null) {
@@ -35,7 +36,7 @@ function ProjectRow({ clientId, project, done }: { clientId: string; project: Cl
       </span>
       {!done && <span className="cd-progress" aria-label={percent === null ? "No tasks yet" : `${percent}% of tasks done`}>
         <span className="cd-bar"><i style={{ width: `${percent ?? 0}%` }} /></span>
-        <small>{percent === null ? "No tasks yet" : `${project.tasks_done}/${project.tasks_total} tasks · ${percent}%`}</small>
+        <small>{percent === null ? "No tasks yet" : `${project.tasks_done}/${project.tasks_total} ${project.tasks_total === 1 ? "task" : "tasks"} · ${percent}%`}</small>
       </span>}
       <ArrowUpRight className="cd-go" />
     </Link>
@@ -47,6 +48,7 @@ export function ClientDetail({ client, overview, notice }: { client: ClientCard;
   const [access, setAccess] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const money = overview?.money ?? null;
+  const openInvites = client.invites.filter((invite) => !invite.revoked_at).length;
   const counts = overview?.counts ?? { ongoing: 0, completed: 0, editors: 0 };
   const paidText = !money ? null : money.invoices_issued === 0 && Number(money.paid) === 0 ? "—" : formatMoney(money.paid, money.currency);
   const place = [client.city, client.country_code].filter(Boolean).join(", ");
@@ -67,7 +69,7 @@ export function ClientDetail({ client, overview, notice }: { client: ClientCard;
       <article><span className="cd-stat-icon"><CheckCircle2 /></span><small>Completed projects</small><strong>{counts.completed}</strong></article>
       <article><span className="cd-stat-icon"><Clapperboard /></span><small>Ongoing projects</small><strong>{counts.ongoing}</strong></article>
       {money && <article><span className="cd-stat-icon"><Banknote /></span><small>Paid to date</small><strong>{paidText}</strong>
-        <p>{Number(money.agreed) > 0 ? `of ${formatMoney(money.agreed, money.currency)} agreed` : "No fees or task prices set"}{money.invoices_issued > 0 && ` · ${money.invoices_paid}/${money.invoices_issued} invoices paid`}</p></article>}
+        <p>{Number(money.agreed) > 0 ? `of ${formatMoney(money.agreed, money.currency)} agreed` : "No fees or task prices set"}{money.invoices_issued > 0 && ` · ${money.invoices_paid}/${money.invoices_issued} ${money.invoices_issued === 1 ? "invoice" : "invoices"} paid`}</p></article>}
       <article><span className="cd-stat-icon"><Users /></span><small>Editors on their work</small><strong>{counts.editors}</strong></article>
     </div>
 
@@ -91,7 +93,7 @@ export function ClientDetail({ client, overview, notice }: { client: ClientCard;
             {/* eslint-disable-next-line @next/next/no-img-element -- user avatars come from arbitrary hosts */}
             {editor.avatar_url ? <img src={editor.avatar_url} alt="" /> : <span className="cd-avatar" aria-hidden="true">{initials(editor.name)}</span>}
             <span><strong>{editor.name}</strong><small>{editor.role}</small></span>
-            <em>{editor.project_count} {editor.project_count === 1 ? "project" : "projects"}</em>
+            <em>{plural(editor.project_count, "project")}</em>
           </li>)}</ul> : <p className="cd-empty">No editors are assigned to this client&apos;s tasks yet.</p>}
         </section>
         <section className="cd-card cd-info">
@@ -100,7 +102,7 @@ export function ClientDetail({ client, overview, notice }: { client: ClientCard;
           <dl>
             {client.email && <div><Mail /><a href={`mailto:${client.email}`}>{client.email}</a></div>}
             {client.website && <div><Globe2 /><a href={client.website} target="_blank" rel="noreferrer">{client.website.replace(/^https?:\/\//, "")}</a></div>}
-            <div><Users />{client.members.length} client members · {client.invites.filter((invite) => !invite.revoked_at).length} open invites</div>
+            <div><Users />{plural(client.members.length, "client member")} · {plural(openInvites, "open invite")}</div>
           </dl>
           {client.projects.length > 0 && <div className="client-projects">{client.projects.slice(0, 8).map((project) => <span key={project.id}>{project.name}</span>)}{client.projects.length > 8 && <small>+{client.projects.length - 8}</small>}</div>}
         </section>

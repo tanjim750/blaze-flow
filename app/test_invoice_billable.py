@@ -38,3 +38,13 @@ class BillableSummaryTests(BillingBase, TestCase):
 
     def test_editor_cannot_read_it(self):
         self.billable(self.editor, expect=403)
+
+    def test_preview_matches_what_create_draft_adds_beside_an_open_draft(self):
+        # The Acme launch film case: the fee sits on an open draft and one task is priced later.
+        # The preview counts only the new task, which is exactly what Create draft puts on its invoice.
+        self.priced_project()
+        self.invoice(send=False)
+        task = self.task('Hero edit', self.editor_membership)
+        self.patch_money(task['id'], {'client_price': '250'})
+        self.assertEqual(self.billable(), {'state': 'billable', 'items': 1, 'total': '250.00', 'has_client': True})
+        self.assertEqual(self.invoice(send=False)['total'], '250.00')
