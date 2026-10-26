@@ -12,7 +12,7 @@ describe("role sidebars", () => {
   });
   it("editors get their own work, their pay, and no studio admin", () => {
     const l = labels(editor);
-    expect(l).toEqual(["My work", "My tasks", "Cuts to fix", "Projects", "Chat", "Files", "My pay", "My profile", "Help"]);
+    expect(l).toEqual(["My work", "My tasks", "Projects", "Chat", "Files", "My pay", "My profile", "Help"]);
     expect(navFor(editor).primary[1].href).toBe("/tasks?assignee=m1");
     expect(labels({ ...editor, billing: { view: false, manage: false, rates_view: false } })).not.toContain("My pay");
   });
