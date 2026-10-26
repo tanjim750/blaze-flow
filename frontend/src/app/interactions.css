@@ -42,6 +42,9 @@ textarea, select, [contenteditable]:not([contenteditable=false]), [role=textbox]
 }
 @keyframes bf-spin { to { transform: rotate(360deg); } }
 
-/* Route content enters with a short fade; the skeleton swaps in on the same curve. */
-.sk-body { animation: bf-fade-in var(--bf-duration-base) var(--bf-ease-out) both; }
+/* The skeleton waits a beat before fading in, so a page that resolves quickly goes straight
+   from the old page to the new one without a placeholder flashing in between. The page's
+   own entrance is played by PageTransition when the skeleton is swapped out. */
+.sk-body { animation: bf-fade-in 160ms var(--bf-ease-out) 120ms both; }
+@media (prefers-reduced-motion: reduce) { .sk-body { animation: none; } }
 @keyframes bf-fade-in { from { opacity: 0; } to { opacity: 1; } }

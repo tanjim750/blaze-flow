@@ -37,17 +37,15 @@ html{color-scheme:dark}body{background-image:radial-gradient(circle at 78% -12%,
 @keyframes ui-fade-out { to { opacity: 0 } }
 @keyframes ui-dialog-in { from { opacity: 0; transform: translateY(18px) scale(.98) } }
 @keyframes ui-dialog-out { to { opacity: 0; transform: translateY(10px) scale(.985) } }
-@keyframes ui-page-in { from { opacity: 0; transform: translateY(7px) } }
 .ui-dialog-overlay[data-state=open] { animation: ui-fade-in .18s ease-out }
 .ui-dialog-overlay[data-state=closed] { animation: ui-fade-out .18s ease-in }
 .ui-dialog-content[data-state=open] { animation: ui-dialog-in .22s cubic-bezier(.22,1,.36,1) }
 .ui-dialog-content[data-state=closed] { animation: ui-dialog-out .18s ease-in }
-.studio-page-enter { animation: ui-page-in .24s cubic-bezier(.22,1,.36,1) }
 button.studio-rail-toggle, button.pb-rail-toggle { transition: color .18s, border-color .18s, background .18s, box-shadow .18s, transform .18s cubic-bezier(.34,1.56,.64,1) }
 .studio-rail-toggle:active, .pb-rail-toggle:active { transform: scale(.82) }
 @media (prefers-reduced-motion: reduce) {
-  .ui-dialog-overlay, .ui-dialog-content, .studio-page-enter { animation-duration: 1ms !important }
-  .ui-dialog-content[data-state=open], .studio-page-enter { animation-name: ui-fade-in !important }
+  .ui-dialog-overlay, .ui-dialog-content { animation-duration: 1ms !important }
+  .ui-dialog-content[data-state=open] { animation-name: ui-fade-in !important }
   .studio-rail-toggle:active, .pb-rail-toggle:active { transform: none }
 }
 
