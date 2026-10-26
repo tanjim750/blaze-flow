@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  badgeCount, clip, dayLabel, describeNotification, groupByDay, initialsOf, markRead, notificationHref, sentence, timeLabel,
+  actorsLabel, badgeCount, clip, collapseRepeats, dayLabel, describeNotification, groupByDay, initialsOf, markRead, notificationHref, sentence, timeLabel,
   type NotificationItem,
 } from "./notifications";
 
@@ -218,3 +218,22 @@ describe("AI Visual QA notifications", () => {
     expect(row.snippet).toContain("15 minutes");
   });
 });
+
+describe("collapseRepeats", () => {
+  const row = (id: string, actor: string, extra: Partial<DescribedNotificationForTest> = {}): DescribedNotificationForTest => ({
+    id, actor, initials: "A", avatarUrl: null, verb: "found 2 possible mistakes in", subject: "poster.png", snippet: null,
+    href: "/review?v=1", posterUrl: null, tone: "other", unread: false, createdAt: "2026-10-20T10:00:00Z", ...extra,
+  });
+  it("folds identical events into one row with a count, ids and actors", () => {
+    const out = collapseRepeats([row("a", "AI QA", { unread: true }), row("b", "AI QA"), row("c", "Ana", { subject: "other.png" })]);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({ id: "a", repeat: 2, ids: ["a", "b"], actors: ["AI QA"], unread: true });
+    expect(out[1].repeat).toBe(1);
+  });
+  it("names several actors", () => {
+    expect(actorsLabel(["Ana"])).toBe("Ana");
+    expect(actorsLabel(["Ana", "Ben"])).toBe("Ana and Ben");
+    expect(actorsLabel(["Ana", "Ben", "Cy"])).toBe("Ana and 2 others");
+  });
+});
+type DescribedNotificationForTest = Parameters<typeof collapseRepeats>[0][number];

@@ -5,6 +5,18 @@ from django.utils import timezone
 
 from app.models import Project, ProjectAccessMode, ProjectStatus, ResourceAccess
 
+DUPLICATE_PROJECT_NAME = 'A project with this name already exists. Pick a different name.'
+
+
+def project_name_taken(*, workspace, name, exclude_id=None):
+    """B7: two live projects with the same name are indistinguishable in every picker."""
+    rows = Project.objects.filter(workspace=workspace, name__iexact=(name or '').strip()).exclude(
+        status=ProjectStatus.PENDING_DELETION,
+    )
+    if exclude_id:
+        rows = rows.exclude(id=exclude_id)
+    return rows.exists()
+
 
 @transaction.atomic
 def create_project(*, workspace, created_by_user, authorizing_membership, **validated_data):

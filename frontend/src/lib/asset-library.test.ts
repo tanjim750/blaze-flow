@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyLibraryStage, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, isProcessing, kindFor, libraryForProject, stageFileIds, type LibraryFile, type LibraryState } from "./asset-library";
+import { applyLibraryStage, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, isProcessing, kindFor, PREVIEW_STALL_MS, thumbSrc, libraryForProject, stageFileIds, type LibraryFile, type LibraryState } from "./asset-library";
+import { distinctProjectLabels } from "./files-view";
 
 describe("asset library", () => {
   it("recognizes creative source files when the browser has no MIME type", () => {
@@ -117,7 +118,14 @@ describe("asset library", () => {
     expect(isProcessing({ ...base, status: "DUPLICATING" })).toBe(true);
     expect(isProcessing({ ...base, status: "PENDING" })).toBe(true);
     // Scanned, but the poster has not landed yet.
-    expect(isProcessing(base)).toBe(true);
+    const soon = Date.parse("2026-09-12") + 60_000;
+    expect(isProcessing(base, soon)).toBe(true);
+    // B7: a poster that never lands stops reading "Generating preview…" after the stall window.
+    expect(isProcessing(base, Date.parse("2026-09-12") + PREVIEW_STALL_MS + 1)).toBe(false);
+    // A ready image previews from the file itself.
+    expect(isProcessing({ ...base, kind: "image", url: "/f.png" }, soon)).toBe(false);
+    expect(thumbSrc({ ...base, kind: "image", url: "/f.png" })).toBe("/f.png");
+    expect(thumbSrc(base)).toBeNull();
     expect(isProcessing({ ...base, preview: "/poster.jpg" })).toBe(false);
 
     // Nothing that never gets a poster is left waiting on one.
@@ -125,5 +133,12 @@ describe("asset library", () => {
     expect(isProcessing({ ...base, kind: "document" })).toBe(false);
     // And a rejected file is finished, not pending.
     expect(isProcessing({ ...base, status: "FAILED" })).toBe(false);
+  });
+});
+
+describe("distinctProjectLabels", () => {
+  it("numbers repeated project names", () => {
+    const labels = distinctProjectLabels([{ id: "a", name: "Launch" }, { id: "b", name: "launch" }, { id: "c", name: "Other" }]);
+    expect([...labels.values()]).toEqual(["Launch", "launch (2)", "Other"]);
   });
 });

@@ -81,10 +81,26 @@ export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
  * A poster is only ever produced for video and images, so nothing else is kept waiting on
  * one. `FAILED` is finished, unhappily, and must not spin forever.
  */
-export function isProcessing(file: LibraryFile): boolean {
+/**
+ * How long a scanned file may wait for its poster before the UI stops calling it "Generating
+ * preview…" (B7). Posters normally land in seconds; past this the job has stalled or failed,
+ * and the file is shown with its type glyph and is fully usable rather than stuck forever.
+ */
+export const PREVIEW_STALL_MS = 15 * 60 * 1000;
+
+export function isProcessing(file: LibraryFile, now: number = Date.now()): boolean {
   if (file.status === "DUPLICATING" || file.status === "PENDING") return true;
   if (file.status !== "READY") return false;
-  return (file.kind === "video" || file.kind === "image") && !file.preview;
+  if (file.preview || (file.kind !== "video" && file.kind !== "image")) return false;
+  // An image is its own preview once it is downloadable.
+  if (file.kind === "image" && file.url) return false;
+  const uploaded = Date.parse(file.uploadedAt);
+  return !(Number.isFinite(uploaded) && now - uploaded > PREVIEW_STALL_MS);
+}
+
+/** The image a thumbnail shows: the poster, or for a ready image the file itself. */
+export function thumbSrc(file: LibraryFile): string | null {
+  return file.preview ?? (file.kind === "image" && file.status === "READY" ? file.url : null);
 }
 
 export function kindFor(file: Pick<File, "type" | "name">): LibraryKind { const type = file.type.toLowerCase(), ext = file.name.split(".").pop()?.toLowerCase(); if (type.startsWith("video/")) return "video"; if (type.startsWith("audio/")) return "audio"; if (type.startsWith("image/")) return "image"; if (type.includes("pdf") || type.includes("document") || ["pdf", "doc", "docx", "txt", "rtf"].includes(ext || "")) return "document"; if (["psd", "ai", "aep", "prproj", "blend", "fig", "sketch"].includes(ext || "")) return "source"; return "other"; }

@@ -51,3 +51,8 @@
    inside it, so the field shows focus with its violet underline instead. */
 .qs-field input:focus-visible { outline: none !important; }
 .qs-field:focus-within { border-bottom-color: var(--bf-violet-400, #8b6cff); box-shadow: inset 0 -1px 0 var(--bf-violet-400, #8b6cff); }
+
+/* Search failed (timeout / API down): a quiet inline retry. */
+.qs-retry { min-height: 32px; padding: 0 10px; margin-left: 6px; border-radius: var(--radius-md, 8px); border: 1px solid var(--border); background: var(--shell-high, #26262f); color: var(--shell-on, #ececf1); font: inherit; cursor: pointer; }
+.qs-retry:hover { border-color: var(--shell-accent, #7c5cff); }
+@media (max-width: 600px) { .qs-retry { min-height: 44px; } }

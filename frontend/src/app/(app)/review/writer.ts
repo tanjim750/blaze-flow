@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DECISION_UNDO_MS, scheduleUndoable, type Undoable } from "@/lib/undoable";
 import { toast } from "sonner";
 import type { AnnotationElement, CommentVisibility } from "@/lib/api";
 import { initialsFrom, type NoteDrawing, type ReviewNote } from "@/lib/review-notes";
@@ -302,6 +303,29 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
     return run(() => clientDecisionAction(target.workspaceId, target.projectId, target.versionId, decision, message, startMs, confirmOverride));
   }, [run, target, view.decisions]);
 
+  /*
+   * R15: Approve / Request changes confirm with a toast that has Undo. The write waits out the
+   * Undo window (see lib/undoable), so undoing sends nothing and notifies no one. Leaving the
+   * review commits any decision still waiting.
+   */
+  const pendingDecision = useRef<Undoable | null>(null);
+  useEffect(() => () => { pendingDecision.current?.flush(); }, []);
+  const deferDecision = useCallback((label: string, work: () => Promise<boolean>, onUndo?: () => void) => {
+    pendingDecision.current?.flush();
+    const toastId = toast(label, {
+      description: "Sending in a few seconds.",
+      duration: DECISION_UNDO_MS,
+      action: { label: "Undo", onClick: () => {
+        if (pending.undo()) { onUndo?.(); toast("Undone", { description: "Nothing was sent.", duration: 2500 }); }
+      } },
+    });
+    const pending = scheduleUndoable(() => {
+      if (pendingDecision.current === pending) pendingDecision.current = null;
+      void work().then((sent) => { if (!sent) toast.error("Couldn't save that decision", { id: toastId }); });
+    }, DECISION_UNDO_MS);
+    pendingDecision.current = pending;
+  }, []);
+
   /**
    * Moves the file's task stage, which is the status the board and the Files list both
    * read. Review and the board therefore share one state rather than each keeping its own.
@@ -316,7 +340,7 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
     });
   }, [run, view.version?.assetFileId, view.workspaceId]);
 
-  return { error, setError, busy, overlay, apply, compose, setResolved, editNote, deleteNote, setDrawingWindow, react, removeNote, draw, eraseAnnotation, moveAnnotation, recolorAnnotation, moveToStage, requestChanges, decideAsClient, setTaskStage };
+  return { error, setError, busy, overlay, apply, compose, setResolved, editNote, deleteNote, setDrawingWindow, react, removeNote, draw, eraseAnnotation, moveAnnotation, recolorAnnotation, moveToStage, requestChanges, decideAsClient, deferDecision, setTaskStage };
 }
 
 export type ReviewWriter = ReturnType<typeof useReviewWriter>;

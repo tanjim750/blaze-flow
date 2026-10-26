@@ -749,3 +749,13 @@
 /* Active nav marker: a small violet dot on the current tree row. */
 .fx .fx-tree-row { position: relative; }
 .fx .fx-tree-row.is-selected::before { content: ""; position: absolute; left: 4px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--frm-accent); }
+
+/* Grid names wrap to 2 lines (critic #8); the metadata line is mono, 2xs, subtle. */
+.fx-item.is-tile .fx-caption .fx-name-line { align-items: flex-start; }
+.fx-item.is-tile .fx-caption .fx-name-line > .fx-kind { margin-top: 3px; flex: none; }
+.fx-item.is-tile .fx-name-line > strong.fx-tile-name { display: -webkit-box; overflow: hidden; font-size: var(--text-sm); line-height: 20px; white-space: normal; overflow-wrap: anywhere; text-overflow: clip; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.fx .fx-item.is-tile .fx-meta { color: var(--subtle-foreground); font-family: var(--font-mono); font-size: var(--text-2xs); }
+@media (max-width: 480px) {
+  .fx-item.is-tile .fx-meta { display: flex; }
+  .fx-item.is-tile .fx-meta .fx-feedback { display: none; }
+}

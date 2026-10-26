@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addressLines, buildClientInvoices, buildEarnings, buildOwnerMoneyCards, buildTotals, dueLabel, filterCounts, invoiceBadge,
+  addressLines, visibleToClient, buildClientInvoices, buildEarnings, buildOwnerMoneyCards, buildTotals, dueLabel, filterCounts, invoiceBadge,
   type InvoiceSummary, type MoneyTotals,
 } from "./money-view";
 
@@ -96,5 +96,13 @@ describe("settleLabel (R20)", () => {
   it("offers the demo shortcut before any payment and the remaining balance after one", () => {
     expect(settle({ paid: "0.00", outstanding: "1500.00", currency: "GBP" }, fmt)).toBe("Mark as paid (demo)");
     expect(settle({ paid: "500.00", outstanding: "1000.00", currency: "GBP" }, fmt)).toBe("Record remaining GBP 1000.00");
+  });
+});
+
+describe("visibleToClient", () => {
+  it("hides drafts from the client preview and shows sent or paid invoices", () => {
+    expect(visibleToClient("draft")).toBe(false);
+    expect(visibleToClient("sent")).toBe(true);
+    expect(visibleToClient("paid")).toBe(true);
   });
 });

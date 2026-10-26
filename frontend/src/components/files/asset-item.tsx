@@ -108,7 +108,7 @@ export function FileItem({ file, stage, relation, reviewable, common }: {
       {common.mode === "grid" && openChip}
     </span>
   );
-  const name = common.renaming ?? <FileName name={file.name} max={common.mode === "list" ? 48 : 30} />;
+  const name = common.renaming ?? <FileName name={file.name} max={common.mode === "list" ? 48 : 160} className={common.mode === "grid" ? "fx-tile-name" : undefined} title={file.name} />;
 
   if (common.mode === "list") {
     return (

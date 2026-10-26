@@ -82,3 +82,19 @@
 .nf-pager { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; color: var(--shell-outline); font-size: 12px; }
 .nf-pager nav { display: flex; gap: 8px; }
 .nf-pager a.nf-button[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+
+/* Density pass (critic #9): 16px rows, --text-sm titles, a fixed 40px right slot so rows align. */
+.nf-open { padding: 16px 8px 16px 20px; gap: 12px; align-items: center; }
+.nf-row.is-wide .nf-open { padding: 16px 8px 16px 20px; gap: 12px; }
+.nf-line { font-size: var(--bf-text-sm); line-height: 20px; }
+.nf-avatar { align-self: flex-start; }
+.nf-poster, .nf-row.is-wide .nf-poster { width: 40px; height: 40px; margin-top: 0; border-radius: 6px; object-fit: cover; }
+.nf-poster.is-icon { display: grid; place-items: center; background: var(--shell-low); color: var(--shell-outline); }
+.nf-poster.is-icon.is-approved { color: #8ff0bd; }
+.nf-poster.is-icon.is-changes { color: #ffc98f; }
+.nf-mark, .nf-row.is-wide .nf-mark { align-self: center; margin: 0 8px 0 0; }
+.nf-repeat { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 999px; background: var(--shell-highest); color: var(--shell-on); font: 600 var(--bf-text-2xs)/18px var(--bf-font-mono); vertical-align: 1px; }
+@media (max-width: 480px) {
+  .nf-open, .nf-row.is-wide .nf-open { padding: 12px 4px 12px 16px; gap: 10px; }
+  .nf-page > header { flex-wrap: wrap; align-items: flex-start; }
+}

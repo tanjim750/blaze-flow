@@ -98,8 +98,20 @@ export function rememberRecent(workspaceId: string, row: PaletteRow) {
   } catch { /* storage full or blocked: recents are a nicety */ }
 }
 
+/** Past this the palette says search is unavailable instead of "Searching…" forever (B8). */
+export const SEARCH_TIMEOUT_MS = 8_000;
+
 export async function fetchQuickSearch(workspaceId: string, query: string, signal?: AbortSignal): Promise<SearchResponse> {
-  const response = await fetch(`/api/workspaces/${workspaceId}/search/?q=${encodeURIComponent(query)}`, { credentials: "include", signal });
+  const timeout = AbortSignal.timeout(SEARCH_TIMEOUT_MS);
+  const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  let response: Response;
+  try {
+    response = await fetch(`/api/workspaces/${workspaceId}/search/?q=${encodeURIComponent(query)}`, { credentials: "include", signal: combined });
+  } catch (error) {
+    // A timeout surfaces as a normal failure; a caller's own abort stays an AbortError.
+    if (signal?.aborted) throw error;
+    throw new Error(timeout.aborted ? "Search timed out." : "Search is unavailable.");
+  }
   if (!response.ok) throw new Error(`Search failed (${response.status}).`);
   return response.json() as Promise<SearchResponse>;
 }

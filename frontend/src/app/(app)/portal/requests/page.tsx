@@ -5,6 +5,7 @@ import { getBranding, listProjectRequests } from "@/lib/api";
 import { accentStyle } from "@/lib/portal";
 import { loadWorkspaceContext } from "@/lib/workspace";
 import { PortalBrandBar } from "@/components/portal/brand-bar";
+import { BrandingSync } from "@/components/portal/branding-sync";
 import { ClientRequestList } from "@/components/portal/request-list";
 import "@/components/portal/portal.css";
 
@@ -18,6 +19,7 @@ export default async function ClientRequestsPage() {
   const brand = branding.ok ? branding.data : { studio_name: workspace.name, brand_color: null, logo_url: null, portal_welcome: null };
   return <div className="pt-page pt-scope" style={accentStyle(brand.brand_color)}>
     <Link className="pt-back" href="/"><ArrowLeft size={14} />Back to your portal</Link>
+    <BrandingSync />
     <PortalBrandBar branding={brand}>
       {list.ok && list.data.can_request && <Link className="pt-cta" href="/portal/requests/new"><Plus />Start a new project</Link>}
     </PortalBrandBar>

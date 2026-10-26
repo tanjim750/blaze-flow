@@ -8,7 +8,7 @@ import { Bell, CheckCheck, ChevronLeft, ChevronRight, Settings2 } from "@/compon
 import { NotificationRow } from "@/components/notifications/notification-row";
 import { useNotifications } from "@/components/notifications/use-notifications";
 import "@/components/notifications/notifications.css";
-import { describeNotification, groupByDay, type DescribedNotification } from "@/lib/notifications";
+import { collapseRepeats, describeNotification, groupByDay, type CollapsedNotification } from "@/lib/notifications";
 
 const PAGE_SIZE = 25;
 
@@ -20,7 +20,7 @@ export function NotificationsList({ workspaceId, workspaceName, filter, page }: 
   const rows = useMemo(() => feed.items.map(describeNotification), [feed.items]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read the clock whenever the rows change
   const now = useMemo(() => new Date(), [rows]);
-  const groups = useMemo(() => groupByDay(rows, now), [rows, now]);
+  const groups = useMemo(() => groupByDay(rows, now).map((group) => ({ ...group, items: collapseRepeats(group.items) })), [rows, now]);
   const pages = Math.max(1, Math.ceil(feed.count / PAGE_SIZE));
   const href = (next: { filter?: string; page?: number }) => {
     const query = new URLSearchParams();
@@ -32,8 +32,8 @@ export function NotificationsList({ workspaceId, workspaceName, filter, page }: 
     return text ? `/notifications?${text}` : "/notifications";
   };
 
-  function open(row: DescribedNotification) {
-    if (row.unread) void feed.markOneRead(row.id);
+  function open(row: CollapsedNotification) {
+    if (row.unread) row.ids.forEach((id) => void feed.markOneRead(id));
     if (row.href) router.push(row.href);
   }
 
@@ -79,7 +79,7 @@ export function NotificationsList({ workspaceId, workspaceName, filter, page }: 
             <h3 suppressHydrationWarning>{group.label}</h3>
             <ul>
               {group.items.map((row) => (
-                <NotificationRow key={row.id} wide row={row} now={now} onOpen={open} onMarkRead={(item) => void feed.markOneRead(item.id)} />
+                <NotificationRow key={row.id} wide row={row} now={now} onOpen={() => open(row)} onMarkRead={() => row.ids.forEach((id) => void feed.markOneRead(id))} />
               ))}
             </ul>
           </section>

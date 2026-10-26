@@ -50,3 +50,18 @@ button.studio-rail-toggle, button.pb-rail-toggle { transition: color .18s, borde
   .ui-dialog-content[data-state=open], .studio-page-enter { animation-name: ui-fade-in !important }
   .studio-rail-toggle:active, .pb-rail-toggle:active { transform: none }
 }
+
+/* M9: opening a menu or dialog locks scroll. Reserve the scrollbar gutter up front and stop
+ * the lock from adding its own compensation, so header icons don't jump sideways. */
+html { scrollbar-gutter: stable; }
+body[data-scroll-locked] { margin-right: 0 !important; padding-right: 0 !important; --removed-body-scroll-bar-size: 0px !important; }
+/* M9: on phones the switch was squeezed into a plain circle by row layouts. Hold its shape and
+ * give the off state a visible track and outline so on/off read at a glance. */
+button.ui-switch { flex: 0 0 auto; display: inline-flex; align-items: center; width: 40px; min-width: 40px; height: 24px; min-height: 24px; padding: 2px; border: 1px solid #55555f; border-radius: 999px; background: #2a2a31; }
+button.ui-switch[data-state=checked] { border-color: transparent; background: var(--bf-primary); }
+button.ui-switch .ui-switch-thumb { width: 18px; height: 18px; background: #a1a1aa; }
+button.ui-switch[data-state=checked] .ui-switch-thumb { background: #fff; transform: translateX(16px); }
+/* The shell's 44px tap rule turns switches into circles on touch; keep the track shape and
+   give it the larger hit area through an invisible ::after instead. */
+button.ui-switch { position: relative; width: 40px !important; min-width: 40px !important; height: 24px !important; min-height: 24px !important; max-height: 24px; }
+button.ui-switch::after { content: ""; position: absolute; inset: -10px -4px; }

@@ -11,9 +11,10 @@ import { useAppRouter } from "@/lib/app-router";/**
  */
 import Link from "next/link";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Banknote, CircleDollarSign, Eye, PencilLine, Plus, Printer, Save, Send, Trash2, Undo2, X } from "@/components/icons";
+import { ArrowLeft, Banknote, CircleDollarSign, Eye, MoreHorizontal, PencilLine, Plus, Printer, Save, Send, Trash2, Undo2, X } from "@/components/icons";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { formatMoney, fromMinor, parseMoneyInput, toMinor } from "@/lib/money";
 import { addressLines, dueLabel, formatDate, invoiceBadge, invoiceTotals, LINE_KIND, methodLabel, settleLabel, type InvoiceDetail, type InvoiceLine } from "@/lib/money-view";
@@ -87,23 +88,43 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: 
   }
   const patchLine = (key: string, change: Partial<DraftLine>) => setDraft((current) => ({ ...current, lines: current.lines.map((line) => line.key === key ? { ...line, ...change } : line) }));
 
+  type ToolbarAction = { key: string; label: string; icon: ReactNode; onSelect: () => void; disabled?: boolean; ghost?: boolean; danger?: boolean; pressed?: boolean };
+  const secondary: ToolbarAction[] = [];
+  let primary: ReactNode = null;
+  if (editable) {
+    secondary.push({ key: "delete", label: "Delete draft", icon: <Trash2 aria-hidden="true" />, ghost: true, danger: true, disabled: busy, onSelect: () => { if (confirm(`Delete draft ${invoice.number}?`)) void run(async () => { await deleteInvoice(workspaceId, invoice.id); router.push("/money"); }, `${invoice.number} deleted`); } });
+    secondary.push(previewing
+      ? { key: "preview", label: "Back to editing", icon: <PencilLine aria-hidden="true" />, pressed: true, onSelect: () => setPreviewing(false) }
+      : { key: "preview", label: "Preview as client", icon: <Eye aria-hidden="true" />, pressed: false, onSelect: () => setPreviewing(true) });
+    primary = <button type="button" className="money-button is-primary" disabled={busy} onClick={() => setConfirmSend(true)}><Send aria-hidden="true" />{recipients.length ? "Send to client" : "Mark as sent"}</button>;
+  }
+  if (canManage && invoice.status === "sent") {
+    if (invoice.can_revert) secondary.push({ key: "revert", label: "Revert to draft", icon: <Undo2 aria-hidden="true" />, ghost: true, disabled: busy, onSelect: () => { if (confirm(`Move ${invoice.number} back to draft? The client stops seeing it until you send it again.`)) void run(() => revertInvoice(workspaceId, invoice.id), `${invoice.number} is a draft again`); } });
+    secondary.push({ key: "pay", label: "Record payment", icon: <Banknote aria-hidden="true" />, disabled: busy, onSelect: () => setPaying(true) });
+    primary = <button type="button" className="money-button is-primary" disabled={busy} onClick={() => void run(() => markInvoicePaid(workspaceId, invoice))}><CircleDollarSign aria-hidden="true" />{settleLabel(invoice, formatMoney)}</button>;
+  }
+  secondary.push({ key: "print", label: "Print", icon: <Printer aria-hidden="true" />, onSelect: () => window.print() });
+
   return <div className="money-page invoice-page">
     <div className="invoice-toolbar">
       <Link href={backHref} className="money-button is-ghost"><ArrowLeft aria-hidden="true" />{backHref === "/money" ? "Money" : "Dashboard"}</Link>
+      <span className="invoice-context">
+        <strong>{invoice.number}</strong>
+        <span>{[invoice.client.name, invoice.project?.name].filter(Boolean).join(" · ")}</span>
+      </span>
       <span className="money-badges"><span className={`money-badge tone-${badge.tone}`}>{badge.label}</span>{badge.partial && <span className="money-badge tone-warning">Part-paid</span>}</span>
       <span className="invoice-due">{dueLabel(invoice, new Date(now))}</span>
       <span className="money-spacer" />
-      {editable && <>
-        <button type="button" className="money-button is-ghost" disabled={busy} onClick={() => { if (confirm(`Delete draft ${invoice.number}?`)) void run(async () => { await deleteInvoice(workspaceId, invoice.id); router.push("/money"); }, `${invoice.number} deleted`); }}><Trash2 aria-hidden="true" />Delete draft</button>
-        <button type="button" className="money-button" aria-pressed={previewing} onClick={() => setPreviewing((value) => !value)}>{previewing ? <><PencilLine aria-hidden="true" />Back to editing</> : <><Eye aria-hidden="true" />Preview as client</>}</button>
-        <button type="button" className="money-button is-primary" disabled={busy} onClick={() => setConfirmSend(true)}><Send aria-hidden="true" />{recipients.length ? "Send to client" : "Mark as sent"}</button>
-      </>}
-      {canManage && invoice.status === "sent" && <>
-        {invoice.can_revert && <button type="button" className="money-button is-ghost" disabled={busy} onClick={() => { if (confirm(`Move ${invoice.number} back to draft? The client stops seeing it until you send it again.`)) void run(() => revertInvoice(workspaceId, invoice.id), `${invoice.number} is a draft again`); }}><Undo2 aria-hidden="true" />Revert to draft</button>}
-        <button type="button" className="money-button" disabled={busy} onClick={() => setPaying(true)}><Banknote aria-hidden="true" />Record payment</button>
-        <button type="button" className="money-button is-primary" disabled={busy} onClick={() => void run(() => markInvoicePaid(workspaceId, invoice))}><CircleDollarSign aria-hidden="true" />{settleLabel(invoice, formatMoney)}</button>
-      </>}
-      <button type="button" className="money-button" onClick={() => window.print()}><Printer aria-hidden="true" />Print</button>
+      {secondary.map((action) => <button key={action.key} type="button" className={`money-button invoice-secondary${action.ghost ? " is-ghost" : ""}`} disabled={action.disabled} aria-pressed={action.pressed} onClick={action.onSelect}>{action.icon}{action.label}</button>)}
+      {primary}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="money-button is-icon invoice-more" aria-label="More invoice actions"><MoreHorizontal aria-hidden="true" /></button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {secondary.map((action) => <DropdownMenuItem key={action.key} disabled={action.disabled} onSelect={action.onSelect} variant={action.danger ? "destructive" : undefined}>{action.icon}{action.label}</DropdownMenuItem>)}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
 
     {editable && previewing && <p className="invoice-preview-note" role="status"><Eye aria-hidden="true" />Preview: this is what {invoice.bill_to.name} sees once it&rsquo;s sent.{dirty ? " Includes unsaved changes." : ""}</p>}

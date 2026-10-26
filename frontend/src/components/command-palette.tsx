@@ -37,6 +37,7 @@ export function CommandPalette({ workspace }: { workspace: Workspace | null }) {
   const [query, setQuery] = useState("");
   const [server, setServer] = useState<{ query: string; groups: SearchGroup[] }>({ query: "", groups: [] });
   const [loading, setLoading] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState(false);
   const [active, setActive] = useState(0);
   const [recents, setRecents] = useState<PaletteRow[]>([]);
@@ -74,14 +75,15 @@ export function CommandPalette({ workspace }: { workspace: Workspace | null }) {
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, DEBOUNCE_MS);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [open, workspaceId, trimmed]);
+  }, [open, workspaceId, trimmed, attempt]);
 
   const actions = useMemo(() => quickActions(role), [role]);
   const pages = useMemo(() => pageRows(workspace), [workspace]);
   // Below the minimum, server groups are dropped; above it, the last answer stays until the next lands.
   const groups = useMemo(() => {
     const long = trimmed.length >= MIN_QUERY;
-    const built = buildGroups({ query: long ? trimmed : "", server: long ? server.groups : [], recents, actions, pages });
+    // Any typed text hides Recent at once (M9: it used to flash back for 1-char queries).
+    const built = buildGroups({ query: trimmed, server: long ? server.groups : [], recents, actions, pages });
     const starts = built.map((_, i) => built.slice(0, i).reduce((sum, group) => sum + group.rows.length, 0));
     return built.map((group, i) => ({ ...group, start: starts[i] }));
   }, [trimmed, server.groups, recents, actions, pages]);
@@ -108,7 +110,7 @@ export function CommandPalette({ workspace }: { workspace: Workspace | null }) {
     else if (event.key === "Enter") { event.preventDefault(); choose(rows[current]); }
   };
 
-  const searching = trimmed.length >= MIN_QUERY && (loading || server.query !== trimmed);
+  const searching = Boolean(workspaceId) && trimmed.length >= MIN_QUERY && (loading || server.query !== trimmed);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -153,7 +155,7 @@ export function CommandPalette({ workspace }: { workspace: Workspace | null }) {
             ))}
             {!rows.length && (
               <p className="qs-empty" role="status">
-                {failed ? "Search is unavailable right now." : searching ? "Searching…" : trimmed.length >= MIN_QUERY ? `Nothing matches “${trimmed}”.` : "Type to search."}
+                {failed ? <>Search is unavailable right now. <button type="button" className="qs-retry" onClick={() => { setFailed(false); setAttempt((n) => n + 1); }}>Try again</button></> : searching ? "Searching…" : !workspaceId && trimmed.length >= MIN_QUERY ? "Search comes back once Blaze Flow reconnects." : trimmed.length >= MIN_QUERY ? `Nothing matches “${trimmed}”.` : "Type to search."}
               </p>
             )}
           </div>

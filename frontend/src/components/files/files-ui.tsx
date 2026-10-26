@@ -5,7 +5,7 @@
  * Styles live in `files.css` under the `.fx` scope.
  */
 import { AudioLines, CircleCheck, CircleDashed, CircleDot, Eye, File, FileImage, FileText, Film, Image as ImageIcon, RotateCcw, Tag, Users } from "@/components/icons";
-import type { LibraryFile, LibraryKind } from "@/lib/asset-library";
+import { thumbSrc, type LibraryFile, type LibraryKind } from "@/lib/asset-library";
 import type { TaskStageKind } from "@/lib/api";
 import { middleTruncate, stageTone, type StageTone } from "@/lib/files-panel";
 import { StagePill as SharedStagePill } from "@/components/ui/stage-pill";
@@ -19,9 +19,9 @@ export function KindIcon({ kind, className }: { kind: LibraryKind; className?: s
  * A filename that truncates in the middle, so `spring_launch…_v3_9x16.mp4` keeps both ends.
  * The full name is always in `title` and in the accessible name of the item that owns it.
  */
-export function FileName({ name, max = 32, className }: { name: string; max?: number; className?: string }) {
+export function FileName({ name, max = 32, className, title }: { name: string; max?: number; className?: string; title?: string }) {
   const short = middleTruncate(name, max);
-  return <strong className={className} title={short === name ? undefined : name}>{short}</strong>;
+  return <strong className={className} title={title ?? (short === name ? undefined : name)}>{short}</strong>;
 }
 
 /**
@@ -33,11 +33,12 @@ export function FileName({ name, max = 32, className }: { name: string; max?: nu
  */
 export function Thumb({ file, size = "md" }: { file: LibraryFile | null; size?: "sm" | "md" | "lg" }) {
   if (!file) return <span className="fx-thumb is-blank" aria-hidden="true" />;
-  if (file.preview) {
+  const src = thumbSrc(file);
+  if (src) {
     return (
       <span className="fx-thumb has-media" aria-hidden="true">
         {/* eslint-disable-next-line @next/next/no-img-element -- server posters are auth-proxied, same-origin and already sized; next/image adds nothing here */}
-        <img src={file.preview} alt="" loading="lazy" decoding="async" draggable={false} />
+        <img src={src} alt="" loading="lazy" decoding="async" draggable={false} />
       </span>
     );
   }

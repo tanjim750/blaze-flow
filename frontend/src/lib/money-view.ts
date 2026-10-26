@@ -208,3 +208,8 @@ export function addressLines(address: Address): string[] {
 export function settleLabel(invoice: Pick<InvoiceSummary, "paid" | "outstanding" | "currency">, format: (value: string, currency: string) => string): string {
   return Number(invoice.paid) > 0 ? `Record remaining ${format(invoice.outstanding, invoice.currency)}` : "Mark as paid (demo)";
 }
+
+/** A client never sees a draft: the owner's "View as client" preview hides it like the portal does. */
+export function visibleToClient(status: InvoiceStatus): boolean {
+  return status !== "draft";
+}

@@ -106,6 +106,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'app.middleware.RequestIdMiddleware',
+    # Last, so its process_exception runs first for view errors.
+    'app.middleware.DatabaseUnavailableMiddleware',
 ]
 
 ROOT_URLCONF = 'blazeflow.urls'

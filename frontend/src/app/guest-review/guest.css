@@ -128,3 +128,8 @@
 .gr-brief-toggle:focus-visible { outline: 2px solid var(--bf-ring); outline-offset: 2px; border-radius: 4px; }
 .gr-brief { max-height: min(50vh, 420px); overflow: auto; margin: 0 16px 12px; padding: 16px 20px; border: 1px solid var(--bf-border); border-radius: var(--bf-radius-lg); background: var(--bf-card); }
 @media (max-width: 520px) { .gr-brief-toggle small { display: none; } .gr-brief { margin: 0 12px 12px; padding: 14px 16px; } }
+
+/* B4: a view-only link shows reaction counts but no controls. */
+.gr-note-actions button.is-readonly{cursor:default}
+.gr-note-actions button.is-readonly:hover{color:var(--muted);background:var(--surface)}
+.gr-readonly-note{margin:0;padding:12px;border-top:1px solid var(--border);color:var(--muted);font-size:12px;line-height:1.45}

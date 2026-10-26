@@ -246,13 +246,17 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const reopenOverride = overrideWarning(clientDecision, "changes_requested");
   const openWarning = version ? openNotesWarning(openNotes, version.label) : null;
 
-  async function approve() {
+  function approve() {
+    if (!version) return;
     if (actions.approve === "client") {
-      if (await writer.decideAsClient("approved")) setApproveOpen(false);
+      setApproveOpen(false);
+      writer.deferDecision(`${version.label} approved`, () => writer.decideAsClient("approved"));
       return;
     }
     if (!approval) return;
-    if (await writer.moveToStage(approval.id)) setApproveOpen(false);
+    const stageId = approval.id;
+    setApproveOpen(false);
+    writer.deferDecision(`${version.label} approved`, () => writer.moveToStage(stageId));
   }
   const sourceFor = (item: typeof version) => {
     if (!item) return null;
@@ -565,7 +569,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
             : <>This marks <strong>{version.label}</strong> as approved and moves it to {approval?.name}. To reopen it later, use Request changes.</>}
           confirmLabel={writer.busy ? "Approving…" : `Approve ${version.label}`}
           busy={writer.busy}
-          onConfirm={() => void approve()}
+          onConfirm={approve}
           onCancel={() => setApproveOpen(false)}
         >
           {(openNotes > 0 || (latest && latest.id !== version.id) || writer.error || approveOverride) && (

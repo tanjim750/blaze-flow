@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AtSign, Check, CheckCheck, CircleCheckBig, FilePlus2, FolderInput, Inbox, ListTodo, MessageSquareText, MessagesSquare, Reply, RotateCcw, Bell } from "@/components/icons";
-import { sentence, timeLabel, type DescribedNotification, type NotificationTone } from "@/lib/notifications";
+import { actorsLabel, sentence, timeLabel, type CollapsedNotification, type DescribedNotification, type NotificationTone } from "@/lib/notifications";
 
 const TONE_ICON: Record<NotificationTone, typeof Bell> = {
   comment: MessageSquareText, reply: Reply, mention: AtSign, version: FilePlus2,
@@ -24,33 +24,41 @@ export function NotificationAvatar({ row }: { row: DescribedNotification }) {
   );
 }
 
-/** A letterboxed 16:9 still of the cut, or nothing at all when there is none or it fails. */
-export function NotificationPoster({ src }: { src: string | null }) {
+/**
+ * A fixed 40px slot on the right of every row: the cut's still when there is one, else the
+ * event's type icon, so titles and times line up down the list.
+ */
+export function NotificationPoster({ src, tone }: { src: string | null; tone: NotificationTone }) {
   const [broken, setBroken] = useState(false);
-  if (!src || broken) return null;
+  const Icon = TONE_ICON[tone];
+  if (!src || broken) return <span className={`nf-poster is-icon is-${tone}`} aria-hidden="true"><Icon size={16} /></span>;
   // eslint-disable-next-line @next/next/no-img-element -- permission-checked API route, not a static asset
   return <img className="nf-poster" src={src} alt="" loading="lazy" onError={() => setBroken(true)} />;
 }
 
 export function NotificationRow({ row, now, onOpen, onMarkRead, wide = false }: {
-  row: DescribedNotification;
+  row: DescribedNotification | CollapsedNotification;
   now: Date;
   onOpen: (row: DescribedNotification) => void;
   onMarkRead: (row: DescribedNotification) => void;
   wide?: boolean;
 }) {
+  const repeat = "repeat" in row ? row.repeat : 1;
+  const actor = "actors" in row ? actorsLabel(row.actors) : row.actor;
+  const label = `${repeat > 1 ? `${repeat} times: ` : ""}${sentence({ ...row, actor })}${row.unread ? " (unread)" : ""}`;
   return (
     <li className={`nf-row${row.unread ? " is-unread" : ""}${wide ? " is-wide" : ""}`}>
-      <button type="button" className="nf-open" onClick={() => onOpen(row)} aria-label={`${sentence(row)}${row.unread ? " (unread)" : ""}`} disabled={!row.href && !row.unread}>
+      <button type="button" className="nf-open" onClick={() => onOpen(row)} aria-label={label} disabled={!row.href && !row.unread}>
         <NotificationAvatar row={row} />
         <span className="nf-text">
           <span className="nf-line">
-            <strong>{row.actor}</strong> {row.verb}{row.subject && <> <em>{row.subject}</em></>}
+            {repeat > 1 && <b className="nf-repeat" title={`${repeat} identical events`}>{repeat}×</b>}
+            <strong>{actor}</strong> {row.verb}{row.subject && <> <em>{row.subject}</em></>}
           </span>
           {row.snippet && <span className="nf-snippet">“{row.snippet}”</span>}
           <small suppressHydrationWarning>{timeLabel(row.createdAt, now)}</small>
         </span>
-        <NotificationPoster src={row.posterUrl} />
+        <NotificationPoster src={row.posterUrl} tone={row.tone} />
       </button>
       {row.unread
         ? <button type="button" className="nf-mark" onClick={() => onMarkRead(row)} aria-label="Mark as read" title="Mark as read"><Check size={13} /></button>

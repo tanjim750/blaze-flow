@@ -166,6 +166,10 @@ button.studio-rail-search:hover, button.studio-rail-search:focus-visible { backg
   .studio-main { padding-left: 0; }
   .universal-review-page > main { padding-top: calc(var(--mobilebar-h) + 16px); }
   .universal-review-page > main.flush { padding-top: var(--mobilebar-h); }
+  /* The reconnect banner sits under the fixed top bar and takes over its offset. */
+  .studio-main > .shell-reconnect { margin-top: calc(var(--mobilebar-h) + 8px); }
+  .shell-reconnect + .universal-review-layout .universal-review-page > main { padding-top: 16px; }
+  .shell-reconnect + .universal-review-layout .universal-review-page > main.flush { padding-top: 0; }
   /* Mobile top bar: menu, page title, the page's main action, bell, avatar. */
   .studio-mobilebar {
     display: flex; align-items: center; gap: 4px;
@@ -249,3 +253,19 @@ button.studio-rail-search:hover, button.studio-rail-search:focus-visible { backg
   /* Checkboxes and radios keep their size; their label carries the target. */
   .studio-main label:has(> input[type=checkbox]), .studio-main label:has(> input[type=radio]) { min-height: 44px; display: inline-flex; align-items: center; }
 }
+
+/* B8: the layout couldn't load the user/workspaces. Inline, above the page, never a modal. */
+.shell-reconnect { display: flex; align-items: center; gap: 10px; margin: 12px 16px 0; padding: 10px 12px; border: 1px solid color-mix(in oklab, var(--warning, #f5a524) 40%, var(--border)); border-radius: var(--radius-lg, 10px); background: color-mix(in oklab, var(--warning, #f5a524) 10%, var(--card, var(--background))); color: var(--foreground); font-size: var(--text-sm, 13px); }
+.shell-reconnect > svg { flex: none; color: var(--warning, #f5a524); }
+.shell-reconnect p { flex: 1; min-width: 0; margin: 0; line-height: 1.4; }
+.shell-reconnect p span { color: var(--muted-foreground); }
+.shell-reconnect button { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border-radius: var(--radius-md, 8px); border: 1px solid var(--shell-high, #26262f); background: var(--shell-high, #26262f); color: var(--shell-on, #ececf1); font: inherit; font-weight: 500; cursor: pointer; }
+.shell-reconnect button:disabled { opacity: .7; cursor: progress; }
+.shell-reconnect .is-spinning { animation: shell-reconnect-spin 0.9s linear infinite; }
+@keyframes shell-reconnect-spin { to { transform: rotate(-360deg); } }
+.studio-workspace-label.is-loading b { color: var(--muted-foreground); font-weight: 500; }
+@media (max-width: 600px) {
+  .shell-reconnect { margin: 8px 12px 0; flex-wrap: wrap; }
+  .shell-reconnect button { min-height: 44px; width: 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { .shell-reconnect .is-spinning { animation: none; } }

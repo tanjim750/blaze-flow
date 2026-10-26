@@ -29,6 +29,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         workspaces={context.ok ? context.data.workspaces : []}
         selectedWorkspaceId={context.ok ? context.data.selected?.id : null}
         railCollapsed={jar.get("blazeflow_rail")?.value === "1"}
+        degraded={!session.user || !context.ok}
       >
         {children}
       </AppShell>
