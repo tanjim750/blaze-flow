@@ -212,6 +212,7 @@ from .serializers.media import MEDIA_POSTER_VARIANT_TYPES
 from .services.tasks import record_task_stage_move
 from .services.invitations import pending_invitations, resend_invitation, revoke_invitation
 from .services.review_sync import sync_file_stage
+from .services.projects import DUPLICATE_PROJECT_NAME, project_name_taken
 from .services import (
     InvitationError,
     ClientTeamError,
@@ -1078,6 +1079,8 @@ def project_list_create(request, workspace_id):
         client_team = get_object_or_404(
             ClientTeam, id=client_team_id, workspace=workspace, status=ClientTeamStatus.ACTIVE,
         )
+    if project_name_taken(workspace=workspace, name=project_data.get('name')):
+        return Response({'name': [DUPLICATE_PROJECT_NAME]}, status=status.HTTP_400_BAD_REQUEST)
     try:
         enforce_project_creation_limit(workspace=workspace)
     except SubscriptionError as exc:
@@ -1124,6 +1127,8 @@ def project_detail(request, workspace_id, project_id):
             except SubscriptionError as exc:
                 return Response({'detail': str(exc), 'code': 'plan_limit'}, status=status.HTTP_400_BAD_REQUEST)
         changes = dict(serializer.validated_data)
+        if 'name' in changes and project_name_taken(workspace=workspace, name=changes['name'], exclude_id=project.id):
+            return Response({'name': [DUPLICATE_PROJECT_NAME]}, status=status.HTTP_400_BAD_REQUEST)
         if changes.get('client_team_id'):
             # Linking a project to a client: the client must be an active one of this workspace.
             get_object_or_404(ClientTeam, id=changes['client_team_id'], workspace=workspace, status=ClientTeamStatus.ACTIVE)
