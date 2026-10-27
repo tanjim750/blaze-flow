@@ -108,17 +108,52 @@
 .billing-gateways-head > svg { flex: none; width: 18px; height: 18px; margin-top: 2px; color: var(--shell-primary); }
 .billing-gateways-head h3 { margin: 0 0 3px; font-size: 14px; }
 .billing-gateways-head p { margin: 0; color: var(--shell-outline); font-size: 12px; }
-.billing-gateways ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.billing-gateways li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid #262B37; border-radius: 10px; background: #1A1E28; }
-.billing-gateways li:hover { background: #222733; }
-.billing-gateways li > span:nth-child(2) { display: grid; gap: 2px; min-width: 0; }
-.billing-gateways li strong { font-size: 13px; }
-.billing-gateways li small { color: var(--shell-outline); font-size: 12px; }
+.billing-gateways > ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.billing-gateways > ul > li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid #262B37; border-radius: 10px; background: #1A1E28; }
+.billing-gateways > ul > li:hover { background: #222733; }
+.billing-gateways > ul > li > span:nth-child(2) { display: grid; gap: 2px; min-width: 0; }
+.billing-gateways > ul > li strong { font-size: 13px; }
+.billing-gateways > ul > li small { color: var(--shell-outline); font-size: 12px; }
 .billing-gateway-logo { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: #151922; border: 1px solid #262B37; color: var(--shell-primary); font-weight: 700; }
 .settings-button.is-ghost { border-color: #262B37; background: #151922; color: var(--shell-outline); font-size: 12px; white-space: nowrap; }
 .settings-button.is-ghost:disabled { cursor: not-allowed; opacity: 1; }
 @media (max-width: 700px) {
   .billing-currency-row { grid-template-columns: 1fr; }
-  .billing-gateways li { grid-template-columns: auto minmax(0, 1fr); }
-  .billing-gateways li .settings-button { grid-column: 1 / -1; justify-self: stretch; }
+  .billing-gateways > ul > li { grid-template-columns: auto minmax(0, 1fr); }
+  .billing-gateways > ul > li .settings-button { grid-column: 1 / -1; justify-self: stretch; }
+}
+/* Stripe Connect card (Settings → Billing & currency). */
+.stripe-card { display: grid; gap: 10px; margin: 0 0 12px; padding: 16px; border-radius: 14px; border: 1px solid #262B37; background: #1A1E28; }
+.stripe-card.tone-success { border-color: color-mix(in srgb, #5bd295 35%, #262B37); }
+.stripe-card-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.stripe-logo { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: #635bff; color: #fff; font-weight: 800; font-size: 18px; }
+.stripe-card-title { display: grid; gap: 2px; min-width: 0; }
+.stripe-card-title small { color: var(--shell-outline); font-size: 12px; }
+.stripe-status { justify-self: end; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; border: 1px solid #262B37; background: #151922; color: var(--shell-outline); }
+.stripe-status.tone-success { color: #5bd295; border-color: color-mix(in srgb, #5bd295 40%, transparent); background: color-mix(in srgb, #5bd295 10%, #151922); }
+.stripe-status.tone-warning { color: #ffc95c; border-color: color-mix(in srgb, #ffc95c 40%, transparent); background: color-mix(in srgb, #ffc95c 10%, #151922); }
+.stripe-status.tone-info { color: #a99bff; border-color: color-mix(in srgb, #7c5cff 45%, transparent); background: color-mix(in srgb, #7c5cff 12%, #151922); }
+.stripe-status.tone-danger { color: #ff7b8a; border-color: color-mix(in srgb, #ff7b8a 40%, transparent); background: color-mix(in srgb, #ff7b8a 10%, #151922); }
+.stripe-note { margin: 0; font-size: 13px; line-height: 1.5; color: var(--shell-variant, #c9c4d8); }
+.stripe-note.is-muted { color: var(--shell-outline); font-size: 12px; }
+.stripe-note.is-warn { color: #ffc95c; }
+.stripe-flags { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--shell-outline); }
+.stripe-flags li { display: inline-flex; align-items: center; gap: 5px; }
+.stripe-flags li svg { width: 14px; height: 14px; color: #ff7b8a; }
+.stripe-flags li.is-on { color: var(--shell-variant, #c9c4d8); }
+.stripe-flags li.is-on svg { color: #5bd295; }
+.stripe-flags li.is-id { font-family: var(--font-geist-mono), monospace; }
+.stripe-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.stripe-actions .settings-button { display: inline-flex; align-items: center; gap: 7px; }
+.settings-button.stripe-primary { background: #7c5cff; border-color: #7c5cff; color: #fff; }
+.settings-button.stripe-primary:hover:not(:disabled) { background: #6a4cf0; }
+.settings-button.is-quiet { background: #151922; border-color: #262B37; color: var(--shell-variant, #c9c4d8); }
+.settings-button.is-quiet:hover:not(:disabled) { background: #222733; }
+.settings-button.is-danger { color: #ff7b8a; }
+.stripe-card .spin { animation: stripe-spin 1s linear infinite; }
+@keyframes stripe-spin { to { transform: rotate(360deg); } }
+@media (max-width: 700px) {
+  .stripe-card-head { grid-template-columns: auto minmax(0, 1fr); }
+  .stripe-status { grid-column: 1 / -1; justify-self: start; }
+  .stripe-actions .settings-button { flex: 1 1 100%; justify-content: center; }
 }

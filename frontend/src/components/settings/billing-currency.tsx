@@ -9,6 +9,8 @@ import { api } from "@/components/tasks/tasks-api";
 import { currencyInfo, currencyOptions } from "@/lib/currencies";
 import { formatMoney } from "@/lib/money";
 import type { InvoiceSettings, PaymentGatewayInfo } from "@/lib/studio-settings";
+import type { StripeStatus } from "@/lib/stripe-connect";
+import { StripeConnectCard } from "./stripe-connect-card";
 
 const PREVIEW_AMOUNTS = ["1250.5", "99", "0"];
 
@@ -52,15 +54,17 @@ export function CurrencySettingsForm({ workspaceId, initial, canEdit }: { worksp
   </div>;
 }
 
-/** Payment gateways: the registry from the API, all "Coming soon" for now (nothing connects). */
-export function PaymentGatewaysCard({ gateways }: { gateways: PaymentGatewayInfo[] }) {
+/** Payment gateways: Stripe Connect is live (when the server has keys); the rest are "Coming soon". */
+export function PaymentGatewaysCard({ gateways, workspaceId, stripe }: { gateways: PaymentGatewayInfo[]; workspaceId?: string; stripe?: StripeStatus | null }) {
+  const others = gateways.filter((gateway) => !(stripe && workspaceId && gateway.key === "stripe"));
   return <div className="billing-gateways">
-    <div className="billing-gateways-head"><Wallet aria-hidden="true" /><div><h3>Payment gateways</h3><p>Let clients pay invoices online. Payments recorded by a gateway will mark invoices paid automatically.</p></div></div>
+    <div className="billing-gateways-head"><Wallet aria-hidden="true" /><div><h3>Payment gateways</h3><p>Let clients pay invoices online. Payments taken by a gateway mark invoices paid automatically.</p></div></div>
+    {stripe && workspaceId && <StripeConnectCard workspaceId={workspaceId} initial={stripe} />}
     <ul>
-      {gateways.map((gateway) => <li key={gateway.key}>
+      {others.map((gateway) => <li key={gateway.key}>
         <span className="billing-gateway-logo" aria-hidden="true">{gateway.name.slice(0, 1)}</span>
         <span><strong>{gateway.name}</strong><small>{gateway.description}</small></span>
-        <button type="button" className="settings-button is-ghost" disabled title="Coming soon">{gateway.status === "coming_soon" ? "Coming soon" : "Connect"}</button>
+        <button type="button" className="settings-button is-ghost" disabled title="Coming soon">{gateway.status === "not_configured" ? "Not configured" : "Coming soon"}</button>
       </li>)}
     </ul>
   </div>;

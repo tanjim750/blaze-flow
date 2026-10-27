@@ -33,7 +33,15 @@ describe("CurrencySettingsForm", () => {
 });
 
 describe("PaymentGatewaysCard", () => {
-  it("shows every gateway as coming soon and disabled", () => {
+  it("shows Stripe as live and keeps the others coming soon", () => {
+    render(<PaymentGatewaysCard workspaceId="w" stripe={{ configured: true, not_configured_message: null, connected: false, can_manage: true, platform_fee_percent: "0", status: "not_connected", charges_enabled: false, payouts_enabled: false, details_submitted: false, requirements_due: [], disabled_reason: "", account_id: null, country: "", default_currency: "", last_synced_at: null }} gateways={[
+      { key: "stripe", name: "Stripe", description: "Cards", connected: false, status: "available", features: [], supports_workspace_currency: true },
+      { key: "paypal", name: "PayPal", description: "Wallet", connected: false, status: "coming_soon", features: [], supports_workspace_currency: true },
+    ]} />);
+    expect(screen.getByRole("button", { name: /Connect Stripe/ })).toBeEnabled();
+    expect(screen.getAllByRole("button", { name: /Coming soon/ })).toHaveLength(1);
+  });
+  it("without Stripe status, lists every gateway as disabled", () => {
     render(<PaymentGatewaysCard gateways={[
       { key: "stripe", name: "Stripe", description: "Cards", connected: false, status: "coming_soon", features: [], supports_workspace_currency: true },
       { key: "sslcommerz", name: "SSLCommerz", description: "Bangladesh", connected: false, status: "coming_soon", features: [], supports_workspace_currency: false },

@@ -11,9 +11,9 @@ import { useAppRouter } from "@/lib/app-router";/**
  */
 import Link from "next/link";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Banknote, CircleDollarSign, Eye, MoreHorizontal, PencilLine, Plus, Printer, Save, Send, Trash2, Undo2, X } from "@/components/icons";
+import { ArrowLeft, Banknote, CircleCheck, CircleDollarSign, Eye, Info, Link2, MoreHorizontal, PencilLine, Plus, Printer, Save, Send, Trash2, Undo2, X } from "@/components/icons";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { formatMoney, fromMinor, parseMoneyInput, toMinor } from "@/lib/money";
@@ -22,6 +22,7 @@ import { deleteInvoice, recordInvoicePayment, revertInvoice, sendInvoice, update
 import { markInvoicePaid } from "./money-board";
 import { PaymentDialog } from "./payment-dialog";
 import { sentMessage } from "@/lib/invoice-send";
+import { goTo, invoiceCheckout, onlinePaymentNote } from "@/lib/stripe-connect";
 
 type DraftLine = { key: string; id?: string; kind: InvoiceLine["kind"]; description: string; amount: string };
 type Draft = { lines: DraftLine[]; discount: string; taxRate: string; dueDate: string; notes: string };
@@ -51,7 +52,7 @@ export function editPayload(draft: Draft): { edit: InvoiceEdit } | { error: stri
   return { edit: { lines, discount_amount: discount.amount ?? "0", tax_rate: String(rate), due_date: draft.dueDate || null, notes: draft.notes } };
 }
 
-export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: { workspaceId: string; invoice: InvoiceDetail; canManage: boolean; backHref: string; now: string }) {
+export function InvoiceView({ workspaceId, invoice, canManage, backHref, now, stripeReturn = null }: { workspaceId: string; invoice: InvoiceDetail; canManage: boolean; backHref: string; now: string; stripeReturn?: "success" | "cancel" | null }) {
   const router = useAppRouter();
   const [paying, setPaying] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -74,6 +75,15 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: 
   const shownNotes = editable ? draft.notes : invoice.notes;
   const shownDue = editable ? draft.dueDate || null : invoice.due_date;
   const dueOnSend = draft.dueDate || invoice.default_due_date || null;
+
+  // Back from Stripe Checkout: the webhook usually lands within seconds, so re-read a few times.
+  const awaitingStripe = stripeReturn === "success" && invoice.status !== "paid";
+  useEffect(() => {
+    if (!awaitingStripe) return;
+    let tries = 0;
+    const timer = window.setInterval(() => { tries += 1; router.refresh(); if (tries >= 5) window.clearInterval(timer); }, 2500);
+    return () => window.clearInterval(timer);
+  }, [awaitingStripe, router]);
 
   async function run(action: () => Promise<unknown>, done?: string) {
     setBusy(true);
@@ -103,6 +113,19 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: 
     secondary.push({ key: "pay", label: "Record payment", icon: <Banknote aria-hidden="true" />, disabled: busy, onSelect: () => setPaying(true) });
     primary = <button type="button" className="money-button is-primary" disabled={busy} onClick={() => void run(() => markInvoicePaid(workspaceId, invoice))}><CircleDollarSign aria-hidden="true" />{settleLabel(invoice, formatMoney)}</button>;
   }
+  const payOnline = invoice.online_payment?.available === true;
+  if (!canManage && payOnline) {
+    primary = <button type="button" className="money-button is-primary invoice-pay-now" disabled={busy} onClick={() => void (async () => {
+      setBusy(true);
+      try { goTo.url((await invoiceCheckout(workspaceId, invoice.id)).url); }
+      catch (reason) { toast.error(reason instanceof Error ? reason.message : "Couldn't open the payment page."); setBusy(false); }
+    })()}><CircleDollarSign aria-hidden="true" />Pay now</button>;
+  }
+  if (canManage && invoice.pay_link) {
+    const link = invoice.pay_link;
+    secondary.push({ key: "pay-link", label: "Copy pay link", icon: <Link2 aria-hidden="true" />, onSelect: () => { void navigator.clipboard?.writeText(link).then(() => toast("Pay link copied. Anyone with it can pay this invoice."), () => toast.error("Couldn't copy. The link is " + link)); } });
+  }
+  const payNote = onlinePaymentNote(invoice.online_payment, { manager: canManage });
   secondary.push({ key: "print", label: "Print", icon: <Printer aria-hidden="true" />, onSelect: () => window.print() });
 
   return <div className="money-page invoice-page">
@@ -126,6 +149,10 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now }: 
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+
+    {stripeReturn === "success" && <p className="invoice-stripe-note tone-success" role="status"><CircleCheck aria-hidden="true" />{invoice.online_payment?.reason === "nothing_due" || invoice.status === "paid" ? "Payment received. Thank you!" : "Thanks! Your payment is being confirmed; this page updates once Stripe tells us it\u2019s done."}</p>}
+    {stripeReturn === "cancel" && <p className="invoice-stripe-note tone-warning" role="status"><Info aria-hidden="true" />Payment cancelled. Nothing was charged{payOnline ? "; you can try Pay now again any time." : "."}</p>}
+    {payNote && invoice.status !== "draft" && <p className="invoice-stripe-note" role="note"><Info aria-hidden="true" />{payNote}</p>}
 
     {editable && previewing && <p className="invoice-preview-note" role="status"><Eye aria-hidden="true" />Preview: this is what {invoice.bill_to.name} sees once it&rsquo;s sent.{dirty ? " Includes unsaved changes." : ""}</p>}
 

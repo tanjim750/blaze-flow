@@ -7,7 +7,7 @@ import { publicRoutes, siteConfig } from "@/lib/site-config";
  * (they require a session or a private token anyway).
  */
 export const PRIVATE_PREFIXES = [
-  "/api/", "/platform", "/review", "/guest-review", "/review-embed", "/upload", "/onboarding",
+  "/api/", "/platform", "/review", "/guest-review", "/review-embed", "/upload", "/pay", "/onboarding",
   "/welcome", "/sign-in", "/sign-up", "/forgot-password", "/reset-password", "/verify-email", "/invite",
   "/chat", "/clients", "/deliverables", "/files", "/help", "/messages", "/money", "/notifications",
   "/portal", "/projects", "/render-queue", "/settings", "/tasks", "/team",
