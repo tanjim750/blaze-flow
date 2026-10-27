@@ -189,7 +189,32 @@ def project_pricing(project) -> dict:
         # The open draft, if any, so Pricing links to it with its real total instead of
         # offering to invoice an amount that disagrees with it.
         'draft_invoice': {'id': str(draft.id), 'number': draft.number, 'total': money_str(invoice_total(draft))} if draft else None,
+        'billable': billable_summary(project, draft=draft, has_prices=bool(project.client_fee) or task_total > 0),
     }
+
+
+def billable_summary(project, *, draft=None, has_prices=None) -> dict:
+    """What "New invoice" would put on a fresh invoice for ``project``, before anyone clicks.
+
+    ``state`` says which case applies, so the dialog can explain instead of failing:
+    ``billable`` (items waiting), ``draft`` (nothing new, but Create opens the open draft),
+    ``unpriced`` (no fee and no task prices yet) or ``invoiced`` (everything is billed).
+    """
+    items = _uninvoiced_items(project)
+    if has_prices is None:
+        has_prices = bool(project.client_fee) or _live_tasks(project).filter(client_price__gt=0).exists()
+    if draft is None:
+        draft = Invoice.objects.filter(project=project, status=InvoiceStatus.DRAFT).order_by('-created_at').first()
+    if items:
+        state = 'billable'
+    elif draft is not None:
+        state = 'draft'
+    elif has_prices:
+        state = 'invoiced'
+    else:
+        state = 'unpriced'
+    total = sum((amount for *_rest, amount in items), ZERO)
+    return {'state': state, 'items': len(items), 'total': money_str(total), 'has_client': project.client_team_id is not None}
 
 
 # --- invoices -----------------------------------------------------------------------------

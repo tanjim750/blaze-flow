@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ellipsis, Link2 } from "@/components/icons";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ArrowLeftRight, AtSign, CheckSquare, History, ListChecks, CornerDownRight, Sparkles, Eye, Lock, MessageSquareText, Paperclip, Pencil, PencilLine, Repeat, RotateCcw, Search, Send, SmilePlus, Timer, Trash2, Users, X } from "@/components/icons";
+import { ArrowLeftRight, AtSign, Check, CheckSquare, CircleCheck, History, ListChecks, ListFilter, CornerDownRight, Sparkles, Eye, Lock, MessageSquareText, Paperclip, Pencil, PencilLine, Repeat, Reply, RotateCcw, Search, Send, SmilePlus, Timer, Trash2, Users, X } from "@/components/icons";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DEFAULT_HOLD, HOLD_PRESETS_MS, displayWindow, drawingEndMs, holdLabel, noteEndMs, parseTime, rangeLabel, rememberHold, validChoice, type HoldChoice,
 } from "@/lib/annotation-window";
@@ -199,22 +200,42 @@ export function Comments({
   // Comparing is a reading mode: two labelled feeds, and no composer, because a note
   // written here would have to guess which cut it was about. Branching after the hooks
   // above so this component calls the same ones on every render.
-  const previewToggle = view.target && canWriteTeam && (
-    <button
-      type="button"
-      className={`rvc-preview ${clientPreview ? "is-on" : ""}`}
-      aria-pressed={clientPreview}
-      onClick={() => onClientPreview(!clientPreview)}
-      title="Show only the notes a client or guest reviewer can see"
-    >
-      <Eye size={12} />{clientPreview ? "Client view on" : "See what the client sees"}
-    </button>
+  const canPreview = Boolean(view.target && canWriteTeam);
+  const canSelect = teamTools && open > 0;
+  // "See what the client sees" and "Select" live in one overflow menu, off the main bar.
+  const overflow = (canPreview || canSelect) && (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className="rvc-icon-btn" aria-label="More comment options" title="More options"><Ellipsis size={15} /></button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="rvc-menu">
+        {canPreview && (
+          <DropdownMenuItem onSelect={() => onClientPreview(!clientPreview)} title="Show only the notes a client or guest reviewer can see">
+            <Eye size={13} aria-hidden="true" />{clientPreview ? "Turn off client view" : "See what the client sees"}
+            {clientPreview && <Check size={13} className="rvc-menu-check" aria-hidden="true" />}
+          </DropdownMenuItem>
+        )}
+        {canSelect && (
+          <DropdownMenuItem onSelect={() => (selecting ? stopSelecting() : setSelecting(true))} title="Select open notes to turn into tasks">
+            <CheckSquare size={13} aria-hidden="true" />{selecting ? "Stop selecting" : "Select notes for tasks"}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+  const previewStatus = clientPreview && (
+    <div className="rvc-preview-bar" role="status">
+      <Eye size={12} aria-hidden="true" />
+      <span>Client view{hiddenTeamNotes ? ` · ${hiddenTeamNotes} team ${hiddenTeamNotes === 1 ? "note" : "notes"} hidden` : " · no team notes on this cut"}</span>
+      <button type="button" onClick={() => onClientPreview(false)} aria-label="Turn off client view" title="Turn off client view"><X size={12} /></button>
+    </div>
   );
 
   if (view.comparison) {
     return (
       <>
-        {previewToggle && <div className="rvc-preview-bar">{previewToggle}</div>}
+        {overflow && <header className="rvc-bar"><span className="rvc-count" />{overflow}</header>}
+        {previewStatus}
         <CompareFeeds view={view} writer={writer} compareWriter={compareWriter} clientPreview={clientPreview} onSeek={onCompareSeek} row={row} />
       </>
     );
@@ -222,31 +243,16 @@ export function Comments({
 
   return (
     <div className="rvc">
-      {previewToggle && (
-        <div className="rvc-preview-bar">
-          {previewToggle}
-          {clientPreview && (
-            <span role="status">
-              {hiddenTeamNotes ? `${hiddenTeamNotes} team ${hiddenTeamNotes === 1 ? "note" : "notes"} hidden` : "No team notes on this cut"}
-            </span>
-          )}
-        </div>
-      )}
-      <header className="rvc-head">
-        <h2><MessageSquareText size={15} />Comments</h2>
-        <div>
-          <span>{notes.length ? `${open} open · ${notes.length - open} resolved` : "None yet"}</span>
-          {teamTools && open > 0 && (
-            <button type="button" className={`rvc-select-toggle ${selecting ? "is-on" : ""}`} aria-pressed={selecting} onClick={() => (selecting ? stopSelecting() : setSelecting(true))} title="Select open notes to turn into tasks">
-              <CheckSquare size={12} aria-hidden="true" />{selecting ? "Done" : "Select"}
-            </button>
-          )}
-        </div>
+      <header className="rvc-bar">
+        <span className="rvc-count" data-testid="comment-count">
+          {notes.length ? <><b>{open}</b> open</> : "No comments yet"}
+        </span>
+        {notes.length > 0 && (
+          <FilterBar filter={filter} onChange={setFilter} counts={counts} sides={sides} filtering={filtering} sort={sort} onSort={setSort} />
+        )}
+        {overflow}
       </header>
-
-      {notes.length > 0 && (
-        <FilterBar filter={filter} onChange={setFilter} counts={counts} sides={sides} filtering={filtering} sort={sort} onSort={setSort} />
-      )}
+      {previewStatus}
 
       {teamTools && noteTasks.carry && noteTasks.carry.available > 0 && noteTasks.carry.previous && (
         <div className="rvc-carry" data-testid="carry-over">
@@ -362,18 +368,24 @@ function TeamBadge() {
   );
 }
 
-/** Status, author and drawing filters plus a search, over the comment feed. */
+/**
+ * Search and filters for the feed, as two icon buttons on the bar: the search expands into a
+ * field, and one Filter popover holds the status, the Mine/Drawings/Client/Team filters and
+ * the sort order. The badge counts what is narrowing the list.
+ */
 function FilterBar({ filter, onChange, counts, sides, filtering, sort, onSort }: {
   filter: NoteFilter; onChange: (filter: NoteFilter) => void;
   counts: ReturnType<typeof filterCounts>; sides: boolean; filtering: boolean;
   sort: NoteSort; onSort: (sort: NoteSort) => void;
 }) {
+  const [searching, setSearching] = useState(Boolean(filter.query));
   const set = (change: Partial<NoteFilter>) => onChange({ ...filter, ...change });
   const statuses: { value: NoteStatus; label: string; count: number }[] = [
     { value: "all", label: "All", count: counts.all },
     { value: "open", label: "Open", count: counts.open },
     { value: "resolved", label: "Resolved", count: counts.resolved },
   ];
+  const badge = activeFilters({ ...filter, query: "" }) + (sort !== "timecode" ? 1 : 0);
   const side = (value: Exclude<NoteSide, "all">, label: string, count: number, title: string) => (
     <button
       type="button" aria-pressed={filter.side === value} className={filter.side === value ? "is-on" : ""}
@@ -383,47 +395,71 @@ function FilterBar({ filter, onChange, counts, sides, filtering, sort, onSort }:
     </button>
   );
   return (
-    <div className="rvc-filters">
-      <label className="rvc-search">
-        <Search size={13} aria-hidden="true" />
-        <input
-          type="search"
-          value={filter.query}
-          onChange={(event) => set({ query: event.target.value })}
-          onKeyDown={(event) => { if (event.key === "Escape" && filter.query) { event.stopPropagation(); set({ query: "" }); } }}
-          placeholder="Search comments"
-          aria-label="Search comments"
-        />
-      </label>
-      <label className="rvc-sort">
-        <span>Sort by</span>
-        <select value={sort} onChange={(event) => onSort(event.target.value as NoteSort)} aria-label="Sort comments">
-          {NOTE_SORTS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </select>
-      </label>
-      <div className="rvc-filter-row">
-        <div className="rvc-status" role="radiogroup" aria-label="Show comments">
-          {statuses.map((item) => (
-            <button
-              key={item.value} type="button" role="radio" aria-checked={filter.status === item.value}
-              className={filter.status === item.value ? "is-on" : ""} onClick={() => set({ status: item.value })}
-            >
-              {item.label}<small>{item.count}</small>
+    <div className="rvc-tools">
+      {searching ? (
+        <label className="rvc-search">
+          <Search size={13} aria-hidden="true" />
+          <input
+            type="search"
+            autoFocus
+            value={filter.query}
+            onChange={(event) => set({ query: event.target.value })}
+            onBlur={() => { if (!filter.query) setSearching(false); }}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              event.stopPropagation();
+              if (filter.query) set({ query: "" }); else { setSearching(false); event.currentTarget.blur(); }
+            }}
+            placeholder="Search comments"
+            aria-label="Search comments"
+          />
+          <button type="button" className="rvc-search-close" aria-label="Close search" onMouseDown={(event) => event.preventDefault()} onClick={() => { set({ query: "" }); setSearching(false); }}><X size={12} /></button>
+        </label>
+      ) : (
+        <button type="button" className="rvc-icon-btn" aria-label="Search comments" title="Search comments" onClick={() => setSearching(true)}><Search size={14} /></button>
+      )}
+      <Popover>
+        <PopoverTrigger asChild>
+          <button type="button" className={`rvc-filter-btn ${badge ? "is-on" : ""}`} aria-label={badge ? `Filter comments, ${badge} active` : "Filter comments"} title="Filter and sort">
+            <ListFilter size={14} aria-hidden="true" /><span>Filter</span>{badge > 0 && <b className="rvc-badge">{badge}</b>}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="rvc-filter-pop" data-testid="filter-popover">
+          <p className="rvc-pop-label">Show</p>
+          <div className="rvc-status" role="radiogroup" aria-label="Show comments">
+            {statuses.map((item) => (
+              <button
+                key={item.value} type="button" role="radio" aria-checked={filter.status === item.value}
+                className={filter.status === item.value ? "is-on" : ""} onClick={() => set({ status: item.value })}
+              >
+                {item.label}<small>{item.count}</small>
+              </button>
+            ))}
+          </div>
+          <p className="rvc-pop-label">Filter</p>
+          <div className="rvc-chips" role="group" aria-label="Filter comments">
+            <button type="button" aria-pressed={filter.mine} className={filter.mine ? "is-on" : ""} onClick={() => set({ mine: !filter.mine })} title="Notes you wrote or replied to">
+              Mine<small>{counts.mine}</small>
             </button>
-          ))}
-        </div>
-        <div className="rvc-chips" role="group" aria-label="Filter comments">
-          <button type="button" aria-pressed={filter.mine} className={filter.mine ? "is-on" : ""} onClick={() => set({ mine: !filter.mine })} title="Notes you wrote or replied to">
-            Mine<small>{counts.mine}</small>
-          </button>
-          <button type="button" aria-pressed={filter.drawings} className={filter.drawings ? "is-on" : ""} onClick={() => set({ drawings: !filter.drawings })} title="Notes with a drawing on the frame">
-            <PencilLine size={11} aria-hidden="true" />Drawings<small>{counts.drawings}</small>
-          </button>
-          {sides && side("client", "Client", counts.client, "Written by client members and guest reviewers")}
-          {sides && side("team", "Team", counts.team, "Written by members of this workspace")}
-          {filtering && <button type="button" className="rvc-clear" onClick={() => onChange(DEFAULT_FILTER)}>Clear</button>}
-        </div>
-      </div>
+            <button type="button" aria-pressed={filter.drawings} className={filter.drawings ? "is-on" : ""} onClick={() => set({ drawings: !filter.drawings })} title="Notes with a drawing on the frame">
+              <PencilLine size={11} aria-hidden="true" />Drawings<small>{counts.drawings}</small>
+            </button>
+            {sides && side("client", "Client", counts.client, "Written by client members and guest reviewers")}
+            {sides && side("team", "Team", counts.team, "Written by members of this workspace")}
+          </div>
+          <p className="rvc-pop-label">Sort by</p>
+          <div className="rvc-sort" role="radiogroup" aria-label="Sort comments">
+            {NOTE_SORTS.map((item) => (
+              <button key={item.value} type="button" role="radio" aria-checked={sort === item.value} className={sort === item.value ? "is-on" : ""} onClick={() => onSort(item.value)}>
+                {sort === item.value && <Check size={12} aria-hidden="true" />}{item.label}
+              </button>
+            ))}
+          </div>
+          {(filtering || sort !== "timecode") && (
+            <button type="button" className="rvc-clear" onClick={() => { onChange({ ...DEFAULT_FILTER, query: filter.query }); onSort("timecode"); }}>Reset filters</button>
+          )}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -688,26 +724,6 @@ function Note({ note, view, target, writer, focused, live = false, onSeek, onRep
 
       {editingId !== note.id && (
         <div className="rvc-actions">
-          {onReply && !note.pending && <button type="button" onClick={() => onReply(note)}>Reply</button>}
-          {canReact && <button type="button" onClick={() => writer.react(note, "👍")} aria-label="React with thumbs up"><SmilePlus size={12} /></button>}
-          {canResolve && <button
-            type="button"
-            className={note.resolved ? "" : "rvc-resolve"}
-            onClick={() => { writer.setResolved(note, !note.resolved); onAfterResolve?.(); }}
-          >
-            {note.resolved ? "Reopen" : "Resolve"}
-          </button>}
-          {onMakeTask && !task && (
-            <button type="button" className="rvc-make-task" onClick={onMakeTask} title="Turn this note into a task">
-              <ListChecks size={12} aria-hidden="true" />Make task
-            </button>
-          )}
-          {ownDrawing && (
-            <button type="button" onClick={() => setDurationOpen(!durationOpen)} aria-expanded={durationOpen} aria-label="Change drawing duration" title="Change how long the drawing stays on screen">
-              <Timer size={12} />
-            </button>
-          )}
-          <OwnActions note={note} writer={writer} {...mine} editing={false} onEdit={() => setEditingId(note.id)} />
           {note.reactions.length > 0 && (
             <span className="rvc-reactions">
               {note.reactions.map((reaction) => (
@@ -717,6 +733,31 @@ function Note({ note, view, target, writer, focused, live = false, onSeek, onRep
               ))}
             </span>
           )}
+          {/* Shown on hover or focus (always on touch screens), so a quiet feed reads as text. */}
+          <span className="rvc-hover-actions">
+          {onReply && !note.pending && <button type="button" className="rvc-act" onClick={() => onReply(note)} aria-label="Reply" title="Reply"><Reply size={13} /></button>}
+          {canReact && <button type="button" className="rvc-act" onClick={() => writer.react(note, "👍")} aria-label="React with thumbs up" title="React"><SmilePlus size={13} /></button>}
+          {onMakeTask && !task && (
+            <button type="button" className="rvc-act rvc-make-task" onClick={onMakeTask} aria-label="Make task" title="Turn this note into a task">
+              <ListChecks size={13} aria-hidden="true" />
+            </button>
+          )}
+          {ownDrawing && (
+            <button type="button" onClick={() => setDurationOpen(!durationOpen)} aria-expanded={durationOpen} aria-label="Change drawing duration" title="Change how long the drawing stays on screen">
+              <Timer size={12} />
+            </button>
+          )}
+          <OwnActions note={note} writer={writer} {...mine} editing={false} onEdit={() => setEditingId(note.id)} />
+          </span>
+          {canResolve && <button
+            type="button"
+            className={`rvc-act rvc-resolve ${note.resolved ? "is-resolved" : ""}`}
+            onClick={() => { writer.setResolved(note, !note.resolved); onAfterResolve?.(); }}
+            aria-label={note.resolved ? "Reopen" : "Resolve"}
+            title={note.resolved ? "Reopen" : "Resolve"}
+          >
+            {note.resolved ? <RotateCcw size={13} /> : <CircleCheck size={14} />}
+          </button>}
         </div>
       )}
     </article>
@@ -914,32 +955,6 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
         </div>
       )}
 
-      {pendingAnnotation && (
-        <div className="rvc-chip">
-          <span>Drawing attached · {pendingAnnotation.length === 1 ? pendingAnnotation[0].element_type.toLowerCase() : `${pendingAnnotation.length} shapes`}</span>
-          <button type="button" onClick={onClearAnnotation} aria-label="Remove drawing"><X size={12} /></button>
-        </div>
-      )}
-
-      {ranged && mark && (
-        <div className="rvc-chip is-range" role="status">
-          <span>
-            <ArrowLeftRight size={12} aria-hidden="true" />
-            {markOut !== null
-              ? <>Range <b>{rangeLabel(mark.inMs, markOut)}</b>{pendingAnnotation ? " · drawing shows for the whole range" : ""}</>
-              : <>In <b>{timecode(mark.inMs)}</b> · press O or drag the handle for an out point</>}
-          </span>
-          {markOut !== null && onPlayRange && (
-            <button type="button" onClick={() => onPlayRange(mark.inMs, markOut)} aria-label="Loop the marked range" title="Loop the marked range (Esc stops)"><Repeat size={12} /></button>
-          )}
-          <button type="button" onClick={() => onMark?.(null)} aria-label="Clear range" title="Clear range (Esc)"><X size={12} /></button>
-        </div>
-      )}
-
-      {holdable && startMs !== null && (
-        <HoldPicker startMs={startMs} positionMs={positionMs} durationMs={durationMs} value={hold} onChange={onHold} />
-      )}
-
       {clip && (
         <div className="rvc-chip">
           <span>{clip.kind === "voice" ? "Voice comment" : "Screen recording"} attached</span>
@@ -959,68 +974,124 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
         </ul>
       )}
 
-      {view.target && canWriteTeam && !disabled && (
-        teamThread ? (
-          <p className="rvc-visibility-locked"><Lock size={11} />Team thread: your reply stays team-only</p>
-        ) : (
-          <div className="rvc-visibility" role="radiogroup" aria-label="Who can see this comment">
-            <button type="button" role="radio" aria-checked={!team} className={!team ? "is-on" : ""} onClick={() => setVisibility("client")}>
-              <Users size={12} />Client can see
-            </button>
-            <button type="button" role="radio" aria-checked={team} className={team ? "is-on is-team" : ""} onClick={() => setVisibility("team")}>
-              <Lock size={12} />Team only
-            </button>
-          </div>
-        )
-      )}
-
-      <textarea
-        ref={field}
-        value={text}
-        disabled={disabled}
-        aria-label="Comment"
-        placeholder={disabled
-          ? "Comments are unavailable for this cut."
-          : `${team ? "Team-only note" : "Leave a comment"}${timed && startMs !== null ? ` at ${timecode(startMs)}` : ""}… use @ to mention`}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit(); }
-          // Esc hands the keyboard back to the player; the draft stays.
-          if (event.key === "Escape") { event.preventDefault(); event.currentTarget.blur(); }
-        }}
-      />
-
-      {!replyTo && (
-        <Recorder onClip={setClip} disabled={disabled} />
-      )}
-
       {writer.error && <p className="form-error">{writer.error}</p>}
 
-      <div className="rvc-send">
-        {!timed
-          ? <small>{replyTo ? "Replying in the thread" : "Comments apply to the whole file"}</small>
-          : replyTo
-          ? <small>Replies inherit their parent&rsquo;s timecode</small>
-          : ranged && mark ? (
-            <small className="rvc-pin">{markOut !== null ? `Covers ${rangeLabel(mark.inMs, markOut)}` : `Pinned to ${timecode(mark.inMs)}`}</small>
-          ) : (
-            <span className="rvc-pin-row">
-              <label className="rvc-pin">
-                <input type="checkbox" checked={pinned} onChange={(event) => setPinned(event.target.checked)} />
-                {pinned ? `Pinned to ${timecode(startMs ?? positionMs)}` : "Not pinned to a time"}
-              </label>
-              {onMark && pinned && (
-                <button type="button" className="rvc-range-btn" onClick={startMark} title="Make this note cover a range (I / O keys, or shift-drag on the timeline)">
-                  <ArrowLeftRight size={11} aria-hidden="true" />Range
-                </button>
-              )}
-            </span>
+      {pendingAnnotation && (
+        <DrawingChip
+          count={pendingAnnotation.length}
+          kind={pendingAnnotation.length === 1 ? pendingAnnotation[0].element_type.toLowerCase() : null}
+          span={holdable && startMs !== null ? holdSpan(startMs, hold, durationMs) : markOut !== null ? "range" : null}
+          onRemove={onClearAnnotation}
+        >
+          {holdable && startMs !== null
+            ? <HoldPicker startMs={startMs} positionMs={positionMs} durationMs={durationMs} value={hold} onChange={onHold} />
+            : <p className="rvc-pop-note">{markOut !== null ? "The drawing shows for the whole marked range." : "This drawing shows throughout: its note has no time to hold from."}</p>}
+        </DrawingChip>
+      )}
+
+      <div className="rvc-line">
+        {!replyTo && <Recorder onClip={setClip} disabled={disabled} />}
+        <textarea
+          ref={field}
+          value={text}
+          disabled={disabled}
+          rows={1}
+          aria-label="Comment"
+          placeholder={disabled
+            ? "Comments are unavailable for this cut."
+            : `${team ? "Team-only note" : replyTo ? "Reply" : "Leave a comment"}… @ to mention`}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void submit(); }
+            // Esc hands the keyboard back to the player; the draft stays.
+            if (event.key === "Escape") { event.preventDefault(); event.currentTarget.blur(); }
+          }}
+        />
+        <div className="rvc-line-tools">
+          {view.target && canWriteTeam && !disabled && (
+            teamThread ? (
+              <span className="rvc-vis is-team is-locked" title="Team thread: your reply stays team-only" aria-label="Team thread: your reply stays team-only" role="img"><Lock size={13} /></span>
+            ) : (
+              <button
+                type="button" className={`rvc-vis ${team ? "is-team" : ""}`} role="switch" aria-checked={team}
+                aria-label="Team only"
+                title={team ? "Team only: guests and clients never see this. Click to let the client see it." : "Client can see this. Click to make it team only."}
+                onClick={() => setVisibility(team ? "client" : "team")}
+              >
+                {team ? <Lock size={13} /> : <Users size={13} />}
+              </button>
+            )
           )}
-        <button type="submit" disabled={disabled || writer.busy} aria-label={team ? "Send team-only comment" : "Send comment"}>
-          <Send size={14} />
-        </button>
+          {timed && !replyTo && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className={`rvc-time ${ranged ? "is-range" : ""} ${!pinned && !ranged ? "is-off" : ""}`} aria-label="Comment timecode" title="When this note applies">
+                  {ranged && mark
+                    ? <><ArrowLeftRight size={11} aria-hidden="true" />{markOut !== null ? rangeLabel(mark.inMs, markOut) : `${timecode(mark.inMs)}–?`}</>
+                    : pinned ? timecode(startMs ?? positionMs) : "No time"}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" side="top" className="rvc-time-pop" data-testid="timecode-popover">
+                {ranged && mark ? (
+                  <>
+                    <p className="rvc-pop-note">
+                      {markOut !== null
+                        ? <>Range <b>{rangeLabel(mark.inMs, markOut)}</b>{pendingAnnotation ? " · drawing shows for the whole range" : ""}</>
+                        : <>In <b>{timecode(mark.inMs)}</b> · press O or drag the handle for an out point</>}
+                    </p>
+                    <div className="rvc-pop-row">
+                      {markOut !== null && onPlayRange && (
+                        <button type="button" onClick={() => onPlayRange(mark.inMs, markOut)} aria-label="Loop the marked range" title="Loop the marked range (Esc stops)"><Repeat size={12} />Loop</button>
+                      )}
+                      <button type="button" onClick={() => onMark?.(null)} aria-label="Clear range" title="Clear range (Esc)"><X size={12} />Clear range</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <label className="rvc-pin">
+                      <input type="checkbox" checked={pinned} onChange={(event) => setPinned(event.target.checked)} />
+                      {pinned ? `Pinned to ${timecode(startMs ?? positionMs)}` : "Not pinned to a time"}
+                    </label>
+                    {onMark && pinned && (
+                      <button type="button" className="rvc-range-btn" onClick={startMark} title="Make this note cover a range (I / O keys, or shift-drag on the timeline)">
+                        <ArrowLeftRight size={11} aria-hidden="true" />Make it a range
+                      </button>
+                    )}
+                    <small className="rvc-pop-hint">I / O keys mark in and out points.</small>
+                  </>
+                )}
+              </PopoverContent>
+            </Popover>
+          )}
+          <button type="submit" className="rvc-send-btn" disabled={disabled || writer.busy} aria-label={team ? "Send team-only comment" : "Send comment"} title="Send (⌘↵)">
+            <Send size={14} />
+          </button>
+        </div>
       </div>
+      {(!timed || replyTo) && (
+        <small className="rvc-line-hint">{!timed ? (replyTo ? "Replying in the thread" : "Comments apply to the whole file") : "Replies inherit their parent\u2019s timecode"}</small>
+      )}
     </form>
+  );
+}
+
+/** The pending drawing as one small chip; clicking it opens the Show drawing options. */
+function DrawingChip({ count, kind, span, onRemove, children }: {
+  count: number; kind: string | null; span: string | null; onRemove: () => void; children: React.ReactNode;
+}) {
+  const label = `${kind ?? `${count} shapes`}${span ? ` · ${span}` : ""}`;
+  return (
+    <div className="rvc-draw-chip" data-testid="drawing-chip">
+      <Popover>
+        <PopoverTrigger asChild>
+          <button type="button" className="rvc-draw-open" aria-label={`Drawing attached: ${label}. Change how long it shows`} title="Drawing attached — how long it stays on screen">
+            <PencilLine size={12} aria-hidden="true" /><span>{label}</span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" side="top" className="rvc-draw-pop" data-testid="drawing-popover">{children}</PopoverContent>
+      </Popover>
+      <button type="button" className="rvc-draw-x" onClick={onRemove} aria-label="Remove drawing" title="Remove drawing"><X size={11} /></button>
+    </div>
   );
 }
 
@@ -1138,4 +1209,12 @@ export function RevisionForm({ writer, positionMs, approved = false, asClient = 
       </div>
     </form>
   );
+}
+
+/** The chip's short span: "5s", "frame" or the range length. */
+function holdSpan(startMs: number, hold: HoldChoice, durationMs: number): string {
+  if (hold.kind === "frame") return "frame";
+  if (hold.kind === "hold") return `${hold.ms / 1000}s`;
+  const end = drawingEndMs(startMs, hold, durationMs);
+  return end !== null && end > startMs ? `${Math.round((end - startMs) / 100) / 10}s range` : "range";
 }

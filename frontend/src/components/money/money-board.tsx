@@ -6,16 +6,16 @@ import { useAppRouter } from "@/lib/app-router";/**
  */
 import Link from "next/link";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Banknote, Building2, ChevronRight, CircleDollarSign, FilePlus2, HandCoins, Info, ReceiptText, Users } from "@/components/icons";
+import { Banknote, Building2, ChevronRight, CircleDollarSign, FilePlus2, HandCoins, Info, ListChecks, ReceiptText, Users } from "@/components/icons";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { formatMoney, toMinor } from "@/lib/money";
 import {
   buildTotals, dueLabel, filterCounts, formatDate, INVOICE_FILTERS, invoiceBadge, matchesFilter, settleLabel,
-  type BillingAccess, type InvoiceFilter, type InvoiceSummary, type MoneySummary, type PayoutRow,
+  type BillingAccess, type InvoiceFilter, type InvoiceSummary, type MoneySummary, type PayoutRow, type ProjectPricing,
 } from "@/lib/money-view";
-import { createInvoice, recordInvoicePayment, recordPayout } from "./billing-client";
+import { createInvoice, getProjectPricing, recordInvoicePayment, recordPayout } from "./billing-client";
 import { PaymentDialog } from "./payment-dialog";
 import { Select } from "@/components/ui/select";
 
@@ -133,15 +133,53 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
   </div>;
 }
 
+type Billable = NonNullable<ProjectPricing["billable"]>;
+type BillableCheck = { projectId: string; billable: Billable | null; currency: string; error?: string };
+
+/** The calm "nothing to invoice" note: which case applies and the one step that fixes it. */
+function NothingToInvoice({ billable, projectId }: { billable: Billable; projectId: string }) {
+  const project = `/projects?campaign=${projectId}`;
+  const unpriced = billable.state === "unpriced";
+  return <div className="money-note is-wide" role="status">
+    <Info aria-hidden="true" />
+    <div>
+      <strong>{unpriced ? "This project has no prices yet" : "Everything on this project is already invoiced"}</strong>
+      <p>{unpriced
+        ? "An invoice lists the project fee and each priced task. Set a fee, or price the tasks, and they will appear here."
+        : "The fee and every priced task are on an invoice already. Price a new task to bill more."}</p>
+      <div className="money-note-actions">
+        {unpriced ? <>
+          <Link className="money-button is-primary is-sm" href={`${project}&tab=pricing&focus=fee`}><CircleDollarSign aria-hidden="true" />Set project fee</Link>
+          <Link className="money-button is-sm" href={`${project}&tab=tasks`}><ListChecks aria-hidden="true" />Add task prices</Link>
+        </> : <Link className="money-button is-primary is-sm" href={`${project}&tab=pricing&focus=invoices`}><ReceiptText aria-hidden="true" />View invoices</Link>}
+      </div>
+    </div>
+  </div>;
+}
+
 function NewInvoiceDialog({ workspaceId, projects, onClose, onCreated }: { workspaceId: string; projects: InvoiceableProject[]; onClose: () => void; onCreated: (id: string) => void }) {
   const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
   const [due, setDue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [check, setCheck] = useState<BillableCheck | null>(null);
+  // As soon as a project is picked, ask what a new invoice would hold, before anyone clicks Create.
+  useEffect(() => {
+    if (!projectId) return;
+    let active = true;
+    getProjectPricing(workspaceId, projectId)
+      .then((pricing) => { if (active) setCheck({ projectId, billable: pricing.billable ?? null, currency: pricing.currency }); })
+      .catch((reason) => { if (active) setCheck({ projectId, billable: null, currency: "GBP", error: reason instanceof Error ? reason.message : "Couldn't check this project." }); });
+    return () => { active = false; };
+  }, [workspaceId, projectId]);
+  const current = check?.projectId === projectId ? check : null;
+  const billable = current?.billable ?? null;
+  const nothing = billable?.state === "unpriced" || billable?.state === "invoiced";
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (nothing) return;
     setBusy(true); setError("");
-    try { const invoice = await createInvoice(workspaceId, projectId, due || undefined); toast(`${invoice.number} created as a draft`); onCreated(invoice.id); }
+    try { const invoice = await createInvoice(workspaceId, projectId, due || undefined); toast(`${invoice.number} ${billable?.state === "draft" ? "reopened" : "created as a draft"}`); onCreated(invoice.id); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "The invoice was not created."); }
     finally { setBusy(false); }
   }
@@ -149,12 +187,17 @@ function NewInvoiceDialog({ workspaceId, projects, onClose, onCreated }: { works
     <DialogContent className="money-dialog">
       <form onSubmit={submit} className="money-form">
         <header className="money-dialog-head"><DialogTitle>New invoice</DialogTitle><DialogDescription>Lists the project fee and every priced task not already invoiced. It starts as a draft.</DialogDescription><DialogClose /></header>
-        <label className="is-wide"><span>Project</span><Select aria-label="Project" value={projectId} onValueChange={setProjectId} required options={projects.map((project) => ({ value: project.id, label: `${project.client} · ${project.name}` }))} /></label>
-        <label className="is-wide"><span>Due date (optional)</span><input type="date" value={due} onChange={(event) => setDue(event.target.value)} /><small>Blank uses the workspace payment terms when it is sent.</small></label>
-        {error && <p className="money-error is-wide" role="alert">{error}</p>}
+        <label className="is-wide"><span>Project</span><Select aria-label="Project" value={projectId} onValueChange={(value) => { setProjectId(value); setError(""); }} required options={projects.map((project) => ({ value: project.id, label: `${project.client} · ${project.name}` }))} /></label>
+        {projectId && !current && <p className="money-preview is-wide is-loading" aria-live="polite">Checking what&apos;s billable…</p>}
+        {billable?.state === "billable" && <p className="money-preview is-wide" aria-live="polite"><ReceiptText aria-hidden="true" /><span><strong>{billable.items} {billable.items === 1 ? "item" : "items"}</strong> ready to invoice</span><b>{formatMoney(billable.total, current!.currency)}</b></p>}
+        {billable?.state === "draft" && <p className="money-preview is-wide" aria-live="polite"><ReceiptText aria-hidden="true" /><span>Nothing new to bill. <strong>Create draft</strong> reopens the open draft for this project.</span></p>}
+        {nothing && <NothingToInvoice billable={billable!} projectId={projectId} />}
+        {!nothing && <label className="is-wide"><span>Due date (optional)</span><input type="date" value={due} onChange={(event) => setDue(event.target.value)} /><small>Blank uses the workspace payment terms when it is sent.</small></label>}
+        {(error || current?.error) && <p className="money-error is-wide" role="alert">{error || current?.error}</p>}
         <footer className="is-wide">
+          {nothing && <small className="money-footer-hint">Nothing to invoice yet</small>}
           <button type="button" className="money-button" onClick={onClose}>Cancel</button>
-          <button type="submit" className="money-button is-primary" disabled={busy || !projectId}>{busy ? "Creating…" : "Create draft"}</button>
+          <button type="submit" className="money-button is-primary" disabled={busy || !projectId || nothing} title={nothing ? "Nothing to invoice on this project yet" : undefined}>{busy ? "Creating…" : "Create draft"}</button>
         </footer>
       </form>
     </DialogContent>

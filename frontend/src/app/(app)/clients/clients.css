@@ -34,3 +34,4 @@
   .client-whatsapp small{grid-column:1/-1}
   .client-access{padding:16px;width:calc(100% - 20px)}
 }
+.clients-grid>article.client-card{cursor:pointer;transition:border-color .16s ease,background-color .16s ease,transform .16s ease,box-shadow .16s ease}.clients-grid>article.client-card:hover{border-color:#5b46a8;background:#1d2130;box-shadow:0 10px 28px #0006,inset 0 0 0 1px #7c5cff22;transform:translateY(-1px)}.clients-grid>article.client-card:focus-within{border-color:#5b46a8}.client-card-head h2 a{color:inherit}.client-card-head h2 a:hover,.client-card-head h2 a:focus-visible{color:#c8baff;outline:0;text-decoration:underline;text-underline-offset:3px}@media (prefers-reduced-motion:reduce){.clients-grid>article.client-card{transition:none}.clients-grid>article.client-card:hover{transform:none}}
