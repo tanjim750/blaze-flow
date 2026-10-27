@@ -3,6 +3,7 @@ import { Banknote, Bell, BookA, Building2, CircleUserRound, Coins, FileText, Mes
 import { getGlossary, getInvoiceSettings, getRates, getStripeStatus } from "@/lib/studio-settings-server";
 import { GlossaryForm, InvoiceSettingsForm, RatesForm } from "@/components/settings/studio-settings";
 import { CountrySettingsForm, CurrencySettingsForm, PaymentGatewaysCard } from "@/components/settings/billing-currency";
+import { PaymentsReadOnlyNote } from "@/components/settings/payment-setup-notes";
 import { getBranding, getNotificationPreferences, getNotificationSettings, getWhatsAppSettings, getWorkspaceProfile } from "@/lib/api";
 import { BrandingForm } from "@/components/portal/branding-form";
 import "@/components/portal/portal.css";
@@ -73,6 +74,10 @@ export default async function SettingsPage() {
     {workspace && loadedBranding?.ok && <section className="settings-card" id="branding">
       <div className="settings-title"><Palette /><div><h2>Client portal branding</h2><p>Your logo, colour and welcome line on the client portal and on upload pages.</p></div></div>
       <BrandingForm workspaceId={workspace.id} initial={loadedBranding.data} canEdit={loadedBranding.data.can_edit === true} />
+    </section>}
+    {workspace && roleFor(workspace) !== "client" && !(studio && billing?.view) && <section className="settings-card" id="payments">
+      <div className="settings-title"><Banknote /><div><h2>Payments</h2><p>How clients pay this workspace&rsquo;s invoices.</p></div></div>
+      <PaymentsReadOnlyNote />
     </section>}
     {workspace && invoicing?.ok && <section className="settings-card" id="billing">
       <div className="settings-title"><Banknote /><div><h2>Billing &amp; currency</h2><p>The currency this workspace prices, pays and invoices in, and how clients will pay online.</p></div></div>

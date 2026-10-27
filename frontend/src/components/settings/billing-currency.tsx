@@ -14,6 +14,7 @@ import { LOCAL_COUNTRIES, countryName, countryOptions, groupOf, isLocalGateway, 
 import { StripeConnectCard } from "./stripe-connect-card";
 import { LocalGatewayCard } from "./local-gateway-card";
 import { ManualGatewayCard } from "./manual-gateway-card";
+import { PaymentSetupNote, PaymentSetupOverview, PaymentsReadOnlyNote } from "./payment-setup-notes";
 
 const PREVIEW_AMOUNTS = ["1250.5", "99", "0"];
 
@@ -102,6 +103,11 @@ export function PaymentGatewaysCard({ gateways, workspaceId, stripe, canManage =
   const localHint = LOCAL_COUNTRIES.includes((country ?? "").toUpperCase());
   const [localOpen, setLocalOpen] = useState(() => localExpanded ?? localSectionOpen(gateways, country));
   const card = (gateway: PaymentGatewayInfo) => {
+    const node = gatewayCard(gateway);
+    if (!node) return null;
+    return <div key={gateway.key} className="gateway-with-note">{node}{canManage && <PaymentSetupNote provider={gateway.key} />}</div>;
+  };
+  const gatewayCard = (gateway: PaymentGatewayInfo) => {
     if (gateway.key === "stripe" && stripe && workspaceId) return <div key="stripe" className={stripeReco ? "gateway-stripe is-recommended" : "gateway-stripe"}>
       {stripeReco && <span className="gateway-reco is-floating"><Sparkles aria-hidden="true" />Recommended</span>}
       <StripeConnectCard workspaceId={workspaceId} initial={stripe} /></div>;
@@ -126,6 +132,7 @@ export function PaymentGatewaysCard({ gateways, workspaceId, stripe, canManage =
   const localOn = gateways.filter((gateway) => groupOf(gateway) === "local" && "enabled" in gateway && gateway.enabled).length;
   return <div className="billing-gateways">
     <div className="billing-gateways-head"><Wallet aria-hidden="true" /><div><h3>Payment gateways</h3><p>Let clients pay invoices online. Stripe and PayPal mark invoices paid automatically; Wise and Payoneer show your details and you confirm the payment. Turn on more than one and clients choose when they pay.</p></div></div>
+    {canManage ? <PaymentSetupOverview /> : <PaymentsReadOnlyNote />}
     {main.cards}
     {soon(main.rest)}
     {local.size > 0 && <section className={`gateway-local${localOpen ? " is-open" : ""}`} aria-label="Local payment options">

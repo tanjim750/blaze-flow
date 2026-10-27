@@ -8,7 +8,7 @@ import { formatDate, type InvoiceDetail } from "@/lib/money-view";
 import { goTo, onlinePaymentNote, publicCheckout } from "@/lib/stripe-connect";
 import { PayChooser, PROVIDER_NAME, useGatewayChoice } from "@/components/money/pay-chooser";
 import { ManualPayPanel } from "@/components/money/manual-pay";
-import { claimPublicPayment } from "@/lib/payment-gateways";
+import { claimPublicPayment, payHint } from "@/lib/payment-gateways";
 
 export type PublicInvoice = InvoiceDetail & { studio_name: string };
 
@@ -60,6 +60,7 @@ export function PublicPayView({ token, invoice, back, provider = null }: { token
           <tr className="is-balance"><th>Balance due</th><td>{money(invoice.outstanding)}</td></tr>
         </tfoot>
       </table>
+      {!paid && invoice.online_payment?.available && <p className="pay-hint" role="note"><Info aria-hidden="true" /><span>{payHint(gateways.list.filter((o) => o.available).map((o) => o.kind === "manual"))}</span></p>}
       {!paid && invoice.online_payment?.available && gateways.showChooser && <PayChooser options={gateways.list} value={gateways.choice} onChange={gateways.setChoice} disabled={busy || waiting} />}
       {!paid && manual && <ManualPayPanel key={manual.provider} option={manual} studio={invoice.studio_name} onClaim={(data) => claimPublicPayment(token, data)} />}
       {!paid && invoice.online_payment?.available && !manual && <button type="button" className="pay-button" disabled={busy || waiting} onClick={() => void pay()}>
@@ -72,3 +73,4 @@ export function PublicPayView({ token, invoice, back, provider = null }: { token
     <footer className="pay-foot">Powered by <strong>Blaze Flow</strong> · Payments by {gateways.list.some((o) => o.available) ? gateways.list.filter((o) => o.available).map((o) => o.name).join(", ") : "Stripe"}</footer>
   </main>;
 }
+

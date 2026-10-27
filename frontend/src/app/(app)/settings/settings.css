@@ -249,3 +249,41 @@
   .gateway-local-toggle .gateway-reco { margin-left: 30px; }
   .gateway-local-list { padding: 0 8px 2px; }
 }
+
+/* Payment setup notes: overview, read-only note for editors, and per-option "How to set up" steps. */
+.setup-overview { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 12px; padding: 12px 14px; border: 1px solid color-mix(in srgb, #7c5cff 35%, #262B37); border-radius: 12px; background: color-mix(in srgb, #7c5cff 8%, #151922); color: #d9d2ff; font-size: 13px; line-height: 1.5; }
+.setup-overview > svg { flex: none; width: 16px; height: 16px; margin-top: 2px; color: #a99bff; }
+.setup-overview > div { min-width: 0; }
+.setup-overview strong { color: #fff; }
+.setup-overview > div > strong { display: block; margin-bottom: 4px; font-size: 13px; }
+.setup-overview ul { display: grid; gap: 3px; margin: 0; padding-left: 18px; list-style: disc; }
+.setup-overview li::marker { color: #a99bff; }
+.setup-overview p { margin: 0; color: var(--shell-outline); }
+.setup-overview.is-readonly { border-color: #262B37; background: #1A1E28; }
+.setup-overview.is-readonly > svg { color: #9AA3B5; }
+.gateway-with-note { margin-bottom: 12px; }
+.gateway-with-note > .gateway-card, .gateway-with-note .stripe-card { margin-bottom: 0; }
+.setup-note { margin-top: 6px; border: 1px solid #262B37; border-radius: 12px; background: #151922; font-size: 13px; line-height: 1.5; }
+.setup-note > summary { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-radius: 12px; color: #c9c2ff; cursor: pointer; font-weight: 500; list-style: none; }
+.setup-note > summary::-webkit-details-marker { display: none; }
+.setup-note > summary::after { content: ""; width: 7px; height: 7px; margin-left: auto; border-right: 1.5px solid #9AA3B5; border-bottom: 1.5px solid #9AA3B5; transform: rotate(-45deg); transition: transform 150ms; }
+.setup-note[open] > summary::after { transform: rotate(45deg); }
+.setup-note > summary:hover { background: #1A1E28; }
+.setup-note > summary:focus-visible { outline: 2px solid #8B5CF6; outline-offset: 2px; }
+.setup-note > summary svg { flex: none; width: 15px; height: 15px; }
+.setup-note ol { display: grid; gap: 6px; margin: 0; padding: 2px 16px 0 34px; color: #d6dae3; }
+.setup-note code { padding: 0 4px; border-radius: 4px; background: #222733; font-size: 12px; overflow-wrap: anywhere; }
+.setup-note-tip { margin: 10px 14px 0; padding: 8px 10px; border-radius: 8px; background: #1A1E28; color: var(--shell-outline); }
+.setup-note-links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 10px 14px 12px; }
+.setup-note-links a { display: inline-flex; gap: 4px; align-items: center; color: #a99bff; font-weight: 500; text-decoration: none; }
+.setup-note-links a:hover { text-decoration: underline; }
+.setup-note-links svg { width: 13px; height: 13px; }
+@media (max-width: 560px) {
+  .setup-note > summary { padding: 10px 12px; }
+  .setup-note ol { padding: 2px 12px 0 30px; }
+  .setup-note-tip { margin: 10px 12px 0; }
+  .setup-note-links { margin: 10px 12px 12px; }
+}
+
+/* UI sweep 2: setup-note links are thumb-sized on phones and touch screens. */
+@media (max-width: 640px), (pointer: coarse) { .setup-note-links a { min-height: 44px; } .setup-note-links { gap: 0 16px; } }
