@@ -54,6 +54,7 @@ CONFIGURABLE_KINDS = (
     (NotificationKind.PROJECT_MESSAGE_NEW, 'Project messages', 'New messages in a project thread you follow. Bursts arrive as one entry.'),
     (NotificationKind.AI_QA_COMPLETED, 'AI Visual QA', 'An AI Visual QA check you started has finished.'),
     (NotificationKind.PROJECT_MESSAGE_MENTION, 'Message mentions', 'Someone @mentions you in a project thread.'),
+    (NotificationKind.PAYMENT_CLAIMED, 'Payment claims', 'A client says they paid by Wise or Payoneer (billing managers only).'),
 )
 
 SNIPPET_LENGTH = 240
@@ -605,3 +606,34 @@ def mark_all_notifications_read(*, user, workspace_id=None):
     if workspace_id is not None:
         queryset = queryset.filter(workspace_id=workspace_id)
     return queryset.update(read_at=now)
+
+
+def notify_payment_claimed(*, claim, actor=None):
+    """A client pressed "I've paid": tell everyone who can confirm it (billing.manage). Never editors."""
+    from app.models import WorkspaceMembership, WorkspaceMembershipStatus, WorkspacePrincipalType
+    from app.permissions import BILLING_MANAGE, memberships_with_permission
+    from . import billing
+    invoice = claim.invoice
+    workspace = invoice.workspace
+    client = invoice.client_team.name if invoice.client_team_id else ''
+    payload = {
+        'invoice_id': str(invoice.id), 'invoice_number': invoice.number, 'provider': claim.provider,
+        'amount': billing.money_str(claim.amount), 'currency': claim.currency, 'client_team_name': client,
+        'payer_reference': claim.payer_reference, 'link': f'/money/invoices/{invoice.id}',
+    }
+    seen, sent = set(), []
+    memberships = WorkspaceMembership.objects.filter(
+        workspace=workspace, principal_type=WorkspacePrincipalType.USER, status=WorkspaceMembershipStatus.ACTIVE,
+    ).select_related('user')
+    for membership in memberships:
+        user = membership.user
+        if user is None or user.id in seen:
+            continue
+        seen.add(user.id)
+        if not memberships_with_permission(user=user, workspace=workspace, permission_key=BILLING_MANAGE).filter(
+                principal_type=WorkspacePrincipalType.USER).exists():
+            continue
+        if _notify(recipient=user, workspace=workspace, actor=actor, kind=NotificationKind.PAYMENT_CLAIMED, entity_type='payment_claim',
+                   entity_id=claim.id, payload=payload, actor_name=claim.payer_name or client or 'A client'):
+            sent.append(user)
+    return sent

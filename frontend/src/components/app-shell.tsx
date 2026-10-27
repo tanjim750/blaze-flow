@@ -13,6 +13,7 @@ import type { Workspace } from "@/lib/api";
 import { navFor, type NavIcon } from "@/lib/role-nav";
 import { UniversalReviewLayout } from "@/components/universal-review";
 import { NotificationBell } from "@/components/notifications/bell";
+import { LiveMoney } from "@/components/money/live-money";
 import { fetchUnread, unreadLabel } from "@/lib/messages";
 import "@/components/messages/messages.css";
 import { mobileTitle } from "@/lib/mobile-title";
@@ -156,6 +157,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
         </div>
       </header>
       <ReportProblemDialog workspaceId={selectedWorkspaceId} />
+      {selected && selected.dashboard_role !== "client" && <LiveMoney workspaceId={selected.id} />}
       <CommandPalette workspace={selected ?? null} />
       {open && <button type="button" className="studio-scrim" aria-label="Close navigation" tabIndex={-1} onClick={() => setOpen(false)} />}
 

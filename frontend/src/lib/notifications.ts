@@ -163,6 +163,16 @@ export function describeNotification(item: NotificationItem): DescribedNotificat
       if (payload.status === "FAILED") return { ...base, tone: "other", verb: "couldn’t finish checking", subject: cut ?? "your file", snippet: text(payload.error_message) };
       return { ...base, tone: "other", verb: count ? `found ${count} possible mistake${count === 1 ? "" : "s"} in` : "found no likely mistakes in", subject: cut ?? "your file" };
     }
+    case "PAYMENT_CLAIMED": {
+      // "Rachel Kim says they paid USD 500.00 by Wise for INV-0012". Nothing is paid until the team confirms it.
+      const via = payload.provider === "payoneer" ? "Payoneer" : payload.provider === "wise" ? "Wise" : text(payload.provider) ?? "bank transfer";
+      const amount = text(payload.amount); const currency = text(payload.currency);
+      const invoice = text(payload.invoice_number);
+      return {
+        ...base, tone: "other", verb: `says they paid${amount && currency ? ` ${currency} ${amount}` : ""} by ${via} for`, subject: invoice ?? "an invoice",
+        snippet: text(payload.payer_reference) ? `Reference: ${text(payload.payer_reference)}. Check it arrived, then confirm.` : "Check it arrived, then confirm.",
+      };
+    }
     case "TASK_CLIENT_READY":
       return { ...base, tone: "task", verb: "marked ready for your review:", subject: title ? `“${clip(title, 60)}”` : "a task" };
     default: {

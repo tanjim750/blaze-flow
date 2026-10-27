@@ -916,3 +916,52 @@ def _audit(*, user, workspace, action, entity_type, entity_id, **metadata):
     # they never surface to editors or clients through the feed.
     return record_user_audit(user=user, workspace=workspace, action=action, entity_type=entity_type,
                              entity_id=entity_id, metadata=metadata, team_only=True)
+
+
+# --- live money ("money version") --------------------------------------------------------------
+
+def _stamp(value):
+    return value.isoformat() if value else '-'
+
+
+def money_pulse(*, user, workspace) -> dict | None:
+    """A cheap fingerprint of the money the viewer can see, polled by the browser every few seconds.
+
+    ``version`` changes whenever a payment lands (webhook, confirmed claim or manual), a refund is
+    recorded, a payout is made or editor pay moves. ``latest`` is the newest money event the viewer
+    may hear about, for the toast: billing viewers get the newest incoming payment (client, invoice
+    number); everyone else only ever gets their own payouts, never client revenue. None means the
+    viewer has no money here at all (client-team members, people without a team membership).
+    """
+    from django.db.models import Count, Max
+    access = billing_access(user=user, workspace=workspace)
+    if access['view']:
+        payments = Payment.objects.filter(workspace=workspace)
+        pay = EditorPay.objects.filter(workspace=workspace)
+        latest = payments.filter(direction=PaymentDirection.INCOMING).select_related('invoice__client_team').order_by('-created_at').first()
+        event = latest and {
+            'id': str(latest.id), 'kind': 'payment_received', 'amount': money_str(latest.amount), 'currency': latest.currency,
+            'client': latest.invoice.client_team.name if latest.invoice.client_team_id else '', 'invoice_number': latest.invoice.number,
+            'invoice_id': str(latest.invoice_id), 'provider': latest.provider, 'created_at': latest.created_at.isoformat(),
+        }
+        scope = 'workspace'
+    else:
+        membership = own_membership(user=user, workspace=workspace)
+        if membership is None:
+            return None
+        payments = Payment.objects.filter(workspace=workspace, payee_membership=membership)
+        pay = EditorPay.objects.filter(workspace=workspace, workspace_membership=membership)
+        latest = payments.order_by('-created_at').first()
+        event = latest and {
+            'id': str(latest.id), 'kind': 'payout_received', 'amount': money_str(latest.amount), 'currency': latest.currency,
+            'created_at': latest.created_at.isoformat(),
+        }
+        scope = 'own'
+    p = payments.aggregate(n=Count('id'), last=Max('created_at'), refunded=Sum('refunded_amount'))
+    e = pay.aggregate(n=Count('id'), last=Max('updated_at'))
+    parts = [p['n'], _stamp(p['last']), money_str(p['refunded'] or ZERO), e['n'], _stamp(e['last'])]
+    if access['view']:
+        parts.append(Invoice.objects.filter(workspace=workspace).aggregate(last=Max('updated_at'))['last'])
+    import hashlib
+    version = hashlib.sha1('|'.join(str(x) for x in parts).encode()).hexdigest()[:16]
+    return {'version': version, 'scope': scope, 'latest': event or None}

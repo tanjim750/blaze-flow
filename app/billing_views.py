@@ -418,6 +418,19 @@ def my_earnings(request, workspace_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def money_version(request, workspace_id):
+    """Live money: a small fingerprint the app polls while the tab is visible (see billing.money_pulse)."""
+    workspace, _ = _workspace(request, workspace_id)
+    pulse = billing.money_pulse(user=request.user, workspace=workspace)
+    if pulse is None:
+        raise PermissionDenied('Money updates are for team members.')
+    response = Response(pulse)
+    response['Cache-Control'] = 'no-store'
+    return response
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def my_invoices(request, workspace_id):
     """A client-team member's own client's invoices (sent, overdue or paid)."""
     workspace, _ = _workspace(request, workspace_id)
