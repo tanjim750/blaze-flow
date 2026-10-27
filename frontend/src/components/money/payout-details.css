@@ -61,6 +61,6 @@
 .money-table.is-payouts th, .money-table.is-payouts td { padding-inline: 12px; }
 @media (min-width: 641px) {
   .payout-details-button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .payout-row-actions { flex-direction: row; align-items: center; }
+  .payout-row-actions { flex-direction: column; align-items: flex-end; }
   .money-row-action .payout-row-actions .money-button.payout-details-button { padding-inline: 8px; }
 }
