@@ -9,7 +9,7 @@ import Link from "next/link";
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Banknote, Building2, ChevronRight, CircleDollarSign, FilePlus2, HandCoins, Info, ListChecks, ReceiptText, Users } from "@/components/icons";
+import { Banknote, Building2, Wallet, ChevronRight, CircleDollarSign, FilePlus2, HandCoins, Info, ListChecks, ReceiptText, Users } from "@/components/icons";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { formatMoney, toMinor } from "@/lib/money";
 import {
@@ -18,6 +18,8 @@ import {
 } from "@/lib/money-view";
 import { createInvoice, getProjectPricing, recordInvoicePayment, recordPayout } from "./billing-client";
 import { PaymentDialog } from "./payment-dialog";
+import { PayoutDetailsDialog } from "./payout-details";
+import { paymentMethodFor } from "@/lib/payout-details";
 import { Select } from "@/components/ui/select";
 
 type InvoiceableProject = { id: string; name: string; client: string };
@@ -37,6 +39,7 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
   const [creating, setCreating] = useState(false);
   const [paying, setPaying] = useState<InvoiceSummary | null>(null);
   const [payout, setPayout] = useState<PayoutRow | null>(null);
+  const [details, setDetails] = useState<PayoutRow | null>(null);
   const { currency } = summary;
   const cards = buildTotals(summary);
   const counts = filterCounts(summary.invoices);
@@ -90,8 +93,14 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
             <tbody>{summary.payouts.map((row) => <tr key={row.membership_id}>
               <td><strong>{row.name}</strong><small>{toMinor(row.pending) > 0 ? `${money(row.pending)} pending approval` : "Nothing pending"}{row.default_rate ? ` · ${money(row.default_rate)}/task` : ""}</small></td>
               <td>{money(row.earned)}</td><td>{money(row.paid)}</td>
-              <td><b className={toMinor(row.owed) > 0 ? "is-owed" : ""}>{money(row.owed)}</b></td>
-              {access.manage && <td className="money-row-action">{toMinor(row.owed) > 0 && <button type="button" className="money-button is-sm" onClick={() => setPayout(row)}><HandCoins aria-hidden="true" />Pay out</button>}</td>}
+              <td><span className="money-owed-cell"><b className={toMinor(row.owed) > 0 ? "is-owed" : ""}>{money(row.owed)}</b>
+                {access.manage && row.preferred_payout_method !== undefined && (row.preferred_payout_method
+                  ? <button type="button" className="payout-chip" onClick={() => setDetails(row)} title="Preferred payout method" aria-label={`${row.name} prefers ${row.preferred_payout_method.label}. Open payout details`}><Wallet aria-hidden="true" />{row.preferred_payout_method.label}</button>
+                  : <button type="button" className="payout-chip is-missing" onClick={() => setDetails(row)} aria-label={`${row.name} has no payout details yet`}>No payout details yet</button>)}</span></td>
+              {access.manage && <td className="money-row-action"><div className="payout-row-actions">
+                {toMinor(row.owed) > 0 && <button type="button" className="money-button is-sm" onClick={() => setPayout(row)}><HandCoins aria-hidden="true" />Pay out</button>}
+                <button type="button" className="money-button is-sm is-ghost payout-details-button" onClick={() => setDetails(row)} title="Payout details"><Wallet aria-hidden="true" /><span>Payout details</span></button>
+              </div></td>}
             </tr>)}</tbody>
           </table>}
       </section>}
@@ -132,7 +141,11 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
     {paying && <PaymentDialog title={`Record a payment on ${paying.number}`} description={`${paying.client.name} · ${formatMoney(paying.outstanding, paying.currency)} outstanding`}
       maxAmount={paying.outstanding} currency={paying.currency} onClose={() => setPaying(null)}
       onSubmit={async (payment) => { await recordInvoicePayment(workspaceId, paying.id, payment); toast(`Payment recorded on ${paying.number}`); setPaying(null); router.refresh(); }} />}
+    {details && <PayoutDetailsDialog workspaceId={workspaceId} membershipId={details.membership_id} name={details.name} onClose={() => setDetails(null)}
+      onRecord={toMinor(details.owed) > 0 ? () => { setPayout(details); setDetails(null); } : undefined} />}
     {payout && <PaymentDialog title={`Pay out ${payout.name}`} description={`${money(payout.owed)} earned and not yet paid`} submitLabel="Record payout"
+      initialMethod={paymentMethodFor(payout.preferred_payout_method?.method)}
+      methodHint={payout.preferred_payout_method ? `${payout.name} prefers ${payout.preferred_payout_method.label}.` : undefined}
       maxAmount={payout.owed} currency={currency} onClose={() => setPayout(null)}
       onSubmit={async (payment) => { await recordPayout(workspaceId, payout.membership_id, payment); toast(`Payout recorded for ${payout.name}`); setPayout(null); router.refresh(); }} />}
   </div>;

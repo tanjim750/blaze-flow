@@ -1,9 +1,10 @@
 import { guardRoute } from "@/lib/route-guard";
-import { Banknote, Bell, BookA, Building2, CircleUserRound, Coins, FileText, MessageCircle, Palette, ShieldCheck } from "@/components/icons";
+import { Banknote, Wallet, Bell, BookA, Building2, CircleUserRound, Coins, FileText, MessageCircle, Palette, ShieldCheck } from "@/components/icons";
 import { getGlossary, getInvoiceSettings, getRates, getStripeStatus } from "@/lib/studio-settings-server";
 import { GlossaryForm, InvoiceSettingsForm, RatesForm } from "@/components/settings/studio-settings";
 import { CountrySettingsForm, CurrencySettingsForm, PaymentGatewaysCard } from "@/components/settings/billing-currency";
 import { PaymentsReadOnlyNote } from "@/components/settings/payment-setup-notes";
+import { PayoutDetailsForm } from "@/components/money/payout-details";
 import { getBranding, getNotificationPreferences, getNotificationSettings, getWhatsAppSettings, getWorkspaceProfile } from "@/lib/api";
 import { BrandingForm } from "@/components/portal/branding-form";
 import "@/components/portal/portal.css";
@@ -63,6 +64,10 @@ export default async function SettingsPage() {
           <NotificationPreferencesForm emailMentionsEnabled={loadedNotifications.ok ? loadedNotifications.data.email_mentions_enabled : true} />
         </>}
     </section>
+    {workspace?.my_membership_id && roleFor(workspace) !== "client" && <section className="settings-card" id="payout-details">
+      <div className="settings-title"><Wallet /><div><h2>Payout details</h2><p>How you&rsquo;d like {workspace.name} to pay you. Only you and the people who manage billing here can see this.</p></div></div>
+      <PayoutDetailsForm workspaceId={workspace.id} workspaceName={workspace.name} />
+    </section>}
     {(studio || !workspace) && <section className="settings-card">
       <div className="settings-title"><Building2 /><div><h2>Workspace profile</h2><p>{workspace ? `Public business details for ${workspace.name}.` : "Create a workspace to add business details."}</p></div></div>
       {workspace ? <WorkspaceProfileForm profile={profile} workspaceName={workspace.name} /> : <p className="settings-muted">No workspace is available.</p>}
