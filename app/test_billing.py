@@ -487,7 +487,7 @@ class RecordPaymentIsTheOnlyPathTests(BillingBase, TestCase):
         with self.assertRaises(billing.BillingError):
             billing.record_payment(workspace=self.workspace, invoice=invoice, payee_membership=self.editor_membership, amount='1')
         with self.assertRaises(billing.BillingError):
-            billing.record_payment(workspace=self.workspace, invoice=invoice, amount='1', provider='stripe')
+            billing.record_payment(workspace=self.workspace, invoice=invoice, amount='1', provider='paypal')
 
 
 class SeedCommandTests(BillingBase, TestCase):
@@ -513,14 +513,16 @@ class WorkspaceCurrencyTests(BillingBase, TestCase):
     def settings_url(self):
         return self.url('api-billing-settings')
 
-    def test_defaults_to_gbp_and_lists_gateways_as_coming_soon(self):
+    def test_defaults_to_gbp_and_lists_gateways(self):
         self.as_user(self.owner)
         data = self.client.get(self.settings_url()).json()
         self.assertEqual(data['currency'], 'GBP')
         self.assertTrue(data['can_change_currency'])
         keys = {gateway['key']: gateway for gateway in data['payment_gateways']}
         self.assertIn('stripe', keys)
-        self.assertTrue(all(g['status'] == 'coming_soon' and g['connected'] is False for g in keys.values()))
+        # Stripe is live when the server has keys (none in tests); the rest are coming soon.
+        self.assertEqual((keys['stripe']['status'], keys['stripe']['connected']), ('not_configured', False))
+        self.assertTrue(all(g['status'] == 'coming_soon' and g['connected'] is False for k, g in keys.items() if k != 'stripe'))
         self.assertEqual(self.listed_workspace(self.owner)['currency'], 'GBP')
 
     def test_owner_can_pick_any_iso_4217_code(self):

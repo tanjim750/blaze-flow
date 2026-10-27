@@ -18,7 +18,7 @@ from .models import (
 from .currencies import CURRENCIES
 from .payment_gateways import list_gateways
 from .permissions import TASK_READ, WORKSPACE_MANAGE, WORKSPACE_READ, has_project_permission, has_workspace_permission
-from .services import billing
+from .services import billing, stripe_connect
 
 
 def _workspace(request, workspace_id):
@@ -112,12 +112,12 @@ class RateSerializer(serializers.Serializer):
     default_task_rate = AmountField()
 
 
-def _settings_out(settings, access=None):
+def _settings_out(settings, access=None, workspace=None):
     return {
         'currency': settings.currency, 'payment_terms_days': settings.payment_terms_days, 'invoice_prefix': settings.invoice_prefix,
         # Only owners/admins (billing.manage + workspace.manage) may change the currency.
         'can_change_currency': bool(access and access.get('currency_manage')),
-        'payment_gateways': list_gateways(workspace_currency=settings.currency),
+        'payment_gateways': list_gateways(workspace_currency=settings.currency, workspace=workspace),
     }
 
 
@@ -143,8 +143,8 @@ def billing_settings(request, workspace_id):
             settings = billing.update_billing_settings(workspace=workspace, user=request.user, **serializer.validated_data)
         except billing.BillingError as exc:
             return _error(exc)
-        return Response(_settings_out(settings, access))
-    return Response(_settings_out(billing.billing_settings(workspace), access))
+        return Response(_settings_out(settings, access, workspace))
+    return Response(_settings_out(billing.billing_settings(workspace), access, workspace))
 
 
 @api_view(['GET'])
@@ -188,7 +188,9 @@ def invoice_list_create(request, workspace_id):
 def _invoice_detail(workspace, invoice):
     invoice = Invoice.objects.select_related('client_team', 'project', 'workspace').prefetch_related('lines', 'payments').get(pk=invoice.pk)
     profile = WorkspaceProfile.objects.filter(workspace=workspace).first()
-    return billing.invoice_out(invoice, detail=True, workspace_profile=profile)
+    data = billing.invoice_out(invoice, detail=True, workspace_profile=profile)
+    data['online_payment'] = stripe_connect.online_payment(invoice)
+    return data
 
 
 def _visible_invoice(request, workspace, access, invoice_id):
@@ -230,6 +232,8 @@ def invoice_detail(request, workspace_id, invoice_id):
             return _error(exc)
     data = _invoice_detail(workspace, invoice)
     data['viewer_can_manage'] = access['manage']
+    if access['manage'] and invoice.status != InvoiceStatus.DRAFT and data['online_payment']['available']:
+        data['pay_link'] = stripe_connect.connect_url(f'/pay/{stripe_connect.ensure_pay_token(invoice)}')
     if access['manage'] and invoice.status == 'draft':
         from .services.invoice_email import invoice_recipients
         data['client_recipients'] = invoice_recipients(invoice)
@@ -395,3 +399,88 @@ def my_invoices(request, workspace_id):
     if not team_ids:
         raise PermissionDenied('Invoices here are for client team members.')
     return Response(billing.client_invoices(workspace=workspace, client_team_ids=team_ids))
+
+
+# --- Stripe Connect -----------------------------------------------------------------------
+
+STRIPE_DENIED = 'Only workspace owners and admins can manage Stripe.'
+
+
+def _stripe_manager(request, workspace_id):
+    workspace, access = _workspace(request, workspace_id)
+    if not _can_change_currency(request, workspace, access):
+        raise PermissionDenied(STRIPE_DENIED)
+    return workspace
+
+
+def _stripe_error(exc):
+    if isinstance(exc, stripe_connect.StripeNotConfigured):
+        return Response({'detail': str(exc), 'code': 'stripe_not_configured'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return Response({'detail': str(exc)}, status=exc.status)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def stripe_status(request, workspace_id):
+    """The Stripe card in Settings. ``?refresh=1`` re-reads the account from Stripe."""
+    workspace, access = _workspace(request, workspace_id)
+    _require(access, 'view', VIEW_DENIED)
+    can_manage = _can_change_currency(request, workspace, access)
+    account = stripe_connect.account_for(workspace)
+    if account is not None and can_manage and request.query_params.get('refresh') and stripe_connect.is_configured():
+        try:
+            stripe_connect.sync_account(account)
+        except stripe_connect.StripeConnectError as exc:
+            return _stripe_error(exc)
+    return Response(stripe_connect.status_out(workspace, can_manage=can_manage))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def stripe_connect_start(request, workspace_id):
+    """Create the workspace's Stripe account (first time) and return a hosted onboarding link."""
+    workspace = _stripe_manager(request, workspace_id)
+    try:
+        url = stripe_connect.start_onboarding(workspace=workspace, user=request.user)
+    except (stripe_connect.StripeNotConfigured, stripe_connect.StripeConnectError) as exc:
+        return _stripe_error(exc)
+    return Response({'url': url, **stripe_connect.status_out(workspace, can_manage=True)})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def stripe_dashboard(request, workspace_id):
+    workspace = _stripe_manager(request, workspace_id)
+    try:
+        url = stripe_connect.dashboard_link(workspace=workspace, user=request.user)
+    except (stripe_connect.StripeNotConfigured, stripe_connect.StripeConnectError) as exc:
+        return _stripe_error(exc)
+    return Response({'url': url})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def stripe_disconnect(request, workspace_id):
+    workspace = _stripe_manager(request, workspace_id)
+    stripe_connect.disconnect(workspace=workspace, user=request.user)
+    return Response(stripe_connect.status_out(workspace, can_manage=True))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def invoice_checkout(request, workspace_id, invoice_id):
+    """Pay now: a Stripe Checkout Session for what is outstanding (team billing viewers or the client)."""
+    workspace, access = _workspace(request, workspace_id)
+    try:
+        invoice = _visible_invoice(request, workspace, access, invoice_id)
+    except Invoice.DoesNotExist:
+        return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+    back = stripe_connect.connect_url(f'/money/invoices/{invoice.id}')
+    try:
+        url = stripe_connect.create_checkout(
+            invoice=invoice, success_url=f'{back}?stripe=success', cancel_url=f'{back}?stripe=cancel',
+            customer_email=None if access['view'] else request.user.email, user=request.user,
+        )
+    except (stripe_connect.StripeNotConfigured, stripe_connect.StripeConnectError) as exc:
+        return _stripe_error(exc)
+    return Response({'url': url})

@@ -274,7 +274,8 @@ def invoice_total(invoice) -> Decimal:
 
 
 def invoice_paid(invoice) -> Decimal:
-    return _sum(invoice.payments.all())
+    payments = invoice.payments.all()
+    return _sum(payments) - _sum(payments, 'refunded_amount')
 
 
 def invoice_display_status(invoice, *, today=None, outstanding=None) -> str:
@@ -461,7 +462,7 @@ def record_payment(*, workspace, amount=None, invoice=None, payee_membership=Non
     the invoice from the event metadata, and call this same function with
     ``provider='stripe'``, ``provider_reference=<PaymentIntent id>``, ``method='card'`` and
     ``recorded_by=None``. A repeat delivery with the same reference returns the existing row
-    instead of paying twice. No gateway code, keys or webhooks exist in this demo.
+    instead of paying twice. ``app/services/stripe_connect.py`` does exactly this.
     """
     if (invoice is None) == (payee_membership is None):
         raise BillingError('A payment is either against an invoice or a payout to a team member.')
@@ -519,6 +520,33 @@ def record_payment(*, workspace, amount=None, invoice=None, payee_membership=Non
         invoice.save(update_fields=['status', 'paid_at', 'updated_at'])
     _audit(user=recorded_by, workspace=workspace, action=f'billing.{what}.payment_recorded', entity_type='payment',
            entity_id=payment.id, amount=money_str(amount), currency=currency, provider=provider)
+    return payment
+
+
+def record_refund(*, payment, refunded_total, provider_reference=None):
+    """A gateway refunded (part of) a payment. ``refunded_total`` is the running total refunded.
+
+    Idempotent: the stored refunded amount is set to the gateway's running total, so repeat
+    deliveries change nothing. An invoice that was paid and now has money outstanding again
+    goes back to sent.
+    """
+    with transaction.atomic():
+        payment = Payment.objects.select_for_update().get(pk=payment.pk)
+        refunded_total = min(money(refunded_total), payment.amount)
+        if refunded_total <= (payment.refunded_amount or ZERO):
+            return payment
+        payment.refunded_amount = refunded_total
+        payment.save(update_fields=['refunded_amount'])
+        invoice = payment.invoice
+        if invoice is not None:
+            invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+            if invoice.paid_at is not None and invoice_total(invoice) - invoice_paid(invoice) > 0:
+                invoice.status = InvoiceStatus.SENT
+                invoice.paid_at = None
+                invoice.save(update_fields=['status', 'paid_at', 'updated_at'])
+    _audit(user=None, workspace=payment.workspace, action='billing.invoice.payment_refunded', entity_type='payment',
+           entity_id=payment.id, refunded=money_str(refunded_total), currency=payment.currency, provider=payment.provider,
+           provider_reference=provider_reference or payment.provider_reference)
     return payment
 
 
@@ -714,7 +742,7 @@ def payment_out(payment) -> dict:
     return {
         'id': str(payment.id), 'direction': payment.direction, 'amount': money_str(payment.amount), 'currency': payment.currency,
         'paid_on': payment.paid_on, 'method': payment.method, 'note': payment.note, 'provider': payment.provider,
-        'created_at': payment.created_at,
+        'refunded_amount': money_str(payment.refunded_amount or ZERO), 'created_at': payment.created_at,
     }
 
 

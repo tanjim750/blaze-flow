@@ -1766,6 +1766,7 @@ class PaymentProvider(models.TextChoices):
     # Only the manual (demo) provider exists. A gateway such as Stripe would add its own
     # value here and call billing.record_payment() from its webhook.
     MANUAL = 'manual'
+    STRIPE = 'stripe'
 
 
 class EditorPayStatus(models.TextChoices):
@@ -1837,6 +1838,8 @@ class Invoice(models.Model):
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     created_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='created_by_user_id', null=True, blank=True, related_name='+')
+    # Secret for the shareable "pay this invoice" link (/pay/<token>). Made on first use.
+    pay_token = models.CharField(max_length=64, null=True, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1882,6 +1885,8 @@ class Payment(models.Model):
     # The gateway's own id (e.g. a Stripe PaymentIntent). Unique per provider, so a webhook
     # delivered twice records the payment once.
     provider_reference = models.CharField(max_length=255, null=True, blank=True)
+    # Money handed back by the gateway (Stripe charge.refunded). Paid = amount - refunded.
+    refunded_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     recorded_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='recorded_by_user_id', null=True, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -1905,6 +1910,50 @@ class Payment(models.Model):
         indexes = [
             models.Index(fields=['workspace', 'direction']),
         ]
+
+
+class StripeConnectStatus(models.TextChoices):
+    ONBOARDING = 'onboarding'    # account created, details not submitted yet
+    NEEDS_INFO = 'needs_info'    # Stripe is asking for more information
+    PENDING = 'pending'          # submitted; Stripe is reviewing
+    ACTIVE = 'active'            # charges enabled
+    DISABLED = 'disabled'        # rejected or disabled by Stripe
+
+
+class StripeConnectAccount(models.Model):
+    """A workspace's own Stripe account (Connect, Accounts v2, Express dashboard).
+
+    Invoice payments are direct charges on this account: the money lands in the agency's
+    Stripe balance and pays out to their bank. Only the account id is stored, never keys.
+    """
+    workspace = models.OneToOneField(Workspace, on_delete=models.CASCADE, primary_key=True, db_column='workspace_id', related_name='+')
+    stripe_account_id = models.CharField(max_length=255, unique=True)
+    status = models.CharField(max_length=20, choices=StripeConnectStatus.choices, default=StripeConnectStatus.ONBOARDING)
+    charges_enabled = models.BooleanField(default=False)
+    payouts_enabled = models.BooleanField(default=False)
+    details_submitted = models.BooleanField(default=False)
+    requirements_due = models.JSONField(default=list, blank=True)
+    disabled_reason = models.CharField(max_length=255, blank=True, default='')
+    country = models.CharField(max_length=2, blank=True, default='')
+    default_currency = models.CharField(max_length=3, blank=True, default='')
+    connected_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='connected_by_user_id', null=True, blank=True, related_name='+')
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'stripe_connect_accounts'
+
+
+class StripeWebhookEvent(models.Model):
+    """Every Stripe event id we have handled, so a re-delivery is a no-op."""
+    event_id = models.CharField(max_length=255, primary_key=True)
+    type = models.CharField(max_length=100)
+    stripe_account_id = models.CharField(max_length=255, blank=True, default='')
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'stripe_webhook_events'
 
 
 class UploadLink(models.Model):

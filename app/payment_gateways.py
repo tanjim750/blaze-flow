@@ -1,4 +1,7 @@
-"""Payment gateway registry (structure only; no gateway is connected yet).
+"""Payment gateway registry.
+
+Stripe is live (Stripe Connect, see ``app/services/stripe_connect.py``) whenever the server has
+``STRIPE_SECRET_KEY``; the other providers are still ``coming_soon``.
 
 A gateway (Stripe, PayPal, Razorpay, ...) will subclass ``PaymentGateway``, implement
 ``create_checkout`` and ``handle_webhook``, and record money through
@@ -58,5 +61,15 @@ register(PaymentGateway('sslcommerz', 'SSLCOMMERZ', 'bKash, Nagad, cards and ban
                         features=('bKash', 'Nagad')))
 
 
-def list_gateways(*, workspace_currency: str | None = None) -> list[dict]:
-    return [gateway.as_dict(workspace_currency=workspace_currency) for gateway in REGISTRY.values()]
+def list_gateways(*, workspace_currency: str | None = None, workspace=None) -> list[dict]:
+    out = [gateway.as_dict(workspace_currency=workspace_currency) for gateway in REGISTRY.values()]
+    from .services import stripe_connect
+    from .stripe_currencies import stripe_supports
+    for item in out:
+        if item['key'] == 'stripe':
+            account = stripe_connect.account_for(workspace) if workspace is not None else None
+            item['status'] = 'available' if stripe_connect.is_configured() else 'not_configured'
+            item['connected'] = account is not None
+            item['connect_status'] = account.status if account is not None else 'not_connected'
+            item['supports_workspace_currency'] = stripe_supports(workspace_currency or '')
+    return out
