@@ -361,6 +361,8 @@ def create_claim(*, invoice, provider_key, payer_name='', payer_reference='', us
     _audit(user=user if getattr(user, 'is_authenticated', False) else None, workspace=invoice.workspace,
            action=f'billing.{provider.key}.payment_claimed', entity_id=claim.id, invoice_id=str(invoice.id),
            amount=billing.money_str(claim.amount), currency=claim.currency)
+    from .notifications import notify_payment_claimed
+    notify_payment_claimed(claim=claim, actor=user if getattr(user, 'is_authenticated', False) else None)
     return claim
 
 

@@ -187,6 +187,8 @@ class NotificationKind(models.TextChoices):
     PROJECT_MESSAGE_MENTION = 'PROJECT_MESSAGE_MENTION'
     # A cut moved into the client review / approval stage (to the client's contacts).
     CLIENT_APPROVAL_REQUESTED = 'CLIENT_APPROVAL_REQUESTED'
+    # A client pressed "I've paid" (Wise / Payoneer): to the people who manage billing.
+    PAYMENT_CLAIMED = 'PAYMENT_CLAIMED'
 
 
 class OutboxEventStatus(models.TextChoices):

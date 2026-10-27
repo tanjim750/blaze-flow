@@ -290,6 +290,7 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/checkout/', billing_views.invoice_checkout, name='api-billing-invoice-checkout'),
     path('workspaces/<uuid:workspace_id>/billing/invoices/<uuid:invoice_id>/claims/', billing_views.invoice_claim, name='api-billing-invoice-claim'),
     path('workspaces/<uuid:workspace_id>/billing/claims/<uuid:claim_id>/<str:action>/', billing_views.claim_resolve, name='api-billing-claim-resolve'),
+    path('workspaces/<uuid:workspace_id>/billing/money-version/', billing_views.money_version, name='api-billing-money-version'),
     path('workspaces/<uuid:workspace_id>/billing/my-invoices/', billing_views.my_invoices, name='api-billing-my-invoices'),
     path('workspaces/<uuid:workspace_id>/activity/export/', workspace_activity_export, name='api-workspace-activity-export'),
     path('workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/activity/', project_activity, name='api-project-activity'),
