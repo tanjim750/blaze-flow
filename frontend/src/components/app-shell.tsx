@@ -19,6 +19,7 @@ import { mobileTitle } from "@/lib/mobile-title";
 import { LifeBuoy, Plus, ShieldCheck, Upload } from "@/components/icons";
 import { REPORT_EVENT, ReportProblemDialog } from "@/components/report-problem";
 import { ShellReconnect } from "@/components/shell-reconnect";
+import { Select } from "@/components/ui/select";
 
 type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { severity: string; code: string; count: number }[] };
 
@@ -238,9 +239,12 @@ function WorkspacePicker({ workspaces, selectedWorkspaceId, pathname, degraded =
   return <form action={switchWorkspaceAction} className="studio-workspace-picker">
     <input type="hidden" name="returnTo" value={pathname} />
     <label htmlFor="workspace-switcher">Workspace</label>
-    <select id="workspace-switcher" name="workspaceId" value={selectedWorkspaceId ?? workspaces[0].id} onChange={(event) => event.currentTarget.form?.requestSubmit()} aria-label="Switch workspace">
-      {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
-    </select>
+    <Select
+      id="workspace-switcher" name="workspaceId" aria-label="Switch workspace" defaultValue={selectedWorkspaceId ?? workspaces[0].id}
+      options={workspaces.map((workspace) => ({ value: workspace.id, label: workspace.name }))}
+      // Let the hidden input pick up the new value before the form submits.
+      onValueChange={() => setTimeout(() => document.getElementById("workspace-switcher")?.closest("form")?.requestSubmit())}
+    />
   </form>;
 }
 

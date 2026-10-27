@@ -8,9 +8,9 @@
 .onboarding-card > p:not(.eyebrow) { color: var(--muted); line-height: 1.6; }
 .onboarding-form { display: grid; gap: 17px; margin-top: 28px; }
 .onboarding-form label { display: grid; gap: 7px; color: #d8d4e1; font-size: 12px; font-weight: 600; }
-.onboarding-form input { width: 100%; padding: 11px 12px; border: 1px solid #393844; border-radius: 9px; outline: 0; background: #0A0A0A; color: white; }
+.onboarding-form input { width: 100%; padding: 11px 12px; border: 1px solid #393844; border-radius: 9px; outline: 0; background: #151922; color: white; }
 .onboarding-form input:focus { border-color: var(--primary); }
-.slug-field { display: flex; align-items: center; border: 1px solid #393844; border-radius: 9px; background: #0A0A0A; overflow: hidden; }
+.slug-field { display: flex; align-items: center; border: 1px solid #393844; border-radius: 9px; background: #151922; overflow: hidden; }
 .slug-field span { padding-left: 12px; color: var(--muted); white-space: nowrap; }
 .slug-field input { border: 0; padding-left: 5px; }
 .onboarding-form small { color: var(--muted); }

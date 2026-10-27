@@ -1,3 +1,4 @@
+import { choose } from "@/test/choose";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FilesView } from "@/lib/files-view";
@@ -48,7 +49,7 @@ describe("Files panel interactions", () => {
     render(<AssetLibrary view={view} />);
     // Sort by name so the visible order is alpha, bravo, charlie.
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
-    fireEvent.change(screen.getByLabelText("Filter by sort"), { target: { value: "name" } });
+    choose(screen.getByLabelText("Filter by sort"), /name/i);
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
 
     fireEvent.click(row(/^alpha\.mp4/), { metaKey: true });

@@ -27,6 +27,7 @@ import { Fields } from "./fields";
 import { CompareView, type CompareHandle } from "./compare";
 import { useLeaveGuard } from "./leave-guard";
 import "../tasks/tasks.css";
+import "./review-controls.css";
 import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } from "./player";
 import { SharePanel } from "./share-panel";
 import { PublishDialog } from "./publish-dialog";
@@ -36,6 +37,7 @@ import { returnLabel, reviewSurface, safeReturnPath } from "@/lib/open-in-review
 import { useReviewWriter } from "./writer";
 import { AiQaPanel, useAiQa, useBandScope } from "./ai-qa-panel";
 import { hasRegion, inScope, scopeCounts, type AiFinding, type AiTarget } from "@/lib/ai-qa";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   view: ReviewView; author: string; userId?: string | null; initialShareOpen?: boolean; initialPanel?: "ai" | null; embedded?: boolean;
@@ -409,33 +411,29 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
 
         {/* What is on screen: which version, what it is compared with, and where it stands. */}
         <div className="rv-top-cut" role="group" aria-label="Version">
-          <select
+          <Select
             className="rv-version"
             aria-label="Version"
             value={version.id}
-            onChange={(event) => leave.guard(reviewHref(`media=${event.target.value}`))}
-          >
-            {[...asset.versions].reverse().map((item) => (
-              <option key={item.id} value={item.id}>{item.label}{item.id === latest?.id ? " · Latest" : ""}</option>
-            ))}
-          </select>
+            onValueChange={(next) => leave.guard(reviewHref(`media=${next}`))}
+            options={[...asset.versions].reverse().map((item) => ({ value: item.id, label: `${item.label}${item.id === latest?.id ? " · Latest" : ""}` }))}
+          />
 
           {asset.versions.length > 1 && (comparing ? (
             <button type="button" className="rv-compare-toggle is-on" onClick={() => leave.guard(reviewHref(`media=${version.id}`))}>
               <X size={13} />Exit compare
             </button>
           ) : (
-            <select
+            <Select
               className="rv-compare-toggle"
               aria-label="Compare with another version"
               value=""
-              onChange={(event) => event.target.value && leave.guard(reviewHref(`media=${version.id}&compare=${event.target.value}`))}
-            >
-              <option value="">Compare…</option>
-              {asset.versions.filter((item) => item.id !== version.id).reverse().map((item) => (
-                <option key={item.id} value={item.id}>{version.label} vs {item.label}</option>
-              ))}
-            </select>
+              onValueChange={(next) => next && leave.guard(reviewHref(`media=${version.id}&compare=${next}`))}
+              options={[
+                { value: "", label: "Compare…" },
+                ...asset.versions.filter((item) => item.id !== version.id).reverse().map((item) => ({ value: item.id, label: `${version.label} vs ${item.label}` })),
+              ]}
+            />
           ))}
 
           {approved ? (

@@ -6,6 +6,7 @@ import { FolderInput } from "@/components/icons";
 import { DropUploader } from "./drop-uploader";
 import { formatBytes, portalUploadUrl, shortDateTime, type ClientPortal } from "@/lib/client-uploads";
 import "./client-uploads.css";
+import { Select } from "@/components/ui/select";
 
 const NO_FIELDS = {};
 
@@ -37,9 +38,7 @@ export function ClientUploadPanel({ workspaceId, projects, recent, maxBytes, acc
         <div className="cu-portal-send">
           {projects.length > 1 ? (
             <label className="cu-portal-project">For project
-              <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
-                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-              </select>
+              <Select aria-label="For project" value={projectId} onValueChange={setProjectId} options={projects.map((project) => ({ value: project.id, label: project.name }))} />
             </label>
           ) : (
             <p className="cu-portal-project">For <b>{projects[0]?.name}</b></p>

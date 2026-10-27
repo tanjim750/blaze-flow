@@ -11,7 +11,7 @@
 
 .gr-form{display:grid;gap:13px;margin-top:4px}
 .gr-form label{display:grid;gap:6px;font-size:12px;font-weight:600}
-.gr-form input{height:42px;padding:0 12px;background:#0A0A0A;border:1px solid var(--border);border-radius:9px;color:var(--text);outline:0}
+.gr-form input{height:42px;padding:0 12px;background:#151922;border:1px solid var(--border);border-radius:9px;color:var(--text);outline:0}
 .gr-form input:focus{border-color:var(--primary);box-shadow:0 0 0 3px #8b6cff22}
 .gr-form button{height:44px;border:0;border-radius:9px;background:var(--primary);color:#fff;font-weight:650;cursor:pointer}
 .gr-form button:disabled{opacity:.6;cursor:not-allowed}
@@ -27,7 +27,7 @@
 .gr-error{display:flex;align-items:center;gap:8px;margin:0;padding:11px 22px;background:#3a1c24;border-bottom:1px solid #6b2a38;color:#ffc2cc;font-size:12px}
 
 .gr-body{display:grid;grid-template-columns:minmax(0,1fr) 400px;min-height:0}
-.gr-viewer{display:grid;grid-template-rows:auto minmax(0,1fr);background:#0A0A0A;min-width:0;min-height:0}
+.gr-viewer{display:grid;grid-template-rows:auto minmax(0,1fr);background:#12151D;min-width:0;min-height:0}
 .gr-versions{display:flex;gap:6px}
 .gr-versions button{display:flex;align-items:center;gap:4px;padding:6px 12px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--muted);font:600 11px var(--font-geist-mono);cursor:pointer}
 .gr-versions button.selected{background:#292143;border-color:#55418f;color:#fff}
@@ -65,14 +65,14 @@
 .gr-hint{color:#3b3a48;margin-left:auto}
 
 .gr-edit{display:grid;gap:7px;margin-top:9px}
-.gr-edit textarea{min-height:64px;padding:9px;border:1px solid var(--border);border-radius:7px;background:#0A0A0A;color:var(--text);resize:vertical;outline:0}
+.gr-edit textarea{min-height:64px;padding:9px;border:1px solid var(--border);border-radius:7px;background:#151922;color:var(--text);resize:vertical;outline:0}
 .gr-edit>div{display:flex;justify-content:flex-end;gap:6px}
 .gr-edit button{padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:11px;cursor:pointer}
 .gr-edit button:last-child{background:var(--primary);border-color:var(--primary);color:#fff}
 
 .gr-composer{display:flex;align-items:flex-end;gap:9px;padding:12px;border-top:1px solid var(--border)}
 .gr-note .gr-composer{padding:10px 0 0;border-top:0}
-.gr-composer textarea{flex:1;min-width:0;padding:9px;border:1px solid var(--border);border-radius:8px;background:#0A0A0A;color:var(--text);resize:vertical;outline:0;font-size:12px}
+.gr-composer textarea{flex:1;min-width:0;padding:9px;border:1px solid var(--border);border-radius:8px;background:#151922;color:var(--text);resize:vertical;outline:0;font-size:12px}
 .gr-composer textarea:focus{border-color:var(--primary)}
 .gr-composer button{display:grid;place-items:center;flex:none;width:34px;height:34px;border:0;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer}
 .gr-composer button:disabled{opacity:.5;cursor:not-allowed}
@@ -99,7 +99,7 @@
 .gr-request{position:absolute;top:calc(100% + 8px);right:0;z-index:30;width:min(380px,90vw);display:grid;gap:8px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:11px;box-shadow:0 18px 40px #0009}
 .gr-request label{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:600}
 .gr-request label small{color:var(--muted);font:500 11px var(--font-geist-mono)}
-.gr-request textarea{padding:9px;border:1px solid var(--border);border-radius:8px;background:#0A0A0A;color:var(--text);resize:vertical;outline:0;font-size:12px}
+.gr-request textarea{padding:9px;border:1px solid var(--border);border-radius:8px;background:#151922;color:var(--text);resize:vertical;outline:0;font-size:12px}
 .gr-request textarea:focus{border-color:var(--primary)}
 .gr-request-problem{margin:0;color:var(--danger);font-size:11px}
 .gr-request>div{display:flex;justify-content:flex-end;gap:6px}

@@ -6,6 +6,7 @@ import type { GuestInvite } from "@/lib/api";
 import { guestLinkStatus } from "@/lib/activity";
 import { createGuestInviteAction, replaceGuestInviteAction, revokeGuestAccessAction, revokeGuestInviteAction, setGuestInviteDecisionsAction } from "./actions";
 import { allowsDecisions, emptyGuestInviteState, GUEST_PRESETS } from "./guest-presets";
+import { Select } from "@/components/ui/select";
 
 /** Stable regardless of the viewer's locale, so the server and client markup agree. */
 const day = (iso: string) => new Date(iso).toISOString().slice(0, 10);
@@ -79,11 +80,7 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
             </label>
             <label>
               <span>Access</span>
-              <select name="preset" defaultValue="comment">
-                {Object.entries(GUEST_PRESETS).map(([key, preset]) => (
-                  <option key={key} value={key}>{preset.label} — {preset.description}</option>
-                ))}
-              </select>
+              <Select name="preset" aria-label="Access" defaultValue="comment" options={Object.entries(GUEST_PRESETS).map(([key, preset]) => ({ value: key, label: `${preset.label} — ${preset.description}` }))} />
             </label>
             <label>
               <span>Expires in (days)</span>

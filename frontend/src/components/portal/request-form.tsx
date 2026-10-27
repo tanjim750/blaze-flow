@@ -8,6 +8,7 @@ import {
   ASPECT_OPTIONS, BUDGET_OPTIONS, DELIVERABLE_OPTIONS, LENGTH_OPTIONS, PLATFORM_OPTIONS, budgetLabel, dayDate,
   deliverablesSummary, requestProblems, submitProjectRequest, type DeliverableKind, type ProjectRequestInput,
 } from "@/lib/portal";
+import { Select } from "@/components/ui/select";
 
 type Picks = Partial<Record<DeliverableKind, number>>;
 
@@ -71,7 +72,7 @@ export function ProjectRequestForm({ workspaceId, studioName, clientTeams, today
       <section className="pt-step" aria-labelledby="step-1">
         <header><span className="pt-step-no">1</span><div><h2 id="step-1">What should we make?</h2><p>Pick everything that applies. You can change the numbers.</p></div></header>
         {clientTeams.length > 1 && <label className="pt-field">On behalf of
-          <select value={teamId} onChange={(event) => setTeamId(event.target.value)}>{clientTeams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select>
+          <Select aria-label="Team" value={teamId} onValueChange={setTeamId} options={clientTeams.map((team) => ({ value: team.id, label: team.name }))} />
         </label>}
         <label className="pt-field">Working title
           <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} placeholder="e.g. Summer menu launch" aria-invalid={!!show("title")} />
@@ -118,10 +119,7 @@ export function ProjectRequestForm({ workspaceId, studioName, clientTeams, today
             {show("wanted_by") && <small className="pt-field-error">{show("wanted_by")}</small>}
           </label>
           <label className="pt-field">Budget range
-            <select value={budget} onChange={(event) => setBudget(event.target.value)}>
-              <option value="">Prefer not to say</option>
-              {BUDGET_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            <Select aria-label="Budget" value={budget} onValueChange={setBudget} options={[{ value: "", label: "Prefer not to say" }, ...BUDGET_OPTIONS.map((option) => ({ value: option.value, label: option.label }))]} />
           </label>
         </div>
         <small style={{ color: "var(--muted)" }}>Have footage or brand files already? Once the project is open you can send them from its page.</small>

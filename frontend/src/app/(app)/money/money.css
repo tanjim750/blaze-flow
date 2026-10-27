@@ -36,7 +36,7 @@
 .money-muted { margin: 0; padding: 22px 16px; color: var(--shell-outline); }
 .money-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .money-table th { padding: 9px 16px; text-align: left; color: var(--shell-outline); font: 500 10px var(--font-geist-mono), monospace; letter-spacing: .05em; text-transform: uppercase; }
-.money-table td { padding: 11px 16px; border-top: 1px solid #262626; vertical-align: middle; font-family: var(--font-geist-mono), monospace; font-size: 12px; }
+.money-table td { padding: 11px 16px; border-top: 1px solid #262B37; vertical-align: middle; font-family: var(--font-geist-mono), monospace; font-size: 12px; }
 .money-table td:first-child, .money-table td:nth-child(2) { font-family: var(--font-geist-sans), sans-serif; }
 .money-table td strong { display: block; font-size: 13px; font-weight: 600; }
 .money-table td small { display: block; margin-top: 3px; color: var(--shell-outline); font: 11px var(--font-geist-sans), sans-serif; }
@@ -105,7 +105,7 @@
 .invoice-lines { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .invoice-lines th, .invoice-lines td { padding: 11px 0; text-align: left; }
 .invoice-lines thead th { color: var(--shell-outline); font: 500 10px var(--font-geist-mono), monospace; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--shell-highest); }
-.invoice-lines tbody td { border-bottom: 1px solid #262626; }
+.invoice-lines tbody td { border-bottom: 1px solid #262B37; }
 .invoice-lines td small { display: block; margin-top: 2px; color: var(--shell-outline); font-size: 11px; }
 .invoice-lines :is(th, td):last-child { text-align: right; font-family: var(--font-geist-mono), monospace; }
 .invoice-lines tfoot th { font-weight: 500; color: var(--shell-variant); text-align: right; padding-right: 24px; }

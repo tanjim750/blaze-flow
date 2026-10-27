@@ -176,7 +176,7 @@ export function StageDialog({ open, view, onClose }: { open: boolean; view: Task
       </ol>
       {pendingDelete && <div className="tb-callout" role="group" aria-label={`Delete ${pendingDelete.name}`}>
         <p>{pendingDelete.task_count} task{pendingDelete.task_count === 1 ? "" : "s"} in {pendingDelete.name} will move to:</p>
-        <select className="tb-input" aria-label="Replacement stage" value={replacement} onChange={(event) => setReplacement(event.target.value)}>{rows.filter((row) => row.id !== pendingDelete.id).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
+        <Select className="tb-input" aria-label="Replacement stage" value={replacement} onValueChange={setReplacement} options={rows.filter((row) => row.id !== pendingDelete.id).map((row) => ({ value: row.id, label: row.name }))} />
         <button type="button" className="tb-button" onClick={() => setPendingDelete(null)}>Keep stage</button>
         <button type="button" className="tb-button is-danger" onClick={() => drop(pendingDelete, replacement)}>Delete stage</button>
       </div>}

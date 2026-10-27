@@ -19,7 +19,7 @@
 .nf-group h3 { position: sticky; top: 0; z-index: 1; margin: 0; padding: 8px 14px 6px; background: var(--shell-container); color: var(--shell-outline); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
 .nf-group ul, .nf-list { margin: 0; padding: 0; list-style: none; }
 
-.nf-row { position: relative; display: flex; align-items: stretch; border-bottom: 1px solid #26262680; }
+.nf-row { position: relative; display: flex; align-items: stretch; border-bottom: 1px solid #262B3780; }
 .nf-row:last-child { border-bottom: 0; }
 .nf-row.is-unread { background: #583be814; }
 .nf-row.is-unread::before { content: ""; position: absolute; left: 5px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--shell-primary); }
@@ -97,4 +97,9 @@
 @media (max-width: 480px) {
   .nf-open, .nf-row.is-wide .nf-open { padding: 12px 4px 12px 16px; gap: 10px; }
   .nf-page > header { flex-wrap: wrap; align-items: flex-start; }
+}
+
+/* Touch: footer links and the header action were ~20px tall at 390px. */
+@media (pointer: coarse), (max-width: 600px) {
+  .nf-link, .nf-foot-pref { min-height: 40px; display: inline-flex; align-items: center; }
 }

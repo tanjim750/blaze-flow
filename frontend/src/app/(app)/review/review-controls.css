@@ -1,0 +1,32 @@
+/* Themed Select overrides for the review top bar, player and share form.
+   Kept out of review.css (owned by the review-sidebar PR) on purpose. */
+.rv-top-cut .rv-version.ui-select-trigger {
+  flex: 0 1 auto; width: auto; min-width: 0; max-width: 220px; min-height: 0; height: 30px; padding: 0 8px 0 10px;
+  border: 1px solid var(--rv-line); border-radius: 8px;
+  background: #151922; color: var(--text);
+  font: 600 11px var(--font-geist-mono), monospace;
+}
+.rv-top-cut .rv-version.ui-select-trigger:hover { background: #222733; }
+.rv-top-cut .rv-compare-toggle.ui-select-trigger {
+  flex: none; min-height: 0; height: 30px; padding: 0 10px;
+  border: 1px solid var(--rv-line); border-radius: 8px;
+  background: #151922; color: var(--muted); font-size: 11px; font-weight: 500;
+}
+.rv-top-cut .rv-compare-toggle.ui-select-trigger:hover { background: #222733; color: var(--text); }
+.rvp-select .ui-select-trigger {
+  min-height: 0; height: 28px; padding: 0 6px 0 8px; gap: 4px;
+  border: 1px solid var(--rv-line); border-radius: 7px;
+  background: #151922; color: var(--text); font-size: 11px;
+}
+.rv-share-form .ui-select-trigger {
+  width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: #151922; color: var(--text); max-width: 100%;
+}
+.rv-share-form .ui-select-trigger:focus { border-color: var(--primary); }
+@media (max-width: 760px) { .rv-share-form .ui-select-trigger { height: 44px; } }
+@media (max-width: 600px) {
+  .rv-top-cut .rv-compare-toggle.ui-select-trigger { max-width: 46vw; }
+  .rv-top-cut .rv-version.ui-select-trigger { max-width: 60vw; }
+  .rvp-select:has([aria-label="Playback quality"]) { display: none; }
+}
+@media (max-width: 767px) { .rv-top-cut .ui-select-trigger.rv-compare-toggle { display: none; } .rv-top-cut .rv-version.ui-select-trigger { max-width: 100%; } }

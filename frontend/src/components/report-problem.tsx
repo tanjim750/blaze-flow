@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { reportProblem } from "@/lib/platform-client";
 import "./report-problem.css";
+import { Select } from "@/components/ui/select";
 
 /** Opens the dialog from anywhere: `window.dispatchEvent(new Event(REPORT_EVENT))`. */
 export const REPORT_EVENT = "blazeflow:report-problem";
@@ -63,9 +64,7 @@ export function ReportProblemDialog({ workspaceId }: { workspaceId: string | nul
         <DialogDescription>Tell the Blaze Flow team what went wrong. We reply by email.</DialogDescription>
         <form onSubmit={submit} className="report-form">
           <label>What is it about?
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
+            <Select aria-label="Category" value={category} onValueChange={setCategory} options={CATEGORIES.map((c) => ({ value: c.value, label: c.label }))} />
           </label>
           <label>Subject
             <input value={subject} maxLength={200} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Upload stops at 99%" autoFocus />

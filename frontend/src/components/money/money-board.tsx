@@ -17,6 +17,7 @@ import {
 } from "@/lib/money-view";
 import { createInvoice, getProjectPricing, recordInvoicePayment, recordPayout } from "./billing-client";
 import { PaymentDialog } from "./payment-dialog";
+import { Select } from "@/components/ui/select";
 
 type InvoiceableProject = { id: string; name: string; client: string };
 
@@ -186,9 +187,7 @@ function NewInvoiceDialog({ workspaceId, projects, onClose, onCreated }: { works
     <DialogContent className="money-dialog">
       <form onSubmit={submit} className="money-form">
         <header className="money-dialog-head"><DialogTitle>New invoice</DialogTitle><DialogDescription>Lists the project fee and every priced task not already invoiced. It starts as a draft.</DialogDescription><DialogClose /></header>
-        <label className="is-wide"><span>Project</span><select value={projectId} onChange={(event) => { setProjectId(event.target.value); setError(""); }} required autoFocus>
-          {projects.map((project) => <option key={project.id} value={project.id}>{project.client} · {project.name}</option>)}
-        </select></label>
+        <label className="is-wide"><span>Project</span><Select aria-label="Project" value={projectId} onValueChange={(value) => { setProjectId(value); setError(""); }} required options={projects.map((project) => ({ value: project.id, label: `${project.client} · ${project.name}` }))} /></label>
         {projectId && !current && <p className="money-preview is-wide is-loading" aria-live="polite">Checking what&apos;s billable…</p>}
         {billable?.state === "billable" && <p className="money-preview is-wide" aria-live="polite"><ReceiptText aria-hidden="true" /><span><strong>{billable.items} {billable.items === 1 ? "item" : "items"}</strong> ready to invoice</span><b>{formatMoney(billable.total, current!.currency)}</b></p>}
         {billable?.state === "draft" && <p className="money-preview is-wide" aria-live="polite"><ReceiptText aria-hidden="true" /><span>Nothing new to bill. <strong>Create draft</strong> reopens the open draft for this project.</span></p>}

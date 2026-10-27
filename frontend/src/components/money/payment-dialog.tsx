@@ -9,6 +9,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } fr
 import { formatMoney, parseMoneyInput, toMinor } from "@/lib/money";
 import { PAYMENT_METHODS } from "@/lib/money-view";
 import type { PaymentInput } from "./billing-client";
+import { Select } from "@/components/ui/select";
 
 function todayIso() {
   const now = new Date();
@@ -45,7 +46,7 @@ export function PaymentDialog({ title, description, maxAmount, currency, submitL
         <label><span>Amount ({currency})</span><input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} autoFocus aria-describedby="money-max" />
           <small id="money-max">Up to {formatMoney(maxAmount, currency)}. Less records a part payment.</small></label>
         <label><span>Date paid</span><input type="date" value={paidOn} max={todayIso()} onChange={(event) => setPaidOn(event.target.value)} required /></label>
-        <label><span>Method</span><select value={method} onChange={(event) => setMethod(event.target.value)}>{PAYMENT_METHODS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+        <label><span>Method</span><Select aria-label="Method" value={method} onValueChange={setMethod} options={PAYMENT_METHODS.map((item) => ({ value: item.id, label: item.label }))} /></label>
         <label><span>Note</span><input value={note} onChange={(event) => setNote(event.target.value)} maxLength={1000} placeholder="Reference, cheque number…" /></label>
         {error && <p className="money-error is-wide" role="alert">{error}</p>}
         <footer className="is-wide">

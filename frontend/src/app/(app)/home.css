@@ -330,3 +330,6 @@ a.activity-row:hover p { color: var(--text); }
   .view-as .task-tabs a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; font-size: 13px; }
   .home-empty-action { min-height: 44px; display: inline-flex; align-items: center; padding: 0 16px; }
 }
+
+/* The panel clips overflow, so draw the footer link's focus ring inside it. */
+.panel-footer-link:focus-visible { outline: 2px solid var(--primary-2); outline-offset: -3px; }

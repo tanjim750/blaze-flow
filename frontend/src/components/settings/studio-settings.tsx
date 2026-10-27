@@ -10,6 +10,7 @@ import {
   GLOSSARY_KINDS, invoiceNumberPreview, invoiceSettingsError,
   type GlossaryKind, type GlossaryTerm, type InvoiceSettings, type RateRow,
 } from "@/lib/studio-settings";
+import { Select } from "@/components/ui/select";
 
 const message = (reason: unknown) => (reason instanceof Error ? reason.message : "That didn't save.");
 
@@ -117,7 +118,7 @@ export function GlossaryForm({ workspaceId, initial, canEdit }: { workspaceId: s
   return <div className="settings-form">
     {canEdit && <form className="settings-glossary-add" onSubmit={add} aria-label="Add a glossary term">
       <label><span className="sr-only">Term</span><input value={term} onChange={(event) => setTerm(event.target.value)} maxLength={200} placeholder="e.g. BlazeFlow, iPhone, NHS" /></label>
-      <label><span className="sr-only">Kind</span><select value={kind} onChange={(event) => setKind(event.target.value as GlossaryKind)}>{GLOSSARY_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select></label>
+      <label><span className="sr-only">Kind</span><Select aria-label="Kind" value={kind} onValueChange={(next) => setKind(next as GlossaryKind)} options={GLOSSARY_KINDS.map((k) => ({ value: k.value, label: k.label }))} /></label>
       <button className="settings-button" disabled={busy || !term.trim()}>{busy ? <Loader2 size={15} className="spin" /> : <Plus size={15} />}Add term</button>
     </form>}
     {error && <p className="form-error" role="alert">{error}</p>}

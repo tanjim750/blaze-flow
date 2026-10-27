@@ -95,7 +95,7 @@
 .google-button { min-height: 44px; display: flex; justify-content: center; overflow: hidden; border-radius: 9px; }
 .google-fallback {
   display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 46px;
-  background: #0A0A0A; border: 1px solid var(--border); border-radius: 9px; color: var(--text);
+  background: #1A1E28; border: 1px solid var(--border); border-radius: 9px; color: var(--text);
   font-weight: 600; font-size: 14.5px;
 }
 .google-fallback.is-loading { position: absolute; inset: 0; }
@@ -158,3 +158,11 @@
   .auth-form > header h2 { font-size: 24px; }
   .field input { font-size: 16px; } /* prevents iOS zoom on focus */
 }
+
+/* Sign-up at 1024: the two-up name row's inputs kept their intrinsic width, which pushed the
+   form (and the page) ~100px past the viewport. Let every track shrink. */
+.auth-form-wrap { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.auth-form { max-width: 100%; min-width: 0; }
+.auth-form > *, .auth-row > *, .auth-field, .auth-field .field { min-width: 0; }
+.auth-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 600px) { .auth-row { grid-template-columns: minmax(0, 1fr); } }

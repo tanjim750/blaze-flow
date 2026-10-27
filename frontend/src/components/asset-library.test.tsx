@@ -1,3 +1,4 @@
+import { choose } from "@/test/choose";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FilesView } from "@/lib/files-view";
@@ -43,7 +44,7 @@ describe("AssetLibrary", () => {
     fireEvent.click(screen.getByRole("button", { name: "New" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /New folder/ }));
     fireEvent.change(screen.getByLabelText("Folder name"), { target: { value: "Campaign Assets" } });
-    fireEvent.change(screen.getByLabelText("Project (optional)"), { target: { value: "project" } });
+    choose(screen.getByLabelText("Project (optional)"), "Summer Campaign");
     fireEvent.click(screen.getByRole("button", { name: "Create folder" }));
     // Folder tile in the main grid; library tree is present (By client / Studio nav).
     expect(screen.getByText("Campaign Assets")).toBeInTheDocument();
@@ -114,9 +115,9 @@ describe("AssetLibrary", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /Upload files/ }));
     const input = rendered.container.querySelector<HTMLInputElement>('.al-drop input[type="file"]');
     fireEvent.change(input!, { target: { files: [new File(["a"], "promo.mp4", { type: "video/mp4" })] } });
-    fireEvent.change(screen.getByLabelText("Client (optional)"), { target: { value: "client" } });
-    fireEvent.change(screen.getByLabelText("Project (optional)"), { target: { value: "project" } });
-    fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "s-review" } });
+    choose(screen.getByLabelText("Client (optional)"), "Acme");
+    choose(screen.getByLabelText("Project (optional)"), "Summer Campaign");
+    choose(screen.getByLabelText("Stage"), "Internal QA");
     fireEvent.click(screen.getByRole("button", { name: "Upload 1 file" }));
 
     // The staged name is still on screen while the dialog closes, so wait for the item itself.
@@ -145,7 +146,7 @@ describe("AssetLibrary", () => {
     render(<AssetLibrary view={view} />);
     expect(screen.getByText("rough-cut.mov")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
-    fireEvent.change(screen.getByLabelText("Filter by stage"), { target: { value: "s-review" } });
+    choose(screen.getByLabelText("Filter by stage"), "Internal QA");
     expect(screen.getByText("final-cut.mov")).toBeInTheDocument();
     expect(screen.queryByText("rough-cut.mov")).not.toBeInTheDocument();
   });

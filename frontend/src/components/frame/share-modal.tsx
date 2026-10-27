@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { createGuestInviteAction } from "@/app/(app)/review/actions";
 import { emptyGuestInviteState, type GuestPreset } from "@/app/(app)/review/guest-presets";
 import { copyText } from "./frame-ui";
+import { Select } from "@/components/ui/select";
 
 /** Maps the toggles onto the backend's guest presets (downloads imply full review). */
 export function presetFor(allowComments: boolean, allowDownloads: boolean): GuestPreset {
@@ -67,7 +68,7 @@ export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId
             <ul className="frm-share-opts">
               <li><span>Allow comments</span><Switch checked={comments || downloads} onCheckedChange={setComments} label="Allow comments" /></li>
               <li><span>Allow downloads</span><Switch checked={downloads} onCheckedChange={setDownloads} label="Allow downloads" /></li>
-              <li><span>Expires</span><span className="frm-share-exp">{expires && <select aria-label="Expiry" value={days} onChange={(e) => setDays(Number(e.target.value))}>{[1, 7, 30, 90].map((d) => <option key={d} value={d}>{d} day{d === 1 ? "" : "s"}</option>)}</select>}<Switch checked={expires} onCheckedChange={setExpires} label="Link expires" /></span></li>
+              <li><span>Expires</span><span className="frm-share-exp">{expires && <Select aria-label="Expiry" value={String(days)} onValueChange={(next) => setDays(Number(next))} options={[1, 7, 30, 90].map((d) => ({ value: String(d), label: `${d} day${d === 1 ? "" : "s"}` }))} />}<Switch checked={expires} onCheckedChange={setExpires} label="Link expires" /></span></li>
               {/* TODO(backend): guest invites have no passphrase or watermark fields yet. */}
               <li className="is-todo" title="Not available yet"><span>Passphrase <small>Coming soon</small></span><Switch checked={false} onCheckedChange={() => {}} label="Passphrase (coming soon)" /></li>
               <li className="is-todo" title="Not available yet"><span>Watermark <small>Coming soon</small></span><Switch checked={false} onCheckedChange={() => {}} label="Watermark (coming soon)" /></li>

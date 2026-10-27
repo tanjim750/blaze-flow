@@ -32,6 +32,7 @@ import { startUpload } from "@/lib/upload-store";
 import { reviewHref } from "@/lib/open-in-review";
 import { ProjectActionsMenu, StatusPill } from "@/components/projects/project-actions-menu";
 import { ArchivePicker, ArchivedNotice, OpenProjectsContext, type OpenProject } from "@/components/projects/archive-picker";
+import { Select } from "@/components/ui/select";
 
 const initialState: ActionState = { error: null, savedAt: null };
 
@@ -353,7 +354,7 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
       <label className="pb-file-drop"><UploadCloud size={26} /><strong>Choose an asset</strong><span>PNG, JPEG, GIF, WebP, MP4, MOV, or WebM</span><input name="file" type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm" required /></label>
       <label>Title<input name="title" placeholder="Spring campaign — hero cut" required /></label>
       <label>Notes<textarea name="note" rows={3} placeholder="What changed in this version?" /></label>
-      <div className="pb-upload-options"><label>Priority<select name="priority" defaultValue="MEDIUM"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select></label><label className="pb-check"><input name="allow_download" type="checkbox" value="true" />Allow downloads</label></div>
+      <div className="pb-upload-options"><label>Priority<Select name="priority" aria-label="Priority" defaultValue="MEDIUM" options={[{ value: "LOW", label: "Low" }, { value: "MEDIUM", label: "Medium" }, { value: "HIGH", label: "High" }, { value: "URGENT", label: "Urgent" }]} /></label><label className="pb-check"><input name="allow_download" type="checkbox" value="true" />Allow downloads</label></div>
       {error && <p className="form-error" role="alert">{error}</p>}
       <footer><button type="button" onClick={onClose}>Cancel</button><button type="submit" disabled={busy}><CloudUpload size={15} />{busy ? "Uploading…" : "Upload asset"}</button></footer>
     </form>

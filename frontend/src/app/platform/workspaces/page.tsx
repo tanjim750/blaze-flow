@@ -3,6 +3,7 @@ import { Search } from "@/components/icons";
 import { Empty, ErrorPanel, PageHead, Pager, Pill } from "@/components/platform/ui";
 import { listPlatformWorkspaces } from "@/lib/platform-api";
 import { firstParam, formatBytes, planLabel, query, relativeTime } from "@/lib/platform-view";
+import { Select } from "@/components/ui/select";
 
 export default async function PlatformWorkspaces({ searchParams }: PageProps<"/platform/workspaces">) {
   const params = await searchParams;
@@ -14,7 +15,7 @@ export default async function PlatformWorkspaces({ searchParams }: PageProps<"/p
     <PageHead title="Workspaces" sub={result.ok ? `${result.data.total} workspace${result.data.total === 1 ? "" : "s"}` : undefined}>
       <form className="pf-search" action="/platform/workspaces">
         <Search size={15} /><input name="q" defaultValue={q} placeholder="Name, slug or owner email" aria-label="Search workspaces" />
-        <select name="status" defaultValue={status} aria-label="Status"><option value="">Any status</option><option value="ACTIVE">Active</option><option value="SUSPENDED">Suspended</option><option value="PENDING_DELETION">Pending deletion</option></select>
+        <Select name="status" defaultValue={status} aria-label="Status" options={[{ value: "", label: "Any status" }, { value: "ACTIVE", label: "Active" }, { value: "SUSPENDED", label: "Suspended" }, { value: "PENDING_DELETION", label: "Pending deletion" }]} />
         <button className="pf-btn" type="submit">Search</button>
       </form>
     </PageHead>

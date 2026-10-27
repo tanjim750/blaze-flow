@@ -1,6 +1,7 @@
 import { AuditTable, ErrorPanel, PageHead, Pager } from "@/components/platform/ui";
 import { listAudit } from "@/lib/platform-api";
 import { firstParam, query } from "@/lib/platform-view";
+import { Select } from "@/components/ui/select";
 
 export default async function PlatformAudit({ searchParams }: PageProps<"/platform/audit">) {
   const params = await searchParams;
@@ -13,10 +14,10 @@ export default async function PlatformAudit({ searchParams }: PageProps<"/platfo
   return <>
     <PageHead title="Audit log" sub="Everything recorded across Blaze Flow. Every staff action appears here with its reason." />
     <form className="pf-filters" action="/platform/audit">
-      <label>Actor type<select name="actor_type" defaultValue={filters.actor_type}><option value="">Any</option><option value="PLATFORM_STAFF">Staff</option><option value="USER">User</option><option value="GUEST">Guest</option><option value="SYSTEM">System</option></select></label>
+      <label>Actor type<Select name="actor_type" aria-label="Actor type" defaultValue={filters.actor_type} options={[{ value: "", label: "Any" }, { value: "PLATFORM_STAFF", label: "Staff" }, { value: "USER", label: "User" }, { value: "GUEST", label: "Guest" }, { value: "SYSTEM", label: "System" }]} /></label>
       <label>Actor email<input name="actor" defaultValue={filters.actor} placeholder="name@…" /></label>
       <label>Action contains<input name="action" defaultValue={filters.action} placeholder="platform." /></label>
-      <label>Range<select name="days" defaultValue={filters.days}><option value="1">24 h</option><option value="7">7 days</option><option value="30">30 days</option><option value="365">1 year</option></select></label>
+      <label>Range<Select name="days" aria-label="Range" defaultValue={filters.days} options={[{ value: "1", label: "24 h" }, { value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "365", label: "1 year" }]} /></label>
       {filters.workspace_id && <input type="hidden" name="workspace_id" value={filters.workspace_id} />}
       <button className="pf-btn" type="submit">Filter</button>
     </form>

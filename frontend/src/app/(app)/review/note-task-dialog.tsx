@@ -7,6 +7,7 @@ import type { TaskStage } from "@/lib/api";
 import { noteTasksApi, titleFromNote, type NoteTaskDefaults, type NoteTaskResult } from "@/lib/note-tasks";
 import type { ReviewNote } from "@/lib/review-notes";
 import "./note-tasks.css";
+import { Select } from "@/components/ui/select";
 
 /**
  * "Make task" for one note, or "Create tasks" for several. One note: the server's prefill
@@ -90,15 +91,10 @@ export function NoteTaskDialog({ workspaceId, notes, stages, assignees, versionL
           {single && <label className="ntd-field"><span>Description</span><textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} /></label>}
           <div className="ntd-row">
             <label className="ntd-field"><span>Assignee</span>
-              <select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-                <option value="">Unassigned</option>
-                {assignees.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
-              </select>
+              <Select aria-label="Assignee" value={assignee} onValueChange={setAssignee} options={[{ value: "", label: "Unassigned" }, ...assignees.map((person) => ({ value: person.id, label: person.name }))]} />
             </label>
             <label className="ntd-field"><span>Stage</span>
-              <select value={stage} onChange={(e) => setStage(e.target.value)}>
-                {stages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
+              <Select aria-label="Stage" value={stage} onValueChange={setStage} options={stages.map((item) => ({ value: item.id, label: item.name }))} />
             </label>
             <label className="ntd-field"><span>Due</span><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>
           </div>

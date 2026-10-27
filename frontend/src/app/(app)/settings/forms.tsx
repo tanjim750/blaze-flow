@@ -5,6 +5,7 @@ import { Check, KeyRound, Loader2, Mail, MailCheck, Save, TriangleAlert } from "
 import type { NotificationSettings, WhatsAppSettings, WorkspaceProfile } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import { changePasswordAction, resendVerificationAction, saveNotificationSettingAction, saveWhatsAppSettingsAction, updateNotificationsAction, updateProfileAction, type SettingsState } from "./actions";
+import { Select } from "@/components/ui/select";
 
 const initial: SettingsState = { error: null, message: null };
 const BUSINESS_NAME_REQUIRED = "Business name is required.";
@@ -149,10 +150,14 @@ export function WhatsAppSettingsForm({ initial: start }: { initial: WhatsAppSett
       <Switch checked={settings.enabled} onCheckedChange={(enabled) => { if (!pending) save({ enabled }); }} label="WhatsApp approval messages" />
     </div>
     <div className="whatsapp-row">
-      <label>Review links expire after<select value={String(settings.link_expiry_hours)} disabled={pending} onChange={(event) => save({ link_expiry_hours: Number(event.target.value) })}>
-        {[[24, "1 day"], [72, "3 days"], [168, "7 days"], [336, "14 days"], [720, "30 days"]].map(([hours, label]) => <option key={hours} value={hours}>{label}</option>)}
-        {![24, 72, 168, 336, 720].includes(settings.link_expiry_hours) && <option value={settings.link_expiry_hours}>{settings.link_expiry_hours} hours</option>}
-      </select></label>
+      <label>Review links expire after<Select
+        aria-label="Review links expire after" value={String(settings.link_expiry_hours)} disabled={pending}
+        onValueChange={(next) => save({ link_expiry_hours: Number(next) })}
+        options={[
+          ...([[24, "1 day"], [72, "3 days"], [168, "7 days"], [336, "14 days"], [720, "30 days"]] as const).map(([hours, label]) => ({ value: String(hours), label })),
+          ...(![24, 72, 168, 336, 720].includes(settings.link_expiry_hours) ? [{ value: String(settings.link_expiry_hours), label: `${settings.link_expiry_hours} hours` }] : []),
+        ]}
+      /></label>
       <p className="whatsapp-usage"><span>{used} / {limit}</span> messages this month on the {plan} plan</p>
     </div>
     {settings.test_mode && <p className="whatsapp-test" role="note">Test mode: messages are logged, not sent. Nothing reaches a phone until WhatsApp is connected.</p>}
