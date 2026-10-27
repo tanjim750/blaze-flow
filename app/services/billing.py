@@ -820,12 +820,18 @@ def member_rates(*, workspace):
     } for m in memberships]
 
 
-def payouts_ledger(*, workspace):
-    """Per team member with any pay: pending, earned, paid and owed, plus their payout entries."""
+def payouts_ledger(*, workspace, with_payout_methods=False):
+    """Per team member with any pay: pending, earned, paid and owed, plus their payout entries.
+
+    ``with_payout_methods`` (billing.manage only) adds each member's preferred payout method kind.
+    """
     member_ids = set(EditorPay.objects.filter(workspace=workspace).values_list('workspace_membership_id', flat=True))
     member_ids |= set(Payment.objects.filter(workspace=workspace, direction=PaymentDirection.OUTGOING).values_list('payee_membership_id', flat=True))
     member_ids |= set(MemberPayRate.objects.filter(workspace_membership__workspace=workspace, default_task_rate__isnull=False).values_list('workspace_membership_id', flat=True))
     out = []
+    if with_payout_methods:
+        from . import payout_details
+        preferred_methods = payout_details.preferred(member_ids)
     for membership in WorkspaceMembership.objects.filter(id__in=member_ids).select_related('user'):
         balance = editor_balance(membership)
         out.append({
@@ -835,6 +841,7 @@ def payouts_ledger(*, workspace):
             'default_rate': money_str(default_rate(membership)),
             **_balance_out(balance),
             'payouts': [payment_out(p) for p in Payment.objects.filter(payee_membership=membership).order_by('-paid_on', '-created_at')[:10]],
+            **({'preferred_payout_method': preferred_methods.get(str(membership.id))} if with_payout_methods else {}),
         })
     return sorted(out, key=lambda item: (-Decimal(item['owed']), item['name']))
 
@@ -879,7 +886,7 @@ def money_summary(*, workspace, access, today=None):
     data = {'currency': currency, 'totals': totals, 'receivables': clients, 'invoices': list_invoices(workspace=workspace, today=today),
             'other_currencies': other_currency_totals(workspace=workspace, today=today)}
     if access['rates_view']:
-        editors = payouts_ledger(workspace=workspace)
+        editors = payouts_ledger(workspace=workspace, with_payout_methods=access.get('manage', False))
         editor_cost = _sum(EditorPay.objects.filter(workspace=workspace, task__deleted_at__isnull=True, currency=currency))
         project_value = ZERO
         for project in Project.objects.filter(workspace=workspace):

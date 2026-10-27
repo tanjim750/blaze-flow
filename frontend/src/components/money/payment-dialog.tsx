@@ -16,13 +16,14 @@ function todayIso() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-export function PaymentDialog({ title, description, maxAmount, currency, submitLabel = "Record payment", onClose, onSubmit }: {
+export function PaymentDialog({ title, description, maxAmount, currency, submitLabel = "Record payment", initialMethod = "bank_transfer", methodHint, onClose, onSubmit }: {
   title: string; description: string; maxAmount: string; currency: string; submitLabel?: string;
+  /** Pre-selected method, e.g. the editor's preferred payout method. */ initialMethod?: string; methodHint?: string;
   onClose: () => void; onSubmit: (payment: PaymentInput) => Promise<void>;
 }) {
   const [amount, setAmount] = useState(maxAmount);
   const [paidOn, setPaidOn] = useState(todayIso);
-  const [method, setMethod] = useState("bank_transfer");
+  const [method, setMethod] = useState(initialMethod);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -46,7 +47,7 @@ export function PaymentDialog({ title, description, maxAmount, currency, submitL
         <label><span>Amount ({currency})</span><input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} autoFocus aria-describedby="money-max" />
           <small id="money-max">Up to {formatMoney(maxAmount, currency)}. Less records a part payment.</small></label>
         <label><span>Date paid</span><input type="date" value={paidOn} max={todayIso()} onChange={(event) => setPaidOn(event.target.value)} required /></label>
-        <label><span>Method</span><Select aria-label="Method" value={method} onValueChange={setMethod} options={PAYMENT_METHODS.map((item) => ({ value: item.id, label: item.label }))} /></label>
+        <label><span>Method</span><Select aria-label="Method" value={method} onValueChange={setMethod} options={PAYMENT_METHODS.map((item) => ({ value: item.id, label: item.label }))} />{methodHint && <small className="money-method-hint">{methodHint}</small>}</label>
         <label><span>Note</span><input value={note} onChange={(event) => setNote(event.target.value)} maxLength={1000} placeholder="Reference, cheque number…" /></label>
         {error && <p className="money-error is-wide" role="alert">{error}</p>}
         <footer className="is-wide">

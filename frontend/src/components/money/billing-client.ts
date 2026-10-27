@@ -1,5 +1,6 @@
 /** Browser-side calls for the billing (demo) routes, through the Next `/api` proxy. */
 import { api } from "@/components/tasks/tasks-api";
+import type { PayoutDetails, SavedPayoutMethod } from "@/lib/payout-details";
 import type { InvoiceDetail, PaymentEntry, ProjectPricing, TaskMoney } from "@/lib/money-view";
 
 const base = (workspaceId: string) => `workspaces/${workspaceId}/billing`;
@@ -30,3 +31,8 @@ export const recordPayout = (workspaceId: string, membershipId: string, payment:
   api<PaymentEntry>(`${base(workspaceId)}/payouts/`, "POST", { membership_id: membershipId, ...payment });
 export const setMemberRate = (workspaceId: string, membershipId: string, rate: string | null) =>
   api<{ default_task_rate: string | null }>(`${base(workspaceId)}/members/${membershipId}/rate/`, "PATCH", { default_task_rate: rate });
+export const getMyPayoutDetails = (workspaceId: string) => api<PayoutDetails>(`${base(workspaceId)}/payout-details/me/`);
+export const saveMyPayoutDetails = (workspaceId: string, methods: Pick<SavedPayoutMethod, "method" | "details" | "is_preferred">[]) =>
+  api<PayoutDetails>(`${base(workspaceId)}/payout-details/me/`, "PUT", { methods });
+export const getMemberPayoutDetails = (workspaceId: string, membershipId: string) =>
+  api<PayoutDetails>(`${base(workspaceId)}/members/${membershipId}/payout-details/`);

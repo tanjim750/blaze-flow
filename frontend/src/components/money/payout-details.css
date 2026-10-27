@@ -1,0 +1,52 @@
+/* Editor payout details: the profile form, the owner's details view, and the Money-page chip. */
+.payout-form { gap: 14px; }
+.payout-methods { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.payout-method { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--shell-highest); border-radius: 12px; background: var(--shell-rail); }
+.payout-method.is-preferred { border-color: color-mix(in srgb, var(--shell-primary) 60%, var(--shell-highest)); }
+.payout-method-head { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.payout-method-kind { flex: 1 1 200px; }
+.payout-preferred { display: inline-flex !important; grid-auto-flow: column; align-items: center; gap: 7px !important; min-height: 38px; cursor: pointer; }
+.payout-preferred input { width: 16px !important; height: 16px; accent-color: var(--shell-primary); }
+.payout-icon-button, .payout-copy { display: inline-grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--shell-highest); border-radius: 8px; background: transparent; color: var(--shell-variant); cursor: pointer; flex: none; }
+.payout-icon-button:hover, .payout-copy:hover { color: var(--shell-on); border-color: var(--shell-primary); }
+.payout-single { display: grid; max-width: 420px; }
+.payout-method .is-wide { grid-column: 1 / -1; }
+.payout-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.payout-add { display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border: 1px dashed var(--shell-highest); border-radius: 8px; background: transparent; color: var(--shell-on); font-weight: 600; cursor: pointer; }
+.payout-add:disabled { opacity: .5; cursor: not-allowed; }
+.payout-empty { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px dashed var(--shell-highest, var(--border)); border-radius: 12px; color: var(--shell-variant, var(--muted)); }
+.payout-empty > svg { width: 20px; height: 20px; flex: none; margin-top: 2px; }
+.payout-empty strong { display: block; color: var(--shell-on, var(--text)); font-size: 13px; }
+.payout-empty p { margin: 4px 0 0; font-size: 12px; line-height: 1.5; }
+.payout-why { border-top: 1px solid var(--shell-highest, var(--border)); padding-top: 10px; color: var(--shell-variant, var(--muted)); font-size: 12px; }
+.payout-why summary { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; list-style: none; }
+.payout-why summary::-webkit-details-marker { display: none; }
+.payout-why summary svg { width: 14px; height: 14px; }
+.payout-why[open] .payout-why-chevron { transform: rotate(180deg); }
+.payout-why p { margin: 8px 0 0; line-height: 1.55; max-width: 62ch; }
+/* Owner view */
+.ui-dialog-content.payout-dialog { display: grid; gap: 14px; }
+.payout-view { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.payout-view > li { padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.payout-view > li.is-preferred { border-color: color-mix(in srgb, var(--shell-primary, #8d73fb) 55%, var(--border)); }
+.payout-view header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+.payout-view dl { display: grid; gap: 8px; margin: 0; }
+.payout-view dl > div { display: grid; gap: 2px; }
+.payout-view dt { color: var(--muted); font-size: 11px; }
+.payout-view dd { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.payout-view .payout-copy { width: 30px; height: 30px; border-color: var(--border); }
+.payout-dialog-foot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+/* Money page: preferred method beside Owed */
+.payout-chip { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 11px; white-space: nowrap; background: transparent; cursor: pointer; }
+.payout-chip svg { width: 12px; height: 12px; }
+.payout-chip.is-missing { border-style: dashed; }
+.payout-chip:hover { color: var(--text); border-color: #4a4656; }
+.money-method-hint { color: var(--muted); }
+.money-owed-cell { display: grid; justify-items: start; }
+@media (max-width: 700px) {
+  .money-owed-cell { justify-items: end; }
+  .payout-method-head { align-items: stretch; }
+  .payout-method-kind { flex-basis: 100%; }
+  .payout-actions > * { flex: 1 1 100%; justify-content: center; }
+  .payout-dialog-foot > * { flex: 1 1 auto; justify-content: center; }
+}

@@ -36,7 +36,9 @@ export type InvoiceDetail = InvoiceSummary & {
   pay_link?: string | null;
 };
 export type Receivable = { client: { id: string; name: string }; billed: string; paid: string; outstanding: string; overdue: string; unbilled: string; invoice_count: number };
-export type PayoutRow = { membership_id: string; name: string; email: string | null; active: boolean; default_rate: string | null; pending: string; earned: string; paid: string; owed: string; payouts: PaymentEntry[] };
+export type PayoutRow = { membership_id: string; name: string; email: string | null; active: boolean; default_rate: string | null; pending: string; earned: string; paid: string; owed: string; payouts: PaymentEntry[];
+  /** Only for billing managers: the editor's preferred payout method kind (no details). */
+  preferred_payout_method?: { method: string; label: string } | null };
 export type MoneyTotals = {
   clients_owe: string; overdue: string; billed: string; collected: string; unbilled: string;
   we_owe_editors?: string; editors_paid?: string; editors_pending?: string; project_value?: string; editor_cost?: string; margin?: string; margin_percent?: number | null;
@@ -207,7 +209,9 @@ export function buildClientInvoices(data: ClientInvoices, now: Date) {
 }
 
 export const PAYMENT_METHODS = [
-  { id: "bank_transfer", label: "Bank transfer" }, { id: "card", label: "Card" }, { id: "cash", label: "Cash" }, { id: "other", label: "Other" },
+  { id: "bank_transfer", label: "Bank transfer" }, { id: "wise", label: "Wise" }, { id: "payoneer", label: "Payoneer" }, { id: "paypal", label: "PayPal" },
+  { id: "bkash_nagad", label: "bKash / Nagad" }, { id: "upi", label: "UPI" }, { id: "gcash", label: "GCash" },
+  { id: "card", label: "Card" }, { id: "cash", label: "Cash" }, { id: "other", label: "Other" },
 ] as const;
 export const methodLabel = (id: string) => PAYMENT_METHODS.find((method) => method.id === id)?.label ?? id;
 

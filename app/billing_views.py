@@ -18,7 +18,8 @@ from .models import (
 from .currencies import CURRENCIES
 from .payment_gateways import list_gateways
 from .permissions import TASK_READ, WORKSPACE_MANAGE, WORKSPACE_READ, has_project_permission, has_workspace_permission
-from .services import billing, online_payments, stripe_connect
+from .gateways import crypto
+from .services import billing, online_payments, payout_details, stripe_connect
 
 
 def _workspace(request, workspace_id):
@@ -322,7 +323,7 @@ def payouts(request, workspace_id):
     workspace, access = _workspace(request, workspace_id)
     _require(access, 'rates_view' if request.method == 'GET' else 'manage', RATES_DENIED if request.method == 'GET' else MANAGE_DENIED)
     if request.method == 'GET':
-        return Response({'currency': billing.workspace_currency(workspace), 'results': billing.payouts_ledger(workspace=workspace)})
+        return Response({'currency': billing.workspace_currency(workspace), 'results': billing.payouts_ledger(workspace=workspace, with_payout_methods=access['manage'])})
     serializer = PayoutSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
@@ -646,3 +647,42 @@ def claim_resolve(request, workspace_id, claim_id, action):
     except online_payments.OnlinePaymentError as exc:
         return Response({'detail': str(exc)}, status=exc.status)
     return Response(online_payments.claim_out(claim))
+
+
+# --- payout details (how editors want to be paid; Blaze Flow never moves the money) ---------
+
+def _payout_details_error(exc):
+    body = {'detail': str(exc)}
+    if getattr(exc, 'field', None):
+        body['field'] = exc.field
+    return Response(body, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def my_payout_details(request, workspace_id):
+    """The viewer's own payout methods in this workspace. Only they can change them."""
+    workspace, _ = _workspace(request, workspace_id)
+    membership = billing.own_membership(user=request.user, workspace=workspace)
+    if membership is None:
+        raise PermissionDenied('Payout details are for team members.')
+    if request.method == 'PUT':
+        try:
+            return Response(payout_details.replace_methods(membership=membership, user=request.user, methods=request.data.get('methods')))
+        except payout_details.PayoutDetailsError as exc:
+            return _payout_details_error(exc)
+        except crypto.EncryptionNotConfigured:
+            return Response({'detail': 'Payout details can’t be saved on this server yet: GATEWAY_ENCRYPTION_KEY is not set.'},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return Response(payout_details.payload(membership))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def member_payout_details(request, workspace_id, membership_id):
+    """One member's payout methods: for billing managers, or the member themselves."""
+    workspace, access = _workspace(request, workspace_id)
+    membership = get_object_or_404(WorkspaceMembership, id=membership_id, workspace=workspace, principal_type=WorkspacePrincipalType.USER)
+    if not access['manage'] and membership.user_id != request.user.id:
+        raise PermissionDenied('Only billing managers can see payout details.')
+    return Response({**payout_details.payload(membership), 'name': billing._person(membership)})

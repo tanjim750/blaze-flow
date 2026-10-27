@@ -1762,6 +1762,13 @@ class PaymentMethod(models.TextChoices):
     CARD = 'card'
     CASH = 'cash'
     OTHER = 'other'
+    # Payout rails an editor can ask to be paid by (see PayoutMethodKind). Recorded by hand.
+    WISE = 'wise'
+    PAYONEER = 'payoneer'
+    PAYPAL = 'paypal'
+    BKASH_NAGAD = 'bkash_nagad'
+    UPI = 'upi'
+    GCASH = 'gcash'
 
 
 class PaymentProvider(models.TextChoices):
@@ -1807,6 +1814,44 @@ class MemberPayRate(models.Model):
 
     class Meta:
         db_table = 'member_pay_rates'
+
+
+class PayoutMethodKind(models.TextChoices):
+    BANK_TRANSFER = 'bank_transfer', 'Bank transfer'
+    WISE = 'wise', 'Wise'
+    PAYONEER = 'payoneer', 'Payoneer'
+    PAYPAL = 'paypal', 'PayPal'
+    BKASH_NAGAD = 'bkash_nagad', 'bKash / Nagad'
+    UPI = 'upi', 'UPI'
+    GCASH = 'gcash', 'GCash'
+    OTHER = 'other', 'Other'
+
+
+class MemberPayoutMethod(models.Model):
+    """How a team member wants the agency to pay them, per workspace. Blaze Flow never moves
+    the money; owners read these details and pay the editor directly.
+
+    The details (account numbers, emails, phones) are Fernet-encrypted with the gateway key;
+    only the method kind and the preferred flag are stored in clear.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.CASCADE, db_column='workspace_membership_id', related_name='+')
+    method = models.CharField(max_length=20, choices=PayoutMethodKind.choices)
+    is_preferred = models.BooleanField(default=False)
+    encrypted_details = models.TextField(blank=True, default='')
+    position = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'member_payout_methods'
+        ordering = ['position', 'created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['workspace_membership'], condition=models.Q(is_preferred=True),
+                                    name='member_payout_methods_one_preferred'),
+        ]
+        indexes = [models.Index(fields=['workspace', 'workspace_membership'])]
 
 
 class EditorPay(models.Model):
