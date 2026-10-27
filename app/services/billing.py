@@ -101,7 +101,7 @@ def workspace_currency(workspace) -> str:
     return billing_settings(workspace).currency
 
 
-def update_billing_settings(*, workspace, user, currency=None, payment_terms_days=None, invoice_prefix=None):
+def update_billing_settings(*, workspace, user, currency=None, payment_terms_days=None, invoice_prefix=None, country=None):
     """Change workspace billing settings.
 
     Currency rules (no exchange rates, amounts are never converted):
@@ -124,12 +124,14 @@ def update_billing_settings(*, workspace, user, currency=None, payment_terms_day
         settings.payment_terms_days = int(payment_terms_days)
     if invoice_prefix is not None:
         settings.invoice_prefix = str(invoice_prefix).strip()[:20] or 'INV'
+    if country is not None:
+        settings.country = str(country).strip().upper()[:2]
     with transaction.atomic():
         settings.save()
         if settings.currency != previous:
             _relabel_unissued(workspace, settings.currency)
     _audit(user=user, workspace=workspace, action='billing.settings.updated', entity_type='workspace', entity_id=workspace.id,
-           currency=settings.currency, previous_currency=previous)
+           currency=settings.currency, previous_currency=previous, country=settings.country)
     return settings
 
 

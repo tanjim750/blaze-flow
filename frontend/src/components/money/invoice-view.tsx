@@ -23,6 +23,7 @@ import { markInvoicePaid } from "./money-board";
 import { PaymentDialog } from "./payment-dialog";
 import { sentMessage } from "@/lib/invoice-send";
 import { goTo, invoiceCheckout, onlinePaymentNote } from "@/lib/stripe-connect";
+import { PayChooser, PROVIDER_NAME, useGatewayChoice } from "./pay-chooser";
 
 type DraftLine = { key: string; id?: string; kind: InvoiceLine["kind"]; description: string; amount: string };
 type Draft = { lines: DraftLine[]; discount: string; taxRate: string; dueDate: string; notes: string };
@@ -52,7 +53,8 @@ export function editPayload(draft: Draft): { edit: InvoiceEdit } | { error: stri
   return { edit: { lines, discount_amount: discount.amount ?? "0", tax_rate: String(rate), due_date: draft.dueDate || null, notes: draft.notes } };
 }
 
-export function InvoiceView({ workspaceId, invoice, canManage, backHref, now, stripeReturn = null }: { workspaceId: string; invoice: InvoiceDetail; canManage: boolean; backHref: string; now: string; stripeReturn?: "success" | "cancel" | null }) {
+export function InvoiceView({ workspaceId, invoice, canManage, backHref, now, stripeReturn = null, returnProvider = null }: { workspaceId: string; invoice: InvoiceDetail; canManage: boolean; backHref: string; now: string; stripeReturn?: "success" | "cancel" | "fail" | null; returnProvider?: string | null }) {
+  const gateways = useGatewayChoice(invoice.payment_options);
   const router = useAppRouter();
   const [paying, setPaying] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -114,10 +116,12 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now, st
     primary = <button type="button" className="money-button is-primary" disabled={busy} onClick={() => void run(() => markInvoicePaid(workspaceId, invoice))}><CircleDollarSign aria-hidden="true" />{settleLabel(invoice, formatMoney)}</button>;
   }
   const payOnline = invoice.online_payment?.available === true;
+  const showChooser = !canManage && payOnline && gateways.showChooser;
+  const via = PROVIDER_NAME[returnProvider ?? ""] ?? "the payment provider";
   if (!canManage && payOnline) {
     primary = <button type="button" className="money-button is-primary invoice-pay-now" disabled={busy} onClick={() => void (async () => {
       setBusy(true);
-      try { goTo.url((await invoiceCheckout(workspaceId, invoice.id)).url); }
+      try { goTo.url((await invoiceCheckout(workspaceId, invoice.id, gateways.choice ?? undefined)).url); }
       catch (reason) { toast.error(reason instanceof Error ? reason.message : "Couldn't open the payment page."); setBusy(false); }
     })()}><CircleDollarSign aria-hidden="true" />Pay now</button>;
   }
@@ -150,7 +154,9 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now, st
       </DropdownMenu>
     </div>
 
-    {stripeReturn === "success" && <p className="invoice-stripe-note tone-success" role="status"><CircleCheck aria-hidden="true" />{invoice.online_payment?.reason === "nothing_due" || invoice.status === "paid" ? "Payment received. Thank you!" : "Thanks! Your payment is being confirmed; this page updates once Stripe tells us it\u2019s done."}</p>}
+    {stripeReturn === "success" && <p className="invoice-stripe-note tone-success" role="status"><CircleCheck aria-hidden="true" />{invoice.online_payment?.reason === "nothing_due" || invoice.status === "paid" ? "Payment received. Thank you!" : `Thanks! Your payment is being confirmed; this page updates once ${returnProvider ? via : "Stripe"} tells us it\u2019s done.`}</p>}
+    {stripeReturn === "fail" && <p className="invoice-stripe-note tone-warning" role="status"><Info aria-hidden="true" />{via} couldn&rsquo;t complete the payment. Nothing was charged{payOnline ? "; try Pay now again or choose another way to pay." : "."}</p>}
+    {showChooser && <div className="invoice-pay-chooser"><PayChooser options={gateways.list} value={gateways.choice} onChange={gateways.setChoice} disabled={busy} name={`pay-${invoice.id}`} /></div>}
     {stripeReturn === "cancel" && <p className="invoice-stripe-note tone-warning" role="status"><Info aria-hidden="true" />Payment cancelled. Nothing was charged{payOnline ? "; you can try Pay now again any time." : "."}</p>}
     {payNote && invoice.status !== "draft" && <p className="invoice-stripe-note" role="note"><Info aria-hidden="true" />{payNote}</p>}
 

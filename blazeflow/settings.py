@@ -280,6 +280,17 @@ STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip()
 # application_fee_amount on the direct charge.
 PLATFORM_FEE_PERCENT = os.environ.get('PLATFORM_FEE_PERCENT', '0').strip() or '0'
 STRIPE_REQUEST_TIMEOUT_SECONDS = float(os.environ.get('STRIPE_REQUEST_TIMEOUT_SECONDS', '20'))
+
+# Local payment gateways (PayMongo, Safepay, SSLCOMMERZ). Each agency pastes its own merchant
+# keys in Settings > Billing; they are encrypted at rest with this Fernet key (comma-separated
+# for rotation: the first key encrypts, all decrypt). Generate one with
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Without it the app runs, but nobody can save gateway keys.
+GATEWAY_ENCRYPTION_KEY = os.environ.get('GATEWAY_ENCRYPTION_KEY', '').strip()
+GATEWAY_REQUEST_TIMEOUT_SECONDS = float(os.environ.get('GATEWAY_REQUEST_TIMEOUT_SECONDS', '20'))
+# Public base URL of this API, used for webhook/IPN and return URLs given to gateways
+# (e.g. https://api.example.com). Defaults to APP_BASE_URL (same origin behind a proxy).
+API_PUBLIC_URL = os.environ.get('API_PUBLIC_URL', '').strip().rstrip('/')
 # Platform admin revenue estimate until Stripe is connected: what one PRO seat is assumed to
 # pay per month, in minor units of PLATFORM_CURRENCY. Purely for the /platform dashboard.
 PLATFORM_PRO_PRICE_MINOR = int(os.environ.get('PLATFORM_PRO_PRICE_MINOR', '2900'))

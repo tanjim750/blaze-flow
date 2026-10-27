@@ -42,3 +42,6 @@ STRIPE_SECRET_KEY = ''
 STRIPE_PUBLISHABLE_KEY = ''
 STRIPE_WEBHOOK_SECRET = ''
 PLATFORM_FEE_PERCENT = '0'
+# Throwaway Fernet key for tests only (encrypts fake gateway keys in the in-memory DB).
+GATEWAY_ENCRYPTION_KEY = 'Ld5rKrmdMe4icNf9BxDhXORX8EQvyCJh87UTYw_Bre8='
+API_PUBLIC_URL = ''

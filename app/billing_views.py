@@ -7,7 +7,7 @@ module, so there is exactly one implementation to swap for a gateway later).
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -18,7 +18,7 @@ from .models import (
 from .currencies import CURRENCIES
 from .payment_gateways import list_gateways
 from .permissions import TASK_READ, WORKSPACE_MANAGE, WORKSPACE_READ, has_project_permission, has_workspace_permission
-from .services import billing, stripe_connect
+from .services import billing, online_payments, stripe_connect
 
 
 def _workspace(request, workspace_id):
@@ -61,6 +61,14 @@ class SettingsSerializer(serializers.Serializer):
     currency = serializers.CharField(max_length=3, required=False)
     payment_terms_days = serializers.IntegerField(min_value=0, max_value=365, required=False)
     invoice_prefix = serializers.CharField(max_length=20, required=False)
+    # ISO 3166-1 alpha-2, e.g. PH, PK, BD, US. Blank = use the workspace profile's country.
+    country = serializers.RegexField(r'^([A-Za-z]{2})?$', required=False, allow_blank=True)
+
+
+class GatewayKeysSerializer(serializers.Serializer):
+    mode = serializers.ChoiceField(choices=['sandbox', 'live'])
+    # Blank or missing secret fields keep the saved value (the form only ever sees masks).
+    credentials = serializers.DictField(child=serializers.CharField(allow_blank=True, max_length=2000), required=False)
 
 
 class InvoiceCreateSerializer(serializers.Serializer):
@@ -117,6 +125,11 @@ def _settings_out(settings, access=None, workspace=None):
         'currency': settings.currency, 'payment_terms_days': settings.payment_terms_days, 'invoice_prefix': settings.invoice_prefix,
         # Only owners/admins (billing.manage + workspace.manage) may change the currency.
         'can_change_currency': bool(access and access.get('currency_manage')),
+        'country': (settings.country or '').upper(),
+        'effective_country': online_payments.workspace_country(workspace) if workspace is not None else '',
+        'recommended_gateways': online_payments.recommended_for(online_payments.workspace_country(workspace)) if workspace is not None else [],
+        # Owners/admins enter and see (masked) merchant keys.
+        'can_manage_gateways': bool(access and access.get('currency_manage')),
         'payment_gateways': list_gateways(workspace_currency=settings.currency, workspace=workspace),
     }
 
@@ -139,6 +152,8 @@ def billing_settings(request, workspace_id):
             current = billing.workspace_currency(workspace)
             if str(serializer.validated_data['currency']).strip().upper() != current:
                 raise PermissionDenied('Only workspace owners and admins can change the currency.')
+        if 'country' in serializer.validated_data and not access['currency_manage']:
+            raise PermissionDenied('Only workspace owners and admins can change the country.')
         try:
             settings = billing.update_billing_settings(workspace=workspace, user=request.user, **serializer.validated_data)
         except billing.BillingError as exc:
@@ -189,7 +204,8 @@ def _invoice_detail(workspace, invoice):
     invoice = Invoice.objects.select_related('client_team', 'project', 'workspace').prefetch_related('lines', 'payments').get(pk=invoice.pk)
     profile = WorkspaceProfile.objects.filter(workspace=workspace).first()
     data = billing.invoice_out(invoice, detail=True, workspace_profile=profile)
-    data['online_payment'] = stripe_connect.online_payment(invoice)
+    data['payment_options'] = online_payments.payment_options(invoice)
+    data['online_payment'] = online_payments.online_payment(invoice, options=data['payment_options'])
     return data
 
 
@@ -469,18 +485,88 @@ def stripe_disconnect(request, workspace_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def invoice_checkout(request, workspace_id, invoice_id):
-    """Pay now: a Stripe Checkout Session for what is outstanding (team billing viewers or the client)."""
+    """Pay now with the gateway in body ``provider`` (default: the first that can take it): a hosted checkout for what is outstanding (team billing viewers or the client)."""
     workspace, access = _workspace(request, workspace_id)
     try:
         invoice = _visible_invoice(request, workspace, access, invoice_id)
     except Invoice.DoesNotExist:
         return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-    back = stripe_connect.connect_url(f'/money/invoices/{invoice.id}')
+    return checkout_response(invoice, provider=request.data.get('provider') if hasattr(request.data, 'get') else None,
+                             return_path=f'/money/invoices/{invoice.id}',
+                             customer_email=None if access['view'] else request.user.email, user=request.user)
+
+
+def checkout_response(invoice, *, provider, return_path, customer_email=None, user=None):
     try:
-        url = stripe_connect.create_checkout(
-            invoice=invoice, success_url=f'{back}?stripe=success', cancel_url=f'{back}?stripe=cancel',
-            customer_email=None if access['view'] else request.user.email, user=request.user,
-        )
+        url = online_payments.create_checkout(invoice=invoice, provider_key=provider or None, return_path=return_path,
+                                              customer_email=customer_email, user=user)
     except (stripe_connect.StripeNotConfigured, stripe_connect.StripeConnectError) as exc:
         return _stripe_error(exc)
+    except online_payments.OnlinePaymentError as exc:
+        return Response({'detail': str(exc), 'code': exc.code}, status=exc.status)
     return Response({'url': url})
+
+
+# --- local gateways (PayMongo, Safepay, SSLCOMMERZ): the agency's own merchant keys ----------
+
+GATEWAY_DENIED = 'Only workspace owners and admins can manage payment gateway keys.'
+
+
+def _gateway_access(request, workspace_id, provider):
+    from .gateways import get_provider
+    workspace, access = _workspace(request, workspace_id)
+    _require(access, 'view', VIEW_DENIED)
+    if not _can_change_currency(request, workspace, access):
+        raise PermissionDenied(GATEWAY_DENIED)
+    gateway = get_provider(provider)
+    if gateway is None:
+        raise NotFound('Unknown payment gateway.')
+    return workspace, gateway
+
+
+def _gateway_out(workspace, gateway):
+    settings = billing.billing_settings(workspace)
+    return online_payments.connection_out(gateway, online_payments.connection_for(workspace, gateway.key), workspace_currency=settings.currency)
+
+
+def _gateway_call(fn):
+    try:
+        return fn()
+    except online_payments.OnlinePaymentError as exc:
+        return Response({'detail': str(exc), 'code': exc.code}, status=exc.status)
+
+
+@api_view(['GET', 'PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def gateway_detail(request, workspace_id, provider):
+    """GET the card (masked), PUT {mode, credentials} to save keys, DELETE to disconnect."""
+    workspace, gateway = _gateway_access(request, workspace_id, provider)
+    if request.method == 'PUT':
+        serializer = GatewayKeysSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = _gateway_call(lambda: online_payments.save_connection(
+            workspace=workspace, provider_key=gateway.key, user=request.user, mode=serializer.validated_data['mode'],
+            credentials=serializer.validated_data.get('credentials') or {}))
+        if isinstance(result, Response):
+            return result
+    elif request.method == 'DELETE':
+        online_payments.delete_connection(workspace=workspace, provider_key=gateway.key, user=request.user)
+    return Response(_gateway_out(workspace, gateway))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def gateway_test(request, workspace_id, provider):
+    workspace, gateway = _gateway_access(request, workspace_id, provider)
+    result = _gateway_call(lambda: online_payments.test_connection(workspace=workspace, provider_key=gateway.key, user=request.user))
+    return result if isinstance(result, Response) else Response(_gateway_out(workspace, gateway))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def gateway_enable(request, workspace_id, provider):
+    """{enabled: true|false}. Turning on needs a passing Test connection."""
+    workspace, gateway = _gateway_access(request, workspace_id, provider)
+    enabled = request.data.get('enabled') in (True, 'true', '1', 1)
+    result = _gateway_call(lambda: online_payments.set_enabled(workspace=workspace, provider_key=gateway.key, user=request.user, enabled=enabled))
+    return result if isinstance(result, Response) else Response(_gateway_out(workspace, gateway))

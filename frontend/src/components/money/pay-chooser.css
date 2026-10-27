@@ -1,0 +1,16 @@
+/* "Pay with" chooser (invoice page and the public /pay link). Navy theme, violet accent. */
+.pay-chooser { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.pay-chooser legend { margin: 0 0 8px; padding: 0; color: #9AA3B5; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.pay-choice { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; min-height: 56px; padding: 10px 14px; border: 1px solid #262B37; border-radius: 11px; background: #151922; color: #fff; cursor: pointer; transition: background 120ms, border-color 120ms; }
+.pay-choice:hover { background: #222733; }
+.pay-choice.is-active { border-color: #8B5CF6; background: color-mix(in srgb, #7c5cff 12%, #151922); box-shadow: 0 0 0 1px #8B5CF6 inset; }
+.pay-choice.is-off { cursor: not-allowed; opacity: .55; }
+.pay-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.pay-choice:has(input:focus-visible) { outline: 2px solid #8B5CF6; outline-offset: 2px; }
+.pay-choice-logo { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #262B37; border-radius: 9px; background: #1A1E28; color: #a99bff; font-weight: 750; }
+.pay-choice-text { display: grid; gap: 2px; min-width: 0; }
+.pay-choice-text strong { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
+.pay-choice-text em { padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, #ffc95c 14%, transparent); color: #ffc95c; font-size: 11px; font-style: normal; font-weight: 600; }
+.pay-choice-text small { overflow: hidden; color: #9AA3B5; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.invoice-pay-chooser { max-width: 520px; margin: 0 0 14px; padding: 14px; border: 1px solid #262B37; border-radius: 12px; background: #1A1E28; }
+@media (max-width: 480px) { .pay-choice-text small { white-space: normal; } }

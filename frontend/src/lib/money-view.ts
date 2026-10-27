@@ -29,6 +29,8 @@ export type InvoiceDetail = InvoiceSummary & {
   subtotal?: string; discount_amount?: string; tax_rate?: string; tax?: string; can_revert?: boolean; default_due_date?: string | null;
   /** Whether "Pay now" (Stripe Checkout) is offered, and why not when it isn't. */
   online_payment?: import("./stripe-connect").OnlinePayment;
+  /** Every gateway the studio turned on, for the Pay now chooser. */
+  payment_options?: import("./payment-gateways").PaymentOption[];
   /** Managers only: the shareable no-login pay page, once online payment is available. */
   pay_link?: string | null;
 };

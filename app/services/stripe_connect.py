@@ -461,24 +461,12 @@ def _record_invoice_payment(*, account_id, metadata, amount_minor, currency, ref
     if account is None or account.stripe_account_id != account_id:
         logger.warning('stripe event %s account %s does not own invoice %s', event_id, account_id, invoice_id)
         return 'account_mismatch'
+    from .online_payments import record_invoice_payment  # shared by every gateway
     if str(currency or '').upper() != invoice.currency.upper():
         logger.warning('stripe event %s currency %s != invoice %s', event_id, currency, invoice.currency)
         return 'currency_mismatch'
-    if Payment.objects.filter(provider=PaymentProvider.STRIPE, provider_reference=reference).exists():
-        return 'duplicate_payment'
-    amount = from_minor_units(int(amount_minor), invoice.currency)
-    with transaction.atomic():
-        outstanding = billing.invoice_total(invoice) - billing.invoice_paid(invoice)
-        if outstanding <= 0:
-            _audit(user=None, workspace=invoice.workspace, action='billing.stripe.payment_unmatched', entity_id=invoice.workspace_id,
-                   invoice_id=str(invoice.id), amount=billing.money_str(amount), currency=invoice.currency, payment_intent=reference)
-            return 'already_paid'
-        try:
-            billing.record_payment(
-                workspace=invoice.workspace, invoice=invoice, amount=min(amount, outstanding), method=PaymentMethod.CARD,
-                provider=PaymentProvider.STRIPE, provider_reference=reference, note='Paid online with Stripe',
-            )
-        except billing.BillingError as exc:
-            logger.warning('stripe event %s not recorded: %s', event_id, exc)
-            return 'not_recorded'
-    return 'payment_recorded'
+    return record_invoice_payment(
+        invoice=invoice, provider=PaymentProvider.STRIPE, amount=from_minor_units(int(amount_minor), invoice.currency),
+        currency=currency, reference=reference, event_id=event_id, note='Paid online with Stripe',
+        method=PaymentMethod.CARD, reference_key='payment_intent',
+    )

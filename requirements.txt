@@ -12,3 +12,4 @@ sentry-sdk==2.71.0
 gunicorn==23.0.0
 whitenoise==6.9.0
 stripe==16.0.1
+cryptography>=42

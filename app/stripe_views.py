@@ -10,7 +10,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .models import Invoice, InvoiceStatus, WorkspaceProfile
-from .services import billing, stripe_connect
+from .services import billing, online_payments, stripe_connect
 from .throttles import UploadLinkThrottle
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,8 @@ def public_invoice_out(invoice):
                         for p in data['payments']]
     data.pop('can_revert', None)
     data.pop('default_due_date', None)
-    data['online_payment'] = stripe_connect.online_payment(invoice)
+    data['payment_options'] = online_payments.payment_options(invoice)
+    data['online_payment'] = online_payments.online_payment(invoice, options=data['payment_options'])
     data['studio_name'] = data['from']['name']
     return data
 
@@ -57,14 +58,9 @@ def public_pay_checkout(request, token):
     invoice = _invoice_for_token(token)
     if invoice is None:
         return Response({'detail': 'This payment link is not valid.'}, status=status.HTTP_404_NOT_FOUND)
-    back = stripe_connect.connect_url(f'/pay/{token}')
-    try:
-        url = stripe_connect.create_checkout(invoice=invoice, success_url=f'{back}?stripe=success', cancel_url=f'{back}?stripe=cancel')
-    except stripe_connect.StripeNotConfigured as exc:
-        return Response({'detail': str(exc), 'code': 'stripe_not_configured'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-    except stripe_connect.StripeConnectError as exc:
-        return Response({'detail': str(exc)}, status=exc.status)
-    return Response({'url': url})
+    from .billing_views import checkout_response
+    provider = request.data.get('provider') if hasattr(request.data, 'get') else None
+    return checkout_response(invoice, provider=provider, return_path=f'/pay/{token}')
 
 
 @csrf_exempt
@@ -78,3 +74,22 @@ def stripe_webhook(request):
     except stripe_connect.WebhookSignatureError:
         return JsonResponse({'detail': 'Invalid signature.'}, status=400)
     return JsonResponse({'received': True, 'outcome': outcome})
+
+
+
+@csrf_exempt
+def gateway_webhook(request, provider, connection_id):
+    """PayMongo / Safepay webhooks and SSLCOMMERZ IPN. Raw body kept for signature checks."""
+    if request.method != 'POST':
+        return JsonResponse({'detail': 'Method not allowed.'}, status=405)
+    code, body = online_payments.handle_webhook(provider_key=provider, connection_id=connection_id, request=request)
+    return JsonResponse(body, status=code)
+
+
+@csrf_exempt
+def gateway_return(request, checkout_id, result):
+    """The payer comes back from the hosted page (SSLCOMMERZ POSTs here). Re-checked server side."""
+    from django.http import HttpResponseRedirect
+    if request.method not in ('GET', 'POST'):
+        return JsonResponse({'detail': 'Method not allowed.'}, status=405)
+    return HttpResponseRedirect(online_payments.handle_return(checkout_id=checkout_id, result=result, request=request))

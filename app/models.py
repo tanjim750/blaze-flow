@@ -1767,6 +1767,9 @@ class PaymentProvider(models.TextChoices):
     # value here and call billing.record_payment() from its webhook.
     MANUAL = 'manual'
     STRIPE = 'stripe'
+    PAYMONGO = 'paymongo'
+    SAFEPAY = 'safepay'
+    SSLCOMMERZ = 'sslcommerz'
 
 
 class EditorPayStatus(models.TextChoices):
@@ -1780,6 +1783,9 @@ class WorkspaceBillingSettings(models.Model):
     invoice_prefix = models.CharField(max_length=20, default='INV')
     next_invoice_number = models.PositiveIntegerField(default=1)
     payment_terms_days = models.PositiveIntegerField(default=14)
+    # ISO 3166-1 alpha-2. Drives which payment gateways are recommended first. Blank = fall back
+    # to the business address country on WorkspaceProfile.
+    country = models.CharField(max_length=2, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1954,6 +1960,78 @@ class StripeWebhookEvent(models.Model):
 
     class Meta:
         db_table = 'stripe_webhook_events'
+
+
+class GatewayMode(models.TextChoices):
+    SANDBOX = 'sandbox'
+    LIVE = 'live'
+
+
+class GatewayConnectionStatus(models.TextChoices):
+    UNTESTED = 'untested'
+    CONNECTED = 'connected'
+    FAILED = 'failed'
+
+
+class GatewayConnection(models.Model):
+    """A workspace's own merchant account on a local gateway (PayMongo, Safepay, SSLCOMMERZ).
+
+    The agency signs up with the gateway themselves and pastes their merchant keys. Money lands
+    in their merchant account. ``credentials`` is a Fernet token (GATEWAY_ENCRYPTION_KEY) of
+    the JSON credentials; it is never returned by any API (see app/gateways/crypto.py). The id
+    is the unguessable part of this connection's webhook/IPN URL.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    provider = models.CharField(max_length=30)
+    mode = models.CharField(max_length=10, choices=GatewayMode.choices, default=GatewayMode.SANDBOX)
+    enabled = models.BooleanField(default=False)
+    credentials = models.TextField(blank=True, default='')
+    status = models.CharField(max_length=10, choices=GatewayConnectionStatus.choices, default=GatewayConnectionStatus.UNTESTED)
+    status_message = models.CharField(max_length=500, blank=True, default='')
+    # Non-secret facts learned from the provider, e.g. PayMongo's enabled payment methods.
+    details = models.JSONField(default=dict, blank=True)
+    last_tested_at = models.DateTimeField(null=True, blank=True)
+    updated_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='updated_by_user_id', null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'payment_gateway_connections'
+        constraints = [models.UniqueConstraint(fields=['workspace', 'provider'], name='gateway_connection_workspace_provider_uniq')]
+
+
+class GatewayCheckout(models.Model):
+    """One hosted-checkout attempt for an invoice. Its id is the merchant transaction id we send."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    connection = models.ForeignKey(GatewayConnection, on_delete=models.CASCADE, db_column='connection_id', related_name='checkouts')
+    invoice = models.ForeignKey('Invoice', on_delete=models.CASCADE, db_column='invoice_id', related_name='+')
+    provider = models.CharField(max_length=30)
+    # The provider's id for the session (PayMongo cs_..., Safepay track_...); SSLCOMMERZ uses ours.
+    provider_reference = models.CharField(max_length=255, blank=True, default='', db_index=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(max_length=3)
+    return_to = models.CharField(max_length=500)
+    status = models.CharField(max_length=20, default='open')  # open | paid | failed | cancelled
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'payment_gateway_checkouts'
+
+
+class GatewayWebhookEvent(models.Model):
+    """Every local-gateway event/IPN we have handled, so a re-delivery is a no-op."""
+    provider = models.CharField(max_length=30)
+    event_id = models.CharField(max_length=255)
+    connection = models.ForeignKey(GatewayConnection, on_delete=models.SET_NULL, db_column='connection_id', null=True, related_name='+')
+    type = models.CharField(max_length=100, blank=True, default='')
+    outcome = models.CharField(max_length=40, blank=True, default='')
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'payment_gateway_webhook_events'
+        constraints = [models.UniqueConstraint(fields=['provider', 'event_id'], name='gateway_webhook_event_uniq')]
 
 
 class UploadLink(models.Model):

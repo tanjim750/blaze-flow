@@ -250,6 +250,22 @@ The webhook verifies the signature, stores each event id once (retries are no-op
 invoices paid or part-paid; `charge.refunded` records refunds. Connect, disconnect and every
 payment are in the audit log.
 
+### Local gateways (PayMongo, Safepay, SSLCOMMERZ)
+
+Agencies in the Philippines, Pakistan and Bangladesh connect PayMongo (PHP), Safepay (PKR) or
+SSLCOMMERZ (BDT) with their own merchant keys in Settings → Billing (owners/admins only).
+Secrets are encrypted at rest and only ever shown masked.
+
+1. Set `GATEWAY_ENCRYPTION_KEY` (a Fernet key; see `.env.example`) and back it up. Without it
+   the key form says encryption is not configured and refuses to save.
+2. Set `API_PUBLIC_URL` to the public https URL of the API (falls back to `APP_BASE_URL`). Each connection's webhook/IPN URL
+   is `<API_PUBLIC_URL>/api/payments/<provider>/webhook/<connection id>/`; it is shown with a
+   Copy button on the gateway card.
+3. Optional: `GATEWAY_REQUEST_TIMEOUT_SECONDS` (default 20).
+
+Gateway confirmations are re-verified against the provider API before an invoice is marked
+paid, each event is stored once (retries are no-ops), and every payment is in the audit log.
+
 ## 5. Scheduled maintenance
 
 The `scheduler` service runs `deploy/crontab` with supercronic (UTC):
