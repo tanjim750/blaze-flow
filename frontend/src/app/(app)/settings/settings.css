@@ -284,3 +284,6 @@
   .setup-note-tip { margin: 10px 12px 0; }
   .setup-note-links { margin: 10px 12px 12px; }
 }
+
+/* UI sweep 2: setup-note links are thumb-sized on phones and touch screens. */
+@media (max-width: 640px), (pointer: coarse) { .setup-note-links a { min-height: 44px; } .setup-note-links { gap: 0 16px; } }
