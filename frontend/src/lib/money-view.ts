@@ -180,7 +180,7 @@ export function buildOwnerMoneyCards(summary: Pick<MoneySummary, "currency" | "t
 
 /** Editor dashboard "My earnings": pending / earned / paid, and what is still owed. */
 export function buildEarnings(earnings: MyEarnings) {
-  const money = (value: string) => formatMoney(value, earnings.currency);
+  const money = (value: string) => formatMoney(value, earnings.currency, { whole: true });
   const earnedTotal = sumMoney([earnings.earned]);
   return {
     pending: money(earnings.pending), earned: money(earnings.earned), paid: money(earnings.paid), owed: money(earnings.owed),

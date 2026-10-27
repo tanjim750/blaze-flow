@@ -251,3 +251,18 @@
   .invoice-meta { flex-direction: column; gap: 14px; }
   .invoice-meta dl { grid-template-columns: auto 1fr; }
 }
+
+/* UI sweep 2: summary cards sit 2x2 on tablets, invoice filter tabs wrap, invoice row actions
+   wrap instead of forcing a sideways scroll, invoice links are thumb-sized on phones. */
+@media (min-width: 521px) and (max-width: 960px) { .money-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .money-totals { grid-template-columns: minmax(0, 1fr); } }
+.money-panel > header:has(.money-tabs) { flex-wrap: wrap; row-gap: 10px; }
+.money-tabs { flex-wrap: wrap; max-width: 100%; }
+@media (max-width: 900px) {
+  .money-table.is-invoices td.money-row-action { white-space: normal; }
+  .money-table.is-invoices td.money-row-action .money-button { margin: 3px 0 3px 6px; }
+}
+@media (max-width: 640px) {
+  .money-invoice-link { min-height: 44px; }
+  .money-tabs button { min-height: 44px; }
+}
