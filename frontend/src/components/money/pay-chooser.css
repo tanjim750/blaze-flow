@@ -58,3 +58,8 @@
 .manual-pay .pay-button svg { width: 17px; height: 17px; }
 .manual-pay .pay-button.is-compact { min-height: 40px; font-size: 14px; }
 .manual-pay .pay-error { margin: 0; color: #ff8a8a; font-size: 13px; }
+/* UI sweep: copy buttons and the payment link are comfortable 44px tap targets on phones. */
+@media (max-width: 640px), (pointer: coarse) {
+  .manual-copy { min-width: 44px; min-height: 44px; justify-content: center; }
+  .manual-pay-link { min-height: 44px; }
+}

@@ -236,3 +236,18 @@
 .invoice-stripe-note.tone-success { border-color: color-mix(in srgb, #5bd295 40%, #262B37); }
 .invoice-stripe-note.tone-warning { border-color: color-mix(in srgb, #ffc95c 40%, #262B37); }
 @media print { .invoice-stripe-note { display: none; } }
+
+/* UI sweep (payments): the record-payment/payout dialog fits a 390px phone, the invoice
+   bill-to/meta block stacks instead of wrapping dates, and New invoice sits left on tablets. */
+.money-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.money-form input, .money-form select { min-width: 0; width: 100%; box-sizing: border-box; }
+.money-form footer { flex-wrap: wrap; }
+.invoice-meta dd { white-space: nowrap; }
+@media (max-width: 960px) { .money-heading > .money-new-invoice { align-self: flex-start; align-items: flex-start; } }
+@media (max-width: 520px) {
+  .money-form { grid-template-columns: minmax(0, 1fr); }
+  .money-form footer .money-demo-chip { flex-basis: 100%; margin-right: 0; }
+  .money-form footer .money-button { flex: 1 1 0; min-height: 44px; }
+  .invoice-meta { flex-direction: column; gap: 14px; }
+  .invoice-meta dl { grid-template-columns: auto 1fr; }
+}

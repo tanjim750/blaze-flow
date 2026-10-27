@@ -256,7 +256,8 @@
 .setup-overview > div { min-width: 0; }
 .setup-overview strong { color: #fff; }
 .setup-overview > div > strong { display: block; margin-bottom: 4px; font-size: 13px; }
-.setup-overview ul { display: grid; gap: 3px; margin: 0; padding-left: 18px; }
+.setup-overview ul { display: grid; gap: 3px; margin: 0; padding-left: 18px; list-style: disc; }
+.setup-overview li::marker { color: #a99bff; }
 .setup-overview p { margin: 0; color: var(--shell-outline); }
 .setup-overview.is-readonly { border-color: #262B37; background: #1A1E28; }
 .setup-overview.is-readonly > svg { color: #9AA3B5; }
