@@ -211,3 +211,21 @@
 .invoice-field .pp-input i { font-style: normal; font-size: 12px; opacity: .7; }
 .invoice-field .pp-input input { flex: 1; min-width: 0; }
 .invoice-client-preview { margin: 0; }
+
+/* New invoice: what a fresh invoice would hold, and the calm note when it would be empty. */
+.money-preview { display: flex; align-items: center; gap: 10px; margin: 0; padding: 11px 13px; border: 1px solid #3a2f66; border-radius: 10px; background: #1A1E28; color: var(--text); font-size: 12px; }
+.money-preview svg { flex: none; width: 16px; color: #b6a4ff; }
+.money-preview b { margin-left: auto; font-size: 15px; font-variant-numeric: tabular-nums; }
+.money-preview.is-loading { color: var(--muted); border-style: dashed; border-color: var(--border); }
+.money-note { display: flex; gap: 12px; padding: 14px; border: 1px solid #2c3550; border-radius: 12px; background: #12151D; }
+.money-note > svg { flex: none; width: 18px; margin-top: 1px; color: #9db4ff; }
+.money-note strong { display: block; color: var(--text); font-size: 13px; }
+.money-note p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.money-note-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.money-note-actions a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.money-note-actions svg { width: 14px; }
+.money-footer-hint { margin-right: auto; align-self: center; }
+@media (max-width: 480px) {
+  .money-note { flex-direction: column; gap: 8px; }
+  .money-note-actions a { flex: 1 1 100%; justify-content: center; }
+}

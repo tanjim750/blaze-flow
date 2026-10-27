@@ -524,3 +524,16 @@ export const acceptWorkspaceInvite = (token: string) =>
 
 export const acceptClientTeamInvite = (token: string) =>
   request<{ id: string }>("/client-team-invitations/accept/", jsonBody({ token }));
+
+/** One client's overview: project counts, progress, the editors on their work, and (billing.view only) money. */
+export type ClientOverviewProject = { id: string; name: string; status: string; priority: string | null; due_at: string | null; updated_at: string; tasks_total: number; tasks_done: number; progress: number | null };  // progress: 0–100, null when the project has no tasks
+export type ClientOverviewEditor = { membership_id: string; name: string; email: string | null; avatar_url: string | null; role: string; project_count: number };
+export type ClientOverview = {
+  client_team_id: string;
+  counts: { ongoing: number; completed: number; editors: number };
+  ongoing_projects: ClientOverviewProject[];
+  completed_projects: ClientOverviewProject[];
+  editors: ClientOverviewEditor[];
+  money: { currency: string; paid: string; agreed: string; invoices_issued: number; invoices_paid: number } | null;
+};
+export const getClientTeamOverview = (workspaceId: string, clientTeamId: string) => request<ClientOverview>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/overview/`);
