@@ -3,6 +3,7 @@
  * and how a list of them is grouped by day. No React and no fetch, so the bell, the
  * /notifications page and the tests all read from the same rules.
  */
+import { formatMoney } from "./money";
 
 export type NotificationActor = {
   id: string | null; email: string | null; name: string;
@@ -164,12 +165,13 @@ export function describeNotification(item: NotificationItem): DescribedNotificat
       return { ...base, tone: "other", verb: count ? `found ${count} possible mistake${count === 1 ? "" : "s"} in` : "found no likely mistakes in", subject: cut ?? "your file" };
     }
     case "PAYMENT_CLAIMED": {
-      // "Rachel Kim says they paid USD 500.00 by Wise for INV-0012". Nothing is paid until the team confirms it.
+      // "Rachel Kim says they paid US$500.00 by Wise for INV-0012". Nothing is paid until the team confirms it.
       const via = payload.provider === "payoneer" ? "Payoneer" : payload.provider === "wise" ? "Wise" : text(payload.provider) ?? "bank transfer";
       const amount = text(payload.amount); const currency = text(payload.currency);
+      const shown = text(payload.amount_display) ?? (amount && currency ? formatMoney(amount, currency) : null);
       const invoice = text(payload.invoice_number);
       return {
-        ...base, tone: "other", verb: `says they paid${amount && currency ? ` ${currency} ${amount}` : ""} by ${via} for`, subject: invoice ?? "an invoice",
+        ...base, tone: "other", verb: `says they paid${shown ? ` ${shown}` : ""} by ${via} for`, subject: invoice ?? "an invoice",
         snippet: text(payload.payer_reference) ? `Reference: ${text(payload.payer_reference)}. Check it arrived, then confirm.` : "Check it arrived, then confirm.",
       };
     }

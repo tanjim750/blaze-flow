@@ -36,6 +36,15 @@ it("describes an \"I've paid\" claim for the team", () => {
     link: "/money/invoices/i1", snippet: null, poster_url: null, unread: true, read_at: null, created_at: "",
   } as unknown as NotificationItem;
   const d = describeNotification(item);
-  expect(`${d.actor} ${d.verb} ${d.subject}`).toBe("Rachel Kim says they paid USD 500.00 by Wise for INV-0012");
+  expect(`${d.actor} ${d.verb} ${d.subject}`).toBe("Rachel Kim says they paid US$500.00 by Wise for INV-0012");
   expect(d.href).toBe("/money/invoices/i1");
+});
+
+it("prefers the API's formatted amount on an \"I've paid\" claim", () => {
+  const item = {
+    id: "n", kind: "PAYMENT_CLAIMED", workspace_id: "w", actor: null, entity_type: "payment_claim", entity_id: "c",
+    payload: { actor_name: "Northlight Coffee", provider: "wise", amount: "1590.00", currency: "GBP", amount_display: "£1,590.00", invoice_number: "INV-0002" },
+    link: "/money/invoices/i1", snippet: null, poster_url: null, unread: true, read_at: null, created_at: "",
+  } as unknown as NotificationItem;
+  expect(describeNotification(item).verb).toBe("says they paid £1,590.00 by Wise for");
 });
