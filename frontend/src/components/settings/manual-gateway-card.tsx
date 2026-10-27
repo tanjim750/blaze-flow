@@ -48,7 +48,7 @@ export function ManualGatewayCard({ workspaceId, initial, canManage, workspaceCu
     <div className="gateway-card-head">
       <span className="gateway-logo" aria-hidden="true" style={{ background: LOGO_TONE[gateway.key] ?? "#7c5cff", color: LOGO_INK[gateway.key] ?? "#fff" }}>{gateway.name.slice(0, 1)}</span>
       <div className="gateway-title"><strong>{gateway.name}<span className="gateway-kind">Manual</span></strong><small>{gateway.methods.join(" · ")}</small></div>
-      <span className={`stripe-badge tone-${gateway.enabled ? "success" : "neutral"}`}>{gateway.enabled ? "On" : gateway.connected ? "Saved · off" : "Off"}</span>
+      <span className={`stripe-status tone-${gateway.enabled ? "success" : "neutral"}`}>{gateway.enabled ? "On" : gateway.connected ? "Saved · off" : "Off"}</span>
     </div>
     <p className="gateway-desc">{gateway.description}</p>
     <p className="stripe-note is-muted"><Info aria-hidden="true" />Not automatic: clients pay you directly and press &ldquo;I&rsquo;ve paid&rdquo;. You confirm it on the invoice (or Mark as paid) once the money arrives.</p>
