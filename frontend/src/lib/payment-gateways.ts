@@ -115,3 +115,11 @@ export function localSectionOpen(gateways: { group?: string; enabled?: boolean; 
 }
 const LOCAL_KEYS = ["paymongo", "safepay", "sslcommerz", "razorpay"];
 export const groupOf = (gateway: { group?: string; key: string }) => gateway.group ?? (LOCAL_KEYS.includes(gateway.key) ? "local" : "main");
+
+/** One-line "how to pay" hint for the client, worded for card checkouts, transfers, or both. */
+export function payHint(manualFlags: boolean[]): string {
+  const manual = manualFlags.some(Boolean); const hosted = manualFlags.some((flag) => !flag) || manualFlags.length === 0;
+  if (manual && hosted) return "Choose how to pay below. Online options (card, PayPal and others) open a secure checkout; for a bank transfer, send the money using the details shown, then press \u201cI\u2019ve paid\u201d.";
+  if (manual) return "Send the money using the details shown below, then press \u201cI\u2019ve paid\u201d. The studio confirms it and the invoice is marked paid.";
+  return "Press Pay now to open a secure checkout. Once you pay, this invoice is marked paid automatically and you\u2019ll see a confirmation here.";
+}

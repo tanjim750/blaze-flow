@@ -34,3 +34,5 @@
 .pay-spin { animation: pay-spin 1s linear infinite; }
 @keyframes pay-spin { to { transform: rotate(360deg); } }
 @media (max-width: 480px) { .pay-shell { padding: 24px 14px; } .pay-card { padding: 20px 16px; } .pay-amount strong { font-size: 28px; } }
+.pay-hint { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, #7c5cff 30%, transparent); border-radius: 10px; background: color-mix(in srgb, #7c5cff 8%, transparent); color: #c9c4d6; font-size: 12.5px; line-height: 1.5; }
+.pay-hint svg { width: 15px; height: 15px; flex: none; margin-top: 2px; color: #a99bff; }
