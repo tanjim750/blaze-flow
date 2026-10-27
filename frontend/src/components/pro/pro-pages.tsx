@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Send, TriangleAlert } from "@/components/icons";
 import { siteConfig } from "@/lib/site-config";
 import { Reveal } from "./pro-home";
+import { Select } from "@/components/ui/select";
 
 /*
  * Building blocks for the inner public pages (features, pricing, contact, legal). They use
@@ -93,13 +94,7 @@ export function ProContactForm() {
       <div className="pro-form-row">
         <label><span>Company <span className="pro-muted">(optional)</span></span><input name="company" autoComplete="organization" /></label>
         <label>Topic
-          <select name="topic" defaultValue="Question">
-            <option>Question</option>
-            <option>Demo request</option>
-            <option>Pricing</option>
-            <option>Support</option>
-            <option>Privacy request</option>
-          </select>
+          <Select name="topic" aria-label="Topic" defaultValue="Question" options={["Question", "Demo request", "Pricing", "Support", "Privacy request"].map((topic) => ({ value: topic, label: topic }))} />
         </label>
       </div>
       <label>Message<textarea name="message" required rows={5} /></label>

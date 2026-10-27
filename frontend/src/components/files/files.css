@@ -846,3 +846,10 @@
   /* Size lives in Filters → Density on phones. */
   .fx-toolbar-one .fx-view-more { display: none; }
 }
+
+/* Phones: "Select all visible" was still shown and pushed the search under it and the
+   inspector toggle off-screen. Hide it (checkboxes still multi-select) and let search shrink. */
+@media (max-width: 640px) {
+  .fx .fx-toolbar-one label.fx-select-all { display: none; }
+  .fx .fx-toolbar-one .fx-search { min-width: 40px; }
+}

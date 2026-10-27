@@ -17,6 +17,7 @@ import {
 } from "@/lib/money-view";
 import { createInvoice, recordInvoicePayment, recordPayout } from "./billing-client";
 import { PaymentDialog } from "./payment-dialog";
+import { Select } from "@/components/ui/select";
 
 type InvoiceableProject = { id: string; name: string; client: string };
 
@@ -148,9 +149,7 @@ function NewInvoiceDialog({ workspaceId, projects, onClose, onCreated }: { works
     <DialogContent className="money-dialog">
       <form onSubmit={submit} className="money-form">
         <header className="money-dialog-head"><DialogTitle>New invoice</DialogTitle><DialogDescription>Lists the project fee and every priced task not already invoiced. It starts as a draft.</DialogDescription><DialogClose /></header>
-        <label className="is-wide"><span>Project</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)} required autoFocus>
-          {projects.map((project) => <option key={project.id} value={project.id}>{project.client} · {project.name}</option>)}
-        </select></label>
+        <label className="is-wide"><span>Project</span><Select aria-label="Project" value={projectId} onValueChange={setProjectId} required options={projects.map((project) => ({ value: project.id, label: `${project.client} · ${project.name}` }))} /></label>
         <label className="is-wide"><span>Due date (optional)</span><input type="date" value={due} onChange={(event) => setDue(event.target.value)} /><small>Blank uses the workspace payment terms when it is sent.</small></label>
         {error && <p className="money-error is-wide" role="alert">{error}</p>}
         <footer className="is-wide">

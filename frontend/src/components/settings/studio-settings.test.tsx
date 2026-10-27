@@ -1,3 +1,4 @@
+import { choose } from "@/test/choose";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
@@ -56,7 +57,7 @@ describe("GlossaryForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /Add term/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/already/);
     fireEvent.change(screen.getByPlaceholderText(/e.g./), { target: { value: "NHS" } });
-    fireEvent.change(screen.getByLabelText("Kind"), { target: { value: "acronym" } });
+    choose(screen.getByLabelText("Kind"), /acronym/i);
     fireEvent.click(screen.getByRole("button", { name: /Add term/ }));
     expect(await screen.findByText("NHS")).toBeInTheDocument();
     expect(api).toHaveBeenCalledWith("workspaces/w/ai-glossary/", "POST", { term: "NHS", kind: "acronym" });

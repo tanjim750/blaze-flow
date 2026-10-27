@@ -67,7 +67,7 @@ describe("client dashboard", () => {
       },
     }} choice={chooseLayout(client, "owner")} />);
     expect(screen.getByRole("heading", { name: "Send files to the studio" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "For project" })).toHaveValue("p1");
+    expect(screen.getByRole("combobox", { name: "For project" })).toHaveTextContent("Spring Launch");
     expect(screen.getByText("brand-guide.pdf")).toBeInTheDocument();
     expect(screen.getByText(/48 KB · Spring Launch/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Recent activity" })).toBeInTheDocument();

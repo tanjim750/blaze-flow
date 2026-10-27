@@ -17,6 +17,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } fr
 import { clearLocalReview, type LocalAnnotation } from "@/lib/review-local";
 import type { ReviewNote } from "@/lib/review-notes";
 import { carriedSummary, folderOptions, publishPayload, type PublishOptions } from "@/lib/publish";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   open: boolean;
@@ -133,10 +134,7 @@ export function PublishDialog({ open, onClose, workspaceId, mediaId, fileName, o
             </header>
             <label className="tb-field is-wide">
               <span>Project</span>
-              <select value={projectId} onChange={(event) => pickProject(event.target.value)} required disabled={busy}>
-                {!projectId && <option value="">Pick a project…</option>}
-                {options.projects.map((item) => <option key={item.id} value={item.id}>{item.clientName ? `${item.clientName} · ${item.name}` : item.name}</option>)}
-              </select>
+              <Select aria-label="Project" value={projectId} onValueChange={pickProject} required disabled={busy} placeholder="Pick a project…" options={options.projects.map((item) => ({ value: item.id, label: item.clientName ? `${item.clientName} · ${item.name}` : item.name }))} />
             </label>
             {options.canBeVersion && assets.length > 0 && (
               <fieldset className="rv-publish-mode is-wide" disabled={busy}>
@@ -148,18 +146,12 @@ export function PublishDialog({ open, onClose, workspaceId, mediaId, fileName, o
             {mode === "version" ? (
               <label className="tb-field is-wide">
                 <span>Asset</span>
-                <select value={versionOf} onChange={(event) => setVersionOf(event.target.value)} required disabled={busy}>
-                  <option value="">Pick an asset…</option>
-                  {assets.map((item) => <option key={item.assetFileId} value={item.assetFileId}>{item.name} ({item.label})</option>)}
-                </select>
+                <Select aria-label="Asset" value={versionOf} onValueChange={setVersionOf} required disabled={busy} placeholder="Pick an asset…" options={assets.map((item) => ({ value: item.assetFileId, label: `${item.name} (${item.label})` }))} />
               </label>
             ) : (
               <label className="tb-field is-wide">
                 <span>Folder</span>
-                <select value={folderId} onChange={(event) => setFolderId(event.target.value)} disabled={busy || !projectId}>
-                  <option value="">Project root</option>
-                  {folders.map((item) => <option key={item.id} value={item.id}>{`${"\u2003".repeat(item.depth)}${item.name}`}</option>)}
-                </select>
+                <Select aria-label="Folder" value={folderId} onValueChange={setFolderId} disabled={busy || !projectId} options={[{ value: "", label: "Project root" }, ...folders.map((item) => ({ value: item.id, label: `${"\u2003".repeat(item.depth)}${item.name}` }))]} />
               </label>
             )}
             <p className="rv-publish-carry is-wide" role="note">

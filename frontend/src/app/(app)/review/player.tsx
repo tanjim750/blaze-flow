@@ -21,6 +21,7 @@ import {
   BUFFERING_DELAY_MS, bufferedSpans, canSeekTo, clampSeekMs, describePlaybackError,
   positionFromPointer, sameSpans, seekLanded, type BufferedSpan,
 } from "./player-state";
+import { Select } from "@/components/ui/select";
 
 export type DrawTool = LayerTool;
 const QUALITY_KEY = "bf.review.quality";
@@ -783,18 +784,14 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
 
         <label className="rvp-select" title="Playback speed">
           <Gauge />
-          <select value={speed} aria-label="Playback speed" onChange={(event) => setSpeed(Number(event.target.value))}>
-            {SPEEDS.map((option) => <option key={option} value={option}>{option}x</option>)}
-          </select>
+          <Select value={String(speed)} aria-label="Playback speed" onValueChange={(next) => setSpeed(Number(next))} options={SPEEDS.map((option) => ({ value: String(option), label: `${option}x` }))} />
         </label>
 
         </>}
         {!still && sources.length > 1 && (
           <label className="rvp-select" title="Playback source">
             <MonitorPlay />
-            <select value={source?.id ?? sourceId} aria-label="Playback quality" onChange={(event) => switchSource(event.target.value)}>
-              {sources.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-            </select>
+            <Select value={source?.id ?? sourceId} aria-label="Playback quality" onValueChange={switchSource} options={sources.map((option) => ({ value: option.id, label: option.label }))} />
           </label>
         )}
 

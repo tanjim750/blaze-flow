@@ -1,3 +1,4 @@
+import { choose } from "@/test/choose";
 import { createRef } from "react";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -287,7 +288,7 @@ describe("Review page QA fixes", () => {
     const { container, element, media } = mount();
     act(() => media.loadMetadata());
     act(() => media.playTo(7));
-    fireEvent.change(within(container).getByRole("combobox", { name: "Playback quality" }), { target: { value: "proxy" } });
+    choose(within(container).getByRole("combobox", { name: "Playback quality" }), "SD 720p");
     expect(element.getAttribute("src")).toBe("/p/");
     expect(window.localStorage.getItem("bf.review.quality")).toBe("proxy");
     act(() => media.loadMetadata());

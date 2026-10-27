@@ -15,6 +15,7 @@ import { toDateTimeLocal } from "@/lib/task-dates";
 import { StagePill } from "./stage-ui";
 import { memberName } from "./task-dialogs";
 import { TaskMoney } from "./task-money";
+import { Select } from "@/components/ui/select";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -94,18 +95,26 @@ function SheetBody({ task, stage, stages, view, locked: approvedLock, canEdit = 
 
       <dl className="tb-props">
         <dt><label htmlFor="tb-sheet-stage">Stage</label></dt>
-        <dd><select id="tb-sheet-stage" className="tb-input" disabled={!canEdit} value={stage.id} onChange={(event) => onMove(event.target.value)}>{stages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></dd>
+        <dd><Select id="tb-sheet-stage" className="tb-input" disabled={!canEdit} value={stage.id} onValueChange={onMove} options={stages.map((item) => ({ value: item.id, label: item.name }))} /></dd>
         <dt><label htmlFor="tb-sheet-assignee">Assignee</label></dt>
-        <dd><select id="tb-sheet-assignee" className="tb-input" disabled={locked} value={task.assignees[0]?.id ?? ""} onChange={(event) => void commit({ assignee_id: event.target.value || null })}>
-          <option value="">Unassigned</option>
-          {view.members.filter((member) => member.user).map((member) => <option key={member.id} value={member.id}>{memberName(member)}</option>)}
-          {task.assignees[0] && !view.members.some((member) => member.id === task.assignees[0].id) && <option value={task.assignees[0].id}>{task.assignees[0].name}</option>}
-        </select></dd>
+        <dd><Select
+          id="tb-sheet-assignee" className="tb-input" disabled={locked} value={task.assignees[0]?.id ?? ""}
+          onValueChange={(next) => void commit({ assignee_id: next || null })}
+          options={[
+            { value: "", label: "Unassigned" },
+            ...view.members.filter((member) => member.user).map((member) => ({ value: member.id, label: memberName(member) })),
+            ...(task.assignees[0] && !view.members.some((member) => member.id === task.assignees[0].id) ? [{ value: task.assignees[0].id, label: task.assignees[0].name }] : []),
+          ]}
+        /></dd>
         <dt><label htmlFor="tb-sheet-priority">Priority</label></dt>
-        <dd><select id="tb-sheet-priority" className="tb-input" disabled={locked} value={task.priority} onChange={(event) => void commit({ priority: event.target.value })}>
-          {PRIORITIES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-          {!PRIORITIES.some((item) => item.id === task.priority) && <option value={task.priority}>{task.priority}</option>}
-        </select></dd>
+        <dd><Select
+          id="tb-sheet-priority" className="tb-input" disabled={locked} value={task.priority}
+          onValueChange={(next) => void commit({ priority: next })}
+          options={[
+            ...PRIORITIES.map((item) => ({ value: item.id, label: item.label })),
+            ...(!PRIORITIES.some((item) => item.id === task.priority) ? [{ value: task.priority, label: task.priority }] : []),
+          ]}
+        /></dd>
         <dt><label htmlFor="tb-sheet-due">Due</label></dt>
         <dd className="tb-due-field">
           <input id="tb-sheet-due" className={`tb-input ${overdue ? "is-overdue" : ""}`} type="datetime-local" disabled={locked} value={toDateTimeLocal(task.due_at)}

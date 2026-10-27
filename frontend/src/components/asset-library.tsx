@@ -45,6 +45,7 @@ import { LibraryTree } from "@/components/files/library-tree";
 import { PanelResizer, useStoredNumber } from "@/components/files/panel-resizer";
 import { KindIcon, Thumb } from "@/components/files/files-ui";
 import "@/components/files/files.css";
+import { Select } from "@/components/ui/select";
 
 const RefreshContext = createContext<() => void>(() => {});
 const useServerRefresh = () => useContext(RefreshContext);
@@ -984,11 +985,8 @@ function FilterPopover({ activeCount, children }: { activeCount: number; childre
 /**
  * One labelled filter.
  *
- * A native `<select>` on purpose. shadcn's Radix-backed Select was tried here and looks
- * better, but it does not open under jsdom and one of its keyboard paths hangs the test
- * runner outright — not something worth putting between a filter and its test. The native
- * control is keyboard- and screen-reader-correct for free, and `color-scheme: dark` on it
- * means the browser draws the option list to match the panel.
+ * Uses the themed `Select` (components/ui/select) so the option list matches the navy
+ * panels; tests drive it with `choose()` from src/test/choose.
  */
 function FilterField({ label, value, placeholder, options, onChange, clearable = true, ariaLabel }: {
   label: string; value: string; placeholder: string; clearable?: boolean; ariaLabel?: string;
@@ -998,10 +996,7 @@ function FilterField({ label, value, placeholder, options, onChange, clearable =
   return (
     <label className="al-filter-field">
       <span>{label}</span>
-      <select aria-label={ariaLabel ?? `Filter by ${label.toLowerCase()}`} value={value} onChange={(event) => onChange(event.target.value)}>
-        {clearable && <option value="">{placeholder}</option>}
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
+      <Select aria-label={ariaLabel ?? `Filter by ${label.toLowerCase()}`} value={value} onValueChange={onChange} options={[...(clearable ? [{ value: "", label: placeholder }] : []), ...options]} />
     </label>
   );
 }
@@ -1151,7 +1146,7 @@ function BulkAssignmentDialog({ view, folders, selected, close, done }: { view?:
     else updateLibrary(apply);
     done();
   };
-  return <Modal title={`Move / assign ${selected.size} item${selected.size === 1 ? "" : "s"}`} close={close}><form className="al-form" onSubmit={submit}><RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={project} setProject={setProject} /><label>Destination folder<select name="folder" defaultValue=""><option value="">Project or Files root</option>{destinations.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label><label>Stage<select value={stage} onChange={(event) => setStage(event.target.value)}><option value="">Leave unchanged</option>{(view?.stages ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><button>Apply to {selected.size} item{selected.size === 1 ? "" : "s"}</button></form></Modal>;
+  return <Modal title={`Move / assign ${selected.size} item${selected.size === 1 ? "" : "s"}`} close={close}><form className="al-form" onSubmit={submit}><RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={project} setProject={setProject} /><label>Destination folder<Select name="folder" aria-label="Destination folder" defaultValue="" options={[{ value: "", label: "Project or Files root" }, ...destinations.map((folder) => ({ value: folder.id, label: folder.name }))]} /></label><label>Stage<Select aria-label="Stage" value={stage} onValueChange={setStage} options={[{ value: "", label: "Leave unchanged" }, ...(view?.stages ?? []).map((item) => ({ value: item.id, label: item.name }))]} /></label><button>Apply to {selected.size} item{selected.size === 1 ? "" : "s"}</button></form></Modal>;
 }
 
 function FolderDialog({ view, folders, defaultProjectId, defaultClientId, parentFolderId, close }: { view?: FilesView; folders: LibraryFolder[]; defaultProjectId: string | null; defaultClientId: string | null; parentFolderId: string | null; close: () => void }) { const write = useAssetWrite(); const [client, setClient] = useState(realClientId(view, defaultClientId)); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const projects = (view?.groups ?? []).filter((group) => !client || group.clientId === client); const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget), project = String(data.get("project") || selectedProject || "") || null; const projectRow = view?.groups.find((item) => item.projectId === project); const draft = { id: newId("folder"), name: String(data.get("name")), clientId: (projectRow?.clientId ?? client) || null, projectId: project, parentFolderId, createdAt: new Date().toISOString(), createdBy: "You" }; const add = (state: LibraryState) => ({ ...state, folders: [...state.folders, draft] });
@@ -1160,7 +1155,7 @@ function FolderDialog({ view, folders, defaultProjectId, defaultClientId, parent
         send: () => createAssetFolder(view.workspaceId!, { name: draft.name, client_team_id: draft.clientId, project_id: draft.projectId, parent_folder_id: draft.parentFolderId }),
         onSaved: (saved) => updateLibrary((state) => ({ ...state, folders: state.folders.map((item) => item.id === draft.id ? { ...draft, id: saved.id, createdAt: saved.created_at } : item) })) });
     } else { updateLibrary(add); }
-    close(); }; return <Modal title="Create folder" close={close}><form onSubmit={submit} className="al-form"><label>Folder name<input name="name" required autoFocus placeholder="Footage" /></label><RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={selectedProject} setProject={setSelectedProject} /><label>Inside folder<select name="parent" value={parentFolderId ?? ""} disabled><option value="">Root Files area</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label><button>Create folder</button></form></Modal>; }
+    close(); }; return <Modal title="Create folder" close={close}><form onSubmit={submit} className="al-form"><label>Folder name<input name="name" required autoFocus placeholder="Footage" /></label><RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={selectedProject} setProject={setSelectedProject} /><label>Inside folder<Select name="parent" aria-label="Inside folder" value={parentFolderId ?? ""} disabled options={[{ value: "", label: "Root Files area" }, ...folders.map((folder) => ({ value: folder.id, label: folder.name }))]} /></label><button>Create folder</button></form></Modal>; }
 function UploadDialog({ view, folders, defaultProjectId, defaultClientId, currentFolderId, initialFiles = [], close }: { view?: FilesView; folders: LibraryFolder[]; defaultProjectId: string | null; defaultClientId: string | null; currentFolderId: string | null; initialFiles?: File[]; close: () => void }) {
   const write = useAssetWrite();
   const [client, setClient] = useState(realClientId(view, defaultClientId)); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const [uploads, setUploads] = useState<File[]>(() => initialFiles.filter((file) => file.size > 0)); const [stageId, setStageId] = useState(""); const [dragging, setDragging] = useState(false); const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle"); const [progress] = useState(0); const [failure, setFailure] = useState<string | null>(null); const cancelled = useRef(false);
@@ -1236,7 +1231,7 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
       <fieldset className="al-destination" disabled={busy}>
         <legend>Destination</legend>
         <RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={selectedProject} setProject={setSelectedProject} />
-        <div className="al-relations"><label>Folder (optional)<select name="folder" defaultValue={currentFolderId ?? ""}><option value="">Root Files area</option>{availableFolders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label><label>Stage<select name="stage" value={stageId} onChange={(event) => setStageId(event.target.value)}><option value="">No stage</option>{(view?.stages ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
+        <div className="al-relations"><label>Folder (optional)<Select name="folder" aria-label="Folder" defaultValue={currentFolderId ?? ""} options={[{ value: "", label: "Root Files area" }, ...availableFolders.map((folder) => ({ value: folder.id, label: folder.name }))]} /></label><label>Stage<Select name="stage" aria-label="Stage" value={stageId} onValueChange={setStageId} options={[{ value: "", label: "No stage" }, ...(view?.stages ?? []).map((item) => ({ value: item.id, label: item.name }))]} /></label></div>
       </fieldset>
       {busy && <div className="al-progress" role="status" aria-live="polite"><div><span>Uploading {done} of {uploads.length}…</span><strong>{progress}%</strong></div><i><b style={{ width: `${progress}%` }} /></i></div>}
       {status === "error" && <p className="al-upload-error" role="alert">{failure ?? "The upload could not be completed."} The files it could not take are still staged below.</p>}
@@ -1247,7 +1242,7 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
     </form>
   </Modal>;
 }
-function RelationFields({ view, projects, client, setClient, selectedProject, setProject }: { view?: FilesView; projects: FilesView["groups"]; client: string; setClient: (id: string) => void; selectedProject: string; setProject: (id: string) => void }) { return <div className="al-relations"><label>Client (optional)<select value={client} onChange={(event) => { setClient(event.target.value); setProject(""); }}><option value="">No client</option>{view?.clients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Project (optional)<select name="project" value={selectedProject} onChange={(event) => setProject(event.target.value)}><option value="">No project</option>{projects.map((item) => <option key={item.projectId} value={item.projectId}>{item.projectName}</option>)}</select></label></div>; }
+function RelationFields({ view, projects, client, setClient, selectedProject, setProject }: { view?: FilesView; projects: FilesView["groups"]; client: string; setClient: (id: string) => void; selectedProject: string; setProject: (id: string) => void }) { return <div className="al-relations"><label>Client (optional)<Select aria-label="Client" value={client} onValueChange={(next) => { setClient(next); setProject(""); }} options={[{ value: "", label: "No client" }, ...(view?.clients ?? []).map((item) => ({ value: item.id, label: item.name }))]} /></label><label>Project (optional)<Select name="project" aria-label="Project" value={selectedProject} onValueChange={setProject} options={[{ value: "", label: "No project" }, ...projects.map((item) => ({ value: item.projectId, label: item.projectName }))]} /></label></div>; }
 function Modal({ title, subtitle, icon, wide = false, close, children }: { title: string; subtitle?: string; icon?: React.ReactNode; wide?: boolean; close: () => void; children: React.ReactNode }) {
   const titleId = useId(); const panel = useRef<HTMLElement>(null);
   useEffect(() => { const previous = document.activeElement as HTMLElement | null; const first = panel.current?.querySelector<HTMLElement>("input:not([disabled]), button:not([disabled]), select:not([disabled])"); first?.focus(); return () => previous?.focus(); }, []);

@@ -8,6 +8,7 @@ import type { TicketDetail, TicketStatus } from "@/lib/platform-view";
 import { TICKET_STATUSES, statusLabel } from "@/lib/platform-view";
 import { platformActions } from "@/lib/platform-client";
 import { ReasonDialog } from "./reason-dialog";
+import { Select } from "@/components/ui/select";
 
 type Pending = { kind: "message"; mode: "REPLY" | "NOTE" } | { kind: "update"; changes: { status?: TicketStatus; assignee?: "me" | "none" }; label: string };
 
@@ -21,9 +22,7 @@ export function TicketWorkbench({ ticket, staffEmail }: { ticket: TicketDetail; 
   return <div className="pf-workbench">
     <div className="pf-ticket-controls">
       <label>Status
-        <select value={ticket.status} onChange={(e) => setPending({ kind: "update", changes: { status: e.target.value as TicketStatus }, label: `Mark as ${statusLabel(e.target.value)}` })}>
-          {TICKET_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-        </select>
+        <Select aria-label="Status" value={ticket.status} onValueChange={(next) => setPending({ kind: "update", changes: { status: next as TicketStatus }, label: `Mark as ${statusLabel(next)}` })} options={TICKET_STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))} />
       </label>
       <button type="button" className="pf-btn" onClick={() => setPending({ kind: "update", changes: { assignee: mine ? "none" : "me" }, label: mine ? "Unassign" : "Assign to me" })}>{mine ? "Unassign me" : "Assign to me"}</button>
     </div>

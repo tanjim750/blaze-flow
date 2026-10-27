@@ -154,7 +154,7 @@
 .pb-upload-options { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-items: end; }.pb-upload-options .pb-check { display: flex; grid-template-columns: auto 1fr; align-items: center; padding-bottom: 10px; }.pb-check input { width: auto; accent-color: var(--shell-accent); }
 .pb-upload-panel > footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 5px; }.pb-upload-panel > footer button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 13px; border: 1px solid var(--shell-highest); border-radius: 8px; background: var(--shell-low); color: var(--shell-on); cursor: pointer; }.pb-upload-panel > footer button[type="submit"] { border-color: #8d73fb; background: var(--shell-accent); color: white; }.pb-upload-panel > footer button:disabled { opacity: .6; cursor: wait; }
 
-.pb-tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; border-bottom: 1px solid #262626; padding-bottom: 8px; }
+.pb-tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; border-bottom: 1px solid #262B37; padding-bottom: 8px; }
 .pb-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .pb-tabs button { display: flex; align-items: center; gap: 6px; background: none; border: 0; color: var(--shell-variant); padding: 7px 11px; border-radius: 9px; font-size: 13px; cursor: pointer; }
 .pb-tabs button:hover { background: var(--shell-container); color: var(--shell-on); }
@@ -181,7 +181,7 @@
 .pb-grid.list { grid-template-columns: 1fr; }
 .pb-grid.list .pb-card { display: grid; grid-template-columns: 200px minmax(0, 1fr); }
 .pb-grid.list .pb-thumb { aspect-ratio: auto; }
-.pb-card { background: var(--shell-container); border: 1px solid #262626; border-radius: 14px; overflow: hidden; transition: border-color .15s, transform .15s; }
+.pb-card { background: var(--shell-container); border: 1px solid #262B37; border-radius: 14px; overflow: hidden; transition: border-color .15s, transform .15s; }
 .pb-card:hover { border-color: #4b4866; transform: translateY(-2px); }
 .pb-thumb-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .pb-thumb > div { position: relative; z-index: 1; }
@@ -208,12 +208,12 @@
 .pb-card-title button { background: none; border: 0; color: var(--shell-outline); cursor: pointer; padding: 0; flex-shrink: 0; }
 .pb-card-title button:hover { color: var(--shell-on); }
 .pb-card-body p { margin: 5px 0 10px; font-size: 11px; line-height: 1.5; color: var(--shell-variant); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; min-height: 33px; }
-.pb-card-body footer { display: flex; align-items: center; justify-content: space-between; font: 10px var(--font-geist-mono), monospace; color: var(--shell-outline); border-top: 1px solid #262626; padding-top: 9px; }
+.pb-card-body footer { display: flex; align-items: center; justify-content: space-between; font: 10px var(--font-geist-mono), monospace; color: var(--shell-outline); border-top: 1px solid #262B37; padding-top: 9px; }
 
 @media (max-width: 1023px) {
   .pb-layout { flex-direction: column; }
   .pb-layout, .pb-layout.is-rail-closed { --client-rail-w: 100%; }
-  .pb-rail { box-shadow: none; border-bottom: 1px solid #262626; position: static; height: auto; }
+  .pb-rail { box-shadow: none; border-bottom: 1px solid #262B37; position: static; height: auto; }
   .pb-rail-handle { display: none; }
   .is-rail-closed .pb-rail > *:not(.pb-rail-handle) { display: revert; }
   .pb-tree { max-height: 320px; }
@@ -240,7 +240,7 @@
 .pb-col-dot.tone-done { background: #39dca2; }
 
 .pb-board { display: flex; gap: 16px; align-items: flex-start; overflow-x: auto; padding-bottom: 12px; }
-.pb-column { flex: 0 0 268px; background: var(--shell-low); border: 1px solid #262626; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.pb-column { flex: 0 0 268px; background: var(--shell-low); border: 1px solid #262B37; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 .pb-column.tone-revisions { border-color: #6b2a2e; }
 .pb-column.tone-qa { border-color: #27456b; }
 .pb-column > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -250,7 +250,7 @@
 .pb-board h3, .pb-board-group h3 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; font-weight: 600; }
 .pb-board h3 > b, .pb-board-group h3 > b { font: 600 10px var(--font-geist-mono), monospace; background: var(--shell-highest); color: var(--shell-variant); padding: 2px 6px; border-radius: 5px; }
 
-.pb-board-card { background: var(--shell-container); border: 1px solid #262626; border-radius: 12px; overflow: hidden; transition: border-color .15s, transform .15s; }
+.pb-board-card { background: var(--shell-container); border: 1px solid #262B37; border-radius: 12px; overflow: hidden; transition: border-color .15s, transform .15s; }
 .pb-board-card:hover { border-color: #4b4866; transform: translateY(-1px); }
 .pb-board-card.tone-review { border-color: #6b2a2e80; }
 .pb-card-media { position: relative; aspect-ratio: 16 / 9; overflow: hidden; padding: 7px; background: linear-gradient(150deg, #24222c, #0A0A0A); display: flex; flex-direction: column; }
@@ -273,7 +273,7 @@
 .pb-owner-dot { width: 14px; height: 9px; border-radius: 3px; background: linear-gradient(120deg, #6f6b80, #3a3745); flex-shrink: 0; }
 .pb-card-owner time { margin-left: auto; font: 10px var(--font-geist-mono), monospace; color: var(--shell-outline); }
 .pb-card-owner time.overdue { color: #ff6d7b; }
-.pb-board-card-body footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 9px; border-top: 1px solid #262626; }
+.pb-board-card-body footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 9px; border-top: 1px solid #262B37; }
 .pb-avatars { display: flex; }
 .pb-avatars i { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #3b2f5e; border: 1px solid var(--shell-low); color: #d8c3ff; font: 600 8px var(--font-geist-mono), monospace; font-style: normal; margin-right: -6px; }
 .pb-card-counts { display: flex; align-items: center; gap: 9px; }
@@ -332,7 +332,7 @@
 .pb-rail-empty-clear { border: 0; background: none; padding: 0; color: var(--shell-primary); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
 /* Honest "coming soon" / no-campaign state for tabs without content (quick win Q6). */
-.pb-soon { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 420px; margin: 56px auto; padding: 32px 24px; text-align: center; color: var(--shell-variant); border: 1px solid #26262680; border-radius: 12px; }
+.pb-soon { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 420px; margin: 56px auto; padding: 32px 24px; text-align: center; color: var(--shell-variant); border: 1px solid #262B3780; border-radius: 12px; }
 .pb-soon > svg { color: var(--shell-outline); }
 .pb-soon h2 { margin: 0; font-size: 16px; font-weight: 600; color: var(--shell-on); }
 .pb-soon p { margin: 0; font-size: 13px; line-height: 1.5; }
@@ -446,3 +446,12 @@
 /* Client link: a quiet text chip beside the title, not a toolbar button. */
 .pb-title .pb-client-link{height:28px;padding:0 8px;border:1px solid transparent;background:none;color:var(--muted,#9aa0ad);font-size:12px;font-weight:500}
 .pb-title .pb-client-link:hover,.pb-title .pb-client-link[data-state=open]{border-color:#262B37;background:#1A1E28;color:var(--text,#e8e9ee)}
+
+/* Mobile tab strip scrolls horizontally, which also clips vertically; give focus rings room. */
+@media (max-width: 760px) { .pb-tabs { padding-block: 4px; margin-block: -4px; } }
+.pb-client-link { max-width: min(220px, 60vw); }
+.pb-title h1 { min-width: 0; }
+@media (max-width: 1100px) { .pb-title h1 { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; } }
+/* At ~1024 the client link ran under the Share/more buttons: let the title side shrink instead. */
+.pb-title-row > .pb-title { flex: 1 1 auto; }
+.pb-title > h1, .pb-title > .pb-client-link { flex: 0 1 auto; min-width: 0; }

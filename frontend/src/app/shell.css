@@ -269,3 +269,4 @@ button.studio-rail-search:hover, button.studio-rail-search:focus-visible { backg
   .shell-reconnect button { min-height: 44px; width: 100%; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { .shell-reconnect .is-spinning { animation: none; } }
+@media (max-width: 760px) { .studio-workspace-picker .ui-select-trigger { min-height: 40px; } }
