@@ -3,7 +3,8 @@
 Stripe is live (Stripe Connect, see ``app/services/stripe_connect.py``) whenever the server has
 ``STRIPE_SECRET_KEY``. The local gateways (PayMongo, Safepay, SSLCOMMERZ) live in
 ``app/gateways/`` and are always available: each agency pastes its own merchant keys. PayPal
-and Razorpay are still ``coming_soon``.
+(Orders v2) uses the same interface; Wise and Payoneer are manual (``app/gateways/manual.py``).
+Razorpay is still ``coming_soon``.
 
 A gateway (Stripe, PayPal, Razorpay, ...) will subclass ``PaymentGateway``, implement
 ``create_checkout`` and ``handle_webhook``, and record money through
@@ -55,15 +56,13 @@ def register(gateway: PaymentGateway) -> PaymentGateway:
 
 register(PaymentGateway('stripe', 'Stripe', 'Cards, wallets and bank debits with a hosted pay link on every invoice.',
                         features=('Pay links on invoices', 'Automatic payment matching')))
-register(PaymentGateway('paypal', 'PayPal', 'Let clients pay invoices with PayPal or card.',
-                        features=('Pay links on invoices',)))
 register(PaymentGateway('razorpay', 'Razorpay', 'UPI, cards and net banking for India.', currencies=('INR',),
                         features=('UPI', 'Net banking')))
 
 
 def list_gateways(*, workspace_currency: str | None = None, workspace=None, country: str | None = None) -> list[dict]:
     """Every gateway for Settings > Billing: recommended for the workspace's country first."""
-    from .gateways import PROVIDERS
+    from .gateways import MANUAL_PROVIDERS, PROVIDERS
     from .services import online_payments, stripe_connect
     from .stripe_currencies import stripe_supports
     if country is None and workspace is not None:
@@ -86,10 +85,19 @@ def list_gateways(*, workspace_currency: str | None = None, workspace=None, coun
     if workspace is not None:
         from .models import GatewayConnection
         connections = {c.provider: c for c in GatewayConnection.objects.filter(workspace=workspace)}
-    local = [online_payments.connection_out(p, connections.get(k), workspace_currency=workspace_currency) for k, p in PROVIDERS.items()]
-    out = [stripe_item, *local, *coming]
+    keyed = [online_payments.connection_out(p, connections.get(k), workspace_currency=workspace_currency) for k, p in PROVIDERS.items()]
+    manual = [online_payments.manual_out(p, connections.get(k)) for k, p in MANUAL_PROVIDERS.items()]
+    stripe_item['group'] = 'main'
+    stripe_item['automatic'] = True
+    for item in coming:
+        item['group'] = 'main' if item['key'] in online_payments.MAIN_GATEWAYS else 'local'
+    out = [stripe_item, *keyed, *manual, *coming]
     for item in out:
         item['recommended'] = item['key'] in recommended
-    # Stable sort: recommended first, coming-soon last.
-    out.sort(key=lambda i: (0 if i['recommended'] else 1, 1 if i['status'] == 'coming_soon' else 0))
+        item['country_unsupported'] = bool(country) and country.upper() in item.get('unsupported_countries', [])
+    # Main gateways first in a fixed order (Stripe, PayPal, Wise, Payoneer), then local ones:
+    # recommended first, coming-soon last.
+    order = {k: i for i, k in enumerate((*online_payments.MAIN_GATEWAYS, *online_payments.LOCAL_GATEWAYS))}
+    out.sort(key=lambda i: (0 if i['group'] == 'main' else 1, 1 if i['status'] == 'coming_soon' else 0,
+                            0 if i['recommended'] else 1, order.get(i['key'], 99)))
     return out

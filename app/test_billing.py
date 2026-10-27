@@ -487,7 +487,7 @@ class RecordPaymentIsTheOnlyPathTests(BillingBase, TestCase):
         with self.assertRaises(billing.BillingError):
             billing.record_payment(workspace=self.workspace, invoice=invoice, payee_membership=self.editor_membership, amount='1')
         with self.assertRaises(billing.BillingError):
-            billing.record_payment(workspace=self.workspace, invoice=invoice, amount='1', provider='paypal')
+            billing.record_payment(workspace=self.workspace, invoice=invoice, amount='1', provider='venmo')
 
 
 class SeedCommandTests(BillingBase, TestCase):
@@ -523,7 +523,7 @@ class WorkspaceCurrencyTests(BillingBase, TestCase):
         # Stripe is live when the server has keys (none in tests); PayMongo, Safepay and SSLCOMMERZ
         # are available with the agency's own keys; PayPal and Razorpay are still coming soon.
         self.assertEqual((keys['stripe']['status'], keys['stripe']['connected']), ('not_configured', False))
-        self.assertTrue(all(keys[k]['status'] == 'coming_soon' and keys[k]['connected'] is False for k in ('paypal', 'razorpay')))
+        self.assertTrue(all(keys[k]['status'] == 'coming_soon' and keys[k]['connected'] is False for k in ('razorpay',)))
         self.assertTrue(all(keys[k]['status'] == 'available' and keys[k]['connected'] is False for k in ('paymongo', 'safepay', 'sslcommerz')))
         self.assertEqual(self.listed_workspace(self.owner)['currency'], 'GBP')
 

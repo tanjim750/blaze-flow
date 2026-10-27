@@ -121,7 +121,7 @@ class RateSerializer(serializers.Serializer):
 
 
 def _settings_out(settings, access=None, workspace=None):
-    return {
+    out = {
         'currency': settings.currency, 'payment_terms_days': settings.payment_terms_days, 'invoice_prefix': settings.invoice_prefix,
         # Only owners/admins (billing.manage + workspace.manage) may change the currency.
         'can_change_currency': bool(access and access.get('currency_manage')),
@@ -132,6 +132,12 @@ def _settings_out(settings, access=None, workspace=None):
         'can_manage_gateways': bool(access and access.get('currency_manage')),
         'payment_gateways': list_gateways(workspace_currency=settings.currency, workspace=workspace),
     }
+    # "Local payment options" opens by itself only when one is on or the business is in PH / PK / BD.
+    country = out['effective_country']
+    out['local_expanded'] = bool(country in online_payments.LOCAL_BY_COUNTRY or any(
+        g.get('group') == 'local' and g.get('enabled') for g in out['payment_gateways']))
+    out['local_recommended'] = country in online_payments.LOCAL_BY_COUNTRY
+    return out
 
 
 def _can_change_currency(request, workspace, access):
@@ -248,6 +254,10 @@ def invoice_detail(request, workspace_id, invoice_id):
             return _error(exc)
     data = _invoice_detail(workspace, invoice)
     data['viewer_can_manage'] = access['manage']
+    if access['manage']:
+        from .models import PaymentClaim, PaymentClaimStatus
+        data['payment_claims'] = [online_payments.claim_out(c) for c in
+                                  PaymentClaim.objects.filter(invoice=invoice, status=PaymentClaimStatus.PENDING).order_by('created_at')]
     if access['manage'] and invoice.status != InvoiceStatus.DRAFT and data['online_payment']['available']:
         data['pay_link'] = stripe_connect.connect_url(f'/pay/{stripe_connect.ensure_pay_token(invoice)}')
     if access['manage'] and invoice.status == 'draft':
@@ -513,18 +523,21 @@ GATEWAY_DENIED = 'Only workspace owners and admins can manage payment gateway ke
 
 
 def _gateway_access(request, workspace_id, provider):
-    from .gateways import get_provider
+    from .gateways import get_manual, get_provider
     workspace, access = _workspace(request, workspace_id)
     _require(access, 'view', VIEW_DENIED)
     if not _can_change_currency(request, workspace, access):
         raise PermissionDenied(GATEWAY_DENIED)
-    gateway = get_provider(provider)
+    gateway = get_provider(provider) or get_manual(provider)
     if gateway is None:
         raise NotFound('Unknown payment gateway.')
     return workspace, gateway
 
 
 def _gateway_out(workspace, gateway):
+    from .gateways import get_manual
+    if get_manual(gateway.key):
+        return online_payments.manual_out(gateway, online_payments.connection_for(workspace, gateway.key))
     settings = billing.billing_settings(workspace)
     return online_payments.connection_out(gateway, online_payments.connection_for(workspace, gateway.key), workspace_currency=settings.currency)
 
@@ -540,8 +553,15 @@ def _gateway_call(fn):
 @permission_classes([IsAuthenticated])
 def gateway_detail(request, workspace_id, provider):
     """GET the card (masked), PUT {mode, credentials} to save keys, DELETE to disconnect."""
+    from .gateways import get_manual
     workspace, gateway = _gateway_access(request, workspace_id, provider)
-    if request.method == 'PUT':
+    if request.method == 'PUT' and get_manual(gateway.key):
+        data = request.data if isinstance(request.data, dict) else {}
+        result = _gateway_call(lambda: online_payments.save_manual(workspace=workspace, provider_key=gateway.key, user=request.user,
+                                                                    data=data))
+        if isinstance(result, Response):
+            return result
+    elif request.method == 'PUT':
         serializer = GatewayKeysSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = _gateway_call(lambda: online_payments.save_connection(
@@ -557,7 +577,10 @@ def gateway_detail(request, workspace_id, provider):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def gateway_test(request, workspace_id, provider):
+    from .gateways import get_manual
     workspace, gateway = _gateway_access(request, workspace_id, provider)
+    if get_manual(gateway.key):
+        return Response({'detail': f'{gateway.name} has nothing to test: payments are confirmed by your team.'}, status=status.HTTP_400_BAD_REQUEST)
     result = _gateway_call(lambda: online_payments.test_connection(workspace=workspace, provider_key=gateway.key, user=request.user))
     return result if isinstance(result, Response) else Response(_gateway_out(workspace, gateway))
 
@@ -570,3 +593,43 @@ def gateway_enable(request, workspace_id, provider):
     enabled = request.data.get('enabled') in (True, 'true', '1', 1)
     result = _gateway_call(lambda: online_payments.set_enabled(workspace=workspace, provider_key=gateway.key, user=request.user, enabled=enabled))
     return result if isinstance(result, Response) else Response(_gateway_out(workspace, gateway))
+
+
+# --- Pay by Wise / Payoneer: "I've paid" claims the team confirms ----------------------------
+
+def claim_response(invoice, request, user=None):
+    data = request.data if hasattr(request.data, 'get') else {}
+    try:
+        claim = online_payments.create_claim(invoice=invoice, provider_key=data.get('provider'), payer_name=data.get('payer_name', ''),
+                                             payer_reference=data.get('payer_reference', ''), user=user)
+    except online_payments.OnlinePaymentError as exc:
+        return Response({'detail': str(exc), 'code': exc.code}, status=exc.status)
+    return Response(online_payments.claim_out(claim), status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def invoice_claim(request, workspace_id, invoice_id):
+    """The client says "I've paid" by Wise / Payoneer: a pending claim, nothing is paid yet."""
+    workspace, access = _workspace(request, workspace_id)
+    try:
+        invoice = _visible_invoice(request, workspace, access, invoice_id)
+    except Invoice.DoesNotExist:
+        return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+    return claim_response(invoice, request, user=request.user)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def claim_resolve(request, workspace_id, claim_id, action):
+    """Confirm (records the payment, optional {amount}) or reject a pending claim. Billing managers."""
+    workspace, access = _workspace(request, workspace_id)
+    _require(access, 'manage', MANAGE_DENIED)
+    if action not in ('confirm', 'reject'):
+        raise NotFound()
+    try:
+        claim = online_payments.resolve_claim(workspace=workspace, claim_id=claim_id, user=request.user, confirm=action == 'confirm',
+                                              amount=request.data.get('amount') if hasattr(request.data, 'get') else None)
+    except online_payments.OnlinePaymentError as exc:
+        return Response({'detail': str(exc)}, status=exc.status)
+    return Response(online_payments.claim_out(claim))

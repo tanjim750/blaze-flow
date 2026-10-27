@@ -1770,6 +1770,9 @@ class PaymentProvider(models.TextChoices):
     PAYMONGO = 'paymongo'
     SAFEPAY = 'safepay'
     SSLCOMMERZ = 'sslcommerz'
+    PAYPAL = 'paypal'
+    WISE = 'wise'
+    PAYONEER = 'payoneer'
 
 
 class EditorPayStatus(models.TextChoices):
@@ -2032,6 +2035,38 @@ class GatewayWebhookEvent(models.Model):
     class Meta:
         db_table = 'payment_gateway_webhook_events'
         constraints = [models.UniqueConstraint(fields=['provider', 'event_id'], name='gateway_webhook_event_uniq')]
+
+
+class PaymentClaimStatus(models.TextChoices):
+    PENDING = 'pending'
+    CONFIRMED = 'confirmed'
+    REJECTED = 'rejected'
+
+
+class PaymentClaim(models.Model):
+    """A client says "I've paid" by Wise / Payoneer. Nothing is paid until the agency confirms it.
+
+    Confirming records a Payment through billing.record_payment (provider = the claim's provider,
+    provider_reference = ``claim:<id>``), so confirming twice can't pay twice.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column='workspace_id', related_name='+')
+    invoice = models.ForeignKey('Invoice', on_delete=models.CASCADE, db_column='invoice_id', related_name='payment_claims')
+    provider = models.CharField(max_length=30)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(max_length=3)
+    payer_name = models.CharField(max_length=150, blank=True, default='')
+    payer_reference = models.CharField(max_length=200, blank=True, default='')
+    status = models.CharField(max_length=10, choices=PaymentClaimStatus.choices, default=PaymentClaimStatus.PENDING)
+    claimed_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='claimed_by_user_id', null=True, blank=True, related_name='+')
+    resolved_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='resolved_by_user_id', null=True, blank=True, related_name='+')
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    payment = models.ForeignKey(Payment, on_delete=models.SET_NULL, db_column='payment_id', null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'payment_claims'
+        indexes = [models.Index(fields=['invoice', 'status'])]
 
 
 class UploadLink(models.Model):

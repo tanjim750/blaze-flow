@@ -63,6 +63,19 @@ def public_pay_checkout(request, token):
     return checkout_response(invoice, provider=provider, return_path=f'/pay/{token}')
 
 
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@throttle_classes([UploadLinkThrottle])
+def public_pay_claim(request, token):
+    """Pay link: "I've paid" by Wise / Payoneer. Creates a pending claim the agency confirms."""
+    invoice = _invoice_for_token(token)
+    if invoice is None:
+        return Response({'detail': 'This payment link is not valid.'}, status=status.HTTP_404_NOT_FOUND)
+    from .billing_views import claim_response
+    return claim_response(invoice, request)
+
+
 @csrf_exempt
 @require_POST
 def stripe_webhook(request):

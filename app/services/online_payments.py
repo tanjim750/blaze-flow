@@ -19,11 +19,11 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from app.gateways import PROVIDERS, GatewayError, PaymentEvent, WebhookRejected, get_provider
+from app.gateways import MANUAL_PROVIDERS, PROVIDERS, GatewayError, PaymentEvent, WebhookRejected, get_manual, get_provider
 from app.gateways import crypto
 from app.models import (
     GatewayCheckout, GatewayConnection, GatewayConnectionStatus, GatewayMode, GatewayWebhookEvent, Invoice, InvoiceStatus,
-    Payment, PaymentMethod, WorkspaceProfile,
+    Payment, PaymentClaim, PaymentClaimStatus, PaymentMethod, WorkspaceProfile,
 )
 
 from . import billing
@@ -43,6 +43,9 @@ STRIPE_COUNTRIES = {
 CHECKOUT_SETTLED = 'paid'
 
 LOCAL_BY_COUNTRY = {'PH': 'paymongo', 'PK': 'safepay', 'BD': 'sslcommerz'}
+# Settings > Billing groups: the main gateways at the top, local ones in a collapsed section.
+MAIN_GATEWAYS = ('stripe', 'paypal', 'wise', 'payoneer')
+LOCAL_GATEWAYS = ('paymongo', 'safepay', 'sslcommerz', 'razorpay')
 
 
 class OnlinePaymentError(Exception):
@@ -107,6 +110,8 @@ def connection_out(provider, connection, *, workspace_currency=None) -> dict:
         'encryption_configured': crypto.is_configured(),
         'connected': False, 'enabled': False, 'mode': GatewayMode.SANDBOX, 'connection_status': 'not_connected',
         'status_message': '', 'last_tested_at': None, 'credentials': {}, 'webhook_url': None,
+        'group': 'main' if provider.key in MAIN_GATEWAYS else 'local', 'automatic': True,
+        'unsupported_countries': list(getattr(provider, 'unsupported_countries', ())),
     }
     if connection is None:
         return out
@@ -128,6 +133,39 @@ def connection_out(provider, connection, *, workspace_currency=None) -> dict:
         'details': {k: v for k, v in (connection.details or {}).items() if k in ('payment_methods',)},
     })
     return out
+
+
+def manual_out(provider, connection) -> dict:
+    """The Wise / Payoneer card: what the agency saved (shown to its clients, so not secret)."""
+    details = (connection.details or {}) if connection is not None else {}
+    return {
+        **provider.info(), 'status': 'available', 'kind': 'manual', 'group': 'main', 'automatic': False,
+        'features': list(provider.methods), 'supports_workspace_currency': True,
+        'connected': bool(connection is not None and (details.get('accounts') or details.get('payment_link'))),
+        'enabled': bool(connection is not None and connection.enabled),
+        'payment_link': details.get('payment_link', ''), 'accounts': details.get('accounts', []), 'note': details.get('note', ''),
+    }
+
+
+def save_manual(*, workspace, provider_key, user, data: dict) -> GatewayConnection:
+    provider = get_manual(provider_key)
+    if provider is None:
+        raise OnlinePaymentError('Unknown payment gateway.', status=404)
+    try:
+        cleaned = provider.clean(data or {})
+    except GatewayError as exc:
+        raise OnlinePaymentError(str(exc), status=exc.status) from exc
+    connection = connection_for(workspace, provider.key) or GatewayConnection(workspace=workspace, provider=provider.key)
+    connection.mode = GatewayMode.LIVE
+    connection.credentials = ''
+    connection.details = cleaned
+    connection.status = GatewayConnectionStatus.CONNECTED
+    connection.status_message = ''
+    connection.updated_by_user = user
+    connection.save()
+    _audit(user=user, workspace=workspace, action=f'billing.{provider.key}.details_saved', entity_id=connection.id,
+           currencies=[a['currency'] for a in cleaned['accounts']], has_link=bool(cleaned['payment_link']))
+    return connection
 
 
 def save_connection(*, workspace, provider_key, user, mode, credentials: dict) -> GatewayConnection:
@@ -197,6 +235,8 @@ def set_enabled(*, workspace, provider_key, user, enabled: bool) -> GatewayConne
     if connection is None:
         raise OnlinePaymentError('Save your keys first.', status=400)
     if enabled and connection.status != GatewayConnectionStatus.CONNECTED:
+        if get_manual(provider_key):
+            raise OnlinePaymentError('Save your payment details first.', status=400)
         raise OnlinePaymentError('Run Test connection successfully before turning this gateway on.', status=409)
     connection.enabled = bool(enabled)
     connection.updated_by_user = user
@@ -256,10 +296,100 @@ def payment_options(invoice, *, outstanding=None) -> list[dict]:
     if stripe_connect.is_configured() and stripe_connect.account_for(invoice.workspace) is not None:
         options.append({**stripe, 'name': 'Stripe', 'methods': ['Cards', 'Wallets']})
     connections = {c.provider: c for c in GatewayConnection.objects.filter(workspace_id=invoice.workspace_id, enabled=True)}
-    for key, provider in PROVIDERS.items():
+    for key in ('paypal',):
         if key in connections:
+            options.append(local_option(invoice, PROVIDERS[key], connections[key], outstanding=outstanding))
+    for key, provider in MANUAL_PROVIDERS.items():
+        if key in connections:
+            options.append(manual_option(invoice, provider, connections[key], outstanding=outstanding))
+    for key, provider in PROVIDERS.items():
+        if key in connections and key != 'paypal':
             options.append(local_option(invoice, provider, connections[key], outstanding=outstanding))
     return options
+
+
+def manual_option(invoice, provider, connection, *, outstanding) -> dict:
+    """Pay by Wise / Payoneer: instructions, not a checkout. Never automatic."""
+    details = connection.details or {}
+    currency = invoice.currency.upper()
+    account = next((a for a in details.get('accounts') or [] if a.get('currency') == currency), None)
+    link = provider.link_for(details, amount=billing.money_str(max(outstanding, Decimal(0))), currency=currency)
+    out = {'provider': provider.key, 'name': provider.name, 'kind': 'manual', 'available': False, 'reason': None,
+           'methods': list(provider.methods), 'automatic': False}
+    if invoice.status == InvoiceStatus.DRAFT:
+        out['reason'] = 'draft'
+    elif outstanding <= 0:
+        out['reason'] = 'nothing_due'
+    elif not account and not link:
+        out['reason'] = 'currency_unsupported'
+        out['message'] = f'No {provider.name} details for {currency} yet.'
+    else:
+        out['available'] = True
+        pending = PaymentClaim.objects.filter(invoice=invoice, provider=provider.key, status=PaymentClaimStatus.PENDING).first()
+        out['instructions'] = {
+            'reference': invoice.number, 'amount': billing.money_str(outstanding), 'currency': currency,
+            'account_details': account['details'] if account else '', 'payment_link': link,
+            'link_label': provider.link_label, 'note': details.get('note', ''),
+            'pending_claim': claim_out(pending) if pending else None,
+        }
+    return out
+
+
+# --- "I've paid" claims (Wise / Payoneer) ---------------------------------------------------------
+
+def claim_out(claim) -> dict:
+    return {'id': str(claim.id), 'provider': claim.provider, 'amount': billing.money_str(claim.amount), 'currency': claim.currency,
+            'payer_name': claim.payer_name, 'payer_reference': claim.payer_reference, 'status': claim.status,
+            'created_at': claim.created_at.isoformat() if claim.created_at else None}
+
+
+def create_claim(*, invoice, provider_key, payer_name='', payer_reference='', user=None) -> PaymentClaim:
+    provider = get_manual(provider_key)
+    option = next((o for o in payment_options(invoice) if o['provider'] == provider_key), None) if provider else None
+    if option is None:
+        raise OnlinePaymentError('That payment method isn’t turned on for this invoice.', status=409, code='not_enabled')
+    if not option['available']:
+        raise OnlinePaymentError(option.get('message') or 'Nothing to pay on this invoice.', status=409, code=option['reason'])
+    existing = PaymentClaim.objects.filter(invoice=invoice, provider=provider.key, status=PaymentClaimStatus.PENDING).first()
+    if existing:
+        return existing
+    claim = PaymentClaim.objects.create(
+        workspace=invoice.workspace, invoice=invoice, provider=provider.key, amount=_outstanding(invoice), currency=invoice.currency,
+        payer_name=str(payer_name or '').strip()[:150], payer_reference=str(payer_reference or '').strip()[:200],
+        claimed_by_user=user if getattr(user, 'is_authenticated', False) else None,
+    )
+    _audit(user=user if getattr(user, 'is_authenticated', False) else None, workspace=invoice.workspace,
+           action=f'billing.{provider.key}.payment_claimed', entity_id=claim.id, invoice_id=str(invoice.id),
+           amount=billing.money_str(claim.amount), currency=claim.currency)
+    return claim
+
+
+def resolve_claim(*, workspace, claim_id, user, confirm: bool, amount=None) -> PaymentClaim:
+    with transaction.atomic():
+        claim = PaymentClaim.objects.select_for_update().select_related('invoice').filter(id=claim_id, workspace=workspace).first()
+        if claim is None:
+            raise OnlinePaymentError('Claim not found.', status=404)
+        if claim.status != PaymentClaimStatus.PENDING:
+            return claim
+        if confirm:
+            outstanding = _outstanding(claim.invoice)
+            value = billing.money(amount) if amount not in (None, '') else min(claim.amount, outstanding)
+            try:
+                payment = billing.record_payment(
+                    workspace=workspace, invoice=claim.invoice, amount=value, method=PaymentMethod.BANK_TRANSFER, provider=claim.provider,
+                    provider_reference=f'claim:{claim.id}', recorded_by=user,
+                    note=f'Paid by {MANUAL_PROVIDERS[claim.provider].name}, confirmed by the team'
+                         + (f' (ref {claim.payer_reference})' if claim.payer_reference else ''))
+            except billing.BillingError as exc:
+                raise OnlinePaymentError(str(exc), status=409) from exc
+            claim.payment = payment
+        claim.status = PaymentClaimStatus.CONFIRMED if confirm else PaymentClaimStatus.REJECTED
+        claim.resolved_by_user = user
+        claim.resolved_at = timezone.now()
+        claim.save()
+    _audit(user=user, workspace=workspace, action=f'billing.{claim.provider}.claim_{claim.status}', entity_id=claim.id,
+           invoice_id=str(claim.invoice_id))
+    return claim
 
 
 def online_payment(invoice, *, options=None) -> dict:
@@ -290,8 +420,11 @@ def create_checkout(*, invoice, provider_key=None, return_path: str, customer_em
     from . import stripe_connect
     options = payment_options(invoice)
     if not provider_key:
-        available = [o for o in options if o['available']]
+        available = [o for o in options if o['available'] and o.get('kind') != 'manual']
         provider_key = available[0]['provider'] if available else 'stripe'
+    if get_manual(provider_key):
+        raise OnlinePaymentError('Pay by bank transfer or payment link using the details shown, then press “I’ve paid”.',
+                                 status=409, code='manual_payment')
     if provider_key == 'stripe':
         back = stripe_connect.connect_url(return_path)
         return stripe_connect.create_checkout(invoice=invoice, success_url=f'{back}?stripe=success', cancel_url=f'{back}?stripe=cancel',

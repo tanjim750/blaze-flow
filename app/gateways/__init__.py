@@ -8,8 +8,10 @@ from .base import GatewayError, GatewayProvider, PaymentEvent, WebhookRejected  
 from .paymongo import PayMongo
 from .safepay import Safepay
 from .sslcommerz import SSLCommerz
+from .paypal import PayPal
+from .manual import MANUAL_PROVIDERS, ManualProvider, get_manual  # noqa: F401
 
-PROVIDERS: dict[str, GatewayProvider] = {p.key: p for p in (PayMongo(), Safepay(), SSLCommerz())}
+PROVIDERS: dict[str, GatewayProvider] = {p.key: p for p in (PayPal(), PayMongo(), Safepay(), SSLCommerz())}
 
 
 def get_provider(key: str) -> GatewayProvider | None:

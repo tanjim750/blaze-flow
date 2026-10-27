@@ -103,7 +103,7 @@ class NotConfiguredTests(BillingBase, TestCase):
         stripe_entry = next(g for g in settings_out['payment_gateways'] if g['key'] == 'stripe')
         self.assertEqual(stripe_entry['status'], 'not_configured')
         # Only PayPal and Razorpay are still coming soon (local gateways: app/test_local_gateways.py).
-        self.assertTrue(all(g['status'] == 'coming_soon' for g in settings_out['payment_gateways'] if g['key'] in ('paypal', 'razorpay')))
+        self.assertTrue(all(g['status'] == 'coming_soon' for g in settings_out['payment_gateways'] if g['key'] in ('razorpay',)))
         self.priced_project()
         invoice = self.invoice()
         self.assertEqual(invoice['online_payment'], {'provider': 'stripe', 'available': False, 'reason': 'not_configured'})

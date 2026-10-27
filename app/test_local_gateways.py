@@ -419,10 +419,10 @@ class SharedTests(GatewayBase, TestCase):
             data = self.client.patch(self.url('api-billing-settings'), {'country': country}, format='json').json()
             self.assertEqual(data['country'], country.upper())
             self.assertEqual(data['recommended_gateways'], [expected])
-            self.assertEqual(data['payment_gateways'][0]['key'], expected)
-            self.assertTrue(data['payment_gateways'][0]['recommended'])
-        keys = {g['key']: g for g in data['payment_gateways']}
-        self.assertEqual((keys['paypal']['status'], keys['razorpay']['status']), ('coming_soon', 'coming_soon'))
+            keys = {g['key']: g for g in data['payment_gateways']}
+            self.assertTrue(keys[expected]['recommended'])
+            self.assertEqual(data['local_expanded'], country.upper() in ('PH', 'PK', 'BD'))
+        self.assertEqual((keys['paypal']['status'], keys['razorpay']['status']), ('available', 'coming_soon'))
         self.assertEqual(self.client.patch(self.url('api-billing-settings'), {'country': 'PHL'}, format='json').status_code, 400)
         self.assertEqual(WorkspaceBillingSettings.objects.get(workspace=self.workspace).country, 'AU')
 
@@ -443,7 +443,7 @@ class SharedTests(GatewayBase, TestCase):
         token = stripe_connect.ensure_pay_token(invoice)
         self.client.force_authenticate(None)
         page = self.client.get(reverse('api-public-pay', args=[token])).json()
-        self.assertEqual([o['provider'] for o in page['payment_options']], ['paymongo', 'sslcommerz'])
+        self.assertEqual([o['provider'] for o in page['payment_options']], ['paymongo', 'sslcommerz'])  # disabled ones are hidden
         response = self.client.post(reverse('api-public-pay-checkout', args=[token]), {'provider': 'paymongo'}, format='json')
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(GatewayCheckout.objects.get().return_to, f'/pay/{token}')
