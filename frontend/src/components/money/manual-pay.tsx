@@ -45,7 +45,7 @@ export function ManualPayPanel({ option, studio, onClaim }: { option: PaymentOpt
       <pre>{info.account_details}</pre>
       <button type="button" className="manual-copy is-text" onClick={() => copy(info.account_details, "Account details")}><Copy aria-hidden="true" />Copy details</button>
     </div>}
-    {info.payment_link && <a className="manual-pay-link" href={info.payment_link} target="_blank" rel="noreferrer"><ExternalLink aria-hidden="true" />{info.account_details ? `Or pay with the ${info.link_label.toLowerCase()}` : `Open the ${info.link_label.toLowerCase()}`}</a>}
+    {info.payment_link && <a className="manual-pay-link" href={info.payment_link} target="_blank" rel="noreferrer"><ExternalLink aria-hidden="true" />{info.account_details ? `Or pay with the ${info.link_label}` : `Open the ${info.link_label}`}</a>}
     {info.note && <p className="manual-pay-note"><Info aria-hidden="true" />{info.note}</p>}
     {claim ? <p className="manual-pay-status" role="status"><Clock aria-hidden="true" />Thanks! {studio} has been told you paid{claim.payer_reference ? ` (ref ${claim.payer_reference})` : ""}. The invoice is marked paid once they confirm the money arrived.</p>
       : open ? <form className="manual-claim" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
