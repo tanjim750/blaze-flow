@@ -73,7 +73,7 @@ describe("dashboard cards", () => {
       lines: [{ task_id: "t1", task: "Hero 30s: v1 assembly", project: "Spring Launch", amount: "320.00", status: "earned", earned_at: "2026-10-03T10:00:00Z" },
         { task_id: "t2", task: "Reel 21", project: "Q4 Social Reels", amount: "220.00", status: "pending", earned_at: null }],
     });
-    expect([view.pending, view.earned, view.paid, view.owed]).toEqual(["£800.00", "£580.00", "£260.00", "£320.00"]);
+    expect([view.pending, view.earned, view.paid, view.owed]).toEqual(["£800", "£580", "£260", "£320"]);
     expect(view.paidShare).toBe(44.8);
     expect(view.recent.map((row) => row.status)).toEqual(["Earned", "Pending approval"]);
   });

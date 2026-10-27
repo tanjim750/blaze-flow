@@ -22,6 +22,8 @@ export type Workspace = {
   dashboard_role?: DashboardRole | null;
   /** What the viewer may do with money here (billing demo). Always all-false via a client team. Absent on older backends. */
   billing?: { view: boolean; manage: boolean; rates_view: boolean };
+  /** Workspace currency (ISO 4217) for prices, pay and new invoices. */
+  currency?: string;
 };
 /** `owner` runs the workspace, `editor` is any other team member, `client` is in only through a client team. */
 export type DashboardRole = "owner" | "editor" | "client";

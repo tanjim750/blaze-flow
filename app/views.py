@@ -563,7 +563,12 @@ def workspace_list_create(request):
         # Which dashboard layout fits the viewer here: owner, editor or client. Derived from
         # what their memberships allow (services/dashboard.py), never from role names.
         by_id = {str(workspace.id): workspace for workspace in workspaces}
+        from .models import DEFAULT_BILLING_CURRENCY, WorkspaceBillingSettings
+        currencies = {str(pk): code for pk, code in WorkspaceBillingSettings.objects.filter(
+            workspace_id__in=[workspace.id for workspace in workspaces]).values_list('workspace_id', 'currency')}
         for item in data:
+            # Workspace display currency (ISO 4217) for money formatting everywhere in the app.
+            item['currency'] = currencies.get(str(item['id']), DEFAULT_BILLING_CURRENCY)
             item['my_membership_id'] = own.get(str(item['id']))
             item['dashboard_role'] = dashboard_role(user=request.user, workspace=by_id[str(item['id'])])
             # What the viewer may do with money here (Money page, prices, pay). Always false

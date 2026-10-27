@@ -15,7 +15,9 @@ from .models import (
     Invoice, InvoiceStatus, PaymentMethod, Project, Task, Workspace, WorkspaceMembership, WorkspacePrincipalType,
     WorkspaceProfile,
 )
-from .permissions import TASK_READ, WORKSPACE_READ, has_project_permission, has_workspace_permission
+from .currencies import CURRENCIES
+from .payment_gateways import list_gateways
+from .permissions import TASK_READ, WORKSPACE_MANAGE, WORKSPACE_READ, has_project_permission, has_workspace_permission
 from .services import billing
 
 
@@ -110,8 +112,17 @@ class RateSerializer(serializers.Serializer):
     default_task_rate = AmountField()
 
 
-def _settings_out(settings):
-    return {'currency': settings.currency, 'payment_terms_days': settings.payment_terms_days, 'invoice_prefix': settings.invoice_prefix}
+def _settings_out(settings, access=None):
+    return {
+        'currency': settings.currency, 'payment_terms_days': settings.payment_terms_days, 'invoice_prefix': settings.invoice_prefix,
+        # Only owners/admins (billing.manage + workspace.manage) may change the currency.
+        'can_change_currency': bool(access and access.get('currency_manage')),
+        'payment_gateways': list_gateways(workspace_currency=settings.currency),
+    }
+
+
+def _can_change_currency(request, workspace, access):
+    return access['manage'] and has_workspace_permission(user=request.user, workspace=workspace, permission_key=WORKSPACE_MANAGE)
 
 
 @api_view(['GET', 'PATCH'])
@@ -119,16 +130,28 @@ def _settings_out(settings):
 def billing_settings(request, workspace_id):
     workspace, access = _workspace(request, workspace_id)
     _require(access, 'view', VIEW_DENIED)
+    access = {**access, 'currency_manage': _can_change_currency(request, workspace, access)}
     if request.method == 'PATCH':
         _require(access, 'manage', MANAGE_DENIED)
         serializer = SettingsSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        if 'currency' in serializer.validated_data and not access['currency_manage']:
+            current = billing.workspace_currency(workspace)
+            if str(serializer.validated_data['currency']).strip().upper() != current:
+                raise PermissionDenied('Only workspace owners and admins can change the currency.')
         try:
             settings = billing.update_billing_settings(workspace=workspace, user=request.user, **serializer.validated_data)
         except billing.BillingError as exc:
             return _error(exc)
-        return Response(_settings_out(settings))
-    return Response(_settings_out(billing.billing_settings(workspace)))
+        return Response(_settings_out(settings, access))
+    return Response(_settings_out(billing.billing_settings(workspace), access))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def currencies(request):
+    """Every accepted ISO 4217 code with its English name and minor units."""
+    return Response({'results': [{'code': code, 'name': name, 'minor_units': digits} for code, name, digits in CURRENCIES]})
 
 
 @api_view(['GET'])

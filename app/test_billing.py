@@ -507,3 +507,87 @@ class SeedCommandTests(BillingBase, TestCase):
         from django.core.management.base import CommandError
         with self.assertRaises(CommandError):
             call_command('seed_billing_demo', workspace=self.workspace.slug, stdout=open('/dev/null', 'w'))
+
+
+class WorkspaceCurrencyTests(BillingBase, TestCase):
+    def settings_url(self):
+        return self.url('api-billing-settings')
+
+    def test_defaults_to_gbp_and_lists_gateways_as_coming_soon(self):
+        self.as_user(self.owner)
+        data = self.client.get(self.settings_url()).json()
+        self.assertEqual(data['currency'], 'GBP')
+        self.assertTrue(data['can_change_currency'])
+        keys = {gateway['key']: gateway for gateway in data['payment_gateways']}
+        self.assertIn('stripe', keys)
+        self.assertTrue(all(g['status'] == 'coming_soon' and g['connected'] is False for g in keys.values()))
+        self.assertEqual(self.listed_workspace(self.owner)['currency'], 'GBP')
+
+    def test_owner_can_pick_any_iso_4217_code(self):
+        self.as_user(self.owner)
+        for code in ('usd', 'BDT', 'PHP', 'JPY', 'INR', 'EUR'):
+            response = self.client.patch(self.settings_url(), {'currency': code}, format='json')
+            self.assertEqual(response.status_code, 200, response.content)
+            self.assertEqual(response.json()['currency'], code.upper())
+        self.assertEqual(self.listed_workspace(self.owner)['currency'], 'EUR')
+
+    def test_unknown_codes_are_rejected(self):
+        self.as_user(self.owner)
+        for code in ('XYZ', 'US', 'ABCD', '123', ''):
+            response = self.client.patch(self.settings_url(), {'currency': code}, format='json')
+            self.assertEqual(response.status_code, 400, (code, response.content))
+        self.assertEqual(billing.workspace_currency(self.workspace), 'GBP')
+
+    def test_currency_list_endpoint(self):
+        self.as_user(self.owner)
+        rows = {row['code']: row for row in self.client.get(reverse('api-billing-currencies')).json()['results']}
+        self.assertGreater(len(rows), 150)
+        self.assertEqual(rows['JPY']['minor_units'], 0)
+        self.assertEqual(rows['BDT']['name'], 'Bangladeshi Taka')
+
+    def test_only_owners_and_admins_change_currency(self):
+        # A custom role with billing.manage but not workspace.manage can edit other settings, not the currency.
+        role = self.custom_role('Bookkeeper', [*MEMBER_PERMISSION_KEYS, BILLING_VIEW, BILLING_MANAGE])
+        user, _ = self.add_member('books@example.com', role=role)
+        self.as_user(user)
+        self.assertFalse(self.client.get(self.settings_url()).json()['can_change_currency'])
+        self.assertEqual(self.client.patch(self.settings_url(), {'currency': 'USD'}, format='json').status_code, 403)
+        self.assertEqual(self.client.patch(self.settings_url(), {'payment_terms_days': 30}, format='json').status_code, 200)
+        self.as_user(self.editor)
+        self.assertEqual(self.client.patch(self.settings_url(), {'currency': 'USD'}, format='json').status_code, 403)
+        self.assertEqual(billing.workspace_currency(self.workspace), 'GBP')
+
+    def test_issued_invoices_keep_their_currency_and_new_work_uses_the_new_one(self):
+        self.priced_project()
+        sent = self.invoice(send=True)
+        self.assertEqual(sent['currency'], 'GBP')
+        self.as_user(self.owner)
+        self.assertEqual(self.client.patch(self.settings_url(), {'currency': 'USD'}, format='json').status_code, 200)
+        self.assertEqual(Invoice.objects.get(id=sent['id']).currency, 'GBP')
+        # Unissued prices follow the workspace currency; new invoices are drafted in it.
+        pricing = self.set_fee('2000')
+        self.assertEqual(pricing['currency'], 'USD')
+        task = self.task('Extra cut', self.editor_membership)
+        self.patch_money(task['id'], {'client_price': '75'})
+        self.assertEqual(Task.objects.get(id=task['id']).client_price_currency, 'USD')
+        draft = self.invoice(send=False)
+        self.assertEqual(draft['currency'], 'USD')
+        # Money totals never add GBP to USD: the GBP invoice is reported on its own.
+        summary = self.client.get(self.url('api-billing-summary')).json()
+        self.assertEqual(summary['currency'], 'USD')
+        self.assertEqual(summary['totals']['billed'], '0.00')
+        self.assertEqual(summary['other_currencies'], [
+            {'currency': 'GBP', 'billed': '1400.00', 'paid': '0.00', 'outstanding': '1400.00', 'invoice_count': 1}])
+        # Project pricing: the GBP invoice is not shown as USD "invoiced"; only the new USD task is.
+        pricing = self.client.get(self.url('api-billing-project', self.project_id)).json()
+        self.assertEqual(pricing['invoiced'], '75.00')
+        self.assertEqual(pricing['invoiced_other'], [{'currency': 'GBP', 'amount': '1400.00'}])
+        self.assertEqual(pricing['uninvoiced'], '0.00')
+
+    def test_unsent_drafts_follow_a_currency_change(self):
+        self.priced_project()
+        draft = self.invoice(send=False)
+        self.as_user(self.owner)
+        self.client.patch(self.settings_url(), {'currency': 'BDT'}, format='json')
+        self.assertEqual(Invoice.objects.get(id=draft['id']).currency, 'BDT')
+        self.assertEqual(Project.objects.get(id=self.project_id).client_fee_currency, 'BDT')

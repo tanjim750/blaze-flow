@@ -93,3 +93,32 @@
 .verification-row>div>strong{display:block}
 .verification-email{color:var(--shell-on);overflow-wrap:anywhere}
 .settings-success svg{vertical-align:-2px}
+/* Billing & currency: picker + preview, then the payment gateways card (theme: cards #1A1E28, fields #151922, borders #262B37). */
+.billing-currency-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 15px; align-items: start; }
+.billing-currency-picker .ui-select-trigger { width: 100%; min-height: 40px; background: #151922; border-color: #262B37; }
+.billing-currency-preview { display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: center; padding: 14px; border: 1px solid #262B37; border-radius: 10px; background: #151922; }
+.billing-currency-badge { display: grid; place-items: center; min-width: 40px; height: 40px; padding: 0 8px; border-radius: 10px; background: #8d73fb22; color: var(--shell-primary); font-size: 17px; font-weight: 700; }
+.billing-currency-preview strong { display: block; font-size: 13px; }
+.billing-currency-preview small { color: var(--shell-outline); font-size: 11px; }
+.billing-currency-preview ul { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.billing-currency-preview li { padding: 5px 9px; border: 1px solid #262B37; border-radius: 999px; background: #1A1E28; font-variant-numeric: tabular-nums; font-size: 12px; }
+.billing-currency-note { margin: 0; }
+.billing-gateways { margin-top: 20px; padding-top: 18px; border-top: 1px solid #262B37; }
+.billing-gateways-head { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+.billing-gateways-head > svg { flex: none; width: 18px; height: 18px; margin-top: 2px; color: var(--shell-primary); }
+.billing-gateways-head h3 { margin: 0 0 3px; font-size: 14px; }
+.billing-gateways-head p { margin: 0; color: var(--shell-outline); font-size: 12px; }
+.billing-gateways ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.billing-gateways li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid #262B37; border-radius: 10px; background: #1A1E28; }
+.billing-gateways li:hover { background: #222733; }
+.billing-gateways li > span:nth-child(2) { display: grid; gap: 2px; min-width: 0; }
+.billing-gateways li strong { font-size: 13px; }
+.billing-gateways li small { color: var(--shell-outline); font-size: 12px; }
+.billing-gateway-logo { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: #151922; border: 1px solid #262B37; color: var(--shell-primary); font-weight: 700; }
+.settings-button.is-ghost { border-color: #262B37; background: #151922; color: var(--shell-outline); font-size: 12px; white-space: nowrap; }
+.settings-button.is-ghost:disabled { cursor: not-allowed; opacity: 1; }
+@media (max-width: 700px) {
+  .billing-currency-row { grid-template-columns: 1fr; }
+  .billing-gateways li { grid-template-columns: auto minmax(0, 1fr); }
+  .billing-gateways li .settings-button { grid-column: 1 / -1; justify-self: stretch; }
+}

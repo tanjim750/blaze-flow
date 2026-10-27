@@ -4,6 +4,8 @@
  * 0.1 + 0.2 never shows up on an invoice.
  */
 
+import { currencyInfo } from "./currencies";
+
 export type Money = { amount: string | number | null | undefined; currency: string };
 
 /** "1250.5" -> 125050. Null, blank or unparseable -> 0. Rounds half away from zero. */
@@ -34,8 +36,12 @@ function formatter(currency: string, locale: string, whole: boolean): Intl.Numbe
   const key = `${locale}|${currency}|${whole}`;
   let found = formatters.get(key);
   if (!found) {
+    const digits = currencyInfo(currency).digits;
+    const fraction = whole ? 0 : digits;
     try {
-      found = new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });
+      // "symbol" keeps US$/CA$ distinct; codes without a wide symbol (BDT) use the narrow one (৳).
+      const display = currencyInfo(currency).symbol === currency.toUpperCase() ? "code" : (symbolStyle(currency, locale));
+      found = new Intl.NumberFormat(locale, { style: "currency", currency, currencyDisplay: display, minimumFractionDigits: fraction, maximumFractionDigits: fraction });
     } catch {
       // An unknown code still renders, as "XYZ 1,250.00", rather than throwing in a page.
       found = new Intl.NumberFormat(locale, { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });
@@ -45,26 +51,38 @@ function formatter(currency: string, locale: string, whole: boolean): Intl.Numbe
   return found;
 }
 
+function symbolStyle(currency: string, locale: string): "symbol" | "narrowSymbol" {
+  const wide = new Intl.NumberFormat(locale, { style: "currency", currency, currencyDisplay: "symbol" }).formatToParts(0).find((p) => p.type === "currency")?.value;
+  return wide === currency.toUpperCase() ? "narrowSymbol" : "symbol";
+}
+
+/** Number grouping/punctuation only; the currency decides the symbol and decimals. */
+export const DEFAULT_MONEY_LOCALE = "en-GB";
+
 /**
- * Format with Intl: `formatMoney("1250.5", "GBP")` -> "£1,250.50". `whole` drops the pence
- * when they are zero (for big dashboard numbers); `null` amounts render as an em dash.
+ * Format with Intl in the currency's own minor units: `formatMoney("1250.5", "GBP")` ->
+ * "£1,250.50", `formatMoney(1250, "JPY")` -> "JP¥1,250", `formatMoney(1250, "BDT")` -> "৳1,250.00".
+ * `whole` drops the minor units when they are zero (for big dashboard numbers); `null`
+ * amounts render as an em dash. Callers always pass the row's own currency code.
  */
-export function formatMoney(amount: string | number | null | undefined, currency = "GBP", options: { locale?: string; whole?: boolean } = {}): string {
+export function formatMoney(amount: string | number | null | undefined, currency: string, options: { locale?: string; whole?: boolean } = {}): string {
   if (amount === null || amount === undefined || amount === "") return "—";
   const minor = toMinor(amount);
-  const locale = options.locale ?? "en-GB";
+  const locale = options.locale ?? DEFAULT_MONEY_LOCALE;
   const whole = Boolean(options.whole) && minor % 100 === 0;
   const text = formatter(currency, locale, whole).format(minor / 100);
   const known = formatter(currency, locale, whole).resolvedOptions().currency;
   return known ? text : `${currency} ${text}`;
 }
 
+
 /**
  * What someone typed into a price box, as an API amount. "" -> null (clears the price),
- * "£1,250" -> "1250.00". Returns `{ error }` for anything that is not a non-negative amount.
+ * "£1,250" or "BDT 1,250" -> "1250.00". Returns `{ error }` for anything that is not a non-negative amount.
  */
 export function parseMoneyInput(raw: string): { amount: string | null } | { error: string } {
-  const cleaned = raw.replace(/[£$€,\s]/g, "");
+  // Strip any currency sign (£ $ € ৳ ₱ ₹ ¥ …), letters of a code (USD) and grouping.
+  const cleaned = raw.trim().replace(/^[A-Za-z]{3}(?=[\s\d\p{Sc}-])|(?<=[\d\s])[A-Za-z]{3}$/u, "").replace(/[\p{Sc},\s\u00a0]/gu, "");
   if (cleaned === "") return { amount: null };
   if (cleaned.startsWith("-")) return { error: "The amount can't be negative. Enter 0 or more." };
   if (!/^\d+(\.\d{0,2})?$/.test(cleaned)) return { error: "Enter an amount like 1250 or 1250.50." };

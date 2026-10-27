@@ -34,17 +34,21 @@ export type MoneyTotals = {
   clients_owe: string; overdue: string; billed: string; collected: string; unbilled: string;
   we_owe_editors?: string; editors_paid?: string; editors_pending?: string; project_value?: string; editor_cost?: string; margin?: string; margin_percent?: number | null;
 };
-export type MoneySummary = { currency: string; totals: MoneyTotals; receivables: Receivable[]; invoices: InvoiceSummary[]; payouts?: PayoutRow[]; access: BillingAccess };
+/** Sent/paid invoices issued in a currency other than the workspace's current one (never converted or added in). */
+export type OtherCurrencyTotal = { currency: string; billed: string; paid: string; outstanding: string; invoice_count: number };
+export type MoneySummary = { currency: string; totals: MoneyTotals; receivables: Receivable[]; invoices: InvoiceSummary[]; payouts?: PayoutRow[]; access: BillingAccess; other_currencies?: OtherCurrencyTotal[] };
 export type MyEarnings = {
   currency: string; pending: string; earned: string; paid: string; owed: string;
   lines: { task_id: string; task: string; project: string | null; amount: string; status: "pending" | "earned"; earned_at: string | null }[];
   payouts: PaymentEntry[];
 };
-export type ClientInvoices = { currency: string; results: InvoiceSummary[]; outstanding: string; overdue_count: number };
+export type ClientInvoices = { currency: string; results: InvoiceSummary[]; outstanding: string; overdue_count: number; other_currencies?: OtherCurrencyTotal[] };
 export type EditorPayLine = { membership_id: string; name: string; is_me: boolean; amount: string | null; default_rate: string | null; status: "pending" | "earned" | null; earned_at: string | null; frozen: boolean; assigned: boolean };
 export type TaskMoney = { task_id: string; currency: string; can_manage: boolean; client_price?: string | null; editor_pay: EditorPayLine[] };
 export type ProjectPricing = {
   project_id: string; currency: string; fee: string | null; tasks_total: string; total: string; invoiced: string; uninvoiced: string;
+  /** Invoices issued in an earlier workspace currency, per currency (never converted). */
+  invoiced_other?: { currency: string; amount: string }[];
   tasks: { id: string; title: string; client_price: string | null }[]; invoices: InvoiceSummary[]; can_manage: boolean;
   draft_invoice?: { id: string; number: string; total: string } | null;
   /** What a new invoice would hold right now; `state` names the case when it would be empty. */
@@ -167,7 +171,7 @@ export function buildOwnerMoneyCards(summary: Pick<MoneySummary, "currency" | "t
 
 /** Editor dashboard "My earnings": pending / earned / paid, and what is still owed. */
 export function buildEarnings(earnings: MyEarnings) {
-  const money = (value: string) => formatMoney(value, earnings.currency);
+  const money = (value: string) => formatMoney(value, earnings.currency, { whole: true });
   const earnedTotal = sumMoney([earnings.earned]);
   return {
     pending: money(earnings.pending), earned: money(earnings.earned), paid: money(earnings.paid), owed: money(earnings.owed),

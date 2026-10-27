@@ -229,3 +229,35 @@
   .money-note { flex-direction: column; gap: 8px; }
   .money-note-actions a { flex: 1 1 100%; justify-content: center; }
 }
+.money-other-currencies { margin: 0 0 16px; padding: 10px 12px; border: 1px solid #262B37; border-radius: 10px; background: #151922; color: var(--shell-outline, #9aa3b5); font-size: 12px; line-height: 1.5; }
+
+/* UI sweep (payments): the record-payment/payout dialog fits a 390px phone, the invoice
+   bill-to/meta block stacks instead of wrapping dates, and New invoice sits left on tablets. */
+.money-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.money-form input, .money-form select { min-width: 0; width: 100%; box-sizing: border-box; }
+.money-form footer { flex-wrap: wrap; }
+.invoice-meta dd { white-space: nowrap; }
+@media (max-width: 960px) { .money-heading > .money-new-invoice { align-self: flex-start; align-items: flex-start; } }
+@media (max-width: 520px) {
+  .money-form { grid-template-columns: minmax(0, 1fr); }
+  .money-form footer .money-demo-chip { flex-basis: 100%; margin-right: 0; }
+  .money-form footer .money-button { flex: 1 1 0; min-height: 44px; }
+  .invoice-meta { flex-direction: column; gap: 14px; }
+  .invoice-meta dl { grid-template-columns: auto 1fr; }
+}
+
+/* UI sweep 2: summary cards sit 2x2 on tablets, invoice filter tabs wrap, invoice row actions
+   wrap instead of forcing a sideways scroll, invoice links are thumb-sized on phones. */
+@media (min-width: 521px) and (max-width: 960px) { .money-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .money-totals { grid-template-columns: minmax(0, 1fr); } }
+.money-panel > header:has(.money-tabs) { flex-wrap: wrap; row-gap: 10px; }
+.money-tabs { flex-wrap: wrap; max-width: 100%; }
+@media (max-width: 900px) {
+  .money-table.is-invoices td.money-row-action { white-space: normal; }
+  .money-table.is-invoices td.money-row-action .money-button { display: flex; width: max-content; max-width: 150px; margin: 4px 0 4px auto; white-space: normal; text-align: left; line-height: 1.25; }
+  .money-table.is-invoices td, .money-table.is-invoices th { padding-inline: 10px; }
+}
+@media (max-width: 640px) {
+  .money-invoice-link { min-height: 44px; }
+  .money-tabs button { min-height: 44px; }
+}

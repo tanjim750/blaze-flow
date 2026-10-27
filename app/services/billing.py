@@ -35,6 +35,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
 
+from app.currencies import CURRENCY_CODES
 from app.models import (
     ClientTeam, ClientTeamStatus, EditorPay, EditorPayStatus, Invoice, InvoiceLine, InvoiceLineKind,
     InvoiceStatus, MemberPayRate, Payment, PaymentDirection, PaymentMethod, PaymentProvider, Project,
@@ -101,20 +102,43 @@ def workspace_currency(workspace) -> str:
 
 
 def update_billing_settings(*, workspace, user, currency=None, payment_terms_days=None, invoice_prefix=None):
+    """Change workspace billing settings.
+
+    Currency rules (no exchange rates, amounts are never converted):
+    - Sent and paid invoices, and recorded payments, keep the currency they were issued in.
+    - Unissued prices (project fees, task prices, default rates, pending editor pay) and
+      draft invoices without payments follow the new workspace currency: they were typed in
+      "the workspace currency" and have not been shown to a client as a bill yet.
+    - Earned (frozen) editor pay keeps its currency.
+    Totals on the Money page count the workspace currency; anything in another currency is
+    reported separately in ``other_currencies`` (see money_summary).
+    """
     settings = billing_settings(workspace)
+    previous = settings.currency
     if currency is not None:
         code = str(currency).strip().upper()
-        if len(code) != 3 or not code.isalpha():
-            raise BillingError('Use a three-letter currency code such as GBP, USD or EUR.')
+        if code not in CURRENCY_CODES:
+            raise BillingError('Choose a valid ISO 4217 currency code such as USD, EUR, GBP or BDT.')
         settings.currency = code
     if payment_terms_days is not None:
         settings.payment_terms_days = int(payment_terms_days)
     if invoice_prefix is not None:
         settings.invoice_prefix = str(invoice_prefix).strip()[:20] or 'INV'
-    settings.save()
+    with transaction.atomic():
+        settings.save()
+        if settings.currency != previous:
+            _relabel_unissued(workspace, settings.currency)
     _audit(user=user, workspace=workspace, action='billing.settings.updated', entity_type='workspace', entity_id=workspace.id,
-           currency=settings.currency)
+           currency=settings.currency, previous_currency=previous)
     return settings
+
+
+def _relabel_unissued(workspace, code):
+    Project.objects.filter(workspace=workspace, client_fee__isnull=False).update(client_fee_currency=code)
+    Task.objects.filter(workspace=workspace, client_price__isnull=False).update(client_price_currency=code)
+    MemberPayRate.objects.filter(workspace_membership__workspace=workspace).update(currency=code)
+    EditorPay.objects.filter(workspace=workspace, status=EditorPayStatus.PENDING).update(currency=code)
+    Invoice.objects.filter(workspace=workspace, status=InvoiceStatus.DRAFT, payments__isnull=True).update(currency=code)
 
 
 # --- who sees what ------------------------------------------------------------------------
@@ -178,13 +202,26 @@ def project_pricing(project) -> dict:
     tasks = list(_live_tasks(project).order_by('sort_order', 'created_at'))
     fee = project.client_fee or ZERO
     task_total = sum((task.client_price or ZERO for task in tasks), ZERO)
-    invoiced = _sum(InvoiceLine.objects.filter(invoice__project=project).exclude(kind=InvoiceLineKind.MANUAL))
+    currency = project.client_fee_currency or workspace_currency(project.workspace)
+    lines = InvoiceLine.objects.filter(invoice__project=project).exclude(kind=InvoiceLineKind.MANUAL)
+    # Never add amounts across currencies: invoices issued before a currency change are
+    # reported per currency in ``invoiced_other`` and are not counted in ``invoiced``.
+    invoiced = _sum(lines.filter(invoice__currency=currency))
+    invoiced_other = [
+        {'currency': code, 'amount': money_str(_sum(lines.filter(invoice__currency=code)))}
+        for code in sorted(set(lines.exclude(invoice__currency=currency).values_list('invoice__currency', flat=True)))
+    ]
     draft = Invoice.objects.filter(project=project, status=InvoiceStatus.DRAFT).order_by('created_at').first()
     total = (fee + task_total).quantize(CENT)
+    if invoiced_other:
+        # Items already on an older-currency invoice are billed; only the rest is still to invoice.
+        uninvoiced = sum((amount or ZERO for *_, amount in _uninvoiced_items(project)), ZERO)
+    else:
+        uninvoiced = max(total - invoiced, ZERO)
     return {
-        'project_id': str(project.id), 'currency': project.client_fee_currency or workspace_currency(project.workspace),
+        'project_id': str(project.id), 'currency': currency,
         'fee': money_str(project.client_fee), 'tasks_total': money_str(task_total), 'total': money_str(total),
-        'invoiced': money_str(invoiced), 'uninvoiced': money_str(max(total - invoiced, ZERO)),
+        'invoiced': money_str(invoiced), 'uninvoiced': money_str(uninvoiced), 'invoiced_other': invoiced_other,
         'tasks': [{'id': str(task.id), 'title': task.title, 'client_price': money_str(task.client_price)} for task in tasks],
         # The open draft, if any, so Pricing links to it with its real total instead of
         # offering to invoice an amount that disagrees with it.
@@ -693,10 +730,12 @@ def client_invoices(*, workspace, client_team_ids, today=None):
     """What a client-team member sees: their own client's invoices, never drafts."""
     rows = _invoices(workspace).filter(client_team_id__in=client_team_ids).exclude(status=InvoiceStatus.DRAFT).order_by('-issue_date', '-created_at')
     invoices = [invoice_out(invoice, today=today) for invoice in rows]
-    outstanding = sum((Decimal(item['outstanding']) for item in invoices), ZERO)
+    currency = workspace_currency(workspace)
+    outstanding = sum((Decimal(item['outstanding']) for item in invoices if item['currency'] == currency), ZERO)
     return {
-        'currency': workspace_currency(workspace), 'results': invoices,
+        'currency': currency, 'results': invoices,
         'outstanding': money_str(outstanding),
+        'other_currencies': other_currency_totals(workspace=workspace, client_team_ids=client_team_ids, today=today),
         'overdue_count': sum(1 for item in invoices if item['display_status'] == 'overdue'),
     }
 
@@ -714,7 +753,9 @@ def receivables(*, workspace, today=None):
             'billed': ZERO, 'paid': ZERO, 'outstanding': ZERO, 'overdue': ZERO, 'unbilled': ZERO, 'invoice_count': 0,
         })
 
-    for invoice in _invoices(workspace).exclude(status=InvoiceStatus.DRAFT):
+    # Only invoices in the workspace currency; older ones in another currency are summed
+    # separately by other_currency_totals() so amounts in different currencies never mix.
+    for invoice in _invoices(workspace).exclude(status=InvoiceStatus.DRAFT).filter(currency=workspace_currency(workspace)):
         total, paid = invoice_total(invoice), invoice_paid(invoice)
         outstanding = max(total - paid, ZERO)
         entry = row(invoice.client_team_id)
@@ -768,12 +809,36 @@ def payouts_ledger(*, workspace):
     return sorted(out, key=lambda item: (-Decimal(item['owed']), item['name']))
 
 
+def other_currency_totals(*, workspace, client_team_ids=None, today=None) -> list[dict]:
+    """Sent/paid invoices issued in a currency other than the workspace's current one.
+
+    Mixed-currency rule: amounts are never converted or added across currencies. The Money
+    page totals count the workspace currency; these groups (one per other currency) are shown
+    beside them so older invoices stay visible with their original currency.
+    """
+    today = today or timezone.localdate()
+    rows = _invoices(workspace).exclude(status=InvoiceStatus.DRAFT).exclude(currency=workspace_currency(workspace))
+    if client_team_ids is not None:
+        rows = rows.filter(client_team_id__in=client_team_ids)
+    groups = {}
+    for invoice in rows:
+        total, paid = invoice_total(invoice), invoice_paid(invoice)
+        group = groups.setdefault(invoice.currency, {'currency': invoice.currency, 'billed': ZERO, 'paid': ZERO, 'outstanding': ZERO,
+                                                      'invoice_count': 0})
+        group['billed'] += total
+        group['paid'] += paid
+        group['outstanding'] += max(total - paid, ZERO)
+        group['invoice_count'] += 1
+    return [{**group, **{key: money_str(group[key]) for key in ('billed', 'paid', 'outstanding')}}
+            for _code, group in sorted(groups.items())]
+
+
 def money_summary(*, workspace, access, today=None):
     """The Money page and owner dashboard: totals, receivables, invoices and (if allowed) payouts."""
     today = today or timezone.localdate()
     currency = workspace_currency(workspace)
     clients = receivables(workspace=workspace, today=today)
-    collected = _sum(Payment.objects.filter(workspace=workspace, direction=PaymentDirection.INCOMING))
+    collected = _sum(Payment.objects.filter(workspace=workspace, direction=PaymentDirection.INCOMING, currency=currency))
     totals = {
         'clients_owe': money_str(sum((Decimal(row['outstanding']) for row in clients), ZERO)),
         'overdue': money_str(sum((Decimal(row['overdue']) for row in clients), ZERO)),
@@ -781,10 +846,11 @@ def money_summary(*, workspace, access, today=None):
         'collected': money_str(collected),
         'unbilled': money_str(sum((Decimal(row['unbilled']) for row in clients), ZERO)),
     }
-    data = {'currency': currency, 'totals': totals, 'receivables': clients, 'invoices': list_invoices(workspace=workspace, today=today)}
+    data = {'currency': currency, 'totals': totals, 'receivables': clients, 'invoices': list_invoices(workspace=workspace, today=today),
+            'other_currencies': other_currency_totals(workspace=workspace, today=today)}
     if access['rates_view']:
         editors = payouts_ledger(workspace=workspace)
-        editor_cost = _sum(EditorPay.objects.filter(workspace=workspace, task__deleted_at__isnull=True))
+        editor_cost = _sum(EditorPay.objects.filter(workspace=workspace, task__deleted_at__isnull=True, currency=currency))
         project_value = ZERO
         for project in Project.objects.filter(workspace=workspace):
             project_value += Decimal(project_pricing(project)['total'])

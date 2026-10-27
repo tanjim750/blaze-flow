@@ -19,6 +19,10 @@ EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
 REST_FRAMEWORK = {
     **REST_FRAMEWORK,  # noqa: F405
     'DEFAULT_THROTTLE_RATES': {
+        # Every scope the app defines, relaxed, so new scopes never miss a rate in tests.
+        **{scope: '10000/hour' for scope in REST_FRAMEWORK.get('DEFAULT_THROTTLE_RATES', {})},  # noqa: F405
+        'invite_preview': '10000/hour',
+        'support_ticket': '10000/hour',
         'registration': '10000/hour',
         'login': '10000/hour',
         'password_reset': '10000/hour',

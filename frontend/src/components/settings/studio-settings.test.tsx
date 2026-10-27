@@ -13,24 +13,24 @@ import { GlossaryForm, InvoiceSettingsForm, RatesForm } from "./studio-settings"
 afterEach(() => { cleanup(); api.mockReset(); setMemberRate.mockReset(); });
 
 describe("InvoiceSettingsForm", () => {
-  it("validates, then saves upper-cased values", async () => {
-    api.mockResolvedValue({ currency: "USD", payment_terms_days: 30, invoice_prefix: "ACME" });
+  it("validates, then saves terms and prefix (currency lives in Billing & currency)", async () => {
+    api.mockResolvedValue({ currency: "GBP", payment_terms_days: 30, invoice_prefix: "ACME" });
     render(<InvoiceSettingsForm workspaceId="w" initial={{ currency: "GBP", payment_terms_days: 14, invoice_prefix: "INV" }} canEdit />);
-    fireEvent.change(screen.getByLabelText(/Currency/), { target: { value: "us" } });
+    expect(screen.queryByLabelText(/Currency/)).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Invoice prefix/), { target: { value: "  " } });
     fireEvent.click(screen.getByRole("button", { name: /Save invoicing/ }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/three-letter/);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/1–20 characters/);
     expect(api).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText(/Currency/), { target: { value: "usd" } });
     fireEvent.change(screen.getByLabelText(/Payment terms/), { target: { value: "30" } });
     fireEvent.change(screen.getByLabelText(/Invoice prefix/), { target: { value: "ACME" } });
     expect(screen.getByText("Numbers look like ACME-0001")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Save invoicing/ }));
-    await waitFor(() => expect(api).toHaveBeenCalledWith("workspaces/w/billing/settings/", "PATCH", { currency: "USD", payment_terms_days: 30, invoice_prefix: "ACME" }));
+    await waitFor(() => expect(api).toHaveBeenCalledWith("workspaces/w/billing/settings/", "PATCH", { payment_terms_days: 30, invoice_prefix: "ACME" }));
   });
   it("is read-only without manage", () => {
     render(<InvoiceSettingsForm workspaceId="w" initial={{ currency: "GBP", payment_terms_days: 14, invoice_prefix: "INV" }} canEdit={false} />);
     expect(screen.queryByRole("button")).toBeNull();
-    expect(screen.getByLabelText(/Currency/)).toBeDisabled();
+    expect(screen.getByLabelText(/Payment terms/)).toBeDisabled();
   });
 });
 

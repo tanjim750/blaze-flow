@@ -1,7 +1,8 @@
 import { guardRoute } from "@/lib/route-guard";
-import { Bell, BookA, Building2, CircleUserRound, Coins, FileText, MessageCircle, Palette, ShieldCheck } from "@/components/icons";
+import { Banknote, Bell, BookA, Building2, CircleUserRound, Coins, FileText, MessageCircle, Palette, ShieldCheck } from "@/components/icons";
 import { getGlossary, getInvoiceSettings, getRates } from "@/lib/studio-settings-server";
 import { GlossaryForm, InvoiceSettingsForm, RatesForm } from "@/components/settings/studio-settings";
+import { CurrencySettingsForm, PaymentGatewaysCard } from "@/components/settings/billing-currency";
 import { getBranding, getNotificationPreferences, getNotificationSettings, getWhatsAppSettings, getWorkspaceProfile } from "@/lib/api";
 import { BrandingForm } from "@/components/portal/branding-form";
 import "@/components/portal/portal.css";
@@ -72,8 +73,13 @@ export default async function SettingsPage() {
       <div className="settings-title"><Palette /><div><h2>Client portal branding</h2><p>Your logo, colour and welcome line on the client portal and on upload pages.</p></div></div>
       <BrandingForm workspaceId={workspace.id} initial={loadedBranding.data} canEdit={loadedBranding.data.can_edit === true} />
     </section>}
+    {workspace && invoicing?.ok && <section className="settings-card" id="billing">
+      <div className="settings-title"><Banknote /><div><h2>Billing &amp; currency</h2><p>The currency this workspace prices, pays and invoices in, and how clients will pay online.</p></div></div>
+      <CurrencySettingsForm workspaceId={workspace.id} initial={invoicing.data} canEdit={invoicing.data.can_change_currency === true} />
+      <PaymentGatewaysCard gateways={invoicing.data.payment_gateways ?? []} />
+    </section>}
     {workspace && invoicing?.ok && <section className="settings-card" id="invoicing">
-      <div className="settings-title"><FileText /><div><h2>Invoicing</h2><p>Invoice numbering, payment terms and the currency for prices and invoices.</p></div></div>
+      <div className="settings-title"><FileText /><div><h2>Invoicing</h2><p>Invoice numbering and payment terms.</p></div></div>
       <InvoiceSettingsForm workspaceId={workspace.id} initial={invoicing.data} canEdit={billing?.manage === true} />
     </section>}
     {workspace && rates?.ok && <section className="settings-card" id="rates">

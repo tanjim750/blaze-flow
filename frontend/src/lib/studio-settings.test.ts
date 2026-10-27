@@ -5,7 +5,7 @@ describe("invoice settings validation", () => {
   const ok = { currency: "gbp", payment_terms_days: "30", invoice_prefix: "ACME" };
   it("accepts valid values", () => expect(invoiceSettingsError(ok)).toBeNull());
   it("rejects bad currency, terms and prefix", () => {
-    expect(invoiceSettingsError({ ...ok, currency: "£" })).toMatch(/three-letter/);
+    expect(invoiceSettingsError({ ...ok, currency: "£" })).toMatch(/currency such as/);
     expect(invoiceSettingsError({ ...ok, payment_terms_days: "400" })).toMatch(/0–365/);
     expect(invoiceSettingsError({ ...ok, payment_terms_days: "1.5" })).toMatch(/whole/);
     expect(invoiceSettingsError({ ...ok, invoice_prefix: "  " })).toMatch(/prefix/);
