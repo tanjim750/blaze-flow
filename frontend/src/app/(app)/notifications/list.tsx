@@ -12,8 +12,8 @@ import { collapseRepeats, describeNotification, groupByDay, type CollapsedNotifi
 
 const PAGE_SIZE = 25;
 
-export function NotificationsList({ workspaceId, workspaceName, filter, page }: {
-  workspaceId: string | null; workspaceName: string | null; filter: "all" | "unread"; page: number;
+export function NotificationsList({ workspaceId, filter, page }: {
+  workspaceId: string | null; filter: "all" | "unread"; page: number;
 }) {
   const router = useAppRouter();
   const feed = useNotifications({ workspaceId, page, pageSize: PAGE_SIZE, unreadOnly: filter === "unread" });
@@ -41,7 +41,6 @@ export function NotificationsList({ workspaceId, workspaceName, filter, page }: 
     <div className="nf-page">
       <header>
         <div>
-          <p className="eyebrow">{workspaceName ?? "Workspace"}</p>
           <h1>Notifications</h1>
           <p>Notes on your cuts, replies, new versions, approvals and task assignments.</p>
         </div>

@@ -15,5 +15,5 @@ export default async function NotificationsPage({ searchParams }: PageProps<"/no
   const filter = params.filter === "unread" ? "unread" : "all";
   const rawPage = Number(typeof params.page === "string" ? params.page : "1");
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
-  return <NotificationsList key={`${filter}:${page}`} workspaceId={workspace?.id ?? null} workspaceName={workspace?.name ?? null} filter={filter} page={page} />;
+  return <NotificationsList key={`${filter}:${page}`} workspaceId={workspace?.id ?? null} filter={filter} page={page} />;
 }

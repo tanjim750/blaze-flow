@@ -437,3 +437,4 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 .tb-blocked-hint.is-card { padding: 6px 10px; margin: -2px 0 8px; }
 .tb-blocked-hint-close { flex: none; min-width: 28px; min-height: 28px; margin: -6px -6px -6px 0; border: 0; background: transparent; color: inherit; font-size: 16px; line-height: 1; cursor: pointer; border-radius: 6px; }
 .tb-blocked-hint-close:focus-visible { outline: 2px solid var(--tb-ring); }
+.tb-field .ui-select-trigger { width: 100%; }

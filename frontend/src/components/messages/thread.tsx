@@ -13,9 +13,16 @@ import {
   uploadUrl, type Channel, type Message, type MessageAttachment, type Person, type Thread, type ThreadTarget, type Viewer,
 } from "@/lib/messages";
 import "@/components/portal/portal.css";
+import { MessagesSkeleton } from "@/components/chat/skeleton";
+import "@/components/chat/chat.css";
 import "./messages.css";
 
 const POLL_MS = 5000;
+
+/** The last thread seen per channel, so reopening it paints instantly and refreshes behind. */
+const threadCache = new Map<string, { thread: Thread; messages: Message[] }>();
+export function clearThreadCache() { threadCache.clear(); }
+const cacheKey = (target: ThreadTarget, channel: Channel) => `${target.workspaceId}:${target.chatChannelId ?? ""}:${target.projectId ?? ""}:${channel}`;
 
 /**
  * One project's thread, as a tabbed pair of channels for the studio ("With client" and the
@@ -65,8 +72,11 @@ type Linked = { id: string; name: string; kind: "file" | "cut" };
 function ChannelView({ target, projectId, channel, variant, initialQuote = "", onThread }: {
   target: ThreadTarget; projectId?: string; channel: Channel; variant: "studio" | "portal"; initialQuote?: string; onThread: (thread: Thread) => void;
 }) {
-  const [thread, setThread] = useState<Thread | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const cached = threadCache.get(cacheKey(target, channel));
+  const [thread, setThread] = useState<Thread | null>(cached?.thread ?? null);
+  const [messages, setMessages] = useState<Message[]>(cached?.messages ?? []);
+  // Fade the real list in only when it replaces a skeleton.
+  const [fromSkeleton] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
   const [olderBusy, setOlderBusy] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -101,6 +111,10 @@ function ChannelView({ target, projectId, channel, variant, initialQuote = "", o
     });
     return () => { alive = false; };
   }, [target, channel, onThread, read]);
+
+  useEffect(() => {
+    if (thread) threadCache.set(cacheKey(target, channel), { thread, messages });
+  }, [thread, messages, target, channel]);
 
   const ready = thread !== null;
   useEffect(() => {
@@ -147,7 +161,7 @@ function ChannelView({ target, projectId, channel, variant, initialQuote = "", o
   }
 
   if (error) return <p className="mt-alert" role="alert">{error}</p>;
-  if (!thread) return <div className="mt-loading" aria-busy="true"><Loader2 className="mt-spin" aria-hidden="true" />Loading messages…</div>;
+  if (!thread) return <MessagesSkeleton />;
 
   const people = thread.mentionable;
   const viewer = thread.viewer;
@@ -162,7 +176,7 @@ function ChannelView({ target, projectId, channel, variant, initialQuote = "", o
           ? <p className="mt-banner is-shared" role="note"><Users aria-hidden="true" /><span>Shared with the client. Use <strong>Team only</strong> for anything internal.</span></p>
           : null}
 
-    <div className="mt-list" ref={listRef} onScroll={(event) => {
+    <div className={`mt-list${fromSkeleton ? " ch-ready" : ""}`} ref={listRef} onScroll={(event) => {
       const el = event.currentTarget;
       stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
     }} aria-live="polite" aria-relevant="additions">

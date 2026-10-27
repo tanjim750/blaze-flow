@@ -1,0 +1,24 @@
+.ui-select-trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; min-height: 36px; padding: 0 10px; border: 1px solid #262B37; border-radius: 8px; background: #1A1E28; color: #e8e6f0; font: inherit; font-size: 13px; text-align: left; cursor: pointer; outline: none; }
+.ui-select-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-select-trigger > span.is-placeholder { color: #8b8fa3; }
+.ui-select-trigger svg { flex: none; width: 14px; height: 14px; color: #8b8fa3; }
+.ui-select-trigger:hover { background: #222733; }
+/* The ring is drawn inside the border box so overflow:hidden parents never clip it. */
+.ui-select-trigger:focus-visible, .ui-select-trigger[aria-expanded="true"] { border-color: #7c5cff; box-shadow: inset 0 0 0 1px #7c5cff; }
+.ui-select-trigger[aria-invalid="true"] { border-color: #ff6b78; }
+.ui-select-trigger:disabled { opacity: .5; cursor: not-allowed; }
+input.ui-select-native { position: absolute !important; width: 1px !important; height: 1px !important; margin: -1px !important; padding: 0 !important; border: 0 !important; opacity: 0; pointer-events: none; clip: rect(0 0 0 0); }
+.ui-select-content { z-index: 200; display: grid; min-width: var(--radix-popover-trigger-width); max-width: min(360px, calc(100vw - 16px)); max-height: min(320px, var(--radix-popover-content-available-height)); padding: 4px; border: 1px solid #262B37; border-radius: 10px; background: #1A1E28; color: #e8e6f0; box-shadow: 0 12px 32px #0008; font-size: 13px; overflow: hidden; }
+.ui-select-content ul { margin: 0; padding: 0; list-style: none; overflow-y: auto; outline: none; }
+.ui-select-content li[role="option"] { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.ui-select-content li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-select-content li.is-active { background: #222733; }
+.ui-select-content li.is-selected { background: #7c5cff26; color: #cabeff; font-weight: 600; }
+.ui-select-content li.is-selected.is-active { background: #7c5cff38; }
+.ui-select-content li svg { flex: none; width: 14px; height: 14px; color: #a993ff; }
+.ui-select-content li[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.ui-select-empty { padding: 10px; color: #8b8fa3; }
+.ui-select-search { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; padding: 0 8px; border-bottom: 1px solid #262B37; }
+.ui-select-search svg { width: 14px; height: 14px; color: #8b8fa3; }
+.ui-select-search input { flex: 1; min-width: 0; height: 34px; border: 0; background: transparent; color: inherit; font: inherit; outline: none; }
+@media (max-width: 760px) { .ui-select-trigger { min-height: 40px; } .ui-select-content li[role="option"] { min-height: 40px; } }

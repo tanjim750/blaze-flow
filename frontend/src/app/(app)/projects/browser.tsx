@@ -10,13 +10,13 @@ import {
 } from "@/components/icons";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
-import { AssetLibrary } from "@/components/asset-library";
+import { AssetLibrary, FILES_SHARE_EVENT } from "@/components/asset-library";
 import { ProjectBrief } from "@/components/project-brief";
 import { ProjectPricing } from "@/components/money/project-pricing";
 import { ActivityFeed } from "@/components/activity/activity-feed";
 import { UploadLinksPanel } from "@/components/client-uploads/upload-links-panel";
 import { ChatPreview } from "@/components/chat/preview";
-import { chatHref, fetchUnread, unreadLabel } from "@/lib/messages";
+import { fetchUnread, unreadLabel } from "@/lib/messages";
 import "@/components/project-brief.css";
 import { LinkPending } from "@/components/nav-progress";
 import { TasksBoard } from "@/app/(app)/tasks/board";
@@ -156,7 +156,7 @@ function PlanLimitDialog({ limit, name, onClose, onRetry }: { limit: PlanLimit; 
     </DialogContent>
   </Dialog>;
 }
-const TABS = ["Files", "Tasks", "Brief & Specs", "Activity Log", "Client uploads", "Pricing"] as const;
+const TABS = ["Files", "Tasks", "Chat", "Brief & Specs", "Activity Log", "Client uploads", "Pricing"] as const;
 /** "Client uploads" also answers to `?tab=client-uploads` (what notifications and the feed link to). */
 const tabSlug = (value: string) => value.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
 
@@ -213,13 +213,6 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
               <span>{view.selectedClient?.name ?? "—"}</span><ChevronRight size={13} />
               <b>{view.selectedCampaign?.name ?? "No campaign"}<Pencil size={11} /></b>
             </nav>
-            {view.selectedCampaign ? (
-              <Link className="pb-ghost-button" aria-label="Client review link" href={`/review?project=${view.selectedCampaign.id}&share=1`}>
-                <Share2 size={14} />Client Review Link
-              </Link>
-            ) : (
-              <button className="pb-ghost-button" type="button" disabled title="Select a campaign first"><Share2 size={14} />Client Review Link</button>
-            )}
           </div>
 
           <div className="pb-title-row">
@@ -227,16 +220,15 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
               <span className="pb-monogram">{initials(view.selectedClient?.name ?? "Blaze Flow")}</span>
               <h1>{view.selectedCampaign?.name ?? "No campaign selected"}</h1>
               {view.workspaceId && view.selectedCampaign && <StatusPill status={view.selectedCampaign.project?.status ?? view.selectedCampaign.status ?? "DRAFT"} />}
+              {/* The client link is a quiet chip beside the title rather than a toolbar button. */}
+              {view.selectedCampaign && <ProjectMoreActions view={view} campaignId={view.selectedCampaign.id} />}
             </div>
             <div className="pb-title-actions">
               {view.workspaceId && view.selectedCampaign
                 ? <ProjectActionsMenu projectId={view.selectedCampaign.id} name={view.selectedCampaign.name} status={view.selectedCampaign.project?.status ?? view.selectedCampaign.status ?? "DRAFT"} />
                 : <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions" disabled><Ellipsis size={15} /></button>}
-              {view.selectedCampaign && <ProjectMoreActions view={view} campaignId={view.selectedCampaign.id} />}
-              {view.workspaceId && view.selectedCampaign && (
-                <ChatHeaderButton workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} unread={messagesUnread} />
-              )}
-              <button className="pb-primary-button" type="button" disabled={!view.workspaceId || !view.selectedCampaign} onClick={() => setUploading(true)}><CloudUpload size={15} />Upload Asset</button>
+              <ShareMenu campaignId={view.selectedCampaign?.id ?? null} onShareFiles={() => { setTab("Files"); window.setTimeout(() => window.dispatchEvent(new Event(FILES_SHARE_EVENT)), 0); }} />
+              <button className="pb-primary-button" type="button" disabled={!view.workspaceId || !view.selectedCampaign} onClick={() => setUploading(true)}><CloudUpload size={15} />Upload</button>
             </div>
           </div>
 
@@ -245,11 +237,13 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
               {TABS.filter((value) => value !== "Pricing" || view.canSeeBilling).map((value) => (
                 <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? "selected" : ""} onClick={() => setTab(value)}>
                   {value === "Files" && <FolderOpen size={14} />}
+                  {value === "Chat" && <MessagesSquare size={14} />}
                   {value === "Brief & Specs" && <FileText size={14} />}
                   {value === "Activity Log" && <Activity size={14} />}
                   {value === "Client uploads" && <FolderInput size={14} />}
                   {value === "Pricing" && <Wallet size={14} />}
                   <span>{value}</span>
+                  {value === "Chat" && messagesUnread > 0 && <b className="pb-tab-unread" aria-label={`${messagesUnread} unread`}>{unreadLabel(messagesUnread)}</b>}
                 </button>
               ))}
             </div>
@@ -257,12 +251,11 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
           </div>
         </div>
 
-        {view.selectedCampaign && view.workspaceId && tab === "Files" && (
-          <div className="pb-chat-preview"><ChatPreview workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} /></div>
-        )}
 
         {tab === "Files" && view.selectedCampaign ? (
           <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null} />
+        ) : tab === "Chat" && view.selectedCampaign && view.workspaceId ? (
+          <div className="pb-chat-preview"><ChatPreview workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} /></div>
         ) : tab === "Tasks" && view.selectedCampaign ? (
           <TasksBoard compact view={tasksView} projectId={view.selectedCampaign.id} />
         ) : tab === "Brief & Specs" && view.selectedCampaign && view.workspaceId && view.selectedCampaign.project ? (
@@ -294,23 +287,6 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
   );
 }
 
-function ChatHeaderButton({ workspaceId, projectId, unread }: { workspaceId: string; projectId: string; unread: number }) {
-  const [href, setHref] = useState(`/chat`);
-  useEffect(() => {
-    void fetchUnread(workspaceId).then((result) => {
-      if (!result.ok) return;
-      const row = result.data.projects.find((project) => project.project_id === projectId);
-      if (row?.chat_channel_id) setHref(chatHref(row.chat_channel_id, "team", (row.unread?.team ?? 0) > 0 && !(row.unread?.client) ? "team" : "client"));
-    });
-  }, [workspaceId, projectId]);
-  return <Link className="pb-ghost-button" href={href}><MessagesSquare size={14} />Chat{unread > 0 ? ` (${unreadLabel(unread)})` : ""}</Link>;
-}
-
-/**
- * The tab body when there is nothing real to show: no campaign yet, or a tab whose feature
- * has not shipped. It says so plainly instead of "not built yet", and offers the one useful
- * next step without dressing it up as a primary action.
- */
 function ComingSoon({ tab, hasCampaign, briefFolder, onOpenFiles }: { tab: (typeof TABS)[number]; hasCampaign: boolean; briefFolder: string | null; onOpenFiles: () => void }) {
   if (!hasCampaign) {
     return (
@@ -725,5 +701,21 @@ function ProjectMoreActions({ view, campaignId }: { view: ProjectsView; campaign
       </DropdownMenu>
       {error && <span className="pb-inline-error" role="alert">{error}</span>}
     </>
+  );
+}
+
+/** The page's one share entry point: the client review link and sharing the project's files. */
+function ShareMenu({ campaignId, onShareFiles }: { campaignId: string | null; onShareFiles: () => void }) {
+  if (!campaignId) return <button className="pb-ghost-button" type="button" disabled title="Select a campaign first"><Share2 size={14} />Share</button>;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="pb-ghost-button" type="button" aria-label="Share"><Share2 size={14} />Share<ChevronDown size={13} /></button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem asChild><Link href={`/review?project=${campaignId}&share=1`}><Share2 size={14} />Client review link</Link></DropdownMenuItem>
+        <DropdownMenuItem onSelect={onShareFiles}><FolderOpen size={14} />Share files…</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

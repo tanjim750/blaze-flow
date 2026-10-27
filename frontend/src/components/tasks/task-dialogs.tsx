@@ -1,5 +1,6 @@
 "use client";
 /** Modal dialogs for the Tasks board: confirmations, New task and Customize stages. */
+import { Select } from "@/components/ui/select";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Plus, RotateCcw, Trash2 } from "@/components/icons";
 import type { Task, TaskStage, TaskWorkflowSettings } from "@/lib/api";
@@ -79,11 +80,11 @@ export function NewTaskDialog({ open, view, stages, defaultProjectId, defaultSta
         <header className="tb-dialog-head"><DialogTitle>New task</DialogTitle><DialogDescription>Add a piece of production work to the board.</DialogDescription><DialogClose /></header>
         <label className="tb-field is-wide"><span>Title</span><input name="title" required autoFocus maxLength={255} aria-invalid={Boolean(titleError)} aria-describedby={titleError ? "task-title-error" : undefined} onChange={() => { if (titleError) setTitleError(""); }} />{titleError && <small id="task-title-error" className="tb-field-error" role="alert">{titleError}</small>}</label>
         <label className="tb-field is-wide"><span>Description</span><textarea name="description" rows={3} /></label>
-        <label className="tb-field"><span>Client</span><select value={client} onChange={(event) => { setClient(event.target.value); setProject(""); }}><option value="">No client</option>{view.clients.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label className="tb-field"><span>Project</span><select value={project} onChange={(event) => { setProject(event.target.value); const match = view.projects.find((item) => item.id === event.target.value); if (match?.client_team_id) setClient(match.client_team_id); }}><option value="">No project</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label className="tb-field"><span>Stage</span><select name="stage" defaultValue={startable.some((stage) => stage.id === defaultStageId) ? defaultStageId! : startable[0]?.id}>{startable.map((stage) => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</select></label>
-        <label className="tb-field"><span>Assignee</span><select name="assignee" defaultValue=""><option value="">Unassigned</option>{view.members.filter((member) => member.user).map((member) => <option key={member.id} value={member.id}>{memberName(member)}</option>)}</select></label>
-        <label className="tb-field"><span>Priority</span><select name="priority" defaultValue="MEDIUM">{PRIORITIES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+        <label className="tb-field"><span>Client</span><Select aria-label="Client" value={client} onValueChange={(next) => { setClient(next); setProject(""); }} options={[{ value: "", label: "No client" }, ...view.clients.map((item) => ({ value: item.id, label: item.name }))]} /></label>
+        <label className="tb-field"><span>Project</span><Select aria-label="Project" value={project} onValueChange={(next) => { setProject(next); const match = view.projects.find((item) => item.id === next); if (match?.client_team_id) setClient(match.client_team_id); }} options={[{ value: "", label: "No project" }, ...projects.map((item) => ({ value: item.id, label: item.name }))]} /></label>
+        <label className="tb-field"><span>Stage</span><Select name="stage" aria-label="Stage" defaultValue={startable.some((stage) => stage.id === defaultStageId) ? defaultStageId! : startable[0]?.id} options={startable.map((stage) => ({ value: stage.id, label: stage.name }))} /></label>
+        <label className="tb-field"><span>Assignee</span><Select name="assignee" aria-label="Assignee" defaultValue="" options={[{ value: "", label: "Unassigned" }, ...view.members.filter((member) => member.user).map((member) => ({ value: member.id, label: memberName(member) }))]} /></label>
+        <label className="tb-field"><span>Priority</span><Select name="priority" aria-label="Priority" defaultValue="MEDIUM" options={PRIORITIES.map((item) => ({ value: item.id, label: item.label }))} /></label>
         <label className="tb-field"><span>Due</span><input name="due" type="datetime-local" /></label>
         {error && <p className="tb-error is-wide" role="alert">{error}</p>}
         <footer className="tb-dialog-foot is-wide">

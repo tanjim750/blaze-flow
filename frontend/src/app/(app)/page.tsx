@@ -3,7 +3,6 @@ import { CloudOff } from "@/components/icons";
 import { ClientDashboard } from "@/components/dashboards/client-dashboard";
 import { EditorDashboard } from "@/components/dashboards/editor-dashboard";
 import { OwnerDashboard } from "@/components/dashboards/owner-dashboard";
-import { partOfDay } from "@/components/dashboards/parts";
 import { DashboardRetry } from "@/components/dashboard-retry";
 import { listWorkspaces } from "@/lib/api";
 import { chooseLayout } from "@/lib/dashboard-role";
@@ -11,7 +10,7 @@ import { noticeFor } from "@/lib/role-nav";
 import { failureView, type DashboardFailure } from "@/lib/dashboard-view";
 import { loadClientDashboard, loadEditorDashboard, loadOwnerDashboard } from "@/lib/role-dashboard-view";
 import { loadSession } from "@/lib/session";
-import { displayName } from "@/lib/user";
+import { accountName, accountTitle } from "@/lib/user";
 import { selectWorkspace } from "@/lib/workspace";
 import "./home.css";
 
@@ -23,7 +22,7 @@ import "./home.css";
 export default async function Dashboard({ searchParams }: PageProps<"/">) {
   // Redirects to /sign-in when the API says we are unauthenticated.
   const session = await loadSession();
-  const greetingName = session.user ? displayName(session.user).split(" ")[0] : "there";
+  const greetingName = session.user ? accountName(session.user) : "";
   const now = new Date();
 
   const workspaces = await listWorkspaces();
@@ -51,8 +50,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
 function DashboardError({ view }: { view: DashboardFailure }) {
   return <div className="home-shell">
     <div className="dashboard-heading">
-      <p>{view.today}</p>
-      <h1>Good {partOfDay()}, {view.greetingName}</h1>
+      <h1>{accountTitle(view.greetingName)}</h1>
     </div>
     <section className="home-error" role="alert" aria-labelledby="dashboard-error-title">
       <CloudOff size={22} aria-hidden="true" />
