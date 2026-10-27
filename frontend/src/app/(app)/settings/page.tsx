@@ -79,7 +79,8 @@ export default async function SettingsPage() {
       <CurrencySettingsForm workspaceId={workspace.id} initial={invoicing.data} canEdit={invoicing.data.can_change_currency === true} />
       <CountrySettingsForm workspaceId={workspace.id} initial={invoicing.data} canEdit={invoicing.data.can_change_currency === true} />
       <PaymentGatewaysCard gateways={invoicing.data.payment_gateways ?? []} workspaceId={workspace.id} stripe={stripe?.ok ? stripe.data : null}
-        canManage={invoicing.data.can_manage_gateways === true} workspaceCurrency={invoicing.data.currency} />
+        canManage={invoicing.data.can_manage_gateways === true} workspaceCurrency={invoicing.data.currency}
+        country={invoicing.data.effective_country} localExpanded={invoicing.data.local_expanded} />
     </section>}
     {workspace && invoicing?.ok && <section className="settings-card" id="invoicing">
       <div className="settings-title"><FileText /><div><h2>Invoicing</h2><p>Invoice numbering and payment terms.</p></div></div>

@@ -3,16 +3,17 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Globe, Loader2, Save, Sparkles, Wallet } from "@/components/icons";
+import { ChevronDown, Globe, Loader2, Save, Sparkles, Wallet } from "@/components/icons";
 import { Select } from "@/components/ui/select";
 import { api } from "@/components/tasks/tasks-api";
 import { currencyInfo, currencyOptions } from "@/lib/currencies";
 import { formatMoney } from "@/lib/money";
 import type { InvoiceSettings, PaymentGatewayInfo } from "@/lib/studio-settings";
 import type { StripeStatus } from "@/lib/stripe-connect";
-import { countryName, countryOptions, isLocalGateway, recommendationLine } from "@/lib/payment-gateways";
+import { LOCAL_COUNTRIES, countryName, countryOptions, groupOf, isLocalGateway, isManualGateway, localSectionOpen, recommendationLine } from "@/lib/payment-gateways";
 import { StripeConnectCard } from "./stripe-connect-card";
 import { LocalGatewayCard } from "./local-gateway-card";
+import { ManualGatewayCard } from "./manual-gateway-card";
 
 const PREVIEW_AMOUNTS = ["1250.5", "99", "0"];
 
@@ -89,31 +90,51 @@ export function CountrySettingsForm({ workspaceId, initial, canEdit }: { workspa
 }
 
 /**
- * Payment gateways: Stripe Connect, the local merchant-key gateways (PayMongo, Safepay,
- * SSLCOMMERZ) and the "Coming soon" ones. The server sorts recommended gateways first.
+ * Payment gateways. Main ones first (Stripe, PayPal, Wise, Payoneer), then a collapsed
+ * "Local payment options" section (PayMongo, Safepay, SSLCOMMERZ, Razorpay soon) that opens by
+ * itself only when one of them is on or the business is in PH / PK / BD. Everything starts off.
  */
-export function PaymentGatewaysCard({ gateways, workspaceId, stripe, canManage = false, workspaceCurrency = "USD" }: {
+export function PaymentGatewaysCard({ gateways, workspaceId, stripe, canManage = false, workspaceCurrency = "USD", country, localExpanded }: {
   gateways: PaymentGatewayInfo[]; workspaceId?: string; stripe?: StripeStatus | null; canManage?: boolean; workspaceCurrency?: string;
+  country?: string; localExpanded?: boolean;
 }) {
   const stripeReco = gateways.find((gateway) => gateway.key === "stripe")?.recommended;
-  const rest = gateways.filter((gateway) => !(stripe && workspaceId && gateway.key === "stripe"));
-  const local = workspaceId ? rest.filter(isLocalGateway) : [];
-  const others = rest.filter((gateway) => !local.includes(gateway as never));
-  const stripeCard = stripe && workspaceId ? <div className={stripeReco ? "gateway-stripe is-recommended" : "gateway-stripe"}>
-    {stripeReco && <span className="gateway-reco is-floating"><Sparkles aria-hidden="true" />Recommended</span>}
-    <StripeConnectCard workspaceId={workspaceId} initial={stripe} /></div> : null;
+  const localHint = LOCAL_COUNTRIES.includes((country ?? "").toUpperCase());
+  const [localOpen, setLocalOpen] = useState(() => localExpanded ?? localSectionOpen(gateways, country));
+  const card = (gateway: PaymentGatewayInfo) => {
+    if (gateway.key === "stripe" && stripe && workspaceId) return <div key="stripe" className={stripeReco ? "gateway-stripe is-recommended" : "gateway-stripe"}>
+      {stripeReco && <span className="gateway-reco is-floating"><Sparkles aria-hidden="true" />Recommended</span>}
+      <StripeConnectCard workspaceId={workspaceId} initial={stripe} /></div>;
+    if (workspaceId && isLocalGateway(gateway)) return <LocalGatewayCard key={gateway.key} workspaceId={workspaceId} initial={gateway} canManage={canManage} workspaceCurrency={workspaceCurrency} country={country} />;
+    if (workspaceId && isManualGateway(gateway)) return <ManualGatewayCard key={gateway.key} workspaceId={workspaceId} initial={gateway} canManage={canManage} workspaceCurrency={workspaceCurrency} />;
+    return null;
+  };
+  const soon = (list: PaymentGatewayInfo[]) => list.length > 0 && <ul>
+    {list.map((gateway) => <li key={gateway.key}>
+      <span className="billing-gateway-logo" aria-hidden="true">{gateway.name.slice(0, 1)}</span>
+      <span><strong>{gateway.name}</strong><small>{gateway.description}</small></span>
+      <button type="button" className="settings-button is-ghost" disabled title="Coming soon">{gateway.status === "not_configured" ? "Not configured" : "Coming soon"}</button>
+    </li>)}
+  </ul>;
+  const split = (group: "main" | "local") => {
+    const list = gateways.filter((gateway) => groupOf(gateway) === group);
+    const cards = list.map((gateway) => [gateway, card(gateway)] as const);
+    return { cards: cards.filter(([, node]) => node).map(([, node]) => node), rest: cards.filter(([, node]) => !node).map(([gateway]) => gateway), size: list.length };
+  };
+  const main = split("main");
+  const local = split("local");
+  const localOn = gateways.filter((gateway) => groupOf(gateway) === "local" && "enabled" in gateway && gateway.enabled).length;
   return <div className="billing-gateways">
-    <div className="billing-gateways-head"><Wallet aria-hidden="true" /><div><h3>Payment gateways</h3><p>Let clients pay invoices online. Payments taken by a gateway mark invoices paid automatically. Turn on more than one and clients choose when they pay.</p></div></div>
-    {stripeReco !== false && stripeCard}
-    {local.filter((gateway) => gateway.recommended).map((gateway) => <LocalGatewayCard key={gateway.key} workspaceId={workspaceId!} initial={gateway} canManage={canManage} workspaceCurrency={workspaceCurrency} />)}
-    {stripeReco === false && stripeCard}
-    {local.filter((gateway) => !gateway.recommended).map((gateway) => <LocalGatewayCard key={gateway.key} workspaceId={workspaceId!} initial={gateway} canManage={canManage} workspaceCurrency={workspaceCurrency} />)}
-    {others.length > 0 && <ul>
-      {others.map((gateway) => <li key={gateway.key}>
-        <span className="billing-gateway-logo" aria-hidden="true">{gateway.name.slice(0, 1)}</span>
-        <span><strong>{gateway.name}</strong><small>{gateway.description}</small></span>
-        <button type="button" className="settings-button is-ghost" disabled title="Coming soon">{gateway.status === "not_configured" ? "Not configured" : "Coming soon"}</button>
-      </li>)}
-    </ul>}
+    <div className="billing-gateways-head"><Wallet aria-hidden="true" /><div><h3>Payment gateways</h3><p>Let clients pay invoices online. Stripe and PayPal mark invoices paid automatically; Wise and Payoneer show your details and you confirm the payment. Turn on more than one and clients choose when they pay.</p></div></div>
+    {main.cards}
+    {soon(main.rest)}
+    {local.size > 0 && <section className={`gateway-local${localOpen ? " is-open" : ""}`} aria-label="Local payment options">
+      <button type="button" className="gateway-local-toggle" aria-expanded={localOpen} aria-controls="gateway-local-list" onClick={() => setLocalOpen((value) => !value)}>
+        <ChevronDown aria-hidden="true" className="gateway-local-chevron" />
+        <span><strong>Local payment options</strong><small>PayMongo (Philippines), Safepay (Pakistan), SSLCOMMERZ (Bangladesh), Razorpay soon{localOn ? ` · ${localOn} on` : ""}</small></span>
+        {localHint && <span className="gateway-reco"><Sparkles aria-hidden="true" />Recommended for your country</span>}
+      </button>
+      {localOpen && <div id="gateway-local-list" className="gateway-local-list">{local.cards}{soon(local.rest)}</div>}
+    </section>}
   </div>;
 }

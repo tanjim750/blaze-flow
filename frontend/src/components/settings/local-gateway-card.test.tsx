@@ -8,9 +8,10 @@ vi.mock("@/components/tasks/tasks-api", () => ({ api: (...args: unknown[]) => ap
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }) }));
 
-import type { LocalGateway } from "@/lib/payment-gateways";
+import type { LocalGateway, ManualGateway } from "@/lib/payment-gateways";
 import { CountrySettingsForm, PaymentGatewaysCard } from "./billing-currency";
 import { LocalGatewayCard } from "./local-gateway-card";
+import { ManualGatewayCard } from "./manual-gateway-card";
 
 afterEach(() => { cleanup(); api.mockReset(); });
 
@@ -76,15 +77,57 @@ describe("LocalGatewayCard", () => {
   });
 });
 
-describe("PaymentGatewaysCard with local gateways", () => {
-  it("renders recommended local gateways and keeps PayPal coming soon", () => {
-    render(<PaymentGatewaysCard workspaceId="w" canManage workspaceCurrency="PHP" gateways={[
-      paymongo, { ...paymongo, key: "safepay", name: "Safepay", recommended: false, countries: ["PK"], currencies: ["PKR"], supports_workspace_currency: false },
-      { key: "paypal", name: "PayPal", description: "Wallet", connected: false, status: "coming_soon", features: [], supports_workspace_currency: true },
+const paypal: LocalGateway = { ...paymongo, key: "paypal", name: "PayPal", recommended: false, group: "main", countries: [], unsupported_countries: ["BD", "PK"],
+  currencies: ["USD", "EUR", "GBP", "AUD", "CAD", "JPY", "SGD"], methods: ["PayPal", "Cards"] };
+const wise: ManualGateway = {
+  key: "wise", name: "Wise", description: "Clients pay to your Wise account details.", status: "available", kind: "manual", group: "main", automatic: false,
+  link_label: "Wise payment link", link_help: "Your Wise Quick Pay link.", details_help: "From Wise → Account details.", signup_url: "https://wise.com/business",
+  docs_url: "https://wise.com/help", methods: ["Bank transfer", "Pay with Wise"], features: [], supports_workspace_currency: true, connected: false, enabled: false,
+  payment_link: "", accounts: [], note: "",
+};
+const local = { ...paymongo, group: "local" as const };
+
+describe("PaymentGatewaysCard layout", () => {
+  it("puts PayPal and Wise first and keeps local options collapsed outside PH/PK/BD", () => {
+    render(<PaymentGatewaysCard workspaceId="w" canManage workspaceCurrency="USD" country="US" gateways={[
+      paypal, wise, local, { key: "razorpay", name: "Razorpay", description: "India", connected: false, status: "coming_soon", features: [], supports_workspace_currency: false },
     ]} />);
+    expect(screen.getByRole("region", { name: "PayPal" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Wise" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "PayMongo" })).toBeNull();
+    expect(screen.queryByText("Recommended for your country")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Local payment options/ }));
     expect(screen.getByRole("region", { name: "PayMongo" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Safepay" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Coming soon" })).toBeDisabled();
+  });
+  it("opens the local section with a hint in the Philippines, or when one is on", () => {
+    render(<PaymentGatewaysCard workspaceId="w" canManage workspaceCurrency="PHP" country="PH" gateways={[paypal, local]} />);
+    expect(screen.getByRole("region", { name: "PayMongo" })).toBeInTheDocument();
+    expect(screen.getByText("Recommended for your country")).toBeInTheDocument();
+    cleanup();
+    render(<PaymentGatewaysCard workspaceId="w" canManage workspaceCurrency="USD" country="US" gateways={[paypal, { ...local, enabled: true, connection_status: "connected" as const }]} />);
+    expect(screen.getByRole("region", { name: "PayMongo" })).toBeInTheDocument();
+  });
+  it("warns when PayPal can't receive in the business country", () => {
+    render(<LocalGatewayCard workspaceId="w" initial={paypal} canManage workspaceCurrency="USD" country="BD" />);
+    expect(screen.getByText(/doesn.t let businesses in BD receive payments/)).toBeInTheDocument();
+    expect(screen.getByText(/7 currencies/)).toBeInTheDocument();
+  });
+});
+
+describe("ManualGatewayCard", () => {
+  it("saves a payment link and per-currency details", async () => {
+    api.mockResolvedValue({ ...wise, connected: true, payment_link: "https://wise.com/pay/me/north", accounts: [{ currency: "USD", details: "ACH 123" }] });
+    render(<ManualGatewayCard workspaceId="w" initial={wise} canManage workspaceCurrency="USD" />);
+    expect(screen.getByText(/Not automatic/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Add Wise details/ }));
+    expect(screen.getByRole("button", { name: /Save details/ })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Wise payment link/), { target: { value: "https://wise.com/pay/me/north" } });
+    fireEvent.change(screen.getByLabelText("USD account details"), { target: { value: "ACH 123" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save details/ }));
+    await waitFor(() => expect(api).toHaveBeenCalledWith("workspaces/w/billing/gateways/wise/", "PUT",
+      { payment_link: "https://wise.com/pay/me/north", note: "", accounts: [{ currency: "USD", details: "ACH 123" }] }));
+    expect(await screen.findByRole("switch")).toBeInTheDocument();
   });
 });
 

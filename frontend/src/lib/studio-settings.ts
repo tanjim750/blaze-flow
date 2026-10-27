@@ -2,12 +2,13 @@
 
 export type PaymentGatewayInfo = {
   key: string; name: string; description: string; status: "coming_soon" | "available" | "not_configured"; connected: boolean; connect_status?: string;
-  features: string[]; supports_workspace_currency: boolean; recommended?: boolean; kind?: "connect" | "merchant_keys";
-} | import("./payment-gateways").LocalGateway;
+  features: string[]; supports_workspace_currency: boolean; recommended?: boolean; kind?: "connect" | "merchant_keys"; group?: "main" | "local";
+} | import("./payment-gateways").LocalGateway | import("./payment-gateways").ManualGateway;
 export type InvoiceSettings = {
   currency: string; payment_terms_days: number; invoice_prefix: string;
   can_change_currency?: boolean; payment_gateways?: PaymentGatewayInfo[];
   country?: string; effective_country?: string; recommended_gateways?: string[]; can_manage_gateways?: boolean;
+  local_expanded?: boolean; local_recommended?: boolean;
 };
 export type RateRow = { membership_id: string; name: string; email: string | null; active: boolean; role?: string | null; default_rate: string | null };
 export type GlossaryKind = "brand" | "product" | "name" | "acronym" | "stylisation" | "other";

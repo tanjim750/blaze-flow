@@ -9,7 +9,7 @@ import {
 } from "@/lib/payment-gateways";
 
 type Busy = null | "save" | "test" | "enable" | "disconnect";
-const LOGO_TONE: Record<string, string> = { paymongo: "#24b47e", safepay: "#1f6feb", sslcommerz: "#e2136e" };
+const LOGO_TONE: Record<string, string> = { paypal: "#0070e0", paymongo: "#24b47e", safepay: "#1f6feb", sslcommerz: "#e2136e" };
 
 /**
  * One local gateway (PayMongo, Safepay or SSLCOMMERZ) in Settings → Billing. Owners/admins paste
@@ -17,7 +17,7 @@ const LOGO_TONE: Record<string, string> = { paymongo: "#24b47e", safepay: "#1f6f
  * Saved secrets never come back from the server: the form shows a masked hint and a blank field
  * keeps the saved value.
  */
-export function LocalGatewayCard({ workspaceId, initial, canManage, workspaceCurrency }: { workspaceId: string; initial: LocalGateway; canManage: boolean; workspaceCurrency: string }) {
+export function LocalGatewayCard({ workspaceId, initial, canManage, workspaceCurrency, country }: { workspaceId: string; initial: LocalGateway; canManage: boolean; workspaceCurrency: string; country?: string }) {
   const [gateway, setGateway] = useState(initial);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<GatewayMode>(initial.mode ?? "sandbox");
@@ -54,13 +54,14 @@ export function LocalGatewayCard({ workspaceId, initial, canManage, workspaceCur
       <span className="gateway-logo" aria-hidden="true" style={{ background: LOGO_TONE[gateway.key] ?? "#7c5cff" }}>{gateway.name.slice(0, 1)}</span>
       <div className="gateway-title">
         <strong>{gateway.name}{gateway.recommended && <span className="gateway-reco"><Sparkles aria-hidden="true" />Recommended</span>}</strong>
-        <small>{gateway.countries.join(", ")} · {gateway.currencies.join(", ")} only</small>
+        <small>{gateway.currencies.length > 6 ? `${gateway.countries.length ? gateway.countries.join(", ") : "Worldwide"} · ${gateway.currencies.length} currencies incl. ${gateway.currencies.slice(0, 4).join(", ")}` : `${gateway.countries.join(", ")} · ${gateway.currencies.join(", ")} only`}</small>
       </div>
       <span className={`stripe-status tone-${badge.tone}`}>{badge.label}</span>
     </div>
     <p className="stripe-note">{gateway.description}</p>
     {gateway.methods.length > 0 && <ul className="gateway-methods" aria-label={`${gateway.name} payment methods`}>{gateway.methods.map((method) => <li key={method}>{method}</li>)}</ul>}
     {note && <p className="stripe-note is-warn"><TriangleAlert aria-hidden="true" />{note}</p>}
+    {(gateway.country_unsupported || (country && gateway.unsupported_countries?.includes(country.toUpperCase()))) && <p className="stripe-note is-warn" role="note"><TriangleAlert aria-hidden="true" />{gateway.name} doesn&rsquo;t let businesses in {country} receive payments. Use Wise, Payoneer or a local option instead.</p>}
     {gateway.connection_status === "failed" && gateway.status_message && <p className="stripe-note is-danger" role="status">{gateway.status_message}</p>}
     {gateway.connection_status === "unreadable" && <p className="stripe-note is-danger" role="status">The saved keys can&rsquo;t be decrypted (the server&rsquo;s encryption key changed). Enter them again.</p>}
     {!canManage && <p className="stripe-note is-muted">Only workspace owners and admins can add or change {gateway.name} keys.</p>}

@@ -31,6 +31,7 @@ export type InvoiceDetail = InvoiceSummary & {
   online_payment?: import("./stripe-connect").OnlinePayment;
   /** Every gateway the studio turned on, for the Pay now chooser. */
   payment_options?: import("./payment-gateways").PaymentOption[];
+  payment_claims?: import("./payment-gateways").PaymentClaim[];
   /** Managers only: the shareable no-login pay page, once online payment is available. */
   pay_link?: string | null;
 };

@@ -24,6 +24,8 @@ import { PaymentDialog } from "./payment-dialog";
 import { sentMessage } from "@/lib/invoice-send";
 import { goTo, invoiceCheckout, onlinePaymentNote } from "@/lib/stripe-connect";
 import { PayChooser, PROVIDER_NAME, useGatewayChoice } from "./pay-chooser";
+import { ManualPayPanel, PendingClaims } from "./manual-pay";
+import { claimInvoicePayment, resolveClaim } from "@/lib/payment-gateways";
 
 type DraftLine = { key: string; id?: string; kind: InvoiceLine["kind"]; description: string; amount: string };
 type Draft = { lines: DraftLine[]; discount: string; taxRate: string; dueDate: string; notes: string };
@@ -117,8 +119,10 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now, st
   }
   const payOnline = invoice.online_payment?.available === true;
   const showChooser = !canManage && payOnline && gateways.showChooser;
+  const chosen = gateways.list.find((option) => option.provider === gateways.choice);
+  const manual = !canManage && payOnline && chosen?.kind === "manual" ? chosen : null;
   const via = PROVIDER_NAME[returnProvider ?? ""] ?? "the payment provider";
-  if (!canManage && payOnline) {
+  if (!canManage && payOnline && !manual) {
     primary = <button type="button" className="money-button is-primary invoice-pay-now" disabled={busy} onClick={() => void (async () => {
       setBusy(true);
       try { goTo.url((await invoiceCheckout(workspaceId, invoice.id, gateways.choice ?? undefined)).url); }
@@ -157,6 +161,11 @@ export function InvoiceView({ workspaceId, invoice, canManage, backHref, now, st
     {stripeReturn === "success" && <p className="invoice-stripe-note tone-success" role="status"><CircleCheck aria-hidden="true" />{invoice.online_payment?.reason === "nothing_due" || invoice.status === "paid" ? "Payment received. Thank you!" : `Thanks! Your payment is being confirmed; this page updates once ${returnProvider ? via : "Stripe"} tells us it\u2019s done.`}</p>}
     {stripeReturn === "fail" && <p className="invoice-stripe-note tone-warning" role="status"><Info aria-hidden="true" />{via} couldn&rsquo;t complete the payment. Nothing was charged{payOnline ? "; try Pay now again or choose another way to pay." : "."}</p>}
     {showChooser && <div className="invoice-pay-chooser"><PayChooser options={gateways.list} value={gateways.choice} onChange={gateways.setChoice} disabled={busy} name={`pay-${invoice.id}`} /></div>}
+    {manual && <div className="invoice-pay-chooser"><ManualPayPanel key={manual.provider} option={manual} studio={invoice.from?.name || "the studio"} onClaim={(data) => claimInvoicePayment(workspaceId, invoice.id, data)} /></div>}
+    {canManage && invoice.payment_claims && invoice.payment_claims.length > 0 && <PendingClaims claims={invoice.payment_claims} onResolve={async (claim, action) => {
+      try { await resolveClaim(workspaceId, claim.id, action); toast(action === "confirm" ? "Payment confirmed and recorded" : "Claim rejected. The invoice stays unpaid."); router.refresh(); }
+      catch (reason) { toast.error(reason instanceof Error ? reason.message : "That didn't save."); }
+    }} />}
     {stripeReturn === "cancel" && <p className="invoice-stripe-note tone-warning" role="status"><Info aria-hidden="true" />Payment cancelled. Nothing was charged{payOnline ? "; you can try Pay now again any time." : "."}</p>}
     {payNote && invoice.status !== "draft" && <p className="invoice-stripe-note" role="note"><Info aria-hidden="true" />{payNote}</p>}
 

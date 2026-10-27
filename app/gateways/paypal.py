@@ -57,7 +57,8 @@ class PayPal(GatewayProvider):
     credential_fields = (
         CredentialField('client_id', 'Client ID', secret=False, placeholder='AbC…'),
         CredentialField('client_secret', 'Secret', placeholder='EFg…'),
-        CredentialField('webhook_id', 'Webhook ID', secret=False, placeholder='8PT597110X687430LKGECATA'),
+        CredentialField('webhook_id', 'Webhook ID', secret=False, required=False, placeholder='8PT597110X687430LKGECATA',
+                        help='Save the Client ID and Secret first to get your webhook URL, then add the webhook in PayPal and paste its ID.'),
     )
     # Not supported for receiving by PayPal Business in these countries (paypal.com/worldwide).
     unsupported_countries = ('BD', 'PK')
@@ -90,6 +91,8 @@ class PayPal(GatewayProvider):
 
     def test_connection(self, connection, credentials):
         token = self._token(connection, credentials)
+        if not credentials.get('webhook_id'):
+            raise GatewayError('Client ID and Secret work. Now add the webhook in PayPal (URL below) and paste its Webhook ID.', status=400)
         hook, _ = self._call(connection, credentials, 'GET', f'/v1/notifications/webhooks/{credentials["webhook_id"]}', token=token)
         events = {e.get('name') for e in hook.get('event_types') or [] if isinstance(e, dict)}
         missing = [e for e in (APPROVED, CAPTURED) if e not in events and '*' not in events]

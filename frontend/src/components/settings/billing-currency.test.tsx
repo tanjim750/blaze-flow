@@ -42,12 +42,13 @@ describe("PaymentGatewaysCard", () => {
     expect(screen.getAllByRole("button", { name: /Coming soon/ })).toHaveLength(1);
   });
   it("without Stripe status, lists every gateway as disabled", () => {
-    render(<PaymentGatewaysCard gateways={[
+    render(<PaymentGatewaysCard country="BD" gateways={[
       { key: "stripe", name: "Stripe", description: "Cards", connected: false, status: "coming_soon", features: [], supports_workspace_currency: true },
       { key: "sslcommerz", name: "SSLCommerz", description: "Bangladesh", connected: false, status: "coming_soon", features: [], supports_workspace_currency: false },
     ]} />);
     const buttons = screen.getAllByRole("button", { name: /Coming soon/ });
     expect(buttons).toHaveLength(2);
     buttons.forEach((button) => expect(button).toBeDisabled());
+    expect(screen.getByText("Recommended for your country")).toBeInTheDocument();
   });
 });

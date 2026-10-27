@@ -7,6 +7,8 @@ import { formatMoney } from "@/lib/money";
 import { formatDate, type InvoiceDetail } from "@/lib/money-view";
 import { goTo, onlinePaymentNote, publicCheckout } from "@/lib/stripe-connect";
 import { PayChooser, PROVIDER_NAME, useGatewayChoice } from "@/components/money/pay-chooser";
+import { ManualPayPanel } from "@/components/money/manual-pay";
+import { claimPublicPayment } from "@/lib/payment-gateways";
 
 export type PublicInvoice = InvoiceDetail & { studio_name: string };
 
@@ -15,7 +17,8 @@ export function PublicPayView({ token, invoice, back, provider = null }: { token
   const gateways = useGatewayChoice(invoice.payment_options);
   const via = provider ? PROVIDER_NAME[provider] ?? "the payment provider" : "Stripe";
   const chosen = gateways.list.find((option) => option.provider === gateways.choice);
-  const hosted = new Set(gateways.list.filter((option) => option.available).map((option) => option.name));
+  const manual = chosen?.kind === "manual" ? chosen : null;
+  const hosted = new Set(gateways.list.filter((option) => option.available && option.kind !== "manual").map((option) => option.name));
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,13 +61,14 @@ export function PublicPayView({ token, invoice, back, provider = null }: { token
         </tfoot>
       </table>
       {!paid && invoice.online_payment?.available && gateways.showChooser && <PayChooser options={gateways.list} value={gateways.choice} onChange={gateways.setChoice} disabled={busy || waiting} />}
-      {!paid && invoice.online_payment?.available && <button type="button" className="pay-button" disabled={busy || waiting} onClick={() => void pay()}>
+      {!paid && manual && <ManualPayPanel key={manual.provider} option={manual} studio={invoice.studio_name} onClaim={(data) => claimPublicPayment(token, data)} />}
+      {!paid && invoice.online_payment?.available && !manual && <button type="button" className="pay-button" disabled={busy || waiting} onClick={() => void pay()}>
         {busy ? <Loader2 aria-hidden="true" className="pay-spin" /> : <LockKeyhole aria-hidden="true" />}Pay {money(invoice.outstanding)} now{gateways.showChooser && chosen ? ` with ${chosen.name}` : ""}</button>}
       {error && <p className="pay-error" role="alert">{error}</p>}
       {!paid && note && <p className="pay-muted">{note}</p>}
       {!paid && !invoice.online_payment?.available && !note && <p className="pay-muted">Online payment isn&rsquo;t available for this invoice right now. Please contact {invoice.studio_name}.</p>}
-      <p className="pay-muted pay-secure"><LockKeyhole aria-hidden="true" />Payment details are entered on {hosted.size > 1 ? "the provider" : [...hosted][0] ?? "Stripe"}&rsquo;s secure page; {invoice.studio_name} and Blaze Flow never see them.</p>
+      {hosted.size > 0 && !manual && <p className="pay-muted pay-secure"><LockKeyhole aria-hidden="true" />Payment details are entered on {hosted.size > 1 ? "the provider" : [...hosted][0] ?? "Stripe"}&rsquo;s secure page; {invoice.studio_name} and Blaze Flow never see them.</p>}
     </section>
-    <footer className="pay-foot">Powered by <strong>Blaze Flow</strong> · Payments by {hosted.size ? [...hosted].join(", ") : "Stripe"}</footer>
+    <footer className="pay-foot">Powered by <strong>Blaze Flow</strong> · Payments by {gateways.list.some((o) => o.available) ? gateways.list.filter((o) => o.available).map((o) => o.name).join(", ") : "Stripe"}</footer>
   </main>;
 }
