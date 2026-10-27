@@ -50,3 +50,17 @@
   .payout-actions > * { flex: 1 1 100%; justify-content: center; }
   .payout-dialog-foot > * { flex: 1 1 auto; justify-content: center; }
 }
+/* UI sweep: the payouts table's actions stack in one narrow column so "Pay out" is never
+   cut off at the panel edge, and optional-field hints stay on the label line. */
+.payout-row-actions { display: inline-flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.payout-row-actions .money-button { justify-content: center; }
+.money-row-action .payout-row-actions .money-button + .money-button { margin-left: 0; }
+@media (max-width: 640px) { .payout-row-actions { flex-direction: row; flex-wrap: wrap; } }
+.payout-method .settings-grid { align-items: start; }
+.payout-field-label .settings-hint { display: inline; }
+.money-table.is-payouts th, .money-table.is-payouts td { padding-inline: 12px; }
+@media (min-width: 641px) {
+  .payout-details-button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .payout-row-actions { flex-direction: row; align-items: center; }
+  .money-row-action .payout-row-actions .money-button.payout-details-button { padding-inline: 8px; }
+}

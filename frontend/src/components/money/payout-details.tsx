@@ -95,7 +95,7 @@ export function PayoutDetailsForm({ workspaceId, workspaceName, initial }: { wor
           </div>
           <div className={def.fields.length > 1 ? "settings-grid" : "payout-single"}>
             {def.fields.map((field) => <label key={field.name} className={field.kind === "textarea" ? "is-wide" : undefined}>
-              {field.label}{!field.required && <small className="settings-hint"> (optional)</small>}
+              <span className="payout-field-label">{field.label}{!field.required && <small className="settings-hint"> (optional)</small>}</span>
               {field.kind === "textarea"
                 ? <textarea value={item.details[field.name] ?? ""} rows={3} maxLength={1000} onChange={(event) => update(index, { details: { ...item.details, [field.name]: event.target.value } })} />
                 : <input value={item.details[field.name] ?? ""} placeholder={field.placeholder} autoComplete="off" spellCheck={false}

@@ -97,10 +97,10 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
                 {access.manage && row.preferred_payout_method !== undefined && (row.preferred_payout_method
                   ? <button type="button" className="payout-chip" onClick={() => setDetails(row)} title="Preferred payout method" aria-label={`${row.name} prefers ${row.preferred_payout_method.label}. Open payout details`}><Wallet aria-hidden="true" />{row.preferred_payout_method.label}</button>
                   : <button type="button" className="payout-chip is-missing" onClick={() => setDetails(row)} aria-label={`${row.name} has no payout details yet`}>No payout details yet</button>)}</span></td>
-              {access.manage && <td className="money-row-action">
+              {access.manage && <td className="money-row-action"><div className="payout-row-actions">
                 {toMinor(row.owed) > 0 && <button type="button" className="money-button is-sm" onClick={() => setPayout(row)}><HandCoins aria-hidden="true" />Pay out</button>}
-                <button type="button" className="money-button is-sm is-ghost" onClick={() => setDetails(row)}><Wallet aria-hidden="true" />Payout details</button>
-              </td>}
+                <button type="button" className="money-button is-sm is-ghost payout-details-button" onClick={() => setDetails(row)} title="Payout details"><Wallet aria-hidden="true" /><span>Payout details</span></button>
+              </div></td>}
             </tr>)}</tbody>
           </table>}
       </section>}
