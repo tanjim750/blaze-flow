@@ -250,10 +250,11 @@ The webhook verifies the signature, stores each event id once (retries are no-op
 invoices paid or part-paid; `charge.refunded` records refunds. Connect, disconnect and every
 payment are in the audit log.
 
-### Local gateways (PayMongo, Safepay, SSLCOMMERZ)
+### PayPal, Wise, Payoneer and local gateways (PayMongo, Safepay, SSLCOMMERZ)
 
-Agencies in the Philippines, Pakistan and Bangladesh connect PayMongo (PHP), Safepay (PKR) or
-SSLCOMMERZ (BDT) with their own merchant keys in Settings → Billing (owners/admins only).
+Agencies connect PayPal (Orders v2; Client ID, Secret and Webhook ID from developer.paypal.com),
+or in the Philippines, Pakistan and Bangladesh PayMongo (PHP), Safepay (PKR) or
+SSLCOMMERZ (BDT), with their own merchant keys in Settings → Billing (owners/admins only).
 Secrets are encrypted at rest and only ever shown masked.
 
 1. Set `GATEWAY_ENCRYPTION_KEY` (a Fernet key; see `.env.example`) and back it up. Without it
@@ -264,7 +265,12 @@ Secrets are encrypted at rest and only ever shown masked.
 3. Optional: `GATEWAY_REQUEST_TIMEOUT_SECONDS` (default 20).
 
 Gateway confirmations are re-verified against the provider API before an invoice is marked
-paid, each event is stored once (retries are no-ops), and every payment is in the audit log.
+paid (PayPal webhooks via `verify-webhook-signature`), each event is stored once (retries are no-ops), and every payment is in the audit log.
+
+Wise and Payoneer are manual: agencies save a payment link and per-currency account details
+(stored unencrypted, because clients see them). Clients press "I've paid", which creates a
+pending claim. A Payment is recorded only when an owner or admin confirms it (idempotent via
+`claim:<id>`). No server setup is needed.
 
 ## 5. Scheduled maintenance
 
