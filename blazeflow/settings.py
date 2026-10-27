@@ -267,6 +267,19 @@ WHATSAPP_GRAPH_API_VERSION = os.environ.get('WHATSAPP_GRAPH_API_VERSION', 'v23.0
 WHATSAPP_TEMPLATE_APPROVAL = os.environ.get('WHATSAPP_TEMPLATE_APPROVAL', 'deliverable_ready_for_approval')
 WHATSAPP_TEMPLATE_LANGUAGE = os.environ.get('WHATSAPP_TEMPLATE_LANGUAGE', 'en_GB')
 WHATSAPP_REQUEST_TIMEOUT_SECONDS = float(os.environ.get('WHATSAPP_REQUEST_TIMEOUT_SECONDS', '10'))
+
+# Stripe Connect (client invoice payments into each workspace's own Stripe account).
+# All optional: with no secret key the feature reports "Stripe not configured on this server"
+# and everything else works. Never commit real values; set them in the server's env file.
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '').strip()
+STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY', '').strip()
+# Signing secret(s) of the Connect webhook endpoint (whsec_...). Comma-separate several when
+# more than one endpoint (e.g. a snapshot and a thin-event destination) points here.
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip()
+# Optional Blaze Flow cut of each invoice payment, as a percent (0 = none). Sent to Stripe as
+# application_fee_amount on the direct charge.
+PLATFORM_FEE_PERCENT = os.environ.get('PLATFORM_FEE_PERCENT', '0').strip() or '0'
+STRIPE_REQUEST_TIMEOUT_SECONDS = float(os.environ.get('STRIPE_REQUEST_TIMEOUT_SECONDS', '20'))
 # Platform admin revenue estimate until Stripe is connected: what one PRO seat is assumed to
 # pay per month, in minor units of PLATFORM_CURRENCY. Purely for the /platform dashboard.
 PLATFORM_PRO_PRICE_MINOR = int(os.environ.get('PLATFORM_PRO_PRICE_MINOR', '2900'))

@@ -222,6 +222,34 @@ Django admin (`/admin/`) is not routed by the frontend, so it is not public. To 
 temporarily publish `web` on localhost only (add `ports: ["127.0.0.1:8000:8000"]` in an
 override file) and open it through an SSH tunnel: `ssh -L 8000:127.0.0.1:8000 deploy@server`.
 
+## 4a. Stripe payments (optional)
+
+Agencies connect their **own** Stripe account (Stripe Connect, Express dashboard) under
+Settings → Billing & currency, and clients pay invoices with **Pay now** (Stripe Checkout).
+Payments are direct charges: the money lands in the agency's Stripe balance, Stripe pays it
+out to the agency's bank, and Stripe (not the platform) carries fees and disputes. Without
+keys the feature is off and the app says "Stripe not configured on this server".
+
+1. In the Stripe dashboard of the platform account, turn on **Connect** and finish the
+   platform profile (Settings → Connect). Copy the secret key (`sk_test_...` first).
+2. Add a webhook endpoint at `https://<APP_BASE_URL host>/api/stripe/webhook/`. Use the real,
+   stable domain behind Caddy, never a `trycloudflare.com` URL (it changes on restart and
+   Stripe would keep posting to a dead address). Listen to **Events on connected accounts**
+   (and optionally your account) and select at least: `checkout.session.completed`,
+   `checkout.session.async_payment_succeeded`, `payment_intent.succeeded`, `charge.refunded`,
+   `account.updated`. Copy the signing secret (`whsec_...`).
+3. In `.env` set `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` (comma-
+   separate several secrets when you have two endpoints or are rotating), optionally
+   `PLATFORM_FEE_PERCENT`, and make sure `APP_BASE_URL` is the public https URL: Stripe sends
+   people back there after onboarding and Checkout.
+4. `docker compose -f docker-compose.prod.yml up -d` to restart with the new environment, then
+   connect a test agency and pay a test invoice with card `4242 4242 4242 4242`.
+5. Going live: repeat 1–3 with live keys and a live-mode webhook endpoint.
+
+The webhook verifies the signature, stores each event id once (retries are no-ops) and marks
+invoices paid or part-paid; `charge.refunded` records refunds. Connect, disconnect and every
+payment are in the audit log.
+
 ## 5. Scheduled maintenance
 
 The `scheduler` service runs `deploy/crontab` with supercronic (UTC):

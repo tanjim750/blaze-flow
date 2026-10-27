@@ -36,3 +36,9 @@ AI_QA_ENGINE = 'fake'
 
 # Expected 4xx responses in tests are not worth a log line each.
 LOGGING['loggers']['django.request']['level'] = 'ERROR'  # noqa: F405
+
+# Stripe is mocked in tests; these are fake placeholders, never real keys.
+STRIPE_SECRET_KEY = ''
+STRIPE_PUBLISHABLE_KEY = ''
+STRIPE_WEBHOOK_SECRET = ''
+PLATFORM_FEE_PERCENT = '0'

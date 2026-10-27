@@ -1,7 +1,7 @@
 /** Studio settings: invoicing defaults, editors' default rates and the AI QA glossary. */
 
 export type PaymentGatewayInfo = {
-  key: string; name: string; description: string; status: "coming_soon" | "available"; connected: boolean;
+  key: string; name: string; description: string; status: "coming_soon" | "available" | "not_configured"; connected: boolean; connect_status?: string;
   features: string[]; supports_workspace_currency: boolean;
 };
 export type InvoiceSettings = {

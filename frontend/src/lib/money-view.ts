@@ -27,6 +27,10 @@ export type InvoiceDetail = InvoiceSummary & {
   /** Only on the send response: who the invoice email went to. */
   emailed_to?: string[];
   subtotal?: string; discount_amount?: string; tax_rate?: string; tax?: string; can_revert?: boolean; default_due_date?: string | null;
+  /** Whether "Pay now" (Stripe Checkout) is offered, and why not when it isn't. */
+  online_payment?: import("./stripe-connect").OnlinePayment;
+  /** Managers only: the shareable no-login pay page, once online payment is available. */
+  pay_link?: string | null;
 };
 export type Receivable = { client: { id: string; name: string }; billed: string; paid: string; outstanding: string; overdue: string; unbilled: string; invoice_count: number };
 export type PayoutRow = { membership_id: string; name: string; email: string | null; active: boolean; default_rate: string | null; pending: string; earned: string; paid: string; owed: string; payouts: PaymentEntry[] };

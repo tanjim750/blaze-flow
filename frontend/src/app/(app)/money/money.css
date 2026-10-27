@@ -230,6 +230,12 @@
   .money-note-actions a { flex: 1 1 100%; justify-content: center; }
 }
 .money-other-currencies { margin: 0 0 16px; padding: 10px 12px; border: 1px solid #262B37; border-radius: 10px; background: #151922; color: var(--shell-outline, #9aa3b5); font-size: 12px; line-height: 1.5; }
+/* Stripe: return banners and the "why no Pay now" note on an invoice. */
+.invoice-stripe-note { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; border: 1px solid #262B37; background: #1A1E28; color: var(--shell-variant, #c9c4d8); font-size: 13px; line-height: 1.45; }
+.invoice-stripe-note svg { width: 16px; height: 16px; flex: none; margin-top: 1px; color: var(--tone-color, var(--brand, #7c5cff)); }
+.invoice-stripe-note.tone-success { border-color: color-mix(in srgb, #5bd295 40%, #262B37); }
+.invoice-stripe-note.tone-warning { border-color: color-mix(in srgb, #ffc95c 40%, #262B37); }
+@media print { .invoice-stripe-note { display: none; } }
 
 /* UI sweep (payments): the record-payment/payout dialog fits a 390px phone, the invoice
    bill-to/meta block stacks instead of wrapping dates, and New invoice sits left on tablets. */

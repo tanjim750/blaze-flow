@@ -1,6 +1,6 @@
 import { guardRoute } from "@/lib/route-guard";
 import { Banknote, Bell, BookA, Building2, CircleUserRound, Coins, FileText, MessageCircle, Palette, ShieldCheck } from "@/components/icons";
-import { getGlossary, getInvoiceSettings, getRates } from "@/lib/studio-settings-server";
+import { getGlossary, getInvoiceSettings, getRates, getStripeStatus } from "@/lib/studio-settings-server";
 import { GlossaryForm, InvoiceSettingsForm, RatesForm } from "@/components/settings/studio-settings";
 import { CurrencySettingsForm, PaymentGatewaysCard } from "@/components/settings/billing-currency";
 import { getBranding, getNotificationPreferences, getNotificationSettings, getWhatsAppSettings, getWorkspaceProfile } from "@/lib/api";
@@ -36,13 +36,14 @@ export default async function SettingsPage() {
   const profile = loadedProfile?.ok ? loadedProfile.data : null;
   // Each section shows only when the viewer's role can load it (billing view, rates view, AI QA on).
   const billing = workspace?.billing;
-  const [invoicing, rates, glossary] = workspace && studio
+  const [invoicing, rates, glossary, stripe] = workspace && studio
     ? await Promise.all([
       billing?.view ? getInvoiceSettings(workspace.id) : null,
       billing?.rates_view ? getRates(workspace.id) : null,
       getGlossary(workspace.id),
+      billing?.view ? getStripeStatus(workspace.id) : null,
     ])
-    : [null, null, null];
+    : [null, null, null, null];
   const user = session.user;
 
   return <><div className="settings-page">
@@ -76,7 +77,7 @@ export default async function SettingsPage() {
     {workspace && invoicing?.ok && <section className="settings-card" id="billing">
       <div className="settings-title"><Banknote /><div><h2>Billing &amp; currency</h2><p>The currency this workspace prices, pays and invoices in, and how clients will pay online.</p></div></div>
       <CurrencySettingsForm workspaceId={workspace.id} initial={invoicing.data} canEdit={invoicing.data.can_change_currency === true} />
-      <PaymentGatewaysCard gateways={invoicing.data.payment_gateways ?? []} />
+      <PaymentGatewaysCard gateways={invoicing.data.payment_gateways ?? []} workspaceId={workspace.id} stripe={stripe?.ok ? stripe.data : null} />
     </section>}
     {workspace && invoicing?.ok && <section className="settings-card" id="invoicing">
       <div className="settings-title"><FileText /><div><h2>Invoicing</h2><p>Invoice numbering and payment terms.</p></div></div>
