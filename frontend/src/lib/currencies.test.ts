@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { currencyChip, currencyCodes, currencyInfo, currencyOptions } from "./currencies";
 import { formatMoney, parseMoneyInput } from "./money";
+import { invoicedSummary } from "@/components/money/project-pricing";
 
 describe("workspace currency formatting", () => {
   it("uses each currency's own symbol and minor units", () => {
@@ -27,5 +28,13 @@ describe("workspace currency formatting", () => {
     expect(parseMoneyInput("BDT 99.5")).toEqual({ amount: "99.50" });
     expect(parseMoneyInput("₱ 10")).toEqual({ amount: "10.00" });
     expect(parseMoneyInput("ten")).toHaveProperty("error");
+  });
+});
+
+describe("project pricing after a currency change", () => {
+  it("lists older-currency invoices separately instead of relabelling them", () => {
+    const money = (value: string) => formatMoney(value, "BDT");
+    expect(invoicedSummary({ invoiced: "0.00", uninvoiced: "0.00", invoices: [], invoiced_other: [{ currency: "GBP", amount: "2650.00" }] }, money))
+      .toBe("£2,650.00 invoiced earlier in GBP.");
   });
 });

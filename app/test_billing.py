@@ -578,6 +578,11 @@ class WorkspaceCurrencyTests(BillingBase, TestCase):
         self.assertEqual(summary['totals']['billed'], '0.00')
         self.assertEqual(summary['other_currencies'], [
             {'currency': 'GBP', 'billed': '1400.00', 'paid': '0.00', 'outstanding': '1400.00', 'invoice_count': 1}])
+        # Project pricing: the GBP invoice is not shown as USD "invoiced"; only the new USD task is.
+        pricing = self.client.get(self.url('api-billing-project', self.project_id)).json()
+        self.assertEqual(pricing['invoiced'], '75.00')
+        self.assertEqual(pricing['invoiced_other'], [{'currency': 'GBP', 'amount': '1400.00'}])
+        self.assertEqual(pricing['uninvoiced'], '0.00')
 
     def test_unsent_drafts_follow_a_currency_change(self):
         self.priced_project()

@@ -47,6 +47,8 @@ export type EditorPayLine = { membership_id: string; name: string; is_me: boolea
 export type TaskMoney = { task_id: string; currency: string; can_manage: boolean; client_price?: string | null; editor_pay: EditorPayLine[] };
 export type ProjectPricing = {
   project_id: string; currency: string; fee: string | null; tasks_total: string; total: string; invoiced: string; uninvoiced: string;
+  /** Invoices issued in an earlier workspace currency, per currency (never converted). */
+  invoiced_other?: { currency: string; amount: string }[];
   tasks: { id: string; title: string; client_price: string | null }[]; invoices: InvoiceSummary[]; can_manage: boolean;
   draft_invoice?: { id: string; number: string; total: string } | null;
   /** What a new invoice would hold right now; `state` names the case when it would be empty. */

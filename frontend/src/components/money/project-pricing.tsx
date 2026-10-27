@@ -100,13 +100,14 @@ export function ProjectPricing({ workspaceId, projectId }: { workspaceId: string
  * A draft isn't invoiced until it is sent: "£1,500 invoiced" for an unsent draft
  * contradicted Money ("£0 billed · £1,500 not billed yet").
  */
-export function invoicedSummary(data: { invoiced: string; uninvoiced: string; invoices: { status: string; total: string }[] }, money: (value: string) => string): string {
+export function invoicedSummary(data: { invoiced: string; uninvoiced: string; invoices: { status: string; total: string }[]; invoiced_other?: { currency: string; amount: string }[] }, money: (value: string) => string): string {
   const drafted = sumMoney(data.invoices.filter((item) => item.status === "draft").map((item) => item.total));
   const sent = fromMinor(Math.max(0, toMinor(data.invoiced) - toMinor(drafted)));
   const parts = [
     toMinor(sent) > 0 ? `${money(sent)} invoiced` : null,
     toMinor(drafted) > 0 ? `${money(drafted)} in draft (not sent)` : null,
     toMinor(data.uninvoiced) > 0 ? `${money(data.uninvoiced)} still to invoice` : null,
+    ...(data.invoiced_other ?? []).map((other) => `${formatMoney(other.amount, other.currency)} invoiced earlier in ${other.currency}`),
   ].filter(Boolean);
   return parts.length ? `${parts.join(", ")}.` : "Nothing invoiced yet.";
 }

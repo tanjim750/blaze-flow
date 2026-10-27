@@ -202,13 +202,26 @@ def project_pricing(project) -> dict:
     tasks = list(_live_tasks(project).order_by('sort_order', 'created_at'))
     fee = project.client_fee or ZERO
     task_total = sum((task.client_price or ZERO for task in tasks), ZERO)
-    invoiced = _sum(InvoiceLine.objects.filter(invoice__project=project).exclude(kind=InvoiceLineKind.MANUAL))
+    currency = project.client_fee_currency or workspace_currency(project.workspace)
+    lines = InvoiceLine.objects.filter(invoice__project=project).exclude(kind=InvoiceLineKind.MANUAL)
+    # Never add amounts across currencies: invoices issued before a currency change are
+    # reported per currency in ``invoiced_other`` and are not counted in ``invoiced``.
+    invoiced = _sum(lines.filter(invoice__currency=currency))
+    invoiced_other = [
+        {'currency': code, 'amount': money_str(_sum(lines.filter(invoice__currency=code)))}
+        for code in sorted(set(lines.exclude(invoice__currency=currency).values_list('invoice__currency', flat=True)))
+    ]
     draft = Invoice.objects.filter(project=project, status=InvoiceStatus.DRAFT).order_by('created_at').first()
     total = (fee + task_total).quantize(CENT)
+    if invoiced_other:
+        # Items already on an older-currency invoice are billed; only the rest is still to invoice.
+        uninvoiced = sum((amount or ZERO for *_, amount in _uninvoiced_items(project)), ZERO)
+    else:
+        uninvoiced = max(total - invoiced, ZERO)
     return {
-        'project_id': str(project.id), 'currency': project.client_fee_currency or workspace_currency(project.workspace),
+        'project_id': str(project.id), 'currency': currency,
         'fee': money_str(project.client_fee), 'tasks_total': money_str(task_total), 'total': money_str(total),
-        'invoiced': money_str(invoiced), 'uninvoiced': money_str(max(total - invoiced, ZERO)),
+        'invoiced': money_str(invoiced), 'uninvoiced': money_str(uninvoiced), 'invoiced_other': invoiced_other,
         'tasks': [{'id': str(task.id), 'title': task.title, 'client_price': money_str(task.client_price)} for task in tasks],
         # The open draft, if any, so Pricing links to it with its real total instead of
         # offering to invoice an amount that disagrees with it.
