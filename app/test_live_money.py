@@ -1,12 +1,24 @@
 """Live money: the money-version endpoint the app polls, and the "I've paid" team notification."""
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
+from .money_format import format_money
 from .models import Invoice, Notification, Payment, TaskStageKind
 from .services import stripe_connect
 from .test_local_gateways import GatewayBase
 
 WISE = {'payment_link': 'https://wise.com/pay/business/northlight', 'accounts': [{'currency': 'USD', 'details': 'ACH routing 026073150'}]}
+
+
+class MoneyFormatTests(SimpleTestCase):
+    def test_matches_the_frontend_formatter(self):
+        self.assertEqual(format_money('1590', 'GBP'), '£1,590.00')
+        self.assertEqual(format_money('500.5', 'USD'), 'US$500.50')
+        self.assertEqual(format_money('1250', 'JPY'), 'JP¥1,250')
+        self.assertEqual(format_money('1234567.891', 'EUR'), '€1,234,567.89')
+        self.assertEqual(format_money('-20', 'gbp'), '-£20.00')
+        self.assertEqual(format_money('10', 'BDT'), '৳10.00')
+        self.assertEqual(format_money(None, 'GBP'), '')
 
 
 class LiveMoneyTests(GatewayBase, TestCase):
@@ -89,4 +101,6 @@ class ClaimNotificationTests(GatewayBase, TestCase):
         self.assertEqual((payload['invoice_number'], payload['provider'], payload['client_team_name'], payload['actor_name']),
                          (invoice.number, 'wise', 'Northlight Coffee', 'Rachel Kim'))
         self.assertEqual(payload['link'], f'/money/invoices/{invoice.id}')
+        self.assertEqual(payload['amount_display'], format_money(payload['amount'], payload['currency']))
+        self.assertNotIn(payload['currency'], payload['amount_display'])
         self.assertFalse(Notification.objects.filter(kind='PAYMENT_CLAIMED', recipient_user=self.editor).exists())

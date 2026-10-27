@@ -613,12 +613,14 @@ def notify_payment_claimed(*, claim, actor=None):
     from app.models import WorkspaceMembership, WorkspaceMembershipStatus, WorkspacePrincipalType
     from app.permissions import BILLING_MANAGE, memberships_with_permission
     from . import billing
+    from ..money_format import format_money
     invoice = claim.invoice
     workspace = invoice.workspace
     client = invoice.client_team.name if invoice.client_team_id else ''
     payload = {
         'invoice_id': str(invoice.id), 'invoice_number': invoice.number, 'provider': claim.provider,
-        'amount': billing.money_str(claim.amount), 'currency': claim.currency, 'client_team_name': client,
+        'amount': billing.money_str(claim.amount), 'currency': claim.currency,
+        'amount_display': format_money(claim.amount, claim.currency), 'client_team_name': client,
         'payer_reference': claim.payer_reference, 'link': f'/money/invoices/{invoice.id}',
     }
     seen, sent = set(), []
