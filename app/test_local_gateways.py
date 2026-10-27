@@ -7,6 +7,7 @@ import time
 from decimal import Decimal
 from unittest import mock
 
+from cryptography.fernet import Fernet
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -19,7 +20,12 @@ from .permissions import BILLING_MANAGE, BILLING_VIEW, MEMBER_PERMISSION_KEYS
 from .services import online_payments, stripe_connect
 from .test_billing import BillingBase
 
-APP = dict(APP_BASE_URL='https://app.example.test', API_PUBLIC_URL='https://api.example.test')
+# A fresh throwaway key per run, so tests pass under any settings module (CI uses settings.py).
+APP = dict(
+    APP_BASE_URL='https://app.example.test',
+    API_PUBLIC_URL='https://api.example.test',
+    GATEWAY_ENCRYPTION_KEY=Fernet.generate_key().decode(),
+)
 
 
 class FakeResponse:
