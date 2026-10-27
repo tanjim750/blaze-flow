@@ -19,7 +19,7 @@ function subline(view: OwnerView): string {
 export function OwnerDashboard({ view, choice }: { view: OwnerView; choice: LayoutChoice }) {
   const { health, workload } = view;
   return <div className="home-shell role-owner">
-    <DashboardHeading workspaceName={view.workspaceName} today={view.today} greetingName={view.greetingName} subline={subline(view)} choice={choice} />
+    <DashboardHeading greetingName={view.greetingName} subline={subline(view)} choice={choice} />
     <CounterStrip items={view.strip} />
     {view.money && view.money.length > 0 && <OwnerMoneyStrip cards={view.money} />}
 

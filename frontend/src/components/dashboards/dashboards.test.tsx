@@ -6,7 +6,7 @@ import { chooseLayout } from "@/lib/dashboard-role";
 import type { ClientDashboard as ClientView, EditorDashboard as EditorView } from "@/lib/role-dashboard-view";
 import { ClientDashboard } from "./client-dashboard";
 import { EditorDashboard } from "./editor-dashboard";
-import { ViewAsSwitch } from "./parts";
+import { DashboardHeading, ViewAsSwitch } from "./parts";
 
 afterEach(cleanup);
 
@@ -133,5 +133,14 @@ describe("client dashboard: portal v2", () => {
     render(<ClientDashboard view={clientView} choice={chooseLayout(client, "owner")} />);
     expect(screen.queryByRole("link", { name: /Start a new project/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Your project requests" })).not.toBeInTheDocument();
+  });
+});
+
+describe("dashboard heading", () => {
+  it("names the account instead of greeting, with no workspace/date eyebrow", () => {
+    const { container } = render(<DashboardHeading greetingName="James" subline="2 projects" choice={{ layout: "owner", canSwitch: false, previewing: false } as never} />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("James' account");
+    expect(container.textContent).not.toMatch(/Good (morning|afternoon|evening)/);
+    expect(container.querySelector(".dashboard-heading p")).toBeNull();
   });
 });

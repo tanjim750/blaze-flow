@@ -8,6 +8,7 @@ import {
   ArrowLeft, ChevronDown, ChevronRight, Hash, Lock, MessagesSquare, Search, Users, X,
 } from "@/components/icons";
 import { ProjectThread } from "@/components/messages/thread";
+import { ChatShellSkeleton } from "./skeleton";
 import {
   fetchChatList, searchChat, unreadLabel,
   type Channel, type ChatChannelRow, type ChatList, type ChatSearchResult,
@@ -18,6 +19,11 @@ import "./chat.css";
 
 type View = "all" | "unreads" | "mentions";
 
+/** Last channel list per workspace, so coming back to Chat paints instantly and refreshes behind. */
+const listCache = new Map<string, ChatList>();
+const lastSelected = new Map<string, string>();
+export function clearChatListCache() { listCache.clear(); lastSelected.clear(); }
+
 /**
  * Slack-style chat: a client-grouped channel list on the left, the conversation on the right.
  * On phones the list and the conversation are separate screens.
@@ -26,12 +32,12 @@ export function ChatShell({ workspaceId, initialChannelId = null, initialSide = 
   workspaceId: string; initialChannelId?: string | null; initialSide?: Channel; variant?: "studio" | "portal";
 }) {
   const router = useAppRouter();
-  const [list, setList] = useState<ChatList | null>(null);
+  const [list, setList] = useState<ChatList | null>(() => listCache.get(workspaceId) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>("all");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [pastOpen, setPastOpen] = useState<Record<string, boolean>>({});
-  const [selected, setSelected] = useState<string | null>(initialChannelId);
+  const [selected, setSelected] = useState<string | null>(() => initialChannelId ?? lastSelected.get(workspaceId) ?? null);
   const [side, setSide] = useState<Channel>(initialSide);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<ChatSearchResult | null>(null);
@@ -55,6 +61,7 @@ export function ChatShell({ workspaceId, initialChannelId = null, initialSide = 
     void fetchChatList(workspaceId).then((result) => {
       if (!result.ok) { setError(result.error); return; }
       setList(result.data);
+      listCache.set(workspaceId, result.data);
       setError(null);
       if (!selected) {
         const first = result.data.sections.flatMap((section) => section.channels).find((row) => row.total_unread || row.total_mentions)
@@ -95,6 +102,8 @@ export function ChatShell({ workspaceId, initialChannelId = null, initialSide = 
     return () => window.clearTimeout(timer);
   }, [query, workspaceId]);
 
+  useEffect(() => { if (selected) lastSelected.set(workspaceId, selected); }, [workspaceId, selected]);
+
   const selectedRow = useMemo(() => {
     if (!list || !selected) return null;
     for (const section of list.sections) {
@@ -134,7 +143,7 @@ export function ChatShell({ workspaceId, initialChannelId = null, initialSide = 
   }, [list, query, search]);
 
   if (error) return <div className="ch-shell"><p className="mt-alert" role="alert">{error}</p></div>;
-  if (!list) return <div className="ch-shell"><p className="mt-loading">Loading chat…</p></div>;
+  if (!list) return <ChatShellSkeleton withThread={Boolean(initialChannelId)} variant={variant} />;
 
   const listPane = <aside className={`ch-sidebar${mobileShowThread ? " is-hidden-mobile" : ""}`} aria-label="Channels">
     <header className="ch-side-head">

@@ -32,7 +32,7 @@ export function ClientDashboard({ view, choice }: { view: ClientView; choice: La
       <Link className="pt-ghost" href="/portal/chat" style={{ height: 36, padding: "0 12px" }}><MessagesSquare size={14} />Messages</Link>
       {view.requests && <Link className="pt-cta" href="/portal/requests/new"><Plus />Start a new project</Link>}
     </PortalBrandBar>}
-    <DashboardHeading workspaceName={view.workspaceName} today={view.today} greetingName={view.greetingName} subline={subline(view)} choice={choice} />
+    <DashboardHeading greetingName={view.greetingName} subline={subline(view)} choice={choice} />
     <CounterStrip items={view.strip} label="Your work" />
 
     <div className="dashboard-columns">

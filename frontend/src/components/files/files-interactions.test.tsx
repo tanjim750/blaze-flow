@@ -77,7 +77,8 @@ describe("Files panel interactions", () => {
     fireEvent.click(row(/^alpha\.mp4/));
     expect(opened).toEqual([]);
     expect(selectedNames()).toEqual(["alpha.mp4"]);
-    expect(within(screen.getByRole("complementary", { name: "Video" })).getByText("alpha.mp4")).toBeInTheDocument();
+    // Selecting does not open the details panel; it stays closed until the toolbar toggle.
+    expect(screen.queryByRole("complementary", { name: "Video" })).not.toBeInTheDocument();
     // A double-click (two clicks, then dblclick) opens exactly once.
     fireEvent.click(row(/^alpha\.mp4/));
     fireEvent.doubleClick(row(/^alpha\.mp4/));
@@ -139,6 +140,13 @@ describe("Files panel interactions", () => {
 
   it("shows file details, a folder summary, and a multi-select summary in the inspector", () => {
     render(<AssetLibrary view={view} />);
+    // Closed by default; selecting an item does not open it.
+    expect(screen.queryByRole("complementary", { name: "Details" })).not.toBeInTheDocument();
+    // The toolbar Details button opens it and shows its active state.
+    const toggle = screen.getByRole("button", { name: "Details" });
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(window.localStorage.getItem("bf.files.inspector.v2")).toContain("open");
     // Nothing selected: the location summary.
     const summary = screen.getByRole("complementary", { name: "Details" });
     expect(within(summary).getByText("All files")).toBeInTheDocument();

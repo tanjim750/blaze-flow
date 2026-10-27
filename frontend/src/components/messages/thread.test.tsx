@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProjectThread } from "./thread";
+import { ProjectThread, clearThreadCache } from "./thread";
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); clearThreadCache(); });
 
 const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
 const viewer = { kind: "team", channels: ["client", "team"], can_post: true, can_link_files: true, can_link_cuts: true, has_client: true };
@@ -17,6 +17,21 @@ const thread = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe("ProjectThread", () => {
+  it("shows message skeletons instead of loading text, then paints a revisited channel from cache", async () => {
+    let resolve: (value: Response) => void = () => {};
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((done) => { resolve = done; })));
+    const first = render(<ProjectThread workspaceId="w1" projectId="p1" />);
+    expect(screen.getByLabelText("Loading messages")).toBeInTheDocument();
+    expect(screen.queryByText(/Loading messages…/)).not.toBeInTheDocument();
+    resolve(new Response(JSON.stringify(thread()), { status: 200, headers: { "Content-Type": "application/json" } }));
+    expect(await screen.findByText("Can the logo be bigger?")).toBeInTheDocument();
+    first.unmount();
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    render(<ProjectThread workspaceId="w1" projectId="p1" />);
+    expect(screen.getByText("Can the logo be bigger?")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Loading messages")).not.toBeInTheDocument();
+  });
+
   it("shows the shared channel with client badges and the team channel's unread count", async () => {
     vi.stubGlobal("fetch", vi.fn(() => json(thread())));
     render(<ProjectThread workspaceId="w1" projectId="p1" />);

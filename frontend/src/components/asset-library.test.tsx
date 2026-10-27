@@ -40,7 +40,8 @@ describe("AssetLibrary", () => {
   it("creates one shared project folder and switches display density", () => {
     replaceLibrary(empty);
     const rendered = render(<AssetLibrary view={view} />);
-    fireEvent.click(screen.getByRole("button", { name: "New folder" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /New folder/ }));
     fireEvent.change(screen.getByLabelText("Folder name"), { target: { value: "Campaign Assets" } });
     fireEvent.change(screen.getByLabelText("Project (optional)"), { target: { value: "project" } });
     fireEvent.click(screen.getByRole("button", { name: "Create folder" }));
@@ -52,8 +53,10 @@ describe("AssetLibrary", () => {
     expect(screen.getByRole("button", { name: "List view" })).toHaveAttribute("aria-pressed", "true");
     expect(document.querySelector(".fx-item.is-row")).toBeInTheDocument();
     // Toolbar density control (avoid Filters popover Density label collision).
+    fireEvent.click(screen.getByRole("button", { name: "View options" }));
     fireEvent.click(screen.getByTitle("Comfortable"));
     expect(document.querySelector(".fx-item.is-row.is-compact")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View options" }));
     fireEvent.click(screen.getByTitle("Compact"));
     expect(document.querySelector(".fx-item.is-row.is-compact")).toBeInTheDocument();
 
@@ -79,7 +82,8 @@ describe("AssetLibrary", () => {
     // Close it again: an open dismissable layer outlives the assertion otherwise.
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Upload files/ }));
     const input = rendered.container.querySelector<HTMLInputElement>('.al-drop input[type="file"]');
     fireEvent.change(input!, { target: { files: [new File(["a"], "brief.pdf", { type: "application/pdf" }), new File(["b"], "mix.wav", { type: "audio/wav" })] } });
     expect(screen.getByText("2 files ready")).toBeInTheDocument();
@@ -106,7 +110,8 @@ describe("AssetLibrary", () => {
   it("links an upload to a client, a project, and a stage in one pass", async () => {
     replaceLibrary(empty);
     const rendered = render(<AssetLibrary view={{ ...view, workspaceId: null }} />);
-    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Upload files/ }));
     const input = rendered.container.querySelector<HTMLInputElement>('.al-drop input[type="file"]');
     fireEvent.change(input!, { target: { files: [new File(["a"], "promo.mp4", { type: "video/mp4" })] } });
     fireEvent.change(screen.getByLabelText("Client (optional)"), { target: { value: "client" } });
@@ -120,8 +125,9 @@ describe("AssetLibrary", () => {
     // Grouped under its campaign, with the stage on the tile.
     expect(item.closest("[role=grid]")).toHaveAttribute("aria-label", "Summer Campaign");
     expect(item.getAttribute("aria-label") || "").toContain("Internal QA");
-    // Selecting it fills the inspector with the link and the stage.
+    // Selecting it and opening Details fills the inspector with the link and the stage.
     fireEvent.click(item, { metaKey: true });
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
     const inspector = screen.getByRole("complementary", { name: "Video" });
     expect(within(inspector).getByText("Linked to").nextElementSibling?.textContent).toBe("Acme / Summer Campaign");
     expect(within(inspector).getByRole("button", { name: /^Stage: Internal QA/ })).toBeInTheDocument();
@@ -243,7 +249,8 @@ describe("AssetLibrary", () => {
     uploadAssetFile.mockRejectedValueOnce(new Error("The file is 120 MB, over the 25 MB upload limit."));
     const rendered = render(<AssetLibrary view={view} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Upload files/ }));
     const input = rendered.container.querySelector<HTMLInputElement>('.al-drop input[type="file"]');
     fireEvent.change(input!, { target: { files: [new File(["x"], "hero.mp4", { type: "video/mp4" })] } });
     fireEvent.click(screen.getByRole("button", { name: "Upload 1 file" }));
@@ -262,7 +269,8 @@ describe("AssetLibrary", () => {
     });
     const rendered = render(<AssetLibrary view={view} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Upload" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Upload files/ }));
     const input = rendered.container.querySelector<HTMLInputElement>('.al-drop input[type="file"]');
     fireEvent.change(input!, { target: { files: [new File(["x"], "hero.mp4", { type: "video/mp4" })] } });
     fireEvent.click(screen.getByRole("button", { name: "Upload 1 file" }));
