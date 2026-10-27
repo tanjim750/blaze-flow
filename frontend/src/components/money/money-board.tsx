@@ -1,5 +1,6 @@
 "use client";
 
+import { currencyChip } from "@/lib/currencies";
 import { useAppRouter } from "@/lib/app-router";/**
  * The Money page body: totals, receivables by client, payouts by editor, and invoices.
  * Server data comes in as props; actions call the billing routes and refresh the page.
@@ -50,12 +51,16 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
   return <div className="money-page">
     <header className="money-heading">
       <div>
-        <p className="money-eyebrow">Billing demo · {currency}</p>
+        <p className="money-eyebrow">Workspace currency · {currencyChip(currency)}</p>
         <h1>Money</h1>
         <p>What clients owe {workspaceName}, what {workspaceName} owes editors, and the margin in between.</p>
       </div>
       {access.manage && <span className="money-new-invoice"><button type="button" className="money-button is-primary" data-mobile-primary="New invoice" onClick={() => setCreating(true)} disabled={!projects.length} aria-describedby={projects.length ? undefined : "money-new-invoice-why"} title={projects.length ? undefined : NEW_INVOICE_BLOCKED}><FilePlus2 aria-hidden="true" />New invoice</button>{!projects.length && <small id="money-new-invoice-why" className="money-hint">{NEW_INVOICE_BLOCKED}</small>}</span>}
     </header>
+    {summary.other_currencies?.length ? <p className="money-other-currencies" role="note">
+      Totals are in {currency}. Earlier invoices in other currencies are counted separately:{" "}
+      {summary.other_currencies.map((group, index) => <span key={group.currency}>{index ? " · " : ""}<b>{group.currency}</b> {formatMoney(group.billed, group.currency)} billed, {formatMoney(group.outstanding, group.currency)} outstanding ({group.invoice_count} {group.invoice_count === 1 ? "invoice" : "invoices"})</span>)}
+    </p> : null}
 
     <section className="money-totals" aria-label="Totals">
       {cards.map((card) => <article key={card.id} className={`money-total tone-${card.tone}`}>
@@ -169,7 +174,7 @@ function NewInvoiceDialog({ workspaceId, projects, onClose, onCreated }: { works
     let active = true;
     getProjectPricing(workspaceId, projectId)
       .then((pricing) => { if (active) setCheck({ projectId, billable: pricing.billable ?? null, currency: pricing.currency }); })
-      .catch((reason) => { if (active) setCheck({ projectId, billable: null, currency: "GBP", error: reason instanceof Error ? reason.message : "Couldn't check this project." }); });
+      .catch((reason) => { if (active) setCheck({ projectId, billable: null, currency: "", error: reason instanceof Error ? reason.message : "Couldn't check this project." }); });
     return () => { active = false; };
   }, [workspaceId, projectId]);
   const current = check?.projectId === projectId ? check : null;

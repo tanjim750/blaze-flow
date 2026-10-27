@@ -229,3 +229,4 @@
   .money-note { flex-direction: column; gap: 8px; }
   .money-note-actions a { flex: 1 1 100%; justify-content: center; }
 }
+.money-other-currencies { margin: 0 0 16px; padding: 10px 12px; border: 1px solid #262B37; border-radius: 10px; background: #151922; color: var(--shell-outline, #9aa3b5); font-size: 12px; line-height: 1.5; }

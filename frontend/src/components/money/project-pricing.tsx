@@ -1,5 +1,6 @@
 "use client";
 
+import { currencyChip, currencyInfo } from "@/lib/currencies";
 import { useAppRouter } from "@/lib/app-router";/**
  * Project "Pricing" tab (billing demo, billing.view only): the client fee, the per-task
  * prices on top, what is invoiced so far, and a shortcut to invoice the rest. Task prices
@@ -63,7 +64,7 @@ export function ProjectPricing({ workspaceId, projectId }: { workspaceId: string
 
   return <div className="pp-shell">
     <section className="pp-card">
-      <header><h2><Wallet aria-hidden="true" />Client price</h2><span className="pp-demo">Billing demo · {data.currency}</span></header>
+      <header><h2><Wallet aria-hidden="true" />Client price</h2><span className="pp-demo" title={currencyInfo(data.currency).name}>{currencyChip(data.currency)}</span></header>
       <div className="pp-sum">
         <label><span>Project fee</span>
           {data.can_manage

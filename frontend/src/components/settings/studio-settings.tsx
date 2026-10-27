@@ -29,7 +29,7 @@ export function InvoiceSettingsForm({ workspaceId, initial, canEdit }: { workspa
     setBusy(true);
     try {
       const next = await api<InvoiceSettings>(`workspaces/${workspaceId}/billing/settings/`, "PATCH", {
-        currency: value.currency.trim().toUpperCase(), payment_terms_days: Number(value.payment_terms_days), invoice_prefix: value.invoice_prefix.trim(),
+        payment_terms_days: Number(value.payment_terms_days), invoice_prefix: value.invoice_prefix.trim(),
       });
       setSaved(next);
       setValue({ currency: next.currency, payment_terms_days: String(next.payment_terms_days), invoice_prefix: next.invoice_prefix });
@@ -39,10 +39,9 @@ export function InvoiceSettingsForm({ workspaceId, initial, canEdit }: { workspa
 
   const set = (key: keyof typeof value) => (event: { target: { value: string } }) => setValue((current) => ({ ...current, [key]: event.target.value }));
   return <form className="settings-form" onSubmit={submit} aria-label="Invoicing">
-    <div className="settings-grid is-three">
+    <div className="settings-grid">
       <label>Invoice prefix<input value={value.invoice_prefix} onChange={set("invoice_prefix")} maxLength={20} disabled={!canEdit} aria-describedby="inv-prefix-hint" /><small id="inv-prefix-hint" className="settings-hint">Numbers look like {invoiceNumberPreview(value.invoice_prefix)}</small></label>
       <label>Payment terms (days)<input value={value.payment_terms_days} onChange={set("payment_terms_days")} inputMode="numeric" type="number" min={0} max={365} disabled={!canEdit} /><small className="settings-hint">Due date when an invoice is sent</small></label>
-      <label>Currency<input value={value.currency} onChange={set("currency")} maxLength={3} placeholder="GBP" disabled={!canEdit} style={{ textTransform: "uppercase" }} /><small className="settings-hint">For new prices and invoices</small></label>
     </div>
     {error && <p className="form-error" role="alert">{error}</p>}
     {canEdit && <button className="settings-button" disabled={busy || !dirty}>{busy ? <Loader2 size={15} className="spin" /> : <Save size={15} />}{busy ? "Saving…" : "Save invoicing"}</button>}
