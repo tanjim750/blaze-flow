@@ -157,3 +157,95 @@
   .stripe-status { grid-column: 1 / -1; justify-self: start; }
   .stripe-actions .settings-button { flex: 1 1 100%; justify-content: center; }
 }
+/* Billing country + local gateway cards (PayMongo, Safepay, SSLCOMMERZ). */
+.billing-country { margin-top: 16px; }
+.billing-country .billing-currency-picker > span { display: inline-flex; align-items: center; gap: 6px; }
+.billing-reco { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, #7c5cff 40%, #262B37); border-radius: 10px; background: color-mix(in srgb, #7c5cff 10%, #1A1E28); color: #d9d2ff; font-size: 13px; line-height: 1.45; }
+.billing-reco svg { flex: none; margin-top: 2px; color: #a99bff; }
+.gateway-stripe { position: relative; }
+.gateway-stripe.is-recommended .stripe-card { border-color: color-mix(in srgb, #8B5CF6 55%, #262B37); }
+.gateway-reco { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, #7c5cff 18%, transparent); color: #c4b8ff; font-size: 11px; font-weight: 600; vertical-align: middle; }
+.gateway-reco svg { width: 12px; height: 12px; }
+.gateway-reco.is-floating { position: absolute; z-index: 1; top: -9px; right: 14px; margin: 0; background: #2a2350; border: 1px solid #5b47c4; }
+.gateway-card { display: grid; gap: 10px; min-width: 0; margin: 0 0 12px; padding: 16px; border: 1px solid #262B37; border-radius: 14px; background: #1A1E28; }
+.gateway-card:hover { border-color: #303646; }
+.gateway-card.is-recommended { border-color: color-mix(in srgb, #8B5CF6 55%, #262B37); }
+.gateway-card.is-on { box-shadow: inset 3px 0 0 #5bd295; }
+.gateway-card-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.gateway-logo { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; color: #fff; font-size: 18px; font-weight: 800; }
+.gateway-title { display: grid; gap: 2px; min-width: 0; }
+.gateway-title strong { font-size: 14px; }
+.gateway-title small { color: var(--shell-outline); font-size: 12px; }
+.gateway-card .stripe-note { display: flex; gap: 7px; align-items: flex-start; }
+.gateway-card .stripe-note svg { flex: none; width: 14px; height: 14px; margin-top: 3px; }
+.stripe-note.is-danger { color: #ff7b8a; }
+.gateway-methods { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.gateway-methods li { padding: 2px 9px; border: 1px solid #262B37; border-radius: 999px; background: #151922; color: var(--shell-variant, #c9c4d8); font-size: 12px; }
+.gateway-actions { align-items: center; }
+.gateway-switch { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--shell-variant, #c9c4d8); font-size: 13px; }
+.gateway-form { display: grid; gap: 12px; padding: 14px; border: 1px solid #262B37; border-radius: 12px; background: #12151D; }
+.gateway-mode { display: inline-flex; gap: 4px; width: fit-content; margin: 0; padding: 3px; border: 1px solid #262B37; border-radius: 10px; background: #151922; }
+.gateway-mode legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.gateway-mode label { padding: 6px 12px; border-radius: 7px; color: var(--shell-outline); font-size: 13px; font-weight: 600; cursor: pointer; }
+.gateway-mode label:hover { background: #222733; }
+.gateway-mode label.is-active { background: #7c5cff; color: #fff; }
+.gateway-mode input { position: absolute; opacity: 0; pointer-events: none; }
+.gateway-mode label:has(input:focus-visible) { outline: 2px solid #8B5CF6; outline-offset: 1px; }
+.gateway-field { display: grid; gap: 5px; min-width: 0; }
+.gateway-field > span { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; }
+.gateway-field em { padding: 0 6px; border-radius: 6px; background: #222733; color: var(--shell-outline); font-size: 11px; font-style: normal; font-weight: 500; }
+.gateway-field input { width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid #262B37; border-radius: 9px; background: #151922; color: #fff; font: 13px var(--font-geist-mono), monospace; }
+.gateway-field input:focus { border-color: #8B5CF6; outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, #8B5CF6 25%, transparent); }
+.gateway-field input::placeholder { color: #6b7385; }
+.gateway-field small { color: var(--shell-outline); font-size: 12px; }
+.gateway-webhook { display: grid; gap: 6px; min-width: 0; }
+.gateway-webhook > span { font-size: 13px; font-weight: 600; }
+.gateway-webhook > div { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.gateway-webhook code { flex: 1; min-width: 0; overflow-x: auto; padding: 9px 10px; border: 1px solid #262B37; border-radius: 9px; background: #151922; color: #c4b8ff; font-size: 12px; white-space: nowrap; }
+.gateway-webhook .settings-button { display: inline-flex; flex: none; align-items: center; gap: 6px; }
+.gateway-webhook small { color: var(--shell-outline); font-size: 12px; }
+.gateway-links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; font-size: 13px; }
+.gateway-links a { display: inline-flex; align-items: center; gap: 5px; color: #a99bff; }
+.gateway-tested { color: #5bd295 !important; }
+@media (max-width: 700px) {
+  .gateway-card { padding: 14px; }
+  .gateway-card-head { grid-template-columns: auto minmax(0, 1fr); }
+  .gateway-card-head .stripe-status { grid-column: 1 / -1; justify-self: start; }
+  .gateway-actions .settings-button { flex: 1 1 100%; justify-content: center; }
+  .gateway-switch { margin-left: 0; }
+  .gateway-mode { width: 100%; }
+  .gateway-mode label { flex: 1; text-align: center; }
+  .gateway-form { padding: 12px; }
+}
+
+/* Wise / Payoneer details form and the collapsible "Local payment options" section. */
+.gateway-kind { margin-left: 8px; padding: 1px 8px; border: 1px solid #262B37; border-radius: 999px; background: #222733; color: #9AA3B5; font-size: 11px; font-weight: 600; vertical-align: middle; }
+.gateway-field textarea { width: 100%; min-height: 76px; padding: 9px 12px; border: 1px solid #262B37; border-radius: 9px; background: #151922; color: #fff; font: 13px/1.5 var(--font-geist-mono), monospace; resize: vertical; }
+.gateway-field textarea:focus { border-color: #8B5CF6; outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, #8B5CF6 25%, transparent); }
+.gateway-field textarea::placeholder { color: #6b7385; }
+.manual-accounts { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.manual-accounts legend { margin-bottom: 4px; padding: 0; font-size: 13px; font-weight: 600; }
+.manual-account { display: grid; grid-template-columns: 86px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px; border: 1px solid #262B37; border-radius: 11px; background: #12151D; }
+.manual-account .gateway-field.is-currency input { text-transform: uppercase; }
+.manual-account .settings-button.is-icon { margin-top: 23px; padding: 0 10px; }
+.manual-accounts > .settings-button { justify-self: start; }
+.gateway-local { margin-top: 6px; border: 1px solid #262B37; border-radius: 14px; background: #151922; }
+.gateway-local-toggle { display: flex; width: 100%; align-items: center; gap: 12px; padding: 14px 16px; border: 0; border-radius: 14px; background: none; color: #fff; cursor: pointer; font: inherit; text-align: left; }
+.gateway-local-toggle:hover { background: #222733; }
+.gateway-local-toggle:focus-visible { outline: 2px solid #8B5CF6; outline-offset: 2px; }
+.gateway-local-toggle > span:not(.gateway-reco) { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.gateway-local-toggle strong { font-size: 14px; }
+.gateway-local-toggle small { color: var(--shell-outline); font-size: 12px; }
+.gateway-local-toggle .gateway-reco { flex: none; margin: 0; }
+.gateway-local-chevron { width: 18px; height: 18px; flex: none; color: #9AA3B5; transform: rotate(-90deg); transition: transform 150ms; }
+.gateway-local.is-open .gateway-local-chevron { transform: none; }
+.gateway-local-list { padding: 0 12px 2px; }
+@media (max-width: 560px) {
+  .manual-account { grid-template-columns: minmax(0, 1fr) auto; }
+  .manual-account .gateway-field.is-grow { grid-column: 1 / -1; grid-row: 2; }
+  .manual-account .settings-button.is-icon { grid-column: 2; grid-row: 1; }
+  .gateway-local-toggle { flex-wrap: wrap; padding: 13px 12px; }
+  .gateway-local-toggle > span:not(.gateway-reco) { flex: 1 1 calc(100% - 34px); }
+  .gateway-local-toggle .gateway-reco { margin-left: 30px; }
+  .gateway-local-list { padding: 0 8px 2px; }
+}

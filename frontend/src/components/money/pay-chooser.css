@@ -1,0 +1,68 @@
+/* "Pay with" chooser (invoice page and the public /pay link). Navy theme, violet accent. */
+.pay-chooser { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.pay-chooser legend { margin: 0 0 8px; padding: 0; color: #9AA3B5; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.pay-choice { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; min-height: 56px; padding: 10px 14px; border: 1px solid #262B37; border-radius: 11px; background: #151922; color: #fff; cursor: pointer; transition: background 120ms, border-color 120ms; }
+.pay-choice:hover { background: #222733; }
+.pay-choice.is-active { border-color: #8B5CF6; background: color-mix(in srgb, #7c5cff 12%, #151922); box-shadow: 0 0 0 1px #8B5CF6 inset; }
+.pay-choice.is-off { cursor: not-allowed; opacity: .55; }
+.pay-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.pay-choice:has(input:focus-visible) { outline: 2px solid #8B5CF6; outline-offset: 2px; }
+.pay-choice-logo { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #262B37; border-radius: 9px; background: #1A1E28; color: #a99bff; font-weight: 750; }
+.pay-choice-text { display: grid; gap: 2px; min-width: 0; }
+.pay-choice-text strong { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
+.pay-choice-text em { padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, #ffc95c 14%, transparent); color: #ffc95c; font-size: 11px; font-style: normal; font-weight: 600; }
+.pay-choice-text small { overflow: hidden; color: #9AA3B5; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.invoice-pay-chooser { max-width: 520px; margin: 0 0 14px; padding: 14px; border: 1px solid #262B37; border-radius: 12px; background: #1A1E28; }
+@media (max-width: 480px) { .pay-choice-text small { white-space: normal; } }
+
+/* Pay by Wise / Payoneer details (invoice page and /pay). */
+.manual-pay { display: grid; gap: 12px; min-width: 0; margin: 4px 0 0; padding: 16px; border: 1px solid #262B37; border-radius: 12px; background: #151922; color: #fff; }
+.manual-pay header { display: grid; gap: 3px; }
+.manual-pay header strong { font-size: 15px; }
+.manual-pay header small, .manual-pay-fine { color: #9AA3B5; font-size: 12px; }
+.manual-pay-fine { margin: 0; }
+.manual-pay-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.manual-pay-facts div { min-width: 0; padding: 10px 12px; border: 1px solid #262B37; border-radius: 10px; background: #1A1E28; }
+.manual-pay-facts dt { color: #9AA3B5; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.manual-pay-facts dd { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 0; font-weight: 650; overflow-wrap: anywhere; }
+.manual-pay-facts code { color: #c4b5fd; font-family: inherit; }
+.manual-copy { display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 5px; border: 1px solid #262B37; border-radius: 7px; background: #222733; color: #c9cfdb; cursor: pointer; font-size: 12px; }
+.manual-copy:hover { border-color: #8B5CF6; color: #fff; }
+.manual-copy svg { width: 14px; height: 14px; }
+.manual-copy.is-text { justify-self: start; padding: 5px 9px; }
+.manual-pay-details { display: grid; gap: 6px; padding: 12px; border: 1px solid #262B37; border-radius: 10px; background: #1A1E28; }
+.manual-pay-details > span { color: #9AA3B5; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.manual-pay-details pre { margin: 0; color: #fff; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.manual-pay-link { display: inline-flex; align-items: center; gap: 7px; justify-self: start; color: #a99bff; font-size: 13px; font-weight: 600; }
+.manual-pay-link svg, .manual-pay-note svg, .manual-pay-status svg { width: 15px; height: 15px; flex: none; }
+.manual-pay-note, .manual-pay-status { display: flex; gap: 8px; margin: 0; color: #c9cfdb; font-size: 13px; line-height: 1.45; }
+.manual-pay-status { padding: 10px 12px; border: 1px solid color-mix(in srgb, #8B5CF6 45%, #262B37); border-radius: 10px; background: color-mix(in srgb, #7c5cff 10%, #151922); }
+.manual-claim { display: grid; gap: 10px; }
+.manual-claim label { display: grid; gap: 5px; color: #c9cfdb; font-size: 12px; font-weight: 600; }
+.manual-claim em { color: #7d8597; font-style: normal; font-weight: 500; }
+.manual-claim input { min-height: 40px; padding: 8px 11px; border: 1px solid #262B37; border-radius: 9px; background: #12151D; color: #fff; font: inherit; font-size: 14px; }
+.manual-claim input:focus { border-color: #8B5CF6; outline: none; }
+.manual-claim-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.manual-cancel { border: 0; background: none; color: #9AA3B5; cursor: pointer; font: inherit; font-size: 13px; }
+.manual-claims { display: grid; gap: 10px; max-width: 720px; margin: 0 0 14px; padding: 14px; border: 1px solid color-mix(in srgb, #ffc95c 40%, #262B37); border-radius: 12px; background: #1A1E28; }
+.manual-claims header { display: flex; gap: 10px; }
+.manual-claims header svg { width: 18px; height: 18px; flex: none; color: #ffc95c; }
+.manual-claims header div { display: grid; gap: 2px; }
+.manual-claims header small, .manual-claims li small { color: #9AA3B5; font-size: 12px; }
+.manual-claims ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.manual-claims li { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #262B37; border-radius: 10px; background: #151922; }
+.manual-claims li > span { display: grid; flex: 1 1 220px; gap: 2px; min-width: 0; }
+@media (max-width: 480px) { .manual-pay { padding: 13px; } .manual-pay-facts { grid-template-columns: 1fr; } .manual-claims li .money-button { flex: 1 1 auto; justify-content: center; } }
+.manual-pay .pay-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 18px; border: 0; border-radius: 11px; background: #7c5cff; color: #fff; font: 650 15px inherit; font-family: inherit; cursor: pointer; }
+.manual-pay .pay-button:hover:not(:disabled) { background: #6a4cf0; }
+.manual-pay .pay-button svg { width: 17px; height: 17px; }
+.manual-pay .pay-button.is-compact { min-height: 40px; font-size: 14px; }
+.manual-pay .pay-error { margin: 0; color: #ff8a8a; font-size: 13px; }
+/* UI sweep: copy buttons and the payment link are comfortable 44px tap targets on phones. */
+@media (max-width: 640px), (pointer: coarse) {
+  .manual-copy { min-width: 44px; min-height: 44px; justify-content: center; }
+  .manual-pay-link { min-height: 44px; }
+}
+
+/* UI sweep 2: the (visually hidden) radio covers its whole choice card, so its hit area is the 56px card. */
+.pay-choice input { inset: 0; width: 100%; height: 100%; margin: 0; }

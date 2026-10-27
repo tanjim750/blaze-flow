@@ -1,3 +1,4 @@
+import { paymentReturn } from "@/lib/payment-gateways";
 import { guardRoute } from "@/lib/route-guard";
 import Link from "next/link";
 import { ArrowLeft, Eye, FileX2 } from "@/components/icons";
@@ -21,7 +22,8 @@ export default async function InvoicePage({ params, searchParams }: PageProps<"/
   // "View as client" shows the client's read-only invoice (no payment-admin actions).
   const query = await searchParams;
   const asClient = query.view === "client";
-  const stripeReturn = query.stripe === "success" || query.stripe === "cancel" ? query.stripe : null;
+  const stripeReturn = paymentReturn(query);
+  const returnProvider = typeof query.provider === "string" ? query.provider : null;
   const access = asClient ? NO_BILLING : workspace?.billing ?? NO_BILLING;
   if (!workspace || !invoice || !invoice.ok) {
     return <div className="money-page"><section className="money-empty is-page" role="alert">
@@ -30,7 +32,7 @@ export default async function InvoicePage({ params, searchParams }: PageProps<"/
       <Link href={access.view ? "/money" : "/"}><ArrowLeft size={14} aria-hidden="true" />{access.view ? "Back to Money" : "Back to dashboard"}</Link>
     </section></div>;
   }
-  if (!asClient) return <InvoiceView workspaceId={workspace.id} invoice={invoice.data} canManage={access.manage} backHref={access.view ? "/money" : "/"} now={new Date().toISOString()} stripeReturn={stripeReturn} />;
+  if (!asClient) return <InvoiceView workspaceId={workspace.id} invoice={invoice.data} canManage={access.manage} backHref={access.view ? "/money" : "/"} now={new Date().toISOString()} stripeReturn={stripeReturn} returnProvider={returnProvider} />;
   // Owner previewing as the client: a banner says so, drafts stay hidden (a client never sees
   // one), and the read-only view has no payment-admin actions (canManage is off).
   const banner = <div className="preview-banner invoice-client-preview" role="status">

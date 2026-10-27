@@ -8,8 +8,9 @@ export type StripeStatus = {
   details_submitted: boolean; requirements_due: string[]; disabled_reason: string; account_id: string | null;
   country: string; default_currency: string; last_synced_at: string | null;
 };
-export type OnlinePaymentReason = "not_configured" | "not_connected" | "account_not_active" | "draft" | "nothing_due" | "currency_unsupported";
-export type OnlinePayment = { provider: "stripe"; available: boolean; reason: OnlinePaymentReason | null; message?: string };
+export type OnlinePaymentReason = "not_configured" | "not_connected" | "account_not_active" | "not_enabled" | "draft" | "nothing_due" | "currency_unsupported" | "amount_out_of_range";
+/** The one-line summary: the first gateway that can take the invoice (Stripe or local), else why not. */
+export type OnlinePayment = { provider: string; available: boolean; reason: OnlinePaymentReason | null; message?: string };
 
 export type Tone = "neutral" | "warning" | "success" | "danger" | "info";
 export const STRIPE_STATUS: Record<StripeConnectState, { label: string; tone: Tone; help: string }> = {
@@ -25,7 +26,7 @@ export const STRIPE_STATUS: Record<StripeConnectState, { label: string; tone: To
 export function onlinePaymentNote(payment: OnlinePayment | undefined, { manager = false } = {}): string | null {
   if (!payment || payment.available) return null;
   switch (payment.reason) {
-    case "currency_unsupported": return payment.message ?? "Stripe can't take payments in this currency.";
+    case "currency_unsupported": case "amount_out_of_range": return payment.message ?? "Online payment can't take this invoice's currency.";
     case "not_configured": return manager ? "Stripe not configured on this server." : null;
     case "not_connected": return manager ? "Connect Stripe in Settings → Billing & currency to add a Pay now button." : null;
     case "account_not_active": return manager ? "Pay now appears once your Stripe account is active." : null;
@@ -41,8 +42,13 @@ export const getStripeStatus = (workspaceId: string, refresh = false) => api<Str
 export const connectStripe = (workspaceId: string) => api<StripeStatus & { url: string }>(`${base(workspaceId)}/connect/`, "POST");
 export const stripeDashboard = (workspaceId: string) => api<{ url: string }>(`${base(workspaceId)}/dashboard/`, "POST");
 export const disconnectStripe = (workspaceId: string) => api<StripeStatus>(`${base(workspaceId)}/disconnect/`, "POST");
-export const invoiceCheckout = (workspaceId: string, invoiceId: string) => api<{ url: string }>(`workspaces/${workspaceId}/billing/invoices/${invoiceId}/checkout/`, "POST");
-export const publicCheckout = (token: string) => api<{ url: string }>(`public/pay/${encodeURIComponent(token)}/checkout/`, "POST");
+/** Pay now with the chosen gateway (``provider``); without one the server picks the first that can take it. */
+export const invoiceCheckout = (workspaceId: string, invoiceId: string, provider?: string) =>
+  provider ? api<{ url: string }>(`workspaces/${workspaceId}/billing/invoices/${invoiceId}/checkout/`, "POST", { provider })
+    : api<{ url: string }>(`workspaces/${workspaceId}/billing/invoices/${invoiceId}/checkout/`, "POST");
+export const publicCheckout = (token: string, provider?: string) =>
+  provider ? api<{ url: string }>(`public/pay/${encodeURIComponent(token)}/checkout/`, "POST", { provider })
+    : api<{ url: string }>(`public/pay/${encodeURIComponent(token)}/checkout/`, "POST");
 
-/** Leaves the app for a Stripe-hosted page. A seam so tests can watch it. */
+/** Leaves the app for a gateway-hosted page. A seam so tests can watch it. */
 export const goTo = { url: (url: string) => { window.location.assign(url); } };

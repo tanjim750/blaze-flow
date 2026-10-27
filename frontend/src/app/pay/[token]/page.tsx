@@ -1,3 +1,4 @@
+import { paymentReturn } from "@/lib/payment-gateways";
 import type { Metadata } from "next";
 import { CircleOff } from "@/components/icons";
 import { request } from "@/lib/api";
@@ -18,7 +19,9 @@ export const metadata: Metadata = {
  */
 export default async function PayPage({ params, searchParams }: PageProps<"/pay/[token]">) {
   const { token } = await params;
-  const back = (await searchParams).stripe;
+  const query = await searchParams;
+  const back = paymentReturn(query);
+  const provider = typeof query.provider === "string" ? query.provider : null;
   const invoice = await request<InvoiceDetail & { studio_name: string }>(`/public/pay/${encodeURIComponent(token)}/`);
   if (!invoice.ok) {
     return <main className="pay-shell">
@@ -31,5 +34,5 @@ export default async function PayPage({ params, searchParams }: PageProps<"/pay/
       <footer className="pay-foot">Powered by <strong>Blaze Flow</strong></footer>
     </main>;
   }
-  return <PublicPayView token={token} invoice={invoice.data as PublicInvoice} back={back === "success" || back === "cancel" ? back : null} />;
+  return <PublicPayView token={token} invoice={invoice.data as PublicInvoice} back={back} provider={provider} />;
 }

@@ -487,7 +487,7 @@ class RecordPaymentIsTheOnlyPathTests(BillingBase, TestCase):
         with self.assertRaises(billing.BillingError):
             billing.record_payment(workspace=self.workspace, invoice=invoice, payee_membership=self.editor_membership, amount='1')
         with self.assertRaises(billing.BillingError):
-            billing.record_payment(workspace=self.workspace, invoice=invoice, amount='1', provider='paypal')
+            billing.record_payment(workspace=self.workspace, invoice=invoice, amount='1', provider='venmo')
 
 
 class SeedCommandTests(BillingBase, TestCase):
@@ -520,9 +520,11 @@ class WorkspaceCurrencyTests(BillingBase, TestCase):
         self.assertTrue(data['can_change_currency'])
         keys = {gateway['key']: gateway for gateway in data['payment_gateways']}
         self.assertIn('stripe', keys)
-        # Stripe is live when the server has keys (none in tests); the rest are coming soon.
+        # Stripe is live when the server has keys (none in tests); PayMongo, Safepay and SSLCOMMERZ
+        # are available with the agency's own keys; PayPal and Razorpay are still coming soon.
         self.assertEqual((keys['stripe']['status'], keys['stripe']['connected']), ('not_configured', False))
-        self.assertTrue(all(g['status'] == 'coming_soon' and g['connected'] is False for k, g in keys.items() if k != 'stripe'))
+        self.assertTrue(all(keys[k]['status'] == 'coming_soon' and keys[k]['connected'] is False for k in ('razorpay',)))
+        self.assertTrue(all(keys[k]['status'] == 'available' and keys[k]['connected'] is False for k in ('paymongo', 'safepay', 'sslcommerz')))
         self.assertEqual(self.listed_workspace(self.owner)['currency'], 'GBP')
 
     def test_owner_can_pick_any_iso_4217_code(self):
