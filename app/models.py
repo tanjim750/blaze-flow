@@ -158,7 +158,7 @@ class AuditActorType(models.TextChoices):
     USER = 'USER'
     GUEST = 'GUEST'
     SYSTEM = 'SYSTEM'
-    # A Blaze Flow employee acting through the platform admin (/platform).
+    # A Krewsys employee acting through the platform admin (/platform).
     PLATFORM_STAFF = 'PLATFORM_STAFF'
 
 
@@ -359,7 +359,7 @@ class WorkspaceProfile(models.Model):
     country_code = models.CharField(max_length=2, null=True, blank=True)
     # Client portal branding: an accent colour (#RRGGBB), a logo image and a short welcome
     # line. Shown to clients on the portal and on public upload pages; the team UI keeps
-    # Blaze Flow's own look.
+    # Krewsys's own look.
     brand_color = models.CharField(max_length=7, null=True, blank=True)
     logo_object_key = models.CharField(max_length=500, null=True, blank=True)
     logo_mime_type = models.CharField(max_length=50, null=True, blank=True)
@@ -1828,7 +1828,7 @@ class PayoutMethodKind(models.TextChoices):
 
 
 class MemberPayoutMethod(models.Model):
-    """How a team member wants the agency to pay them, per workspace. Blaze Flow never moves
+    """How a team member wants the agency to pay them, per workspace. Krewsys never moves
     the money; owners read these details and pay the editor directly.
 
     The details (account numbers, emails, phones) are Fernet-encrypted with the gateway key;

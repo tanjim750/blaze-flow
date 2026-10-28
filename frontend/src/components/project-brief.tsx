@@ -71,7 +71,7 @@ function useAutosave(workspaceId: string, projectId: string) {
         setState({ status: "saved", message: null });
       } catch (caught) {
         failed.current = mergePatch(failed.current, patch);
-        setState({ status: "error", message: caught instanceof Error && caught.message ? caught.message : "Can’t reach Blaze Flow. Your change isn’t saved yet." });
+        setState({ status: "error", message: caught instanceof Error && caught.message ? caught.message : "Can’t reach Krewsys. Your change isn’t saved yet." });
         break;
       }
     }

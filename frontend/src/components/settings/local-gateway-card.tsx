@@ -65,7 +65,7 @@ export function LocalGatewayCard({ workspaceId, initial, canManage, workspaceCur
     {gateway.connection_status === "failed" && gateway.status_message && <p className="stripe-note is-danger" role="status">{gateway.status_message}</p>}
     {gateway.connection_status === "unreadable" && <p className="stripe-note is-danger" role="status">The saved keys can&rsquo;t be decrypted (the server&rsquo;s encryption key changed). Enter them again.</p>}
     {!canManage && <p className="stripe-note is-muted">Only workspace owners and admins can add or change {gateway.name} keys.</p>}
-    {canManage && !gateway.encryption_configured && <p className="stripe-note is-warn"><ShieldCheck aria-hidden="true" />Saving keys is switched off until the server has an encryption key (GATEWAY_ENCRYPTION_KEY). Ask whoever runs Blaze Flow to set it.</p>}
+    {canManage && !gateway.encryption_configured && <p className="stripe-note is-warn"><ShieldCheck aria-hidden="true" />Saving keys is switched off until the server has an encryption key (GATEWAY_ENCRYPTION_KEY). Ask whoever runs Krewsys to set it.</p>}
 
     {canManage && <div className="stripe-actions gateway-actions">
       <button type="button" className={`settings-button${saved ? " is-quiet" : " stripe-primary"}`} aria-expanded={open} onClick={() => setOpen((value) => !value)}>

@@ -1,6 +1,6 @@
 /* Pre-session pages. globals.css provides the base .auth-* split-screen; this file owns the
    polish: brand panel, fields, errors, strength meter, Google button, responsive layout.
-   Dark-first with the Blaze Flow violet accent. */
+   Dark-first with the Krewsys violet accent. */
 
 .auth-page { grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); }
 .auth-story { gap: 32px; position: relative; overflow: hidden; }

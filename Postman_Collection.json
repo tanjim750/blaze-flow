@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Blaze Flow API",
-    "description": "Executable collection for the currently implemented Blaze Flow Django API",
+    "name": "Krewsys API",
+    "description": "Executable collection for the currently implemented Krewsys Django API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -311,7 +311,7 @@
               }
             },
             "url": "{{base_url}}/api/auth/google/",
-            "description": "Exchange a Google-issued ID token for a Blaze Flow session. Requires GOOGLE_OAUTH_CLIENT_ID to be set server-side and a real id_token from a Google Sign-In flow for the same client ID (Postman cannot generate one itself); returns 400 with a clear message if the server has no client ID configured. A verified Google email auto-links to a matching registered account; an unverified one is rejected rather than silently linked. A first-time verified sign-in creates the account, marks its email verified, and provisions a FREE subscription, the same as Register"
+            "description": "Exchange a Google-issued ID token for a Krewsys session. Requires GOOGLE_OAUTH_CLIENT_ID to be set server-side and a real id_token from a Google Sign-In flow for the same client ID (Postman cannot generate one itself); returns 400 with a clear message if the server has no client ID configured. A verified Google email auto-links to a matching registered account; an unverified one is rejected rather than silently linked. A first-time verified sign-in creates the account, marks its email verified, and provisions a FREE subscription, the same as Register"
           },
           "response": []
         },

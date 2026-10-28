@@ -6,7 +6,7 @@ import { PublicUploader } from "./uploader";
 import "./upload.css";
 
 export const metadata: Metadata = {
-  title: "Send files · Blaze Flow",
+  title: "Send files · Krewsys",
   description: "Send files to your studio.",
   // The token in the path is the only credential; keep these pages out of search results.
   robots: { index: false, follow: false },
@@ -29,7 +29,7 @@ export default async function UploadLinkPage({ params }: PageProps<"/upload/[tok
           <p>{link.error.status === 0 ? "The studio's file service could not be reached. Try again in a minute." : link.error.detail}</p>
           <p className="ul-muted">If you still need to send files, ask the studio for a new link.</p>
         </section>
-        <footer className="ul-foot">Powered by <strong>Blaze Flow</strong></footer>
+        <footer className="ul-foot">Powered by <strong>Krewsys</strong></footer>
       </main>
     );
   }

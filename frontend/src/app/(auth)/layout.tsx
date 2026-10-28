@@ -10,9 +10,9 @@ import "./auth.css";
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <main className="auth-page">
-      <section className="auth-story" aria-label="About Blaze Flow">
+      <section className="auth-story" aria-label="About Krewsys">
         <Link className="auth-brand" href="/">
-          <span><Flame aria-hidden /></span>Blaze Flow
+          <span><Flame aria-hidden /></span>Krewsys
         </Link>
         <div className="auth-story-copy">
           <p className="eyebrow">Creative work, in one place</p>
@@ -31,7 +31,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <small>Built for creative teams and the clients they work with.</small>
       </section>
       <section className="auth-form-wrap">
-        <Link className="auth-brand auth-brand-compact" href="/"><span><Flame aria-hidden /></span>Blaze Flow</Link>
+        <Link className="auth-brand auth-brand-compact" href="/"><span><Flame aria-hidden /></span>Krewsys</Link>
         {children}
       </section>
     </main>

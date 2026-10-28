@@ -1,7 +1,7 @@
 "use client";
 /**
  * Editor payout details. The editor saves how they want to be paid (several methods, one
- * preferred) in their profile; billing managers read them from the Money page. Blaze Flow
+ * preferred) in their profile; billing managers read them from the Money page. Krewsys
  * never holds or moves the money: the agency pays the editor directly.
  */
 import { useEffect, useState, type FormEvent } from "react";
@@ -22,7 +22,7 @@ const message = (reason: unknown) => (reason instanceof Error ? reason.message :
 export function WhyWeAsk() {
   return <details className="payout-why">
     <summary><Info aria-hidden="true" />Why we ask<ChevronDown aria-hidden="true" className="payout-why-chevron" /></summary>
-    <p>The agency pays you directly, using the details you save here. Blaze Flow never holds or moves money. Only you and the people who manage billing in this workspace can see these details; clients and other editors can&rsquo;t.</p>
+    <p>The agency pays you directly, using the details you save here. Krewsys never holds or moves money. Only you and the people who manage billing in this workspace can see these details; clients and other editors can&rsquo;t.</p>
   </details>;
 }
 
@@ -137,7 +137,7 @@ export function PayoutDetailsDialog({ workspaceId, membershipId, name, onClose, 
   }, [workspaceId, membershipId]);
   return <Dialog open onOpenChange={(next) => { if (!next) onClose(); }}>
     <DialogContent className="money-dialog payout-dialog">
-      <header className="money-dialog-head"><DialogTitle>Payout details · {name}</DialogTitle><DialogDescription>How {name} asked to be paid. You pay them directly; Blaze Flow never moves the money.</DialogDescription><DialogClose /></header>
+      <header className="money-dialog-head"><DialogTitle>Payout details · {name}</DialogTitle><DialogDescription>How {name} asked to be paid. You pay them directly; Krewsys never moves the money.</DialogDescription><DialogClose /></header>
       {error ? <p className="money-error" role="alert">{error}</p>
         : !data ? <p className="money-muted" aria-live="polite">Loading…</p>
           : data.methods.length === 0 ? <NoPayoutDetails name={name} />

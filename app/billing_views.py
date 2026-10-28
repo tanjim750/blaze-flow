@@ -649,7 +649,7 @@ def claim_resolve(request, workspace_id, claim_id, action):
     return Response(online_payments.claim_out(claim))
 
 
-# --- payout details (how editors want to be paid; Blaze Flow never moves the money) ---------
+# --- payout details (how editors want to be paid; Krewsys never moves the money) ---------
 
 def _payout_details_error(exc):
     body = {'detail': str(exc)}

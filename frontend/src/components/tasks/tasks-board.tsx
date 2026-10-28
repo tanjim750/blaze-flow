@@ -1,6 +1,6 @@
 "use client";
 /**
- * Blaze Flow Tasks: a stage-based production board.
+ * Krewsys Tasks: a stage-based production board.
  *
  * One task collection feeds the board, the list and the detail sheet, and every way of
  * moving a task (drag, keyboard, card menu, list menu, detail sheet) goes through

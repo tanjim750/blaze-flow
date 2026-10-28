@@ -7,7 +7,7 @@ import { loadWorkspaceContext } from "@/lib/workspace";
 import { RequestInbox } from "@/components/portal/request-inbox";
 import "@/components/portal/portal.css";
 
-export const metadata: Metadata = { title: "Project requests · Clients · Blaze Flow" };
+export const metadata: Metadata = { title: "Project requests · Clients · Krewsys" };
 
 export default async function ProjectRequestsPage() {
   await guardRoute("/clients/requests");

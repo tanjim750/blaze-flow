@@ -135,7 +135,7 @@ def _actor(row):
         name = (row.metadata or {}).get('uploader_name') or 'A client'
         return {'type': 'client', 'id': None, 'name': name, 'initials': _initials(name), 'avatar_url': None}
     if user is None:
-        return {'type': 'system', 'id': None, 'name': 'Blaze Flow', 'initials': 'BF', 'avatar_url': None}
+        return {'type': 'system', 'id': None, 'name': 'Krewsys', 'initials': 'K', 'avatar_url': None}
     name = user.get_full_name() or user.email
     return {'type': 'user', 'id': str(user.id), 'name': name, 'initials': _initials(name), 'avatar_url': user.avatar_url or None}
 

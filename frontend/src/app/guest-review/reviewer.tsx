@@ -140,7 +140,7 @@ export function GuestReviewer({ token }: { token: string }) {
   return (
     <div className="gr-shell">
       <header className="gr-topbar">
-        <div className="gr-brand"><span><Flame size={15} /></span><strong>Blaze Flow</strong></div>
+        <div className="gr-brand"><span><Flame size={15} /></span><strong>Krewsys</strong></div>
         <div className="gr-project">
           <strong>{review?.project.name ?? "Loading…"}</strong>
           {review?.project.description && !briefIsEmpty(review.project.description) && (
@@ -620,7 +620,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   return (
     <div className="gr-card-wrap">
       <div className="gr-card">
-        <div className="gr-brand"><span><Flame size={15} /></span><strong>Blaze Flow</strong></div>
+        <div className="gr-brand"><span><Flame size={15} /></span><strong>Krewsys</strong></div>
         <h1>{title}</h1>
         {children}
       </div>

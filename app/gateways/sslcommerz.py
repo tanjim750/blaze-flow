@@ -58,7 +58,7 @@ class SSLCommerz(GatewayProvider):
     docs_url = 'https://developer.sslcommerz.com/doc/v4/'
     signup_url = 'https://signup.sslcommerz.com/register'
     keys_help = 'SSLCOMMERZ emails your Store ID and Store Password when the store is approved (sandbox: developer.sslcommerz.com/registration).'
-    webhook_help = 'Blaze Flow sends this IPN URL with every payment. You can also set it in the SSLCOMMERZ merchant panel → My Stores → IPN Settings.'
+    webhook_help = 'Krewsys sends this IPN URL with every payment. You can also set it in the SSLCOMMERZ merchant panel → My Stores → IPN Settings.'
     webhook_in_dashboard = False
     min_amount = Decimal('10.00')
     max_amount = Decimal('500000.00')

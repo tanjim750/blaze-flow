@@ -1,6 +1,6 @@
-# Blaze Flow Frontend
+# Krewsys Frontend
 
-The Next.js browser client for the Blaze Flow Django API.
+The Next.js browser client for the Krewsys Django API.
 
 **Full documentation: [`../docs/frontend.md`](../docs/frontend.md)** — architecture, routes,
 API coupling, backend gaps, and known limitations. Read it before changing a data loader.

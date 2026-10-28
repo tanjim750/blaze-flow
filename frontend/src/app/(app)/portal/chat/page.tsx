@@ -3,7 +3,7 @@ import { ChatShell } from "@/components/chat/shell";
 import { loadSession } from "@/lib/session";
 import { loadWorkspaceContext } from "@/lib/workspace";
 
-export const metadata: Metadata = { title: "Messages · Client portal · Blaze Flow" };
+export const metadata: Metadata = { title: "Messages · Client portal · Krewsys" };
 
 export default async function PortalChatPage() {
   await loadSession();

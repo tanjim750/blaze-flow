@@ -7,7 +7,7 @@ import { PublicPayView, type PublicInvoice } from "./pay-view";
 import "./pay.css";
 
 export const metadata: Metadata = {
-  title: "Pay invoice · Blaze Flow",
+  title: "Pay invoice · Krewsys",
   description: "Pay your invoice online.",
   // The token in the path is the only credential; keep these pages out of search results.
   robots: { index: false, follow: false },
@@ -31,7 +31,7 @@ export default async function PayPage({ params, searchParams }: PageProps<"/pay/
         <p>{invoice.error.status === 0 ? "The payment service could not be reached. Try again in a minute." : invoice.error.detail}</p>
         <p className="pay-muted">Ask the studio for a new link if you still need to pay.</p>
       </section>
-      <footer className="pay-foot">Powered by <strong>Blaze Flow</strong></footer>
+      <footer className="pay-foot">Powered by <strong>Krewsys</strong></footer>
     </main>;
   }
   return <PublicPayView token={token} invoice={invoice.data as PublicInvoice} back={back} provider={provider} />;

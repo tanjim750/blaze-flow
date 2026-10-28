@@ -44,7 +44,7 @@ export function InvitePanel({ token, invite, userEmail, rateLimited = false }: P
             : "It may have expired or been revoked. Ask the person who invited you to send a new one."}</p>
         </div>
         <div className="auth-actions">
-          <Link className="button primary" href={userEmail ? "/" : "/sign-in"}>{userEmail ? "Go to Blaze Flow" : "Sign in"}</Link>
+          <Link className="button primary" href={userEmail ? "/" : "/sign-in"}>{userEmail ? "Go to Krewsys" : "Sign in"}</Link>
         </div>
       </div>
     );

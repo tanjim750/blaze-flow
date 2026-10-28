@@ -123,7 +123,7 @@ class EmailTemplateTests(_WorkspaceMixin, TestCase):
         self.client.post(reverse('api-register'), _payload(), format='json')
         self.assertEqual(len(mail.outbox), 1)
         message = mail.outbox[0]
-        self.assertEqual(message.subject, 'Verify your Blaze Flow email')
+        self.assertEqual(message.subject, 'Verify your Krewsys email')
         self.assertIn('/verify-email?token=', message.body)
         html, mime = message.alternatives[0]
         self.assertEqual(mime, 'text/html')
@@ -134,7 +134,7 @@ class EmailTemplateTests(_WorkspaceMixin, TestCase):
         User.objects.create_user(email='r@example.com', password='x-secure-password-1', first_name='Rae', last_name='R')
         self.client.post(reverse('api-password-reset-request'), {'email': 'r@example.com'}, format='json')
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn('Reset your Blaze Flow password', mail.outbox[0].subject)
+        self.assertIn('Reset your Krewsys password', mail.outbox[0].subject)
         self.assertIn('Hi Rae', mail.outbox[0].body)
         self.assertIn('Choose a new password', mail.outbox[0].alternatives[0][0])
 
@@ -156,7 +156,7 @@ class EmailTemplateTests(_WorkspaceMixin, TestCase):
         subject, text, html = render_email('mention', {
             'actor_name': 'Ann', 'excerpt': '<script>x</script>', 'action_url': 'https://a/b?x=1&y=2',
         })
-        self.assertEqual(subject, 'Ann mentioned you in Blaze Flow')
+        self.assertEqual(subject, 'Ann mentioned you in Krewsys')
         self.assertNotIn('<script>', html)
         self.assertIn('x=1&y=2', text)
 

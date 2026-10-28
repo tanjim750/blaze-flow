@@ -5,7 +5,7 @@ import { ChatShell } from "@/components/chat/shell";
 import { loadSession } from "@/lib/session";
 import { loadWorkspaceContext } from "@/lib/workspace";
 
-export const metadata: Metadata = { title: "Chat · Blaze Flow" };
+export const metadata: Metadata = { title: "Chat · Krewsys" };
 
 /** Slack-style chat: channels grouped by client, With client / Team only in each. */
 export default async function ChatPage({ searchParams }: PageProps<"/chat">) {

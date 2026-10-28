@@ -1,6 +1,6 @@
-# 🔥 Blaze Flow
+# 🔥 Krewsys
 
-**Blaze Flow** is an all-in-one creative agency management platform designed to bring projects, clients, video reviews, tasks, files, team collaboration, billing, and workflows into one centralized workspace.
+**Krewsys** is an all-in-one creative agency management platform designed to bring projects, clients, video reviews, tasks, files, team collaboration, billing, and workflows into one centralized workspace.
 
 ## ✨ Core Features
 
@@ -20,11 +20,11 @@
 
 Creative agencies often depend on multiple disconnected tools for project management, client communication, creative review, file sharing, and business operations.
 
-Blaze Flow aims to reduce this **tool sprawl** by providing a unified platform where agencies can manage their workflow from project creation to client approval.
+Krewsys aims to reduce this **tool sprawl** by providing a unified platform where agencies can manage their workflow from project creation to client approval.
 
 ## 🏗️ Architecture
 
-Blaze Flow follows a **workspace-based multi-tenant architecture** with structured access control for:
+Krewsys follows a **workspace-based multi-tenant architecture** with structured access control for:
 
 * Internal team members
 * Client members
@@ -35,7 +35,7 @@ The platform is designed with modularity and scalability in mind so individual b
 
 ## 🚧 Status
 
-Blaze Flow is currently under active development.
+Krewsys is currently under active development.
 
 > More technical documentation, architecture details, setup instructions, and API documentation will be added as development progresses.
 
@@ -59,7 +59,7 @@ Architecture, routes, and known limitations are documented in the [frontend guid
 
 ---
 
-**Blaze Flow** — One workspace for creative work, collaboration, and agency operations.
+**Krewsys** — One workspace for creative work, collaboration, and agency operations.
 
 ## Production deployment
 

@@ -116,7 +116,7 @@ export function GlossaryForm({ workspaceId, initial, canEdit }: { workspaceId: s
   const label = (value: GlossaryKind) => GLOSSARY_KINDS.find((k) => k.value === value)?.label ?? value;
   return <div className="settings-form">
     {canEdit && <form className="settings-glossary-add" onSubmit={add} aria-label="Add a glossary term">
-      <label><span className="sr-only">Term</span><input value={term} onChange={(event) => setTerm(event.target.value)} maxLength={200} placeholder="e.g. BlazeFlow, iPhone, NHS" /></label>
+      <label><span className="sr-only">Term</span><input value={term} onChange={(event) => setTerm(event.target.value)} maxLength={200} placeholder="e.g. Krewsys, iPhone, NHS" /></label>
       <label><span className="sr-only">Kind</span><Select aria-label="Kind" value={kind} onValueChange={(next) => setKind(next as GlossaryKind)} options={GLOSSARY_KINDS.map((k) => ({ value: k.value, label: k.label }))} /></label>
       <button className="settings-button" disabled={busy || !term.trim()}>{busy ? <Loader2 size={15} className="spin" /> : <Plus size={15} />}Add term</button>
     </form>}

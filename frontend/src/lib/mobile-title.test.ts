@@ -10,6 +10,6 @@ describe("mobileTitle", () => {
     expect(mobileTitle("/portal")).toBe("Portal");
   });
   it("does not match a prefix of another word", () => {
-    expect(mobileTitle("/filesystem")).toBe("Blaze Flow");
+    expect(mobileTitle("/filesystem")).toBe("Krewsys");
   });
 });

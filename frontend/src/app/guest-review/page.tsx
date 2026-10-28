@@ -7,7 +7,7 @@ import "../(app)/tasks/tasks.css";
 import "./guest.css";
 
 export const metadata: Metadata = {
-  title: "Review · Blaze Flow",
+  title: "Review · Krewsys",
   description: "Review a cut and leave notes.",
   // A review link is a bearer credential in a query string; keep it out of search results.
   robots: { index: false, follow: false },

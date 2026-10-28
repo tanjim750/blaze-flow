@@ -1,4 +1,4 @@
-# AI Visual QA: plan (Blaze Flow)
+# AI Visual QA: plan (Krewsys)
 
 See `research-and-codebase-audit.md` for the audit, the source matrix and citations. Wireframes are in `wireframes.md`.
 

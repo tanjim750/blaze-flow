@@ -1,4 +1,4 @@
-# Blaze Flow geometric monoline icons: 24 grid, 1.25 stroke, square caps, miter joins.
+# Krewsys geometric monoline icons: 24 grid, 1.25 stroke, square caps, miter joins.
 def C(x,y,r): return f'<circle cx="{x}" cy="{y}" r="{r}"/>'
 def R(x,y,w,h): return f'<rect x="{x}" y="{y}" width="{w}" height="{h}"/>'
 def P(d): return f'<path d="{d}"/>'

@@ -12,7 +12,7 @@ export default async function OnboardingPage() {
   if (workspaces.ok && workspaces.data.length) redirect("/");
 
   return <main className="onboarding-page">
-    <header><span><Flame size={18} /></span><strong>Blaze Flow</strong></header>
+    <header><span><Flame size={18} /></span><strong>Krewsys</strong></header>
     <OnboardingForm verified={Boolean(session.user.email_verified_at)} email={session.user.email} defaultTimezone={session.user.timezone || "UTC"} />
   </main>;
 }

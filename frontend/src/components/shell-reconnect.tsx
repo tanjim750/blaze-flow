@@ -37,7 +37,7 @@ export function ShellReconnect() {
     <div className="shell-reconnect" role="status" aria-live="polite">
       <CloudOff size={16} aria-hidden="true" />
       <p>
-        <b>Can’t reach Blaze Flow right now.</b>{" "}
+        <b>Can’t reach Krewsys right now.</b>{" "}
         <span>{exhausted ? "Your work is safe. Try again in a moment." : pending ? "Reconnecting…" : "We’ll keep retrying automatically."}</span>
       </p>
       <button type="button" onClick={() => { window.clearTimeout(timer.current); retry(); }} disabled={pending} aria-busy={pending}>

@@ -1,4 +1,4 @@
-# Blaze Flow Implementation Log
+# Krewsys Implementation Log
 
 This is a living, chronological record of completed engineering work and consequential decisions. Add an entry in the same pull request as any material architecture, infrastructure, schema, or product change.
 
@@ -1121,7 +1121,7 @@ Implement the storage adapter and transactional media upload flow, including saf
 
 ### Decisions
 
-- Permission grants are additive; Blaze Flow still has no explicit deny mechanism.
+- Permission grants are additive; Krewsys still has no explicit deny mechanism.
 - Client Team members inherit the active team's workspace membership rather than receiving duplicate direct grants.
 - Invitation delivery is outside the current backend slice. The raw token must never be logged or stored after delivery.
 - Project deletion is soft lifecycle archival through `ProjectStatus.ARCHIVED`.
@@ -1426,7 +1426,7 @@ Add database constraints for principal/authorship/ownership invariants, followed
 
 - Added `frontend/components.json`, so the shadcn CLI works against this project for the first time. The app already had shadcn's output—`cn`, `cva`, Radix primitives, `src/components/ui/`—but never the config file the CLI reads.
 - Declared the `@skiper-ui` registry in that config, so free Skiper UI components install with `npx shadcn add @skiper-ui/<name>`.
-- Added `src/app/shadcn-theme.css`, mapping shadcn token names onto the Blaze Flow palette so registry components arrive in the studio theme instead of shadcn's default neutral grey. The mapping is one way: `shell.css` stays the source of truth and is never redefined, because `--muted` is a text colour here and a surface in shadcn—overwriting it would turn every `.muted` label into an unreadable block.
+- Added `src/app/shadcn-theme.css`, mapping shadcn token names onto the Krewsys palette so registry components arrive in the studio theme instead of shadcn's default neutral grey. The mapping is one way: `shell.css` stays the source of truth and is never redefined, because `--muted` is a text colour here and a surface in shadcn—overwriting it would turn every `.muted` label into an unreadable block.
 - Installed two free components. `TextRoll` animates the Files heading on hover and was kept. `ProgressiveBlur` was added to the projects client tree and then removed the same day—see below.
 - Wrote the conventions into `frontend/AGENTS.md`, outside the block `next dev` regenerates.
 
@@ -1770,7 +1770,7 @@ place a video appears.
 ### The problem worth solving first
 
 The brief's hard requirement was "one media file, many entry points, one review, one source
-of truth". Blaze Flow describes a video in two unrelated tables — `ProjectFile` (the Files
+of truth". Krewsys describes a video in two unrelated tables — `ProjectFile` (the Files
 library) and `MediaVersion` (a project deliverable, which is what review data hangs off) —
 and nothing links them. The obvious approaches were both bad: duplicate the record, or
 invent a join column.

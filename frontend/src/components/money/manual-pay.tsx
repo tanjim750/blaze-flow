@@ -58,7 +58,7 @@ export function ManualPayPanel({ option, studio, onClaim }: { option: PaymentOpt
       </form>
       : <button type="button" className="pay-button" onClick={() => setOpen(true)}><CircleCheck aria-hidden="true" />I&rsquo;ve paid</button>}
     {error && <p className="pay-error" role="alert">{error}</p>}
-    <p className="manual-pay-fine">Not processed by Blaze Flow. {option.name} fees, if any, are set by {option.name}.</p>
+    <p className="manual-pay-fine">Not processed by Krewsys. {option.name} fees, if any, are set by {option.name}.</p>
   </section>;
 }
 

@@ -16,7 +16,7 @@ import "@/components/portal/portal.css";
 
 /* Posters are small, permission-checked images from our own API (as on the dashboard); plain <img> on purpose. */
 
-export const metadata: Metadata = { title: "Project · Client portal · Blaze Flow" };
+export const metadata: Metadata = { title: "Project · Client portal · Krewsys" };
 
 const EVENT_ICON: Record<TimelineEvent["kind"], typeof Flag> = {
   start: Flag, shared: Clapperboard, approved: CheckCircle2, changes: RotateCcw, due: CalendarClock,

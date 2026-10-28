@@ -1,6 +1,6 @@
 """Editor payout details: how each team member wants the agency to pay them.
 
-Step 1 of editor payouts. Money never moves through Blaze Flow: the agency reads these
+Step 1 of editor payouts. Money never moves through Krewsys: the agency reads these
 details and pays the editor itself, then records the payout by hand. Details live per
 membership (so per workspace) and are encrypted with the gateway key (``crypto``).
 

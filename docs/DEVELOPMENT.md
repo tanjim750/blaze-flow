@@ -1,10 +1,10 @@
-# Blaze Flow Developer Guide
+# Krewsys Developer Guide
 
-This is the starting point for anyone developing or reviewing Blaze Flow. Keep this guide current whenever setup, architecture, or team conventions change. Record material implementation work in `docs/implementation-log.md`.
+This is the starting point for anyone developing or reviewing Krewsys. Keep this guide current whenever setup, architecture, or team conventions change. Record material implementation work in `docs/implementation-log.md`.
 
 ## Current state
 
-Blaze Flow is a Django REST Framework backend in its foundation phase. The repository contains a broad domain model, but most product APIs and business services are not implemented yet. Product intent lives in `docs/implementations/domain_and_features.md`; it must not be mistaken for delivered functionality.
+Krewsys is a Django REST Framework backend in its foundation phase. The repository contains a broad domain model, but most product APIs and business services are not implemented yet. Product intent lives in `docs/implementations/domain_and_features.md`; it must not be mistaken for delivered functionality.
 
 The currently supported behavior is:
 

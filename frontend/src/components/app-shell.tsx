@@ -173,7 +173,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
         </button>
 
         <div className="studio-sidebar-top">
-          <div className="studio-brand"><span><Flame size={17} /></span><strong>Blaze Flow</strong></div>
+          <div className="studio-brand"><span><Flame size={17} /></span><strong>Krewsys</strong></div>
           <WorkspacePicker workspaces={workspaces} selectedWorkspaceId={selectedWorkspaceId} pathname={pathname} degraded={degraded} />
 
           {/* Opens the ⌘K palette (everyone, clients included: it is scoped to what they can see). */}

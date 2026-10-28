@@ -68,9 +68,9 @@ export function PublicPayView({ token, invoice, back, provider = null }: { token
       {error && <p className="pay-error" role="alert">{error}</p>}
       {!paid && note && <p className="pay-muted">{note}</p>}
       {!paid && !invoice.online_payment?.available && !note && <p className="pay-muted">Online payment isn&rsquo;t available for this invoice right now. Please contact {invoice.studio_name}.</p>}
-      {hosted.size > 0 && !manual && <p className="pay-muted pay-secure"><LockKeyhole aria-hidden="true" />Payment details are entered on {hosted.size > 1 ? "the provider" : [...hosted][0] ?? "Stripe"}&rsquo;s secure page; {invoice.studio_name} and Blaze Flow never see them.</p>}
+      {hosted.size > 0 && !manual && <p className="pay-muted pay-secure"><LockKeyhole aria-hidden="true" />Payment details are entered on {hosted.size > 1 ? "the provider" : [...hosted][0] ?? "Stripe"}&rsquo;s secure page; {invoice.studio_name} and Krewsys never see them.</p>}
     </section>
-    <footer className="pay-foot">Powered by <strong>Blaze Flow</strong> · Payments by {gateways.list.some((o) => o.available) ? gateways.list.filter((o) => o.available).map((o) => o.name).join(", ") : "Stripe"}</footer>
+    <footer className="pay-foot">Powered by <strong>Krewsys</strong> · Payments by {gateways.list.some((o) => o.available) ? gateways.list.filter((o) => o.available).map((o) => o.name).join(", ") : "Stripe"}</footer>
   </main>;
 }
 

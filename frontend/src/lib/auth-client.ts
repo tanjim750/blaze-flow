@@ -55,7 +55,7 @@ async function post<T>(path: string, payload: unknown): Promise<AuthResult<T>> {
       body: JSON.stringify(payload),
     });
   } catch {
-    return { ok: false, error: "Cannot reach the Blaze Flow API. Check that it is running." };
+    return { ok: false, error: "Cannot reach the Krewsys API. Check that it is running." };
   }
   if (!response.ok) {
     const text = await response.text();

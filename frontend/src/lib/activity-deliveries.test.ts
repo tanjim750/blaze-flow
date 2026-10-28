@@ -3,7 +3,7 @@ import { activityText, deliveryBadges, describeActivity, type ActivityEntry } fr
 
 const request = (detail: ActivityEntry["detail"]): ActivityEntry => ({
   id: "a1", created_at: "2026-10-19T12:00:00Z", action: "approval_request.sent", category: "notifications",
-  actor: { type: "system", id: null, name: "Blaze Flow", initials: "BF", avatar_url: null }, verb: "asked for approval",
+  actor: { type: "system", id: null, name: "Krewsys", initials: "K", avatar_url: null }, verb: "asked for approval",
   object: { type: "media_version", id: "m1", label: "Hero 30s", href: "/review?media=f1" },
   project: { id: "p1", name: "Spring Launch" }, before: null, after: null, team_only: true, summary: "", detail,
 });

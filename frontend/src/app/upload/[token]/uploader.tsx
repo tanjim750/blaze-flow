@@ -69,7 +69,7 @@ export function PublicUploader({ token, link }: { token: string; link: PublicUpl
           </div>
         </div>
       </section>
-      <footer className="ul-foot">Files go straight to {link.studio_name}&rsquo;s project. Powered by <strong>Blaze Flow</strong></footer>
+      <footer className="ul-foot">Files go straight to {link.studio_name}&rsquo;s project. Powered by <strong>Krewsys</strong></footer>
     </main>
   );
 }

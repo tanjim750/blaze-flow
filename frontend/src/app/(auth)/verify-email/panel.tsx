@@ -62,7 +62,7 @@ export function VerifyEmailPanel({ token, sent = false, email = "" }: { token: s
           <button className="button secondary" type="button" disabled={busy || cooldown.active} onClick={() => send(resentTo)}>
             {busy ? "Sending…" : cooldown.active ? `Resend in ${cooldown.remaining}s` : "Resend email"}
           </button>
-          <Link className="button primary" href="/">Continue to Blaze Flow</Link>
+          <Link className="button primary" href="/">Continue to Krewsys</Link>
         </div>
         <p className="auth-hint auth-center">Can’t find it? Check spam or promotions, or <button type="button" className="auth-link-button" onClick={() => setResentTo("")}>use a different address</button>.</p>
       </div>
@@ -113,7 +113,7 @@ export function VerifyEmailPanel({ token, sent = false, email = "" }: { token: s
       <div className="auth-status">
         <span>{stage === "working" ? <LoaderCircle size={24} className="auth-spin" aria-hidden /> : <ShieldCheck size={24} aria-hidden />}</span>
         <h2>Verify your email</h2>
-        <p>Confirm this address to finish setting up your Blaze Flow account.</p>
+        <p>Confirm this address to finish setting up your Krewsys account.</p>
       </div>
       <div className="auth-actions">
         <button className="button primary" type="button" onClick={verify} disabled={stage === "working"} aria-busy={stage === "working" || undefined}>

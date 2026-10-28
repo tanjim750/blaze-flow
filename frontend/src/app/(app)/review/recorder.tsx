@@ -101,7 +101,7 @@ export function Recorder({ onClip, disabled }: { onClip: (clip: RecordedClip) =>
       releaseDevices();
       setRecording(false);
       setError(cause instanceof Error && cause.name === "NotAllowedError"
-        ? "Blaze Flow was not given permission to record."
+        ? "Krewsys was not given permission to record."
         : cause instanceof Error ? cause.message : "Recording could not be started.");
     }
   }, [discard, releaseDevices]);

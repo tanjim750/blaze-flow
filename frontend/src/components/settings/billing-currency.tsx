@@ -58,7 +58,7 @@ export function CurrencySettingsForm({ workspaceId, initial, canEdit }: { worksp
   </div>;
 }
 
-/** Workspace country: drives which gateway Blaze Flow recommends (it never limits the choice). */
+/** Workspace country: drives which gateway Krewsys recommends (it never limits the choice). */
 export function CountrySettingsForm({ workspaceId, initial, canEdit }: { workspaceId: string; initial: InvoiceSettings; canEdit: boolean }) {
   const router = useRouter();
   const [saved, setSaved] = useState(initial.country ?? "");

@@ -5,7 +5,7 @@ import type { ActivityPage, GuestLinkActivity } from "./activity";
 import type { DecisionKind, DecisionViewer, ReviewDecision } from "./review-decisions";
 
 /**
- * Server-side client for the Blaze Flow Django API.
+ * Server-side client for the Krewsys Django API.
  *
  * Requests go straight to the Django origin rather than through the Next rewrite,
  * so that a server component does not issue a request back into its own server.
@@ -201,7 +201,7 @@ async function requestOnce<T>(path: string, init?: RequestInit): Promise<ApiResu
     });
   } catch {
     // Django unreachable (or too slow) — surfaced to the page so it can explain itself rather than crash.
-    return failure(0, `Cannot reach the Blaze Flow API at ${API_ORIGIN}.`);
+    return failure(0, `Cannot reach the Krewsys API at ${API_ORIGIN}.`);
   }
   if (!response.ok) {
     return failure(response.status, describeErrorBody(response.status, await response.text(), response.statusText));

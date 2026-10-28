@@ -25,7 +25,7 @@ CASES = [
     ('clean-sans', [('SUMMER SALE', 'sans', 130, ''), ('Up to 50% off everything', 'text', 56, '')], []),
     ('clean-brand-url', [('NORTHLIGHT STUDIO', 'sans', 110, ''), ('Visit www.northlight.studio', 'text', 48, ''), ('@northlight #spring', 'text', 48, '')], []),
     ('clean-legal', [('BIG WINTER DEALS', 'sans', 120, ''), ('Terms and conditions apply. Offer ends 31 December 2026.', 'text', 26, ''), ('Subject to availability while stocks last.', 'text', 26, '')], []),
-    ('clean-script', [('Happy Holidays', 'script', 110, ''), ('from all of us at Blazeflow', 'script', 60, '')], []),
+    ('clean-script', [('Happy Holidays', 'script', 110, ''), ('from all of us at Krewsys', 'script', 60, '')], []),
     ('clean-display', [('GAME NIGHT', 'display', 140, ''), ('Friday at eight', 'display', 70, '')], []),
     ('clean-serif', [('The Autumn Collection', 'serif', 90, ''), ('Handmade in London', 'serif', 60, '')], []),
     ('clean-outline', [('FLASH SALE', 'sans', 150, 'outline'), ('Today only', 'text', 64, '')], []),

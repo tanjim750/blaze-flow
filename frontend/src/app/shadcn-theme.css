@@ -1,12 +1,12 @@
 /*
- * Bridges shadcn/ui's token names onto the Blaze Flow palette.
+ * Bridges shadcn/ui's token names onto the Krewsys palette.
  *
  * shadcn components are written against utilities like `bg-background`,
  * `text-muted-foreground` and `border-border`. Mapping those here means anything added
  * from a registry — shadcn's own or Skiper UI's — picks up the studio theme instead of
  * arriving in shadcn's default neutral grey.
  *
- * The mapping is deliberately one-way. Blaze Flow's variables in `shell.css` are the
+ * The mapping is deliberately one-way. Krewsys's variables in `shell.css` are the
  * source of truth and are NOT redefined here, because two of the names collide:
  * `--muted` is a *text* colour in this app but a *surface* in shadcn, and redefining it
  * would turn every `.muted` label into an unreadable dark block. So the shadcn names are

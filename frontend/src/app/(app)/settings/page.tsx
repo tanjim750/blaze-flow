@@ -51,12 +51,12 @@ export default async function SettingsPage() {
   return <><div className="settings-page">
     <header><h1>{studio ? "Settings" : "My profile"}</h1><p>{studio ? "Manage your identity, studio profile, and account security." : "Your account, notifications and password."}</p></header>
     <section className="settings-card identity-card">
-      <div className="settings-title"><CircleUserRound /><div><h2>Account profile</h2><p>Your sign-in identity is managed by Blaze Flow.</p></div></div>
+      <div className="settings-title"><CircleUserRound /><div><h2>Account profile</h2><p>Your sign-in identity is managed by Krewsys.</p></div></div>
       <div className="identity-values"><span><small>Name</small><strong>{displayName(user)}</strong></span><span><small>Email</small><strong>{user.email}</strong></span><span><small>Timezone</small><strong>{user.timezone || "UTC"}</strong></span></div>
       <VerificationForm verified={Boolean(user.email_verified_at)} />
     </section>
     <section className="settings-card" id="notifications">
-      <div className="settings-title"><Bell /><div><h2>Notifications</h2><p>Choose what shows up in your bell, and when Blaze Flow should also send email.</p></div></div>
+      <div className="settings-title"><Bell /><div><h2>Notifications</h2><p>Choose what shows up in your bell, and when Krewsys should also send email.</p></div></div>
       {workspace && loadedSettings?.ok
         ? <NotificationSettingsForm initial={loadedSettings.data} workspaceName={workspace.name} />
         : <>

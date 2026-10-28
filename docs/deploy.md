@@ -1,4 +1,4 @@
-# Deploying Blaze Flow to a single server
+# Deploying Krewsys to a single server
 
 This is the production path: one Linux VM running `docker-compose.prod.yml`, Cloudflare in
 front, Cloudflare R2 for files. The dev stack (`docker-compose.yml`, runserver, pgAdmin,
@@ -117,7 +117,7 @@ first deploy after this change) recreates `db` once, which is expected.
 
 ### Email with Resend
 
-Blaze Flow sends verification, password-reset, invitation and mention emails as branded
+Krewsys sends verification, password-reset, invitation and mention emails as branded
 HTML + plain text. Configuration is environment-only:
 
 | Set | Result |
@@ -150,7 +150,7 @@ honours `EMAIL_TIMEOUT`, and reports Resend's error message (never the key) on f
    Copy values from the Resend dashboard verbatim (the region and DKIM key are per-account).
    Resend's *Auto configure* button can write them to Cloudflare for you. Click *Verify*;
    it usually turns green within minutes.
-3. **Sender.** Set `DEFAULT_FROM_EMAIL="Blaze Flow <no-reply@mail.example.com>"` — the
+3. **Sender.** Set `DEFAULT_FROM_EMAIL="Krewsys <no-reply@mail.example.com>"` — the
    address must be on the verified domain.
    *Sandbox caveat:* before a domain is verified you can only send from
    `onboarding@resend.dev`, and Resend then delivers **only to the email address of the

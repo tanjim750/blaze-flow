@@ -5,11 +5,11 @@ Design
 * **Connected accounts: Accounts v2** (Stripe's recommendation for new platforms) with the
   ``merchant`` configuration, the **Express dashboard**, ``fees_collector=stripe`` and
   ``losses_collector=stripe``. The agency is the business of record: Stripe bills its fees to
-  the agency and Stripe (not Blaze Flow) carries negative-balance risk.
+  the agency and Stripe (not Krewsys) carries negative-balance risk.
 * **Direct charges.** A Checkout Session is created *on the connected account*
   (``Stripe-Account`` header). The client pays the agency, the money lands in the agency's
   Stripe balance and pays out to the agency's bank; refunds and disputes come out of the
-  agency's balance. Blaze Flow's optional cut is ``application_fee_amount``
+  agency's balance. Krewsys's optional cut is ``application_fee_amount``
   (``PLATFORM_FEE_PERCENT``). This is the charge type Stripe recommends for SaaS platforms
   that "enable invoice payments" (docs.stripe.com/connect/charges).
 * Onboarding is Stripe-hosted (v2 Account Links). Status is read with the v1 Accounts API
@@ -266,7 +266,7 @@ def disconnect(*, workspace, user) -> None:
     """Unlink the agency's Stripe account from this workspace.
 
     The Stripe account itself is the agency's and stays open (with its balance and payouts);
-    Blaze Flow simply stops offering Pay now. Payments already recorded are kept.
+    Krewsys simply stops offering Pay now. Payments already recorded are kept.
     """
     account = account_for(workspace)
     if account is None:

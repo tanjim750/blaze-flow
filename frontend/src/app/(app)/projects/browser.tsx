@@ -218,7 +218,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
 
           <div className="pb-title-row">
             <div className="pb-title">
-              <span className="pb-monogram">{initials(view.selectedClient?.name ?? "Blaze Flow")}</span>
+              <span className="pb-monogram">{initials(view.selectedClient?.name ?? "Krewsys")}</span>
               <h1>{view.selectedCampaign?.name ?? "No campaign selected"}</h1>
               {view.workspaceId && view.selectedCampaign && <StatusPill status={view.selectedCampaign.project?.status ?? view.selectedCampaign.status ?? "DRAFT"} />}
               {/* The client link is a quiet chip beside the title rather than a toolbar button. */}

@@ -1,5 +1,5 @@
 /*
- * Blaze Flow design tokens — the single source for colour, spacing, radius and type.
+ * Krewsys design tokens — the single source for colour, spacing, radius and type.
  *
  * Every token is a `--bf-*` custom property defined here and nowhere else. Screens read
  * them directly, or through their own scoped aliases (`.fx { --primary: var(--bf-primary) }`,

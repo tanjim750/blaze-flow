@@ -452,7 +452,7 @@ def delete_draft_invoice(*, invoice, user):
 def record_payment(*, workspace, amount=None, invoice=None, payee_membership=None, paid_on=None,
                    method=PaymentMethod.BANK_TRANSFER, note='', provider=PaymentProvider.MANUAL,
                    provider_reference=None, recorded_by=None):
-    """Record money moving. The single path by which anything in Blaze Flow becomes paid.
+    """Record money moving. The single path by which anything in Krewsys becomes paid.
 
     Exactly one of ``invoice`` (a client paying us: incoming) or ``payee_membership`` (us paying
     an editor: outgoing) is given. ``amount`` defaults to everything still outstanding/owed,

@@ -1,5 +1,5 @@
 /*
- * Tasks workflow board (`tb-`). Every colour comes from the Blaze Flow design-system
+ * Tasks workflow board (`tb-`). Every colour comes from the Krewsys design-system
  * tokens in app/tokens.css (`--bf-*`), aliased here under `--tb-*` and scoped to the
  * `.tb-*` roots; inside the Files panel the `.fx` aliases of the same tokens win.
  * Names that collide with the current palette (`--muted`, `--border`,

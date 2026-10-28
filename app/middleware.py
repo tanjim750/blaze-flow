@@ -55,7 +55,7 @@ class DatabaseUnavailableMiddleware:
             except Exception:  # noqa: BLE001 - already broken; drop it either way
                 pass
         response = JsonResponse(
-            {'detail': 'Blaze Flow is briefly unavailable. Please try again.', 'code': 'service_unavailable'},
+            {'detail': 'Krewsys is briefly unavailable. Please try again.', 'code': 'service_unavailable'},
             status=503,
         )
         response['Retry-After'] = '2'

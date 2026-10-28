@@ -66,7 +66,7 @@ export function StripeConnectCard({ workspaceId, initial }: { workspaceId: strin
         {status.account_id && <li className="is-id">Account {status.account_id}{status.country ? ` · ${status.country}` : ""}{status.default_currency ? ` · ${status.default_currency}` : ""}</li>}
       </ul>}
       {due.length > 0 && <p className="stripe-note is-warn">Stripe needs: {due.slice(0, 4).map(requirementLabel).join(", ")}{due.length > 4 ? ` and ${due.length - 4} more` : ""}.</p>}
-      {Number(status.platform_fee_percent) > 0 && <p className="stripe-note is-muted">Blaze Flow adds a {status.platform_fee_percent}% platform fee to each online payment, on top of Stripe&rsquo;s own fees.</p>}
+      {Number(status.platform_fee_percent) > 0 && <p className="stripe-note is-muted">Krewsys adds a {status.platform_fee_percent}% platform fee to each online payment, on top of Stripe&rsquo;s own fees.</p>}
       {!status.can_manage && <p className="stripe-note is-muted">Only workspace owners and admins can connect or change Stripe.</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
       {manage && <div className="stripe-actions">

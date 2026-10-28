@@ -12,7 +12,7 @@ export default async function PlatformAudit({ searchParams }: PageProps<"/platfo
   const offset = Number(firstParam(params.offset)) || 0;
   const result = await listAudit({ ...filters, offset, limit: 50 });
   return <>
-    <PageHead title="Audit log" sub="Everything recorded across Blaze Flow. Every staff action appears here with its reason." />
+    <PageHead title="Audit log" sub="Everything recorded across Krewsys. Every staff action appears here with its reason." />
     <form className="pf-filters" action="/platform/audit">
       <label>Actor type<Select name="actor_type" aria-label="Actor type" defaultValue={filters.actor_type} options={[{ value: "", label: "Any" }, { value: "PLATFORM_STAFF", label: "Staff" }, { value: "USER", label: "User" }, { value: "GUEST", label: "Guest" }, { value: "SYSTEM", label: "System" }]} /></label>
       <label>Actor email<input name="actor" defaultValue={filters.actor} placeholder="name@…" /></label>
