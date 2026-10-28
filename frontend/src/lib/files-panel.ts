@@ -271,7 +271,7 @@ export type LibraryNavInput = {
 };
 
 /**
- * Frame-style left rail for Blaze: All files, then By client → project → folders,
+ * Frame-style left rail for Krewsys: All files, then By client → project → folders,
  * then Studio for assets/folders with no client. Counts are latest files only.
  */
 export function libraryNavRows(input: LibraryNavInput): LibraryNavRow[] {
