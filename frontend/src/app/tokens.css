@@ -6,8 +6,9 @@
  * `.tb-root { --tb-fg: var(--bf-foreground) }`), so a value changes in one place.
  *
  * Values follow design-system/blaze-flow-design-system.md (§2 colour, §3 type, §4 space,
- * §5 radius). The app is dark-first with the violet accent; `.light` carries the DS light
- * values for the screens that support it.
+ * §5 radius). Dark and light themes: `:root, .dark` is the dark set, `.light` (on <html>,
+ * chosen by the theme switch — see lib/theme.ts) overrides colours only. Screen-level colours
+ * that used to be hard-coded live in theme-palette.css with the same dark/light split.
  *
  * The older app palette (`--bg`, `--surface`, `--primary` …, used by shell, dashboard and
  * review CSS) is defined at the bottom, also here, so there is still one file to look in.
@@ -117,38 +118,64 @@
   --teal: var(--bf-teal);
 }
 
-.light {
-  --bf-background: oklch(0.985 0.002 285);
-  --bf-field: oklch(1 0 0);
-  --bf-card: oklch(1 0 0);
-  --bf-muted: oklch(0.96 0.004 285);
-  --bf-popover: oklch(1 0 0);
-  --bf-secondary: oklch(0.955 0.005 285);
-  --bf-accent: oklch(0.945 0.006 285);
+:root.light {
+  /* Light theme: cool-neutral canvas, white cards, the same violet accent. Text pairs are
+   * WCAG AA on both canvas and card (foreground 16:1, muted 5.9:1, brand text 6.6:1). */
+  --bf-canvas: #F5F6F9;
+  --bf-background: #F5F6F9;
+  --bf-field: #FFFFFF;
+  --bf-card: #FFFFFF;
+  --bf-muted: #F1F2F6;
+  --bf-popover: #FFFFFF;
+  --bf-secondary: #F1F2F6;
+  --bf-accent: #ECEEF3;
   --bf-overlay: oklch(0.2 0.01 285 / 40%);
-  --bf-foreground: oklch(0.21 0.012 285);
-  --bf-muted-foreground: oklch(0.50 0.018 285);
-  --bf-subtle-foreground: oklch(0.54 0.015 285);
-  --bf-border: oklch(0.91 0.006 285);
-  --bf-border-strong: oklch(0.86 0.008 285);
-  --bf-input: oklch(0.62 0.010 285);
-  --bf-input-hover: oklch(0.56 0.010 285);
-  --bf-primary: oklch(0.53 0.22 287);
-  --bf-primary-hover: oklch(0.48 0.21 287);
-  --bf-brand-foreground: oklch(0.50 0.20 287);
-  --bf-ring: oklch(0.55 0.20 288);
+  --bf-foreground: #161A23;
+  --bf-muted-foreground: #5B6475;
+  --bf-subtle-foreground: #5B6475;
+  --bf-border: #E2E5EB;
+  --bf-border-strong: #CDD2DB;
+  --bf-input: #C9CED8;
+  --bf-input-hover: #A9B0BD;
+  --bf-primary: #7C3AED;
+  --bf-primary-hover: #6D28D9;
+  --bf-brand: #7C3AED;
+  --bf-brand-foreground: #6D28D9;
+  --bf-ring: #7C3AED;
+  --bf-violet-300: #6D28D9;
+  --bf-violet-400: #7C3AED;
+  --bf-violet-600: #5B21B6;
   --bf-success: oklch(0.48 0.11 155);
   --bf-warning: oklch(0.50 0.11 60);
   --bf-destructive: oklch(0.52 0.19 25);
+  --bf-destructive-solid: oklch(0.52 0.20 25);
   --bf-info: oklch(0.49 0.14 252);
   --bf-teal: oklch(0.48 0.078 190);
-  --bf-elevation-2: 0 8px 24px oklch(0.2 0.01 285 / 12%);
-  --bf-elevation-3: 0 24px 64px oklch(0.2 0.01 285 / 18%);
+  --bf-annotation: oklch(0.62 0.15 75);
+  --bf-elevation-2: 0 8px 24px oklch(0.2 0.01 285 / 10%);
+  --bf-elevation-3: 0 24px 64px oklch(0.2 0.01 285 / 16%);
   --teal: var(--bf-teal);
+
+  /* The older app palette, light values. */
+  --bg: #F5F6F9;
+  --surface: #FFFFFF;
+  --surface-2: #FFFFFF;
+  --hover: #ECEEF3;
+  --border: #E2E5EB;
+  --text: #161A23;
+  --muted: #5B6475;
+  --primary: #7C3AED;
+  --primary-2: #6D28D9;
+  --warning: #B45309;
+  --danger: #DC2626;
+  --premium-shadow: 0 1px 2px rgba(16, 24, 40, .06);
+  --premium-ring: 0 0 0 3px rgba(124, 58, 237, .18);
+  --scrollbar-thumb: #C3C8D2;
+  color-scheme: light;
 }
 
 /* ---- The older app palette (shell, dashboard, review, auth). Same values as before. */
-:root {
+:root, .dark {
   --bg: #12151D;
   --surface: #1A1E28;
   --surface-2: #1A1E28;
@@ -162,4 +189,6 @@
   --danger: #ff6874;
   --premium-shadow: none;
   --premium-ring: 0 0 0 3px rgba(139, 108, 255, .18);
+  --scrollbar-thumb: #393440;
+  color-scheme: dark;
 }

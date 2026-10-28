@@ -26,7 +26,7 @@
   --color-popover-foreground: var(--text);
 
   --color-primary: var(--primary);
-  --color-primary-foreground: #ffffff;
+  --color-primary-foreground: var(--t-fg-ffffff);
 
   --color-secondary: var(--surface-2);
   --color-secondary-foreground: var(--text);
@@ -39,7 +39,7 @@
   --color-accent-foreground: var(--text);
 
   --color-destructive: var(--danger);
-  --color-destructive-foreground: #ffffff;
+  --color-destructive-foreground: var(--t-fg-ffffff);
 
   --color-border: var(--border);
   --color-input: var(--border);

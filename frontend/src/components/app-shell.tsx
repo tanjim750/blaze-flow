@@ -1,5 +1,6 @@
 "use client";
 
+import { ThemeSwitch } from "@/components/theme/theme-switch";
 import Link from "next/link";
 import { CommandPalette, openQuickSearch } from "@/components/command-palette";
 import { LinkPending } from "@/components/nav-progress";
@@ -300,6 +301,7 @@ function AccountMenu({ user }: { user: ShellUser | null }) {
             <strong>{user.name}</strong>
             <small><Mail size={11} />{user.email}</small>
           </div>
+          <div className="studio-account-theme"><small>Theme</small><ThemeSwitch compact label="Theme" /></div>
           <Link href="/settings" role="menuitem" onClick={() => setOpen(false)}>
             <Settings size={15} />Settings
           </Link>

@@ -28,7 +28,7 @@
 .ui-dialog-content.payout-dialog { display: grid; gap: 14px; }
 .payout-view { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .payout-view > li { padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
-.payout-view > li.is-preferred { border-color: color-mix(in srgb, var(--shell-primary, #8d73fb) 55%, var(--border)); }
+.payout-view > li.is-preferred { border-color: color-mix(in srgb, var(--shell-primary, var(--t-line-8d73fb)) 55%, var(--border)); }
 .payout-view header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
 .payout-view dl { display: grid; gap: 8px; margin: 0; }
 .payout-view dl > div { display: grid; gap: 2px; }
@@ -40,7 +40,7 @@
 .payout-chip { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 11px; white-space: nowrap; background: transparent; cursor: pointer; }
 .payout-chip svg { width: 12px; height: 12px; }
 .payout-chip.is-missing { border-style: dashed; }
-.payout-chip:hover { color: var(--text); border-color: #4a4656; }
+.payout-chip:hover { color: var(--text); border-color: var(--t-line-4a4656); }
 .money-method-hint { color: var(--muted); }
 .money-owed-cell { display: grid; justify-items: start; }
 @media (max-width: 700px) {

@@ -7,6 +7,8 @@ import { NavProgress } from "@/components/nav-progress";
 import { SubmitFeedback } from "@/components/submit-feedback";
 import { UploadTray } from "@/components/uploads/upload-tray";
 import { siteConfig } from "@/lib/site-config";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
+import { ThemeSync } from "@/components/theme/use-theme";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,9 +33,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      {/* Applies the saved Dark/Light/System theme before first paint (no flash). */}
+      <head><script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} /></head>
       <body className="min-h-full flex flex-col">
         <Suspense fallback={null}><NavProgress /></Suspense>
+        <ThemeSync />
         <SubmitFeedback />
         <UploadTray />
         {children}

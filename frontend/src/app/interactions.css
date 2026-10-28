@@ -37,7 +37,7 @@ textarea, select, [contenteditable]:not([contenteditable=false]), [role=textbox]
 :where(button[aria-busy=true]) { position: relative; color: transparent !important; pointer-events: none; }
 :where(button[aria-busy=true])::after {
   content: ""; position: absolute; inset: 0; margin: auto; width: 14px; height: 14px;
-  border: 2px solid currentColor; border-color: var(--text, #fff) transparent var(--text, #fff) var(--text, #fff);
+  border: 2px solid currentColor; border-color: var(--text, var(--t-line-ffffff)) transparent var(--text, var(--t-line-ffffff)) var(--text, var(--t-line-ffffff));
   border-radius: 50%; animation: bf-spin .7s linear infinite;
 }
 @keyframes bf-spin { to { transform: rotate(360deg); } }
