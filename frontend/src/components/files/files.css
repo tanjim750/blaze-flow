@@ -865,3 +865,6 @@
   .fx-toolbar-one.is-search-open .fx-search input { padding-right: 44px; }
   .fx-toolbar-one.is-search-open .fx-search > .fx-icon-btn { width: 36px; min-height: 36px; height: 36px; }
 }
+
+/* Section heading ("Folders", group titles) + chevron share the folder-tile meta colour ("1 Item" / "1 Assets • 1.4 GB" line) in both themes. */
+.fx .fx-section-head button, .fx .fx-section-head .fx-chevron { color: var(--bf-muted-foreground, var(--t-fg-9aa3b5)); }
