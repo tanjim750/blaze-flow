@@ -91,7 +91,10 @@
 
 /* Google */
 .google-auth { display: grid; gap: 8px; }
-/* One custom button; the real GIS button sits invisibly on top (see google-sign-in.tsx). */
+/* Our styled face is only a placeholder while GIS loads; then Google's real button is shown
+   visibly in its place. Never hide the GIS button with opacity 0: its iframe checks its own
+   visibility (IntersectionObserver v2 clickjacking protection) and a transparent button reports
+   isVisible=false, so sign-in silently fails in real Chrome (see google-sign-in.tsx). */
 .google-slot { position: relative; height: 44px; border-radius: 9px; }
 .google-fallback {
   display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 44px;
@@ -100,15 +103,13 @@
   box-shadow: none; transition: border-color .18s ease, background-color .18s ease;
 }
 .google-fallback svg { flex: none; display: block; }
-.google-face { position: absolute; inset: 0; pointer-events: none; }
-.google-slot:not(.is-ready) .google-face { opacity: .75; }
-.google-slot.is-ready:hover .google-face { border-color: var(--muted); }
-.google-slot.is-busy .google-face { opacity: .65; }
-.google-button { position: absolute; inset: 0; z-index: 1; opacity: 0; overflow: hidden; border-radius: 9px; cursor: pointer; }
-.google-button > div, .google-button iframe { width: 100% !important; height: 100% !important; margin: 0 !important; }
-.google-slot:not(.is-ready) .google-button { pointer-events: none; }
-/* Single visible focus ring, matching other auth controls. */
-.google-slot:focus-within .google-face, .google-slot.is-focused .google-face { outline: 2px solid var(--primary-2); outline-offset: 2px; }
+.google-face { position: absolute; inset: 0; pointer-events: none; opacity: .75; }
+.google-slot.is-ready .google-face { visibility: hidden; }
+/* GIS renders at its own size (200–400px); centre it, never stretch or fade the iframe. */
+.google-button { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; }
+.google-slot:not(.is-ready) .google-button { visibility: hidden; pointer-events: none; }
+.google-slot.is-busy .google-button { pointer-events: none; }
+.google-slot:focus-within, .google-slot.is-focused { outline: 2px solid var(--primary-2); outline-offset: 2px; }
 .google-fallback:disabled { opacity: .55; cursor: not-allowed; }
 .auth-divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
 .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
