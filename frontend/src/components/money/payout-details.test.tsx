@@ -66,7 +66,7 @@ describe("PayoutDetailsForm", () => {
     const { container } = render(<WhyWeAsk />);
     const details = container.querySelector("details")!;
     expect(details.open).toBe(false);
-    expect(details.textContent).toMatch(/Blaze Flow never holds or moves money/);
+    expect(details.textContent).toMatch(/Krewsys never holds or moves money/);
   });
 });
 

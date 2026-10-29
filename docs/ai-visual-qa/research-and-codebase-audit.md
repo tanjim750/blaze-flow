@@ -1,4 +1,4 @@
-# AI Visual QA: research and codebase audit (Blaze Flow; the brief calls it "AgencyOS")
+# AI Visual QA: research and codebase audit (Krewsys; the brief calls it "AgencyOS")
 
 Read-only audit of `tanjim750/blaze-flow`, base `origin/feat/update-models-and-migrations` @ 67c3943 (main clone HEAD 8c1c68f; uncommitted package.json pins left alone). Baseline from the last run: 539 backend tests pass, CI green. I didn't re-run it for this audit.
 

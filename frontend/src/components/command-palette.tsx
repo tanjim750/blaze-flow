@@ -155,7 +155,7 @@ export function CommandPalette({ workspace }: { workspace: Workspace | null }) {
             ))}
             {!rows.length && (
               <p className="qs-empty" role="status">
-                {failed ? <>Search is unavailable right now. <button type="button" className="qs-retry" onClick={() => { setFailed(false); setAttempt((n) => n + 1); }}>Try again</button></> : searching ? "Searching…" : !workspaceId && trimmed.length >= MIN_QUERY ? "Search comes back once Blaze Flow reconnects." : trimmed.length >= MIN_QUERY ? `Nothing matches “${trimmed}”.` : "Type to search."}
+                {failed ? <>Search is unavailable right now. <button type="button" className="qs-retry" onClick={() => { setFailed(false); setAttempt((n) => n + 1); }}>Try again</button></> : searching ? "Searching…" : !workspaceId && trimmed.length >= MIN_QUERY ? "Search comes back once Krewsys reconnects." : trimmed.length >= MIN_QUERY ? `Nothing matches “${trimmed}”.` : "Type to search."}
               </p>
             )}
           </div>

@@ -1,4 +1,4 @@
-# Blaze Flow maintenance schedule, run by supercronic in the `scheduler` service.
+# Krewsys maintenance schedule, run by supercronic in the `scheduler` service.
 # Times are UTC (the container clock). Output goes to the container log.
 #
 # Not scheduled on purpose:

@@ -20,7 +20,7 @@ const CATEGORIES = [
 ];
 
 /**
- * "Report a problem": becomes a ticket in the Blaze Flow support inbox (`/platform/support`).
+ * "Report a problem": becomes a ticket in the Krewsys support inbox (`/platform/support`).
  * The page address and browser go with it (only if the box stays ticked), so support does
  * not have to ask; the server adds the plan and a request id itself.
  */
@@ -61,7 +61,7 @@ export function ReportProblemDialog({ workspaceId }: { workspaceId: string | nul
       {open && <DialogContent className="report-dialog">
         <DialogClose />
         <DialogTitle>Report a problem</DialogTitle>
-        <DialogDescription>Tell the Blaze Flow team what went wrong. We reply by email.</DialogDescription>
+        <DialogDescription>Tell the Krewsys team what went wrong. We reply by email.</DialogDescription>
         <form onSubmit={submit} className="report-form">
           <label>What is it about?
             <Select aria-label="Category" value={category} onValueChange={setCategory} options={CATEGORIES.map((c) => ({ value: c.value, label: c.label }))} />

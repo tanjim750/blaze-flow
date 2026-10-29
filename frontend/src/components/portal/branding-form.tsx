@@ -79,7 +79,7 @@ export function BrandingForm({ workspaceId, initial, canEdit }: { workspaceId: s
           {branding.logo_url && <button type="button" className="pt-ghost is-danger" disabled={!canEdit || busy !== null} onClick={dropLogo}><Trash2 />Remove</button>}
         </div>
       </div>
-      <div className="pt-field">Accent colour <small>Used for highlights and buttons on the client portal and upload pages. Leave empty for Blaze Flow violet.</small>
+      <div className="pt-field">Accent colour <small>Used for highlights and buttons on the client portal and upload pages. Leave empty for Krewsys violet.</small>
         <div className="pt-color-row">
           <input type="color" value={colorOk && color ? color : "#8B6CFF"} onChange={(event) => setColor(event.target.value.toUpperCase())} disabled={!canEdit} aria-label="Pick accent colour" />
           <input type="text" value={color} onChange={(event) => setColor(event.target.value.trim())} placeholder="#8B6CFF" maxLength={7} disabled={!canEdit} aria-label="Accent colour hex" aria-invalid={!colorOk} />

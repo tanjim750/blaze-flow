@@ -4,7 +4,7 @@
  */
 export type Strength = { score: 0 | 1 | 2 | 3 | 4; label: string; hint: string };
 
-const COMMON = ["password", "123456", "qwerty", "letmein", "welcome", "admin", "blazeflow", "iloveyou", "abc123"];
+const COMMON = ["password", "123456", "qwerty", "letmein", "welcome", "admin", "blazeflow", "krewsys", "iloveyou", "abc123"];
 
 export function passwordStrength(password: string, context: string[] = []): Strength {
   if (!password) return { score: 0, label: "", hint: "Use at least 8 characters." };

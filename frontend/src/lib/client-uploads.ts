@@ -143,7 +143,7 @@ export async function call<T>(path: string, init: RequestInit = {}): Promise<Cal
       headers: { Accept: "application/json", ...(csrf ? { "X-CSRFToken": csrf } : {}), ...(init.headers ?? {}) },
     });
   } catch {
-    return { ok: false, status: 0, error: "Blaze Flow could not be reached. Check your connection and try again." };
+    return { ok: false, status: 0, error: "Krewsys could not be reached. Check your connection and try again." };
   }
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { detail?: string } | null;

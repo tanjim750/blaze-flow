@@ -30,12 +30,12 @@ export function OnboardingForm({ verified, email, defaultTimezone }: { verified:
   return (
     <section className="onboarding-card">
       <span className="onboarding-icon"><Building2 /></span>
-      <p className="eyebrow">Welcome to Blaze Flow</p>
+      <p className="eyebrow">Welcome to Krewsys</p>
       <h1>Create your workspace</h1>
       <p>This is the home for your clients, campaigns, reviews, and team.</p>
       <form action={createAction} className="onboarding-form">
         <label>Workspace name<input name="name" placeholder="Northstar Studio" required autoFocus /></label>
-        <label>Workspace URL <div className="slug-field"><span>blazeflow /</span><input name="slug" placeholder="northstar-studio" pattern="[a-z0-9-]+" /></div></label>
+        <label>Workspace URL <div className="slug-field"><span>krewsys /</span><input name="slug" placeholder="northstar-studio" pattern="[a-z0-9-]+" /></div></label>
         <input type="hidden" name="timezone" value={defaultTimezone} />
         <small>Timezone: {defaultTimezone}</small>
         {workspaceState.error && <p className="form-error" role="alert">{workspaceState.error}</p>}

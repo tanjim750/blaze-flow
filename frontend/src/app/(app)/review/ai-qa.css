@@ -23,7 +23,7 @@
 .aiqa-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0; padding: 0; list-style: none; }
 .aiqa-steps li { display: grid; justify-items: center; gap: 4px; color: var(--muted); font-size: 10.5px; text-align: center; }
 .aiqa-steps li span { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; border: 1px solid var(--rv-line); font-size: 10px; }
-.aiqa-steps li.is-done span { background: var(--bf-success); border-color: transparent; color: #0b0b0e; }
+.aiqa-steps li.is-done span { background: var(--bf-success); border-color: transparent; color: var(--t-fg-0b0b0e); }
 .aiqa-steps li.is-current { color: var(--text); }
 .aiqa-steps li.is-current span { border-color: var(--bf-violet-400); color: var(--bf-violet-300); }
 
@@ -116,33 +116,33 @@
 .aiqa-highlight { transition: opacity .25s ease; }
 .aiqa-time {
   display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
-  padding: 1px 6px; border-radius: 4px; background: rgba(139, 92, 246, .14); color: #c4b5fd;
+  padding: 1px 6px; border-radius: 4px; background: var(--t-bg-8b5cf624); color: var(--t-fg-c4b5fd);
   font: 600 11px var(--font-geist-mono), monospace;
 }
-.aiqa-bar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .08); overflow: hidden; }
-.aiqa-bar span { display: block; height: 100%; background: #8b5cf6; transition: width .4s ease; }
+.aiqa-bar { height: 4px; border-radius: 2px; background: var(--t-bg-ffffff14); overflow: hidden; }
+.aiqa-bar span { display: block; height: 100%; background: var(--t-bg-8b5cf6); transition: width .4s ease; }
 .aiqa-cancel { align-self: flex-start; }
 .rvp-ai-marker {
   position: absolute; top: 2px; height: 5px; min-width: 6px; padding: 0;
-  border: 0; border-radius: 3px; background: #8b5cf6; opacity: .75; cursor: pointer; z-index: 2;
+  border: 0; border-radius: 3px; background: var(--t-bg-8b5cf6); opacity: .75; cursor: pointer; z-index: 2;
 }
-.rvp-ai-marker.is-medium { background: #a78bfa; }
-.rvp-ai-marker.is-low { background: #6b7280; }
-.rvp-ai-marker:hover, .rvp-ai-marker.is-selected { opacity: 1; box-shadow: 0 0 0 2px rgba(196, 181, 253, .55); }
+.rvp-ai-marker.is-medium { background: var(--t-bg-a78bfa); }
+.rvp-ai-marker.is-low { background: var(--t-bg-6b7280); }
+.rvp-ai-marker:hover, .rvp-ai-marker.is-selected { opacity: 1; box-shadow: 0 0 0 2px var(--t-shadow-c4b5fd8c); }
 .rv-ai-btn { white-space: nowrap; }
 .rv-ai-btn:disabled { opacity: .55; cursor: default; }
 @media (max-width: 1240px) { .rv-ai-btn span { display: none; } .rv-actions .rv-ai-btn { padding: 0; width: 30px; justify-content: center; } }
 .aiqa-partial { display: grid; gap: 8px; margin-top: 4px; }
-.aiqa-partial-head { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; font-weight: 600; color: #c4b5fd; flex-wrap: wrap; }
+.aiqa-partial-head { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; font-weight: 600; color: var(--t-fg-c4b5fd); flex-wrap: wrap; }
 .aiqa-partial-head span { font-weight: 400; color: var(--muted); }
 .aiqa-partial .aiqa-card { animation: aiqa-in .3s ease; }
 @keyframes aiqa-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 /* PR 3: approved-copy compare */
 .aiqa-copy { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
-.aiqa-copy textarea { width: 100%; min-height: 110px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field, #0A0A0A); color: var(--text); font: inherit; resize: vertical; }
-.aiqa-copy-preview { max-height: 140px; overflow: auto; margin: 0; padding: 8px 10px; border-radius: 8px; background: #ffffff0a; white-space: pre-wrap; font: inherit; font-size: 12px; color: var(--muted); }
-.aiqa-missing { font-style: normal; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #f5a52422; color: #f5c46b; }
+.aiqa-copy textarea { width: 100%; min-height: 110px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--field, var(--t-bg-0a0a0a)); color: var(--text); font: inherit; resize: vertical; }
+.aiqa-copy-preview { max-height: 140px; overflow: auto; margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--t-bg-ffffff0a); white-space: pre-wrap; font: inherit; font-size: 12px; color: var(--muted); }
+.aiqa-missing { font-style: normal; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--t-bg-f5a52422); color: var(--t-fg-f5c46b); }
 .aiqa-batch-list { list-style: none; padding-left: 0; max-height: 50vh; overflow: auto; }
 .aiqa-batch-list li { display: grid; gap: 2px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; }
 .aiqa-batch-cat { font-size: 11px; color: var(--muted); }

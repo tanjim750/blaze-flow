@@ -1,0 +1,34 @@
+/* Krewsys mark colours — dark kit by default (matches the `:root, .dark` tokens), light kit under :root.light. */
+.ks-mark, .ks-logo, .ks-loader { --ks-f1: #7c3aed; --ks-f2: #a78bfa; --ks-f3: #c4b5fd; --ks-word: #ffffff; flex: none; display: inline-block; }
+:root.light .ks-mark, :root.light .ks-logo, :root.light .ks-loader { --ks-f2: #5b21b6; --ks-f3: #a78bfa; --ks-word: #0b0b12; }
+.ks-f1 { fill: var(--ks-f1); } .ks-f2 { fill: var(--ks-f2); } .ks-f3 { fill: var(--ks-f3); } .ks-word { fill: var(--ks-word); }
+
+/* Loader: designer's fold-in / hold / fold-away loop, 1.4s. */
+.ks-loader { display: inline-grid; place-items: center; }
+.ks-loader path { transform-box: view-box; animation: ks-fx 1.4s cubic-bezier(.65,0,.35,1) infinite both; }
+.ks-loader path.y { animation-name: ks-fy; }
+.ks-loader path:nth-of-type(1) { transform-origin: 12px 32px; animation-delay: 0s; }
+.ks-loader path:nth-of-type(2) { transform-origin: 26px 12px; animation-delay: .1s; }
+.ks-loader path:nth-of-type(3) { transform-origin: 26px 34px; animation-delay: .2s; }
+.ks-loader path:nth-of-type(4) { transform-origin: 26px 34px; animation-delay: .13s; }
+.ks-loader path:nth-of-type(5) { transform-origin: 26px 46px; animation-delay: .03s; }
+@keyframes ks-fx { 0%,4% { transform: scaleX(0); opacity: 0 } 12% { opacity: 1 } 22% { transform: scaleX(1.06) } 28%,68% { transform: scaleX(1); opacity: 1 } 86%,100% { transform: scaleX(0); opacity: 0 } }
+@keyframes ks-fy { 0%,4% { transform: scaleY(0); opacity: 0 } 12% { opacity: 1 } 22% { transform: scaleY(1.06) } 28%,68% { transform: scaleY(1); opacity: 1 } 86%,100% { transform: scaleY(0); opacity: 0 } }
+@media (prefers-reduced-motion: reduce) {
+  .ks-loader path, .ks-loader path.y { animation: ks-pulse 1.6s ease-in-out infinite; transform: none; }
+  @keyframes ks-pulse { 0%,100% { opacity: 1 } 50% { opacity: .55 } }
+}
+
+/* Full-page loader: invisible for the first 300ms so fast loads never flash it. */
+.ks-page-loader { display: grid; place-items: center; min-height: min(60vh, 520px); width: 100%; animation: ks-reveal .2s ease-out .3s both; }
+.ks-page-loader.is-fullscreen { position: fixed; inset: 0; min-height: 0; z-index: 90; background: var(--bg, #0b0b10); }
+@keyframes ks-reveal { from { opacity: 0 } to { opacity: 1 } }
+
+/* Placements */
+.studio-brand .studio-brand-icon { display: none; }
+.is-collapsed .studio-brand .studio-brand-full { display: none; }
+.is-collapsed .studio-brand .studio-brand-icon { display: inline-block; }
+.studio-mobilebar-mark { margin-left: 2px; }
+.auth-brand .ks-logo, .onboarding-page > header .ks-logo, .gr-brand .ks-logo { display: block; }
+.pf-brand > .ks-mark { padding: 0; background: none; }
+.powered-logo { vertical-align: -3px; margin-left: 3px; }

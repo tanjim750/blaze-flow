@@ -276,7 +276,7 @@ STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY', '').strip()
 # Signing secret(s) of the Connect webhook endpoint (whsec_...). Comma-separate several when
 # more than one endpoint (e.g. a snapshot and a thin-event destination) points here.
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip()
-# Optional Blaze Flow cut of each invoice payment, as a percent (0 = none). Sent to Stripe as
+# Optional Krewsys cut of each invoice payment, as a percent (0 = none). Sent to Stripe as
 # application_fee_amount on the direct charge.
 PLATFORM_FEE_PERCENT = os.environ.get('PLATFORM_FEE_PERCENT', '0').strip() or '0'
 STRIPE_REQUEST_TIMEOUT_SECONDS = float(os.environ.get('STRIPE_REQUEST_TIMEOUT_SECONDS', '20'))
@@ -387,7 +387,7 @@ else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '20'))
 # Brand name shown in email templates.
-EMAIL_BRAND_NAME = os.environ.get('EMAIL_BRAND_NAME', 'Blaze Flow')
+EMAIL_BRAND_NAME = os.environ.get('EMAIL_BRAND_NAME', 'Krewsys')
 
 # --- Sign-up mode ------------------------------------------------------------------------
 # open: anyone may register. invite_only: only people holding a valid workspace or client
@@ -396,7 +396,7 @@ SIGNUP_MODE = os.environ.get('SIGNUP_MODE', 'open').strip().lower()
 if SIGNUP_MODE not in {'open', 'invite_only'}:
     raise ImproperlyConfigured('SIGNUP_MODE must be open or invite_only.')
 INVITE_ACCEPT_URL = os.environ.get('INVITE_ACCEPT_URL', f'{APP_BASE_URL}/invite')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Blaze Flow <no-reply@localhost>')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Krewsys <no-reply@localhost>')
 PASSWORD_RESET_URL = os.environ.get('PASSWORD_RESET_URL', f'{APP_BASE_URL}/reset-password')
 PASSWORD_RESET_TTL_MINUTES = int(os.environ.get('PASSWORD_RESET_TTL_MINUTES', '30'))
 EMAIL_VERIFICATION_URL = os.environ.get(

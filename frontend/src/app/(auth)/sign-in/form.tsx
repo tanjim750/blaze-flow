@@ -46,7 +46,7 @@ export function SignInForm({ next, signedOut = false, email = "" }: { next?: str
     <form className="auth-form" onSubmit={submit} noValidate aria-labelledby="sign-in-title">
       <header>
         <p className="eyebrow">Welcome back</p>
-        <h2 id="sign-in-title">Sign in to Blaze Flow</h2>
+        <h2 id="sign-in-title">Sign in to Krewsys</h2>
         <p className="muted">Pick up where your team left off.</p>
       </header>
 
@@ -74,7 +74,7 @@ export function SignInForm({ next, signedOut = false, email = "" }: { next?: str
       <SubmitButton busy={busy} busyLabel="Signing in…">Sign in</SubmitButton>
 
       <p className="form-foot">
-        New to Blaze Flow? <Link href={signUpHref}>Create an account</Link>
+        New to Krewsys? <Link href={signUpHref}>Create an account</Link>
       </p>
     </form>
   );

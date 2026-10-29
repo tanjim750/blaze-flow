@@ -9,7 +9,7 @@ import { BrandingSync } from "@/components/portal/branding-sync";
 import { ProjectRequestForm } from "@/components/portal/request-form";
 import "@/components/portal/portal.css";
 
-export const metadata: Metadata = { title: "Start a new project · Client portal · Blaze Flow" };
+export const metadata: Metadata = { title: "Start a new project · Client portal · Krewsys" };
 
 const todayIso = () => new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 

@@ -1,4 +1,4 @@
-# Blaze Flow production stack (single host). See docs/deploy.md.
+# Krewsys production stack (single host). See docs/deploy.md.
 #
 #   cp .env.production.example .env.production   # fill in real values; never commit it
 #   (always pass --env-file .env.production: db's POSTGRES_* are interpolated from it)

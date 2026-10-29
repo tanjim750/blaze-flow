@@ -12,7 +12,7 @@ describe("ShellReconnect", () => {
 
   it("re-renders the shell automatically with backoff, then stops", async () => {
     render(<ShellReconnect />);
-    expect(screen.getByRole("status").textContent).toContain("Can’t reach Blaze Flow");
+    expect(screen.getByRole("status").textContent).toContain("Can’t reach Krewsys");
     for (const delay of RECONNECT_DELAYS_MS) await act(async () => { vi.advanceTimersByTime(delay); });
     expect(refresh).toHaveBeenCalledTimes(RECONNECT_DELAYS_MS.length);
     await act(async () => { vi.advanceTimersByTime(60_000); });

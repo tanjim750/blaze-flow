@@ -10,7 +10,7 @@
 const DOMAIN = "blazeflow.app"; // PLACEHOLDER: confirm the production domain.
 
 export const siteConfig = {
-  name: "Blaze Flow",
+  name: "Krewsys",
   tagline: "Review, approve and deliver video work without the email chains.",
   description:
     "The review and delivery workspace for video and creative agencies: frame-accurate feedback, client approvals, AI proofreading of on-screen text, files, tasks and a branded client portal.",
@@ -18,7 +18,7 @@ export const siteConfig = {
   url: (process.env.NEXT_PUBLIC_SITE_URL || `https://${DOMAIN}`).replace(/\/$/, ""),
   contactEmail: "msshamim2821@gmail.com",
   /** Company/legal entity shown in the legal pages. PLACEHOLDER until the owner confirms. */
-  legalEntity: "Blaze Flow (company details to be confirmed)",
+  legalEntity: "Krewsys (company details to be confirmed)",
   /** Where the business is based, for the legal pages. */
   jurisdiction: "England and Wales",
   links: {
@@ -75,7 +75,7 @@ export type Plan = (typeof siteConfig.plans)[number];
 
 export type SiteConfig = typeof siteConfig;
 
-/** `Page title · Blaze Flow`, the format every public page uses. */
+/** `Page title · Krewsys`, the format every public page uses. */
 export function pageTitle(title?: string): string {
   return title ? `${title} · ${siteConfig.name}` : `${siteConfig.name} — ${siteConfig.tagline}`;
 }

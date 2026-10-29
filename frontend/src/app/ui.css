@@ -45,6 +45,18 @@
   outline: var(--bf-focus-width) solid color-mix(in oklch, var(--bf-ring) 70%, transparent) !important;
   outline-offset: -1px;
 }
+/* Composite fields: an input sitting inside one bordered box with a leading/trailing icon,
+ * prefix or toggle (auth .field, chat/message/select search, review search, price input…).
+ * The box draws the single focus ring (icon included); the inner input draws none, otherwise
+ * the global ring above paints a second, inset outline that starts after the icon. */
+:is(.field, .qs-field, .mt-picker-search, .ch-search, .ui-select-search, .rvc-search, .pp-input, .slug-field, .invite-token) input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+:is(.mt-picker-search, .ch-search, .ui-select-search, .rvc-search, .pp-input, .slug-field, .invite-token):has(input:focus-visible) {
+  outline: var(--bf-focus-width) solid color-mix(in oklch, var(--bf-ring) 70%, transparent);
+  outline-offset: -1px;
+}
 input[type=checkbox]:focus-visible, input[type=radio]:focus-visible, input[type=range]:focus-visible {
   outline-offset: var(--bf-focus-offset);
 }

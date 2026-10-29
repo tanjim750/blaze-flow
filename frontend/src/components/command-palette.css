@@ -1,35 +1,35 @@
 /* ⌘K palette. Fixed list height so results arriving never resize the dialog. */
-.qs-overlay { position: fixed; inset: 0; z-index: 300; background: rgb(8 8 12 / .62); backdrop-filter: blur(2px); animation: qs-fade var(--bf-duration-base, 180ms) var(--bf-ease-out, ease-out) both; }
+.qs-overlay { position: fixed; inset: 0; z-index: 300; background: var(--t-bg-08080c9e); backdrop-filter: blur(2px); animation: qs-fade var(--bf-duration-base, 180ms) var(--bf-ease-out, ease-out) both; }
 .qs-dialog {
   position: fixed; z-index: 301; left: 50%; top: 12vh; width: min(640px, calc(100vw - 32px)); transform: translateX(-50%);
-  display: flex; flex-direction: column; border: 1px solid var(--border, #2c2a33); border-radius: 14px; overflow: hidden;
-  background: var(--surface, #0A0A0A); color: var(--text, #f4f3f8); box-shadow: 0 24px 70px rgb(0 0 0 / .5);
+  display: flex; flex-direction: column; border: 1px solid var(--border, var(--t-line-2c2a33)); border-radius: 14px; overflow: hidden;
+  background: var(--surface, var(--t-bg-0a0a0a)); color: var(--text, var(--t-fg-f4f3f8)); box-shadow: 0 24px 70px var(--t-shadow-00000080);
   animation: qs-pop var(--bf-duration-base, 180ms) var(--bf-ease-out, ease-out) both;
 }
-.qs-field { display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 14px; border-bottom: 1px solid var(--border, #2c2a33); }
-.qs-field > svg { width: 18px; height: 18px; flex: none; color: var(--muted, #99978f); }
+.qs-field { display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 14px; border-bottom: 1px solid var(--border, var(--t-line-2c2a33)); }
+.qs-field > svg { width: 18px; height: 18px; flex: none; color: var(--muted, var(--t-fg-99978f)); }
 .qs-field input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: inherit; font-size: 15px; }
 .qs-spin { animation: bf-spin .8s linear infinite; }
-.qs-esc, .qs-foot kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border: 1px solid var(--border, #2c2a33); border-radius: 5px; font: 500 11px/1 var(--font-sans, system-ui); color: var(--muted, #99978f); background: var(--surface-2, #0A0A0A); }
+.qs-esc, .qs-foot kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border: 1px solid var(--border, var(--t-line-2c2a33)); border-radius: 5px; font: 500 11px/1 var(--font-sans, system-ui); color: var(--muted, var(--t-fg-99978f)); background: var(--surface-2, var(--t-bg-0a0a0a)); }
 .qs-close { display: none; }
 .qs-list { height: min(420px, 60vh); overflow-y: auto; overscroll-behavior: contain; padding: 6px; scroll-padding: 32px 0 6px; }
 .qs-group + .qs-group { margin-top: 4px; }
-.qs-heading { position: sticky; top: -6px; z-index: 1; margin: 0; padding: 8px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted, #99978f); background: var(--surface, #0A0A0A); }
+.qs-heading { position: sticky; top: -6px; z-index: 1; margin: 0; padding: 8px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted, var(--t-fg-99978f)); background: var(--surface, var(--t-bg-0a0a0a)); }
 .qs-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border-radius: 9px; cursor: pointer; transition: background-color var(--bf-duration-fast, 120ms) var(--bf-ease-out, ease-out); }
-.qs-row[aria-selected=true] { background: var(--surface-2, #25232b); box-shadow: inset 2px 0 0 var(--bf-violet-400, #8b6cff); }
-.qs-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 7px; background: var(--surface-2, #0A0A0A); color: var(--muted, #99978f); }
+.qs-row[aria-selected=true] { background: var(--surface-2, var(--t-bg-25232b)); box-shadow: inset 2px 0 0 var(--bf-violet-400, var(--t-shadow-8b6cff)); }
+.qs-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 7px; background: var(--surface-2, var(--t-bg-0a0a0a)); color: var(--muted, var(--t-fg-99978f)); }
 .qs-icon svg { width: 15px; height: 15px; }
-.qs-row[aria-selected=true] .qs-icon { color: var(--bf-violet-300, #b69aff); }
+.qs-row[aria-selected=true] .qs-icon { color: var(--bf-violet-300, var(--t-fg-b69aff)); }
 .qs-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .qs-text b, .qs-text small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .qs-text b { font-weight: 550; font-size: 14px; }
-.qs-text small { font-size: 12px; color: var(--muted, #99978f); }
-.qs-text mark { background: transparent; color: var(--bf-violet-300, #b69aff); font-weight: 650; text-decoration: underline; text-decoration-color: rgb(182 154 255 / .45); text-underline-offset: 2px; }
-.qs-meta { flex: none; font-style: normal; font-size: 11px; color: var(--muted, #99978f); }
-.qs-enter { width: 14px; height: 14px; flex: none; color: var(--muted, #99978f); opacity: 0; }
+.qs-text small { font-size: 12px; color: var(--muted, var(--t-fg-99978f)); }
+.qs-text mark { background: transparent; color: var(--bf-violet-300, var(--t-fg-b69aff)); font-weight: 650; text-decoration: underline; text-decoration-color: var(--t-fg-b69aff73); text-underline-offset: 2px; }
+.qs-meta { flex: none; font-style: normal; font-size: 11px; color: var(--muted, var(--t-fg-99978f)); }
+.qs-enter { width: 14px; height: 14px; flex: none; color: var(--muted, var(--t-fg-99978f)); opacity: 0; }
 .qs-row[aria-selected=true] .qs-enter { opacity: 1; }
-.qs-empty { margin: 0; padding: 36px 12px; text-align: center; color: var(--muted, #99978f); font-size: 14px; }
-.qs-foot { display: flex; gap: 14px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--border, #2c2a33); font-size: 11px; color: var(--muted, #99978f); }
+.qs-empty { margin: 0; padding: 36px 12px; text-align: center; color: var(--muted, var(--t-fg-99978f)); font-size: 14px; }
+.qs-foot { display: flex; gap: 14px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--border, var(--t-line-2c2a33)); font-size: 11px; color: var(--muted, var(--t-fg-99978f)); }
 .qs-foot span { display: inline-flex; gap: 4px; align-items: center; }
 .qs-foot-right { margin-left: auto; }
 @keyframes qs-fade { from { opacity: 0; } }
@@ -41,7 +41,7 @@
   .qs-field { height: 58px; padding-top: env(safe-area-inset-top); }
   .qs-field input { font-size: 16px; } /* 16px keeps iOS from zooming the page on focus */
   .qs-esc { display: none; }
-  .qs-close { display: grid; place-items: center; width: 44px; height: 44px; margin-right: -8px; border: 0; background: transparent; color: var(--muted, #99978f); }
+  .qs-close { display: grid; place-items: center; width: 44px; height: 44px; margin-right: -8px; border: 0; background: transparent; color: var(--muted, var(--t-fg-99978f)); }
   .qs-close svg { width: 20px; height: 20px; }
   .qs-list { flex: 1; height: auto; }
   .qs-foot { display: none; }
@@ -50,9 +50,9 @@
 /* The whole field is the input. The global (!important) input focus ring would draw a box
    inside it, so the field shows focus with its violet underline instead. */
 .qs-field input:focus-visible { outline: none !important; }
-.qs-field:focus-within { border-bottom-color: var(--bf-violet-400, #8b6cff); box-shadow: inset 0 -1px 0 var(--bf-violet-400, #8b6cff); }
+.qs-field:focus-within { border-bottom-color: var(--bf-violet-400, var(--t-line-8b6cff)); box-shadow: inset 0 -1px 0 var(--bf-violet-400, var(--t-shadow-8b6cff)); }
 
 /* Search failed (timeout / API down): a quiet inline retry. */
-.qs-retry { min-height: 32px; padding: 0 10px; margin-left: 6px; border-radius: var(--radius-md, 8px); border: 1px solid var(--border); background: var(--shell-high, #26262f); color: var(--shell-on, #ececf1); font: inherit; cursor: pointer; }
-.qs-retry:hover { border-color: var(--shell-accent, #7c5cff); }
+.qs-retry { min-height: 32px; padding: 0 10px; margin-left: 6px; border-radius: var(--radius-md, 8px); border: 1px solid var(--border); background: var(--shell-high, var(--t-bg-26262f)); color: var(--shell-on, var(--t-fg-ececf1)); font: inherit; cursor: pointer; }
+.qs-retry:hover { border-color: var(--shell-accent, var(--t-line-7c5cff)); }
 @media (max-width: 600px) { .qs-retry { min-height: 44px; } }

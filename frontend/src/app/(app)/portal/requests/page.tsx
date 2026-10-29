@@ -9,7 +9,7 @@ import { BrandingSync } from "@/components/portal/branding-sync";
 import { ClientRequestList } from "@/components/portal/request-list";
 import "@/components/portal/portal.css";
 
-export const metadata: Metadata = { title: "Your requests · Client portal · Blaze Flow" };
+export const metadata: Metadata = { title: "Your requests · Client portal · Krewsys" };
 
 export default async function ClientRequestsPage() {
   const context = await loadWorkspaceContext();

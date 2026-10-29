@@ -1,8 +1,8 @@
-# Blaze Flow Postman Testing Guide
+# Krewsys Postman Testing Guide
 
 `Postman_Collection.json` matches the currently implemented Django routes and serializers. It uses session-cookie authentication and automatically captures IDs and tokens from successful responses.
 
-## 1. Start Blaze Flow
+## 1. Start Krewsys
 
 Create `.env` from `.env.example`, then run:
 
@@ -14,7 +14,7 @@ Confirm that `http://localhost:8000/api/health/` returns `{"message":"ok"}`.
 
 ## 2. Import the collection
 
-In Postman, select **Import**, choose `Postman_Collection.json`, and open the **Blaze Flow API** collection.
+In Postman, select **Import**, choose `Postman_Collection.json`, and open the **Krewsys API** collection.
 
 | Variable | Initial value | Purpose |
 | --- | --- | --- |
@@ -218,7 +218,7 @@ This requires `GOOGLE_OAUTH_CLIENT_ID` to be set in the running server's environ
 2. Configure `GOOGLE_OAUTH_CLIENT_ID`, restart the server, obtain a real ID token for that same client ID from a frontend Google Sign-In button (or Google's OAuth Playground configured with your client), set `google_id_token`, and run **Google Sign-In** again. `csrf_token` is captured the same way as **Login**.
 3. A first sign-in with a verified Google email and no matching account creates a new user (email already marked verified, password unusable, a `FREE` subscription provisioned, same as **Register**), links a Google `OAuthIdentity`, and starts a session.
 4. Running **Google Sign-In** again with the same Google account reuses the same identity and user — no duplicate account is created, and the identity's cached name/picture are refreshed from the new token's claims.
-5. If a Google account's email matches an already-registered Blaze Flow account (created through **Register**) and the Google email is verified, signing in links that Google identity to the existing account instead of creating a second one. If the Google email is not verified, linking is refused rather than silently trusting it.
+5. If a Google account's email matches an already-registered Krewsys account (created through **Register**) and the Google email is verified, signing in links that Google identity to the existing account instead of creating a second one. If the Google email is not verified, linking is refused rather than silently trusting it.
 6. A suspended account cannot sign in through Google either way (matched by an existing linked identity, or matched by email) — both return `400`.
 
 ## 12. Test mentions and notifications

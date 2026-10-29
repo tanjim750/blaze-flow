@@ -121,7 +121,7 @@ export function NotificationSettingsForm({ initial, workspaceName }: { initial: 
       <li className={mentionsInApp ? undefined : "is-disabled"}>
         <span>
           <strong><Mail size={13} />Email me when I&rsquo;m mentioned</strong>
-          <small>{mentionsInApp ? "Sent from your account email. Mentions are the only email Blaze Flow sends for now." : "Turn on Mentions above to get mention emails: the email is sent from the in-app notification."}</small>
+          <small>{mentionsInApp ? "Sent from your account email. Mentions are the only email Krewsys sends for now." : "Turn on Mentions above to get mention emails: the email is sent from the in-app notification."}</small>
         </span>
         <Switch checked={settings.email_mentions_enabled && mentionsInApp} label="Email me when I am mentioned" onCheckedChange={(checked) => {
           if (!mentionsInApp) return;

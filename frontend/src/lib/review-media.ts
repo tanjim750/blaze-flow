@@ -5,7 +5,7 @@ import { loadWorkspaceContext } from "./workspace";
 /**
  * Resolves the one media record that sits behind every entry point into review.
  *
- * Blaze Flow reaches the same video from four places — the Files library, a project's
+ * Krewsys reaches the same video from four places — the Files library, a project's
  * files, a task, and the review page itself — and the spec for this feature is that all
  * four open *the same* review, never a copy. That is possible without any new backend
  * column because the two tables that describe a video already share a third:

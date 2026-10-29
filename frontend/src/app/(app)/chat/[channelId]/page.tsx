@@ -4,7 +4,7 @@ import { ChatShell } from "@/components/chat/shell";
 import { loadSession } from "@/lib/session";
 import { loadWorkspaceContext } from "@/lib/workspace";
 
-export const metadata: Metadata = { title: "Chat · Blaze Flow" };
+export const metadata: Metadata = { title: "Chat · Krewsys" };
 
 export default async function ChatChannelPage({ params, searchParams }: PageProps<"/chat/[channelId]">) {
   await guardRoute("/chat");

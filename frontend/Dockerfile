@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Blaze Flow frontend (Next.js standalone output).
+# Krewsys frontend (Next.js standalone output).
 #
 # Rewrites and NEXT_PUBLIC_* values are baked in at BUILD time, so pass them as build args:
 #   docker build --build-arg BLAZEFLOW_API_URL=http://web:8000 \

@@ -1,4 +1,4 @@
-# Blaze Flow Frontend Guide
+# Krewsys Frontend Guide
 
 This describes the Next.js application in `frontend/`, which is the browser client for the
 Django API documented in `docs/DEVELOPMENT.md`. Keep it current whenever a route, data

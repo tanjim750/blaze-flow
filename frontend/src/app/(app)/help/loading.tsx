@@ -1,3 +1,4 @@
-import { PageSkeleton } from "@/components/page-skeleton";
+import { PageLoader } from "@/components/brand/page-loader";
 
-export default function Loading() { return <PageSkeleton shape="list" />; }
+/** Route loading: branded Krewsys loader, revealed only if rendering takes longer than ~300ms. */
+export default function Loading() { return <PageLoader />; }

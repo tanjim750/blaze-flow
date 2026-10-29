@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Blaze Flow backend image.
+# Krewsys backend image.
 #
 #   docker build -t blazeflow-backend .                 # web / outbox worker / scheduler (default)
 #   docker build --target ai -t blazeflow-backend-ai .  # + PaddleOCR for run_ai_qa_worker

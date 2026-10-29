@@ -21,5 +21,5 @@ const TITLES: [string, string][] = [
 export function mobileTitle(pathname: string): string {
   if (pathname === "/" || pathname === "") return "Home";
   const hit = TITLES.find(([prefix]) => pathname === prefix || pathname.startsWith(prefix + "/"));
-  return hit ? hit[1] : "Blaze Flow";
+  return hit ? hit[1] : "Krewsys";
 }

@@ -1,1 +1,1 @@
-{% autoescape off %}Blaze Flow test email{% endautoescape %}
+{% autoescape off %}Krewsys test email{% endautoescape %}

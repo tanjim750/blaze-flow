@@ -114,7 +114,7 @@ export const GUARD_NOTICES: Record<string, string> = {
   "money-editor": "Studio money is for owners and admins. Your own pay is below.",
   clients: "The client list is managed by the studio's owners.",
   team: "Team & Roles is managed by the studio's owners.",
-  "client-area": "That part of Blaze Flow is for the studio team. Everything for you is here.",
+  "client-area": "That part of Krewsys is for the studio team. Everything for you is here.",
 };
 
 export function noticeFor(value: string | string[] | undefined): string | null {

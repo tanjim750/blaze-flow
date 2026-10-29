@@ -82,12 +82,12 @@ def deliver_reply_email(*, message_id):
     ticket = message.ticket
     body = (
         f'{message.body}\n\n'
-        f'— Blaze Flow support\n'
+        f'— Krewsys support\n'
         f'Ticket #{ticket.number}: {ticket.subject}\n'
         f'Reply to this email or use Help → Report a problem in the app.'
     )
     send_mail(
-        f'Re: [Blaze Flow #{ticket.number}] {ticket.subject}', body,
+        f'Re: [Krewsys #{ticket.number}] {ticket.subject}', body,
         settings.SUPPORT_FROM_EMAIL or settings.DEFAULT_FROM_EMAIL, [ticket.user.email],
         fail_silently=False,
     )  # raises → the outbox retries, then dead-letters

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Building2, Gauge, LifeBuoy, ListRestart, ScrollText, ShieldCheck, Users } from "@/components/icons";
+import { ArrowLeft, Building2, Gauge, LifeBuoy, ListRestart, ScrollText, Users } from "@/components/icons";
+import { KrewsysMark } from "@/components/brand/krewsys-logo";
 
 const LINKS = [
   { href: "/platform", label: "Overview", icon: Gauge },
@@ -19,7 +20,7 @@ export function PlatformNav({ email, badges }: { email: string; badges: Partial<
   const active = (href: string) => (href === "/platform" ? pathname === href : pathname.startsWith(href));
   return (
     <aside className="pf-nav">
-      <div className="pf-brand"><ShieldCheck size={18} /><div><strong>Blaze Flow</strong><small>Platform admin · staff only</small></div></div>
+      <div className="pf-brand"><KrewsysMark size={32} title="Krewsys" /><div><strong>Krewsys</strong><small>Platform admin · staff only</small></div></div>
       <nav aria-label="Platform admin">
         {LINKS.map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} className={active(href) ? "active" : undefined} aria-current={active(href) ? "page" : undefined}>

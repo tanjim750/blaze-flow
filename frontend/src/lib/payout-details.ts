@@ -1,5 +1,5 @@
 /**
- * Editor payout details: how each team member wants the agency to pay them. Blaze Flow never
+ * Editor payout details: how each team member wants the agency to pay them. Krewsys never
  * holds or moves the money; owners read these and pay the editor directly.
  */
 export type PayoutMethodId = "bank_transfer" | "wise" | "payoneer" | "paypal" | "bkash_nagad" | "upi" | "gcash" | "other";

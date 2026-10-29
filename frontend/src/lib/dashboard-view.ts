@@ -343,7 +343,7 @@ export function failureView(greetingName: string, now: Date, error: ApiFailure):
     status: "error",
     greetingName,
     today: todayLabel(now),
-    title: unreachable ? "Can't reach Blaze Flow right now" : "The dashboard couldn't load",
+    title: unreachable ? "Can't reach Krewsys right now" : "The dashboard couldn't load",
     detail: unreachable
       ? "The server didn't answer. Check your connection and try again."
       : `The server answered ${error.status}: ${error.detail}`,

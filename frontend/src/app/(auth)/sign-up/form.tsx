@@ -115,7 +115,7 @@ export function SignUpForm({ inviteToken, invite, inviteOnly = false, next }: Pr
 
       <SubmitButton busy={busy} busyLabel="Creating your account…">{invite ? "Create account & join" : "Create account"}</SubmitButton>
 
-      <p className="auth-legal">By creating an account you agree to use Blaze Flow responsibly with your team’s work.</p>
+      <p className="auth-legal">By creating an account you agree to use Krewsys responsibly with your team’s work.</p>
       <p className="form-foot">
         Already have an account? <Link href={inviteToken ? `/sign-in?next=${encodeURIComponent(destination)}` : "/sign-in"}>Sign in</Link>
       </p>

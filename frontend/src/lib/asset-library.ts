@@ -38,9 +38,9 @@ const empty: LibraryState = { folders: [], files: [], deletedIds: [], pending: [
  * when there is no workspace; it is never mixed into a real one.
  */
 export const demoLibrary: LibraryState = { folders: [
-  { id: "demo-footage", name: "Footage", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-05T10:00:00Z", createdBy: "Blaze Flow" },
-  { id: "demo-graphics", name: "Graphics", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-06T10:00:00Z", createdBy: "Blaze Flow" },
-  { id: "demo-sound", name: "Sound Effects", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-07T10:00:00Z", createdBy: "Blaze Flow" },
+  { id: "demo-footage", name: "Footage", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-05T10:00:00Z", createdBy: "Krewsys" },
+  { id: "demo-graphics", name: "Graphics", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-06T10:00:00Z", createdBy: "Krewsys" },
+  { id: "demo-sound", name: "Sound Effects", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-07T10:00:00Z", createdBy: "Krewsys" },
 ], files: [
   { id: "demo-video-1", fileId: null, name: "interview-camera-a.mp4", versioning: { assetId: null, assetName: "interview-camera-a.mp4", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/mp4", size: 482344960, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Aaron Jackson", uploadedAt: "2026-09-05T11:00:00Z", folderId: "demo-footage", clientId: null, projectId: null, stageId: null },
   { id: "demo-video-2", fileId: null, name: "b-roll-01.mov", versioning: { assetId: null, assetName: "b-roll-01.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 894232100, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Aaron Jackson", uploadedAt: "2026-09-05T11:10:00Z", folderId: "demo-footage", clientId: null, projectId: null, stageId: null },

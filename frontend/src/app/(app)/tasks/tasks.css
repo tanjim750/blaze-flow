@@ -1,5 +1,5 @@
 /*
- * Tasks workflow board (`tb-`). Every colour comes from the Blaze Flow design-system
+ * Tasks workflow board (`tb-`). Every colour comes from the Krewsys design-system
  * tokens in app/tokens.css (`--bf-*`), aliased here under `--tb-*` and scoped to the
  * `.tb-*` roots; inside the Files panel the `.fx` aliases of the same tokens win.
  * Names that collide with the current palette (`--muted`, `--border`,
@@ -67,7 +67,7 @@
 .tb-button:hover { background: var(--tb-accent); }
 .tb-button:disabled { opacity: .5; cursor: not-allowed; }
 /* `.tb-button.is-primary` colour: app/ui.css (one primary variant). */
-.tb-button.is-danger { border-color: transparent; background: var(--tb-danger-solid); color: #fff; }
+.tb-button.is-danger { border-color: transparent; background: var(--tb-danger-solid); color: var(--t-fg-ffffff); }
 .tb-button.is-ghost { border-color: transparent; color: var(--tb-muted-fg); }
 .tb-button.is-ghost:hover { color: var(--tb-fg); }
 .tb-button.is-danger-text { color: var(--tb-danger); }
@@ -345,16 +345,16 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 /* Open in review ---------------------------------------------------------
    A card with a linked cut opens it in review; the badge says so before the click. The
    Details button keeps the detail sheet one click away on every card and list row. */
-.tb-card-open { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px; border-radius: 6px; background: #0b0b0ecc; color: #d7c9ff; font-size: 11px; font-weight: 600; opacity: 0; transition: opacity var(--tb-fast) var(--tb-ease); pointer-events: none; }
+.tb-card-open { position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px; border-radius: 6px; background: var(--t-bg-0b0b0ecc); color: var(--t-fg-d7c9ff); font-size: 11px; font-weight: 600; opacity: 0; transition: opacity var(--tb-fast) var(--tb-ease); pointer-events: none; }
 .tb-card-open svg { width: 12px; height: 12px; }
 .tb-card:hover .tb-card-open, .tb-card:focus-visible .tb-card-open { opacity: 1; }
 .tb-card-details { width: 26px; height: 26px; opacity: 0; transition: opacity var(--tb-fast) var(--tb-ease); }
 .tb-card:hover .tb-card-details, .tb-card:focus-within .tb-card-details, .tb-card-details:focus-visible { opacity: 1; }
 @media (hover: none) { .tb-card-open, .tb-card-details { opacity: 1; } }
-.tb-link-prompt { display: flex; gap: 12px; padding: 14px; border: 1px dashed #5b4b8a; border-radius: 10px; background: #1a1527; }
-.tb-link-prompt > svg { flex: none; width: 20px; height: 20px; margin-top: 2px; color: #b9a6ff; }
+.tb-link-prompt { display: flex; gap: 12px; padding: 14px; border: 1px dashed var(--t-line-5b4b8a); border-radius: 10px; background: var(--t-bg-1a1527); }
+.tb-link-prompt > svg { flex: none; width: 20px; height: 20px; margin-top: 2px; color: var(--t-fg-b9a6ff); }
 .tb-link-prompt strong { display: block; font-size: 13px; }
-.tb-link-prompt p { margin: 4px 0 10px; color: var(--tb-muted, #9a9aa5); font-size: 12px; line-height: 1.5; }
+.tb-link-prompt p { margin: 4px 0 10px; color: var(--tb-muted, var(--t-fg-9a9aa5)); font-size: 12px; line-height: 1.5; }
 .tb-link-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* Task sheet Money block (billing demo, components/tasks/task-money.tsx). */
@@ -364,7 +364,7 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 .tb-money h3 svg { width: 16px; height: 16px; color: var(--tb-muted-fg); }
 .tb-money .tb-props { grid-template-columns: 120px 1fr; }
 .tb-money-demo { padding: 1px 6px; border: 1px dashed var(--tb-border-strong); border-radius: 5px; color: var(--tb-muted-fg); font: 10px var(--font-geist-mono), monospace; }
-.tb-money .is-error { color: var(--destructive, #ff9ba3); }
+.tb-money .is-error { color: var(--destructive, var(--t-fg-ff9ba3)); }
 .tb-money-input { display: flex; align-items: center; gap: 6px; flex: 1; }
 .tb-money-input > span { color: var(--tb-subtle-fg); font: 11px var(--font-geist-mono), monospace; }
 .tb-money-input input { font-family: var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; }
@@ -372,7 +372,7 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 .tb-money-pay { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tb-money-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border: 1px solid var(--tb-border-strong); border-radius: 999px; color: var(--tb-muted-fg); font-size: 11px; white-space: nowrap; }
 .tb-money-chip svg { width: 11px; height: 11px; }
-.tb-money-chip.is-earned { color: #7de9bd; border-color: #2d6550; background: #183e31; }
+.tb-money-chip.is-earned { color: var(--t-fg-7de9bd); border-color: var(--t-line-2d6550); background: var(--t-bg-183e31); }
 
 /* Read-only boards (clients, view-only roles): a quiet marker instead of write controls. */
 .tb-readonly { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--tb-border); border-radius: 8px; color: var(--tb-muted-fg); font-size: 12px; font-weight: 500; }
@@ -398,23 +398,23 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 /* A task made from a review note: the note, and a link back to its moment in the cut. */
 .tb-source-note { display: grid; gap: 6px; }
 .tb-source-note > span { font-size: 12px; color: var(--muted); }
-.tb-source-note a { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid #8b6cff44; border-radius: 10px; background: #8b6cff12; color: var(--text); text-decoration: none; }
-.tb-source-note a:hover { border-color: #8b6cff99; }
-.tb-source-note b { font-variant-numeric: tabular-nums; color: var(--bf-violet-300, #b69aff); font-size: 12px; }
+.tb-source-note a { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--t-line-8b6cff44); border-radius: 10px; background: var(--t-bg-8b6cff12); color: var(--text); text-decoration: none; }
+.tb-source-note a:hover { border-color: var(--t-line-8b6cff99); }
+.tb-source-note b { font-variant-numeric: tabular-nums; color: var(--bf-violet-300, var(--t-fg-b69aff)); font-size: 12px; }
 .tb-source-note q { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; quotes: none; }
 .tb-source-note small { color: var(--muted); font-size: 12px; }
 /* Board: fixed 272px columns that snap, with an edge fade so a cut-off column reads as
    "scroll for more" instead of clipped. */
 @media (min-width: 761px) {
   .tb-board { grid-auto-columns: 272px; scroll-snap-type: x proximity; scroll-padding-inline: 2px;
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
-    mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); padding-right: 48px; }
+    -webkit-mask-image: linear-gradient(to right, var(--t-bg-000000) calc(100% - 48px), transparent);
+    mask-image: linear-gradient(to right, var(--t-bg-000000) calc(100% - 48px), transparent); padding-right: 48px; }
   .tb-column { scroll-snap-align: start; }
 }
 .tb-column-empty { padding: 10px 12px; line-height: 1.4; overflow-wrap: anywhere; }
 
-.tb-field-error{color:#ff9ba3;font-size:12px;line-height:1.4}
-.tb-field input[aria-invalid="true"]{border-color:#ff9ba3}
+.tb-field-error{color:var(--t-fg-ff9ba3);font-size:12px;line-height:1.4}
+.tb-field input[aria-invalid="true"]{border-color:var(--t-line-ff9ba3)}
 /* M9 (390px polish) */
 @media (max-width: 767px) {
   /* The mobile top bar already mirrors New task (data-mobile-primary): one entry point. */
@@ -431,7 +431,7 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 }
 
 /* Inline explanation for a refused move (e.g. Client Review without a client). */
-.tb-blocked-hint { margin: 0; border: 1px solid color-mix(in oklch, #ff9ba3 55%, transparent); background: color-mix(in oklch, #ff9ba3 10%, transparent); color: #ffc7cc; border-radius: 8px; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.tb-blocked-hint { margin: 0; border: 1px solid color-mix(in oklch, var(--t-line-ff9ba3) 55%, transparent); background: color-mix(in oklch, var(--t-bg-ff9ba3) 10%, transparent); color: var(--t-fg-ffc7cc); border-radius: 8px; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
 .tb-blocked-hint.is-column { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; margin-bottom: 8px; }
 .tb-blocked-hint.is-column > span { flex: 1; min-width: 0; }
 .tb-blocked-hint.is-card { padding: 6px 10px; margin: -2px 0 8px; }
