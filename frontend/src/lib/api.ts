@@ -24,7 +24,13 @@ export type Workspace = {
   billing?: { view: boolean; manage: boolean; rates_view: boolean };
   /** Workspace currency (ISO 4217) for prices, pay and new invoices. */
   currency?: string;
+  /** The workspace's plan (its primary owner's): "FREE" | "SOLO" | "PRO". Absent on older backends. */
+  plan?: WorkspacePlan;
+  /** Plan-gated features this workspace has ("ai_qa", "team_members", "editor_payouts"). Absent means all. */
+  plan_features?: PlanFeature[];
 };
+export type WorkspacePlan = "FREE" | "SOLO" | "PRO";
+export type PlanFeature = "ai_qa" | "team_members" | "editor_payouts";
 /** `owner` runs the workspace, `editor` is any other team member, `client` is in only through a client team. */
 export type DashboardRole = "owner" | "editor" | "client";
 export type WorkspaceProfile = {
@@ -539,3 +545,14 @@ export type ClientOverview = {
   money: { currency: string; paid: string; agreed: string; invoices_issued: number; invoices_paid: number } | null;
 };
 export const getClientTeamOverview = (workspaceId: string, clientTeamId: string) => request<ClientOverview>(`/workspaces/${workspaceId}/client-teams/${clientTeamId}/overview/`);
+
+/** The signed-in user's own plan (it applies to every workspace they own). */
+export type Subscription = {
+  plan: WorkspacePlan; status: string; current_period_start: string | null; current_period_end: string | null; cancel_at_period_end: boolean;
+  limits: { max_workspaces_owned: number | null; max_projects_per_workspace: number | null; max_storage_bytes: number | null; max_members: number | null };
+  features: Record<PlanFeature, boolean>;
+};
+export const getSubscription = () => request<Subscription>("/subscriptions/me/");
+/** Test mode: no payment is taken. `SOLO` refuses while the user has teammates or several workspaces. */
+export const changeSubscriptionPlan = (plan: Exclude<WorkspacePlan, "FREE">) =>
+  request<Subscription>("/subscriptions/upgrade/", jsonBody({ plan }));

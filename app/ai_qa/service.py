@@ -78,6 +78,8 @@ def save_approved_copy(*, project, user, text, title='Approved copy', source='pr
 def start_review(*, media_version, user, language='en-GB', mode='PROOFREAD', approved_copy_text=None,
                  approved_copy_id=None, save_copy=False, copy_title='Approved copy'):
     """Returns (review, created). Joins an identical active run instead of starting another."""
+    from app.services.plan_features import AI_QA, require_workspace_feature
+    require_workspace_feature(media_version.project.workspace, AI_QA)
     if language not in LANGUAGES:
         raise AIQAError('ai_qa_bad_language', 'Choose English (UK) or English (US).')
     if not is_supported(media_version):
@@ -139,6 +141,8 @@ def start_review(*, media_version, user, language='en-GB', mode='PROOFREAD', app
 
 @transaction.atomic
 def retry_review(*, review, user):
+    from app.services.plan_features import AI_QA, require_workspace_feature
+    require_workspace_feature(review.workspace, AI_QA)
     review = AIReview.objects.select_for_update().get(id=review.id)
     if review.status not in (AIReviewStatus.FAILED, AIReviewStatus.PARTIAL, AIReviewStatus.CANCELLED):
         raise AIQAError('ai_qa_not_retryable', 'Only a failed or partial check can be retried.', 409)

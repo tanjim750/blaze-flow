@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { guardRoute } from "@/lib/route-guard";
 import { Banknote, Wallet, Bell, BookA, Building2, CircleUserRound, Coins, FileText, MessageCircle, Palette, ShieldCheck } from "@/components/icons";
 import { getGlossary, getInvoiceSettings, getRates, getStripeStatus } from "@/lib/studio-settings-server";
@@ -56,6 +57,10 @@ export default async function SettingsPage() {
       <div className="identity-values"><span><small>Name</small><strong>{displayName(user)}</strong></span><span><small>Email</small><strong>{user.email}</strong></span><span><small>Timezone</small><strong>{user.timezone || "UTC"}</strong></span></div>
       <VerificationForm verified={Boolean(user.email_verified_at)} />
     </section>
+    {studio && <section className="settings-card" id="plan">
+      <div className="settings-title"><Coins /><div><h2>Plan</h2><p>{workspace?.plan === "SOLO" ? "Solo: just you, 200 GB, unlimited clients." : "Your Krewsys plan and what it includes."}</p></div></div>
+      <Link href="/settings/plan" className="settings-plan-link">{workspace?.plan === "SOLO" ? "Upgrade to Starter" : "View plans"}</Link>
+    </section>}
     <section className="settings-card" id="appearance">
       <div className="settings-title"><Palette /><div><h2>Appearance</h2><p>Choose how Krewsys looks on this device.</p></div></div>
       <div className="theme-row"><p>System follows your device&rsquo;s light or dark setting.</p><ThemeSwitch label="Theme" /></div>

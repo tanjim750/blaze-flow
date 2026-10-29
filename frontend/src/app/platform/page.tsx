@@ -42,6 +42,7 @@ export default async function PlatformOverview({ searchParams }: PageProps<"/pla
         <div className="pf-mix" aria-hidden><span style={{ width: `${freeShare}%` }} /><span style={{ width: `${100 - freeShare}%` }} /></div>
         <dl className="pf-legend">
           <div><dt><i className="is-free" />Free</dt><dd>{o.plans.free} <small>{freeShare}%</small></dd></div>
+          <div><dt><i className="is-solo" />Solo</dt><dd>{o.plans.solo ?? 0}</dd></div>
           <div><dt><i className="is-pro" />PRO paying</dt><dd>{o.plans.pro_paying}</dd></div>
           <div><dt><i className="is-trial" />PRO trial</dt><dd>{o.plans.trialing}</dd></div>
         </dl>
@@ -56,7 +57,7 @@ export default async function PlatformOverview({ searchParams }: PageProps<"/pla
           <b>{a.count}</b><span>{a.label}</span><ChevronRight size={16} />
         </Link></li>)}
       </ul>}
-      <p className="pf-foot">MRR is an estimate: active, non-trial PRO subscriptions × {formatMoney(o.pro_price_minor, o.currency)}/month (PLATFORM_PRO_PRICE_MINOR). It becomes real once Stripe is connected.</p>
+      <p className="pf-foot">MRR is an estimate: active, non-trial PRO subscriptions × {formatMoney(o.pro_price_minor, o.currency)}/month (PLATFORM_PRO_PRICE_MINOR) plus Solo × {formatMoney(o.solo_price_minor ?? 599, o.currency)}/month (PLATFORM_SOLO_PRICE_MINOR). It becomes real once Stripe is connected.</p>
     </section>
   </>;
 }

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, 
 import Image from "next/image";
 import Link from "next/link";
 import { animate, motion, useInView, useMotionValue, useScroll, useSpring, useTransform } from "motion/react";
-import { ArrowRight, Check } from "@/components/icons";
+import { ArrowRight, Check, Minus } from "@/components/icons";
 import { DemoVideo } from "@/components/marketing/demo-video";
 import { useFinePointer, useReducedMotionSafe } from "@/components/marketing/motion-prefs";
 import { SCREENS, type ScreenKey } from "@/components/marketing/screenshot";
@@ -422,10 +422,34 @@ export function ProPlans({ headingLevel = "h3" }: { headingLevel?: "h2" | "h3" }
             <ul className="pro-points">
               {plan.features.map((f) => <li key={f}><Check aria-hidden="true" />{f}</li>)}
             </ul>
+            {plan.id === "starter" && <p className="pro-plan-solo"><Link href="/pricing#solo">Working alone? <strong>{siteConfig.solo.name} from {symbol}{siteConfig.solo.monthly}/mo</strong> <ArrowRight aria-hidden="true" /></Link></p>}
           </article>
         </Reveal>
       ))}
     </div>
+  );
+}
+
+/** The small Solo details block (/pricing#solo): what one person gets, and what needs Starter. */
+export function ProSolo() {
+  const { solo } = siteConfig;
+  return (
+    <section id="solo" className="pro-solo" aria-labelledby="pro-solo-title">
+      <div className="pro-wrap">
+        <div className="pro-solo-card">
+          <div className="pro-solo-head">
+            <p className="pro-solo-kicker">Working alone?</p>
+            <h2 id="pro-solo-title" className="pro-solo-name">{solo.name} <span>{symbol}{solo.monthly}<small>/mo</small></span></h2>
+            <p className="pro-solo-line">For freelancers who run their own clients. {solo.users}, {solo.storage.replace(" storage", "")} of storage, unlimited clients.</p>
+            <Link className="pro-btn is-sm is-ghost" href={siteConfig.links.signUp}>Start {trialDays}-day free trial</Link>
+          </div>
+          <div className="pro-solo-lists">
+            <div><h3>Included</h3><ul className="pro-points">{solo.included.map((f) => <li key={f}><Check aria-hidden="true" />{f}</li>)}</ul></div>
+            <div><h3>Needs Starter</h3><ul className="pro-points is-excluded">{solo.excluded.map((f) => <li key={f}><Minus aria-hidden="true" />{f}</li>)}</ul></div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { SidebarUpgradeCard } from "@/components/plan/upgrade-prompt";
+import { isSolo } from "@/lib/plan";
 import { ThemeSwitch } from "@/components/theme/theme-switch";
 import Link from "next/link";
 import { CommandPalette, openQuickSearch } from "@/components/command-palette";
@@ -79,7 +81,10 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   const isActive = (href: string) => {
     if (href.includes("#")) return false;
     const path = href.split("?")[0];
-    return path === "/" ? pathname === "/" : pathname.startsWith(path);
+    if (path === "/") return pathname === "/";
+    if (!pathname.startsWith(path)) return false;
+    // A deeper link wins: /settings/plan lights up "Plan", not "Settings" as well.
+    return ![...nav.primary, ...nav.secondary].some((link) => { const other = link.href.split(/[?#]/)[0]; return other.length > path.length && other.startsWith(path) && pathname.startsWith(other); });
   };
   // Projects lays out its own full-bleed browser, so it opts out of the standard page padding.
   // Full-bleed routes: the projects tree and the review workspace both own their own
@@ -206,6 +211,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
               </Link>
             ))}
           </nav>
+          {nav.role === "owner" && !previewRole && isSolo(selected) && <SidebarUpgradeCard onNavigate={() => setOpen(false)} />}
           {nav.role === "owner" && <div className="render-engine">
             <i className={typeof health === "object" && health ? health.status : undefined} />
             <div><small>Operations</small><span>{healthLabel(health)}</span></div>

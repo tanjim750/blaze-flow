@@ -87,14 +87,68 @@ def upgrade_to_pro(*, user):
     return subscription
 
 
+SELECTABLE_PLANS = (SubscriptionPlan.SOLO, SubscriptionPlan.PRO)
+
+
+def _solo_blockers(*, user):
+    """Why this user can't move to Solo right now (Solo is owner-only), or None."""
+    owned = WorkspaceMembership.objects.filter(
+        user=user, is_primary_owner=True, status=WorkspaceMembershipStatus.ACTIVE,
+        workspace__status=WorkspaceStatus.ACTIVE,
+    ).values_list('workspace_id', flat=True)
+    if len(owned) > get_plan_limit(SubscriptionPlan.SOLO, 'max_workspaces_owned'):
+        return 'Solo includes one workspace. Archive the others before switching to Solo.'
+    others = WorkspaceMembership.objects.filter(
+        workspace_id__in=list(owned), status=WorkspaceMembershipStatus.ACTIVE, user__isnull=False,
+    ).exclude(user=user).exists()
+    if others:
+        return 'Solo is for one person. Remove your team members before switching to Solo.'
+    return None
+
+
+@transaction.atomic
+def change_plan(*, user, plan):
+    """Moves the user to a selectable paid plan (test mode: no payment is taken here)."""
+    if plan not in SELECTABLE_PLANS:
+        raise SubscriptionError('Choose Solo or Pro.')
+    if plan == SubscriptionPlan.PRO:
+        return upgrade_to_pro(user=user)
+    blocker = _solo_blockers(user=user)
+    if blocker:
+        raise SubscriptionError(blocker)
+    subscription = UserSubscription.objects.select_for_update().filter(
+        user=user, status__in=(SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE),
+    ).first()
+    now = timezone.now()
+    period_end = now + timedelta(days=settings.SUBSCRIPTION_PRO_PERIOD_DAYS)
+    if subscription is None:
+        return UserSubscription.objects.create(
+            id=uuid.uuid4(), user=user, plan=plan, status=SubscriptionStatus.ACTIVE,
+            started_at=now, current_period_start=now, current_period_end=period_end,
+            created_at=now, updated_at=now,
+        )
+    if subscription.plan == plan and not subscription.cancel_at_period_end:
+        raise SubscriptionError('This account is already on the Solo plan.')
+    subscription.plan = plan
+    subscription.status = SubscriptionStatus.ACTIVE
+    subscription.current_period_start = now
+    subscription.current_period_end = period_end
+    subscription.cancel_at_period_end = False
+    subscription.cancelled_at = None
+    subscription.updated_at = now
+    subscription.full_clean()
+    subscription.save()
+    return subscription
+
+
 @transaction.atomic
 def cancel_subscription(*, user):
     subscription = UserSubscription.objects.select_for_update().filter(
         user=user,
         status__in=(SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE),
     ).first()
-    if subscription is None or subscription.plan != SubscriptionPlan.PRO:
-        raise SubscriptionError('There is no active PRO subscription to cancel.')
+    if subscription is None or subscription.plan not in SELECTABLE_PLANS:
+        raise SubscriptionError('There is no active paid subscription to cancel.')
     if subscription.cancel_at_period_end:
         raise SubscriptionError('This subscription is already scheduled to cancel.')
     subscription.cancel_at_period_end = True
@@ -120,7 +174,7 @@ def resume_subscription(*, user):
 
 
 def process_expired_subscriptions(*, dry_run=True):
-    """Downgrade PRO subscriptions that were scheduled to cancel and whose period has
+    """Downgrade paid (PRO/SOLO) subscriptions that were scheduled to cancel and whose period has
     ended. Run explicitly by an operator/scheduler; there is no payment provider webhook
     driving this in the MVP."""
     now = timezone.now()

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Search } from "@/components/icons";
 import { Empty, ErrorPanel, PageHead, Pager, Pill } from "@/components/platform/ui";
 import { listPlatformWorkspaces } from "@/lib/platform-api";
-import { firstParam, formatBytes, planLabel, query, relativeTime } from "@/lib/platform-view";
+import { firstParam, formatBytes, planLabel, planTone, query, relativeTime } from "@/lib/platform-view";
 import { Select } from "@/components/ui/select";
 
 export default async function PlatformWorkspaces({ searchParams }: PageProps<"/platform/workspaces">) {
@@ -25,7 +25,7 @@ export default async function PlatformWorkspaces({ searchParams }: PageProps<"/p
         <tbody>{result.data.results.map((w) => <tr key={w.id}>
           <td data-label="Workspace"><Link href={`/platform/workspaces/${w.id}`} className="pf-row-link"><b>{w.name}</b></Link> {w.is_demo && <Pill tone="demo">demo</Pill>} {w.status !== "ACTIVE" && <Pill tone="warn">{w.status.toLowerCase()}</Pill>}</td>
           <td data-label="Owner">{w.owner?.email ?? "—"}</td>
-          <td data-label="Plan"><Pill tone={w.subscription?.plan === "PRO" ? "violet" : "neutral"}>{planLabel(w.subscription)}</Pill></td>
+          <td data-label="Plan"><Pill tone={planTone(w.subscription)}>{planLabel(w.subscription)}</Pill></td>
           <td data-label="Members">{w.members}</td>
           <td data-label="Projects" className={w.projects >= w.limits.projects ? "pf-warn-text" : undefined}>{w.projects} / {w.limits.projects}</td>
           <td data-label="Storage" className={w.storage_bytes >= w.limits.storage_bytes * 0.9 ? "pf-warn-text" : undefined}>{formatBytes(w.storage_bytes)} / {formatBytes(w.limits.storage_bytes)}</td>

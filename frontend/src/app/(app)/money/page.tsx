@@ -7,6 +7,7 @@ import { listClientTeams, listProjects } from "@/lib/api";
 import { getMoneySummary } from "@/lib/billing-api";
 import { NO_BILLING } from "@/lib/money-view";
 import { loadWorkspaceContext } from "@/lib/workspace";
+import { hasFeature } from "@/lib/plan";
 import "./money.css";
 
 /**
@@ -30,7 +31,7 @@ export default async function MoneyPage({ searchParams }: PageProps<"/money">) {
   const invoiceable = (projects.ok ? projects.data : [])
     .filter((project) => project.client_team_id && project.status !== "ARCHIVED")
     .map((project) => ({ id: project.id, name: project.name, client: clientNames.get(project.client_team_id!) ?? "Client" }));
-  return <MoneyBoard workspaceId={workspace.id} workspaceName={workspace.name} summary={summary.data} access={access} projects={invoiceable} now={new Date().toISOString()} />;
+  return <MoneyBoard workspaceId={workspace.id} workspaceName={workspace.name} summary={summary.data} access={access} projects={invoiceable} now={new Date().toISOString()} payoutsLocked={!hasFeature(workspace, "editor_payouts")} />;
 }
 
 function MoneyProblem({ title, body }: { title: string; body: string }) {

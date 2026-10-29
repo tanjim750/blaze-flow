@@ -3,6 +3,7 @@ import { CloudOff } from "@/components/icons";
 import { ClientDashboard } from "@/components/dashboards/client-dashboard";
 import { EditorDashboard } from "@/components/dashboards/editor-dashboard";
 import { OwnerDashboard } from "@/components/dashboards/owner-dashboard";
+import { SoloDashboard } from "@/components/dashboards/solo-dashboard";
 import { DashboardRetry } from "@/components/dashboard-retry";
 import { listWorkspaces } from "@/lib/api";
 import { chooseLayout } from "@/lib/dashboard-role";
@@ -10,6 +11,8 @@ import { noticeFor } from "@/lib/role-nav";
 import { failureView, type DashboardFailure } from "@/lib/dashboard-view";
 import { loadClientDashboard, loadEditorDashboard, loadOwnerDashboard } from "@/lib/role-dashboard-view";
 import { loadSession } from "@/lib/session";
+import { isSolo } from "@/lib/plan";
+import { loadSoloDashboard } from "@/lib/solo-dashboard-view";
 import { accountName, accountTitle } from "@/lib/user";
 import { selectWorkspace } from "@/lib/workspace";
 import "./home.css";
@@ -42,6 +45,11 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
   if (choice.layout === "client") {
     const view = await loadClientDashboard(greetingName, workspace);
     return "status" in view ? <DashboardError view={view} /> : <>{banner}<ClientDashboard view={view} choice={choice} /></>;
+  }
+  if (isSolo(workspace)) {
+    // Solo: one person, so a focused "my day" dashboard with no team, editor or payout widgets.
+    const solo = await loadSoloDashboard(greetingName, workspace);
+    return solo.status === "error" ? <DashboardError view={solo} /> : <>{banner}<SoloDashboard view={solo} choice={choice} /></>;
   }
   const view = await loadOwnerDashboard(greetingName, workspace);
   return "status" in view ? <DashboardError view={view} /> : <>{banner}<OwnerDashboard view={view} choice={choice} /></>;

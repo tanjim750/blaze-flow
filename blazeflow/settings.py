@@ -239,6 +239,17 @@ VIDEO_PROXY_TIMEOUT_SECONDS = int(os.environ.get('VIDEO_PROXY_TIMEOUT_SECONDS', 
 # rather than this settings module directly, so a future move to database-managed plans
 # does not require touching call sites.
 PLAN_LIMITS = {
+    # Solo: one person (owner only), 200 GB, task + client management, invoicing and client
+    # review. `features` lists the gated features it includes (see app/services/plan_features.py);
+    # plans without a `features` key include everything.
+    'SOLO': {
+        'max_workspaces_owned': int(os.environ.get('PLAN_SOLO_MAX_WORKSPACES_OWNED', '1')),
+        'max_projects_per_workspace': int(os.environ.get('PLAN_SOLO_MAX_PROJECTS_PER_WORKSPACE', '200')),
+        'max_storage_bytes': int(os.environ.get('PLAN_SOLO_MAX_STORAGE_BYTES', str(200 * 1024 * 1024 * 1024))),
+        'whatsapp_messages_per_month': int(os.environ.get('PLAN_SOLO_WHATSAPP_MESSAGES_PER_MONTH', '100')),
+        'max_members': 1,
+        'features': [],
+    },
     'FREE': {
         'max_workspaces_owned': int(os.environ.get('PLAN_FREE_MAX_WORKSPACES_OWNED', '1')),
         'max_projects_per_workspace': int(os.environ.get('PLAN_FREE_MAX_PROJECTS_PER_WORKSPACE', '3')),
@@ -294,6 +305,8 @@ API_PUBLIC_URL = os.environ.get('API_PUBLIC_URL', '').strip().rstrip('/')
 # Platform admin revenue estimate until Stripe is connected: what one PRO seat is assumed to
 # pay per month, in minor units of PLATFORM_CURRENCY. Purely for the /platform dashboard.
 PLATFORM_PRO_PRICE_MINOR = int(os.environ.get('PLATFORM_PRO_PRICE_MINOR', '2900'))
+# Solo plan list price in minor units (USD cents): $5.99/month.
+PLATFORM_SOLO_PRICE_MINOR = int(os.environ.get('PLATFORM_SOLO_PRICE_MINOR', '599'))
 PLATFORM_CURRENCY = os.environ.get('PLATFORM_CURRENCY', 'GBP')
 SUBSCRIPTION_TRIAL_DAYS = int(os.environ.get('SUBSCRIPTION_TRIAL_DAYS', '14'))
 # Where support replies come from (falls back to DEFAULT_FROM_EMAIL).

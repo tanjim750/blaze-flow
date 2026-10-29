@@ -18,6 +18,7 @@ import {
 } from "@/lib/money-view";
 import { createInvoice, getProjectPricing, recordInvoicePayment, recordPayout } from "./billing-client";
 import { PaymentDialog } from "./payment-dialog";
+import { UpgradePrompt } from "@/components/plan/upgrade-prompt";
 import { PayoutDetailsDialog } from "./payout-details";
 import { paymentMethodFor } from "@/lib/payout-details";
 import { Select } from "@/components/ui/select";
@@ -30,8 +31,10 @@ export async function markInvoicePaid(workspaceId: string, invoice: Pick<Invoice
   toast(`${invoice.number} marked as paid`, { description: `${formatMoney(invoice.outstanding, invoice.currency)} recorded as a manual payment.` });
 }
 
-export function MoneyBoard({ workspaceId, workspaceName, summary, access, projects, now }: {
+export function MoneyBoard({ workspaceId, workspaceName, summary, access, projects, now, payoutsLocked = false }: {
   workspaceId: string; workspaceName: string; summary: MoneySummary; access: BillingAccess; projects: InvoiceableProject[]; now: string;
+  /** Solo: editor payouts aren't in the plan, so the payouts panel is an upgrade prompt. */
+  payoutsLocked?: boolean;
 }) {
   const router = useAppRouter();
   const today = useMemo(() => new Date(now), [now]);
@@ -71,7 +74,7 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
       </article>)}
     </section>
 
-    <div className={summary.payouts ? "money-columns" : "money-columns is-single"}>
+    <div className={summary.payouts || payoutsLocked ? "money-columns" : "money-columns is-single"}>
       <section className="money-panel" aria-labelledby="receivables-title">
         <header><h2 id="receivables-title"><Building2 aria-hidden="true" />Receivables by client</h2><small>Sent and paid invoices</small></header>
         {summary.receivables.length === 0 ? <p className="money-muted">No client work is priced yet. Set a fee on a project to start.</p>
@@ -85,7 +88,11 @@ export function MoneyBoard({ workspaceId, workspaceName, summary, access, projec
           </table>}
       </section>
 
-      {summary.payouts && <section className="money-panel" aria-labelledby="payouts-title">
+      {payoutsLocked && <section className="money-panel" aria-labelledby="payouts-title">
+        <header><h2 id="payouts-title"><Users aria-hidden="true" />Payouts by editor</h2><small>Starter and up</small></header>
+        <UpgradePrompt feature="editor_payouts" />
+      </section>}
+      {!payoutsLocked && summary.payouts && <section className="money-panel" aria-labelledby="payouts-title">
         <header><h2 id="payouts-title"><Users aria-hidden="true" />Payouts by editor</h2><small>Earned when a task is approved</small></header>
         {summary.payouts.length === 0 ? <p className="money-muted">No editor pay yet. Set pay on a task in its detail sheet.</p>
           : <table className="money-table is-stacking is-payouts">

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Lock, ShieldCheck, UploadCloud, Users } from "@/components/icons";
-import { ProClosing, ProFaq, ProPlans, type FaqItem } from "@/components/pro/pro-home";
+import { ProClosing, ProFaq, ProPlans, ProSolo, type FaqItem } from "@/components/pro/pro-home";
 import { ProCardGrid, ProPageHero } from "@/components/pro/pro-pages";
 import { ProCompare } from "@/components/pro/pro-pricing";
 import { marketingMetadata } from "@/lib/marketing-metadata";
@@ -17,6 +17,7 @@ export const metadata = marketingMetadata({
 const FAQ: FaqItem[] = [
   { q: "How does the free trial work?", a: `Every plan starts with ${trialDays} days free, so you can run a real client job end to end.` },
   { q: "What currency do you bill in?", a: `US dollars (${currency}), per month.` },
+  { q: "I work on my own. Is there a smaller plan?", a: <>Yes. <Link href="#solo">{siteConfig.solo.name}</Link> is {siteConfig.pricing.symbol}{siteConfig.solo.monthly} a month for one person: projects, tasks, clients, client review and invoicing, with {siteConfig.solo.storage.replace(" storage", "")} of storage. Move to Starter when you add a team.</> },
   { q: "Do my clients pay anything?", a: "No. Clients review through links or your portal for free." },
   { q: "Can I cancel?", a: <>Yes. The details are in the <Link href="/terms">terms</Link>.</> },
   { q: "We’re a bigger team. Can we talk?", a: <>Yes. <Link href="/contact">Contact us</Link>.</> },
@@ -38,6 +39,7 @@ export default function PricingPage() {
           <ProPlans headingLevel="h2" />
         </div>
       </section>
+      <ProSolo />
       <ProCompare />
       <section className="pro-trust" aria-labelledby="pro-trust-title">
         <div className="pro-wrap">
