@@ -29,12 +29,11 @@ function GoogleMark() {
 }
 
 /**
- * "Continue with Google" in our own design-system styling. Google's GIS button is rendered
- * on top of it at opacity 0 and sized to our button, so clicks and keyboard activation go
- * to the real GIS button (which keeps the ID-token credential flow verified by the backend)
- * while users only ever see our button. The visual button is presentational; focus lands on
- * the GIS iframe and the slot shows a single focus ring (focus events on the iframe, plus :focus-within).
- * Without NEXT_PUBLIC_GOOGLE_CLIENT_ID a disabled look-alike explains why.
+ * "Continue with Google". Our design-system look-alike is a placeholder while the GIS script
+ * loads; once GIS renders, Google's real button is shown visibly in its place. It must stay
+ * visible: the GIS iframe tracks its own visibility with IntersectionObserver v2 (clickjacking
+ * protection) and an opacity-0 overlay reports isVisible=false, so the sign-in never completed
+ * for real Chrome users. Without NEXT_PUBLIC_GOOGLE_CLIENT_ID a disabled look-alike explains why.
  */
 export function GoogleSignIn({ destination = "/", inviteToken, label = "Continue with Google" }: { destination?: string; inviteToken?: string; label?: string }) {
   const router = useAppRouter();
@@ -61,7 +60,7 @@ export function GoogleSignIn({ destination = "/", inviteToken, label = "Continue
         router.refresh();
       },
     });
-    // GIS caps width at 400px; the overlay stretches the iframe to cover our full button.
+    // GIS supports widths of 200–400px; match our slot within that range.
     const width = Math.min(400, Math.max(200, Math.round(mount.current.getBoundingClientRect().width)));
     window.google.accounts.id.renderButton(mount.current, { theme: "outline", size: "large", width, shape: "rectangular", text: "continue_with", logo_alignment: "center" });
     setReady(true);
