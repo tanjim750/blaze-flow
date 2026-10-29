@@ -70,8 +70,8 @@ export function DemoVideo({ label }: { label: string }) {
         preload="metadata"
         poster="/marketing/demo-poster.webp"
         aria-label={label}
-        width={1280}
-        height={800}
+        width={1920}
+        height={1200}
       >
         <source src="/marketing/demo-clip.webm" type="video/webm" />
         <source src="/marketing/demo-clip.mp4" type="video/mp4" />

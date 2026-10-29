@@ -28,6 +28,12 @@ const nextConfig: NextConfig = {
    * empty bottom-right corner. Production builds are unaffected.
    */
   devIndicators: { position: "bottom-right" },
+  /**
+   * Marketing screenshots are stored at 2x (2880×1800). next/image serves AVIF where the
+   * browser supports it (WebP otherwise) at the srcset width the `sizes` hint picks, so
+   * phones never pull the full-size master.
+   */
+  images: { formats: ["image/avif", "image/webp"] },
   experimental: {
     /**
      * Revisiting a page within 30 s reuses the rendered page instead of a fresh server
