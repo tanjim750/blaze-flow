@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "./interactions.css";
+import "./light-polish.css";
 import { NavProgress } from "@/components/nav-progress";
 import { SubmitFeedback } from "@/components/submit-feedback";
 import { UploadTray } from "@/components/uploads/upload-tray";
