@@ -127,6 +127,10 @@ html:has(.pro), body:has(.pro) { background: var(--bf-canvas); }
 .pro-window.is-shot img { width: 100%; }
 .pro .mk-video { position: relative; }
 .pro .mk-video video { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: var(--bf-background); }
+.pro .mk-slides { aspect-ratio: 16 / 10; background: var(--bf-background); }
+.pro .mk-slides img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transform: none; animation: none; opacity: 0; transition: opacity 1.2s ease; }
+.pro .mk-slides img.is-active { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .pro .mk-slides img { transition: none; } }
 .pro .mk-video-toggle {
   position: absolute; right: 14px; bottom: 14px; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px;
   border-radius: 8px; cursor: pointer; background: var(--bf-popover); color: var(--ink); border: 1px solid var(--line-d); font: 600 13px var(--font-geist-sans), sans-serif;
