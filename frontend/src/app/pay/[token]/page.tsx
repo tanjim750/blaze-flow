@@ -4,6 +4,7 @@ import { CircleOff } from "@/components/icons";
 import { request } from "@/lib/api";
 import type { InvoiceDetail } from "@/lib/money-view";
 import { PublicPayView, type PublicInvoice } from "./pay-view";
+import { KrewsysLogo } from "@/components/brand/krewsys-logo";
 import "./pay.css";
 
 export const metadata: Metadata = {
@@ -31,7 +32,7 @@ export default async function PayPage({ params, searchParams }: PageProps<"/pay/
         <p>{invoice.error.status === 0 ? "The payment service could not be reached. Try again in a minute." : invoice.error.detail}</p>
         <p className="pay-muted">Ask the studio for a new link if you still need to pay.</p>
       </section>
-      <footer className="pay-foot">Powered by <strong>Krewsys</strong></footer>
+      <footer className="pay-foot">Powered by <KrewsysLogo height={16} className="powered-logo" /></footer>
     </main>;
   }
   return <PublicPayView token={token} invoice={invoice.data as PublicInvoice} back={back} provider={provider} />;

@@ -6,6 +6,7 @@ import { DropUploader } from "@/components/client-uploads/drop-uploader";
 import { publicUploadUrl, shortDateTime, type PublicUploadLink } from "@/lib/client-uploads";
 import { accentStyle } from "@/lib/portal";
 import { StudioMark } from "@/components/portal/studio-mark";
+import { KrewsysLogo } from "@/components/brand/krewsys-logo";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -69,7 +70,7 @@ export function PublicUploader({ token, link }: { token: string; link: PublicUpl
           </div>
         </div>
       </section>
-      <footer className="ul-foot">Files go straight to {link.studio_name}&rsquo;s project. Powered by <strong>Krewsys</strong></footer>
+      <footer className="ul-foot">Files go straight to {link.studio_name}&rsquo;s project. Powered by <KrewsysLogo height={16} className="powered-logo" /></footer>
     </main>
   );
 }

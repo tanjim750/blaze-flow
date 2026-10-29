@@ -6,7 +6,7 @@ import { CommandPalette, openQuickSearch } from "@/components/command-palette";
 import { LinkPending } from "@/components/nav-progress";
 import { usePathname, useSearchParams } from "next/navigation";
 import { PageTransition } from "@/components/page-transition";
-import { BadgeCheck, Inbox, ReceiptText, CheckCircle2, Clients, ChevronLeft, CircleHelp, Flame, FolderOpen, House, LogOut, Mail, Menu, MessagesSquare, Search, Settings, SquareKanban, Users, Wallet, X } from "@/components/icons";
+import { BadgeCheck, Inbox, ReceiptText, CheckCircle2, Clients, ChevronLeft, CircleHelp, FolderOpen, House, LogOut, Mail, Menu, MessagesSquare, Search, Settings, SquareKanban, Users, Wallet, X } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
 import type { ShellUser } from "@/lib/user";
@@ -22,6 +22,7 @@ import { LifeBuoy, Plus, ShieldCheck, Upload } from "@/components/icons";
 import { REPORT_EVENT, ReportProblemDialog } from "@/components/report-problem";
 import { ShellReconnect } from "@/components/shell-reconnect";
 import { Select } from "@/components/ui/select";
+import { KrewsysLogo, KrewsysMark } from "@/components/brand/krewsys-logo";
 
 type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { severity: string; code: string; count: number }[] };
 
@@ -149,6 +150,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
         <button type="button" className="studio-mobilebar-btn" onClick={() => setOpen(!open)} aria-label={open ? "Close navigation" : "Open navigation"} aria-expanded={open}>
           {open ? <X size={20} /> : <Menu size={20} />}
         </button>
+        <KrewsysMark size={26} className="studio-mobilebar-mark" title="Krewsys" />
         <h1 className="studio-mobilebar-title">{mobileTitle(pathname)}</h1>
         <div className="studio-mobilebar-actions">
           {primary && <button type="button" className="studio-mobilebar-btn is-primary" onClick={runPrimary} aria-label={primary}>{/upload/i.test(primary) ? <Upload size={18} /> : <Plus size={18} />}</button>}
@@ -174,7 +176,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
         </button>
 
         <div className="studio-sidebar-top">
-          <div className="studio-brand"><span><Flame size={17} /></span><strong>Krewsys</strong></div>
+          <div className="studio-brand"><KrewsysLogo height={30} className="studio-brand-full" /><KrewsysMark size={30} className="studio-brand-icon" title="Krewsys" /></div>
           <WorkspacePicker workspaces={workspaces} selectedWorkspaceId={selectedWorkspaceId} pathname={pathname} degraded={degraded} />
 
           {/* Opens the ⌘K palette (everyone, clients included: it is scoped to what they can see). */}

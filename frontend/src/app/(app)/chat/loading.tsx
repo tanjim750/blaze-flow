@@ -1,7 +1,4 @@
-import { ChatShellSkeleton } from "@/components/chat/skeleton";
-import "@/components/messages/messages.css";
-import "@/components/chat/chat.css";
+import { PageLoader } from "@/components/brand/page-loader";
 
-export default function Loading() {
-  return <ChatShellSkeleton />;
-}
+/** Route loading: branded Krewsys loader, revealed only if rendering takes longer than ~300ms. */
+export default function Loading() { return <PageLoader />; }

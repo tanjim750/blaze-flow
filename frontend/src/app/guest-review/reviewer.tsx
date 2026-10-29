@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BadgeCheck, Check, CornerDownRight, Film, Flame, Loader, LogOut, MessageSquareText, Paperclip,
+  BadgeCheck, Check, CornerDownRight, Film, Loader, LogOut, MessageSquareText, Paperclip,
   RotateCcw, Send, SmilePlus, Trash2, TriangleAlert,
 } from "@/components/icons";
 import { nestNotes, type ReviewNote } from "@/lib/review-notes";
@@ -20,6 +20,7 @@ import { briefIsEmpty, briefToPlainText } from "@/lib/rich-brief";
 import { rangeLabel } from "@/lib/annotation-window";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } from "@/app/(app)/review/player";
+import { KrewsysLogo } from "@/components/brand/krewsys-logo";
 import {
   clearGuestSession, createGuestComment, createGuestDecision, deleteGuestComment, downloadGuestAttachment,
   editGuestComment, exchangeGuestInvite, getGuestPlayback, listGuestAnnotations, listGuestComments, loadGuestReview,
@@ -140,7 +141,7 @@ export function GuestReviewer({ token }: { token: string }) {
   return (
     <div className="gr-shell">
       <header className="gr-topbar">
-        <div className="gr-brand"><span><Flame size={15} /></span><strong>Krewsys</strong></div>
+        <div className="gr-brand"><KrewsysLogo height={28} /></div>
         <div className="gr-project">
           <strong>{review?.project.name ?? "Loading…"}</strong>
           {review?.project.description && !briefIsEmpty(review.project.description) && (
@@ -620,7 +621,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   return (
     <div className="gr-card-wrap">
       <div className="gr-card">
-        <div className="gr-brand"><span><Flame size={15} /></span><strong>Krewsys</strong></div>
+        <div className="gr-brand"><KrewsysLogo height={28} /></div>
         <h1>{title}</h1>
         {children}
       </div>
