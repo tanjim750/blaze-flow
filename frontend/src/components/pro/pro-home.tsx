@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type PointerEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { animate, motion, useInView } from "motion/react";
+import { animate, motion, useInView, useMotionValue, useScroll, useSpring, useTransform } from "motion/react";
 import { ArrowRight, Check, CloudUpload, ListChecks, Minus } from "@/components/icons";
 import { DemoVideo } from "@/components/marketing/demo-video";
-import { useReducedMotionSafe } from "@/components/marketing/motion-prefs";
+import { useFinePointer, useReducedMotionSafe } from "@/components/marketing/motion-prefs";
 import { SCREENS, type ScreenKey } from "@/components/marketing/screenshot";
 import { siteConfig } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
@@ -66,16 +66,17 @@ export function Shot({ name: key, sizes, decorative = false }: { name: ScreenKey
 }
 
 /** One fade-and-rise when something first scrolls into view. */
-export function Reveal({ children, className, delay = 0, y = 64, ...rest }: { children: ReactNode; className?: string; delay?: number; y?: number; [data: `data-${string}`]: string | undefined }) {
+export function Reveal({ children, className, delay = 0, y = 64, tilt = 0, ...rest }: { children: ReactNode; className?: string; delay?: number; y?: number; tilt?: number; [data: `data-${string}`]: string | undefined }) {
   const reduce = useReducedMotionSafe();
   return (
     <motion.div
       {...rest}
       className={className}
-      initial={reduce ? false : { opacity: 0, y }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={reduce ? false : { opacity: 0, y, rotateX: tilt, scale: tilt ? 0.96 : 1 }}
+      whileInView={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
       viewport={{ once: true, margin: "0px 0px -8% 0px" }}
       transition={{ duration: 1, ease: EASE, delay }}
+      style={tilt ? { transformPerspective: 1200 } : undefined}
     >
       {children}
     </motion.div>
@@ -97,11 +98,17 @@ function useSequence(steps: number, interval = 650) {
   return { ref, step: reduce ? steps : step, inView: inView || reduce };
 }
 
-/** Screenshots stay flat and full size: no scroll-linked tilt, scale or pan. */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function useSettle(_from?: number, _axis?: "x" | "y") {
+/** A scroll-linked tilt that settles flat as the element reaches the middle of the screen. */
+export function useSettle(from: number, axis: "x" | "y" = "y") {
   const ref = useRef<HTMLDivElement>(null);
-  return { ref, style: undefined };
+  const lite = useLiteMotion();
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "center 55%"] });
+  const p = useSpring(scrollYProgress, { stiffness: 90, damping: 24, mass: 0.5 });
+  const rot = useTransform(p, [0, 1], [from, 0]);
+  const tip = useTransform(p, [0, 1], [14, 0]);
+  const scale = useTransform(p, [0, 1], [0.86, 1]);
+  const y = useTransform(p, [0, 1], [80, 0]);
+  return { ref, style: lite ? undefined : axis === "y" ? { rotateY: rot, rotateX: tip, scale, y } : { rotateX: rot, scale, y } };
 }
 
 export function TrialButton({ children = "Start free trial", light = false }: { children?: ReactNode; light?: boolean }) {
@@ -111,8 +118,30 @@ export function TrialButton({ children = "Start free trial", light = false }: { 
 /* ---------- hero ---------- */
 
 export function ProHero() {
+  const stage = useRef<HTMLDivElement>(null);
+  const lite = useLiteMotion();
+  const fine = useFinePointer();
   const reduce = useReducedMotionSafe();
+  const { scrollYProgress } = useScroll({ target: stage, offset: ["start end", "start 10%"] });
+  const p = useSpring(scrollYProgress, { stiffness: 130, damping: 30, mass: 0.4 });
+  const mx = useSpring(useMotionValue(0), { stiffness: 80, damping: 20 });
+  const my = useSpring(useMotionValue(0), { stiffness: 80, damping: 20 });
+  const tiltX = useTransform(p, [0, 1], [34, 0]);
+  const rotateX = useTransform([tiltX, my], ([a, b]: number[]) => a + b);
+  const rotateY = useTransform(mx, (v) => v);
+  const scale = useTransform(p, [0, 1], [0.84, 1]);
+  const near = useTransform(p, [0, 1], [200, -60]);
+  const mid = useTransform(p, [0, 1], [120, -20]);
+  const far = useTransform(p, [0, 1], [280, -90]);
+  const move = (event: PointerEvent<HTMLDivElement>) => {
+    if (lite || !fine) return;
+    const r = event.currentTarget.getBoundingClientRect();
+    mx.set(((event.clientX - r.left) / r.width - 0.5) * 10);
+    my.set(-((event.clientY - r.top) / r.height - 0.5) * 7);
+  };
+  const reset = () => { mx.set(0); my.set(0); };
   const enter = (delay: number) => (reduce ? {} : { initial: { opacity: 0, y: 48 }, animate: { opacity: 1, y: 0 }, transition: { duration: 1.1, ease: EASE, delay } });
+  const fly = (delay: number, x: number, y = 0) => (reduce ? {} : { initial: { opacity: 0, x, y, scale: 0.9 }, animate: { opacity: 1, x: 0, y: 0, scale: 1 }, transition: { duration: 1.3, ease: EASE, delay } });
 
   return (
     <section className="pro-hero" aria-labelledby="pro-hero-title">
@@ -128,12 +157,20 @@ export function ProHero() {
         <motion.p className="pro-fine" {...enter(0.22)}>From {symbol}{siteConfig.plans[0].monthly} a month after the trial. Clients don&rsquo;t need an account.</motion.p>
       </div>
 
-      {/* The whole product window, flat and uncropped: no scroll zoom, tilt or floating cards over it. */}
-      <div className="pro-stage">
-        <motion.div className="pro-scene" {...(reduce ? {} : { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 1, ease: EASE, delay: 0.3 } })}>
+      <div className="pro-stage" ref={stage} onPointerMove={move} onPointerLeave={reset}>
+        <motion.div className="pro-scene" style={lite ? undefined : { rotateX, rotateY, scale }} {...(reduce ? {} : { initial: { opacity: 0, y: 120 }, animate: { opacity: 1, y: 0 }, transition: { duration: 1.4, ease: EASE, delay: 0.3 } })}>
           <div className="pro-window">
             <DemoVideo label={`${name} review page: a client cut playing, with time-stamped comments and drawings beside it`} />
           </div>
+          <motion.figure className="pro-layer is-qa" style={lite ? undefined : { y: near }}>
+            <motion.div {...fly(0.7, -160)}><Pic img={V3.finding1} sizes="340px" /></motion.div>
+          </motion.figure>
+          <motion.figure className="pro-layer is-signoff" style={lite ? undefined : { y: far }}>
+            <motion.div {...fly(0.9, 160)}><Pic img={V3.signoff} sizes="420px" /></motion.div>
+          </motion.figure>
+          <motion.figure className="pro-layer is-money" style={lite ? undefined : { y: mid }}>
+            <motion.div {...fly(1.1, 0, 140)}><Pic img={V3.invoiceTotals} sizes="440px" /></motion.div>
+          </motion.figure>
         </motion.div>
       </div>
     </section>
@@ -186,8 +223,8 @@ export function ProQaScene() {
                   aria-hidden="true"
                   style={{ left: `${b.left}%`, top: `${b.top}%`, width: `${b.width}%`, height: `${b.height}%` }}
                   initial={false}
-                  animate={{ opacity: step > i ? 1 : 0 }}
-                  transition={{ duration: 0.3 }}
+                  animate={step > i ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 1.6 }}
+                  transition={{ type: "spring", stiffness: 260, damping: 18 }}
                 />
               ))}
             </motion.div>
@@ -197,8 +234,9 @@ export function ProQaScene() {
               <motion.li
                 key={img.src}
                 initial={false}
-                animate={{ opacity: step > i ? 1 : 0 }}
+                animate={step > i ? { opacity: 1, x: 0, rotateY: 0 } : { opacity: 0, x: 120, rotateY: -25 }}
                 transition={{ duration: 0.8, ease: EASE }}
+                style={{ transformPerspective: 900 }}
               >
                 <Pic img={img} sizes="(max-width: 960px) 80vw, 340px" />
               </motion.li>
@@ -232,10 +270,25 @@ export function ProPortalScene() {
               <Pic img={V3.portalProject} sizes="(max-width: 960px) 100vw, 760px" />
             </motion.div>
           </div>
-          <motion.div className="pro-below" initial={false} animate={{ opacity: step >= 1 ? 1 : 0 }} transition={{ duration: 0.8, ease: EASE }}>
-            <figure className="pro-flat"><Pic img={V3.stepper} sizes="(max-width: 960px) 90vw, 640px" /></figure>
-            <figure className="pro-flat is-half"><Pic img={V3.signoff} sizes="(max-width: 960px) 90vw, 440px" /></figure>
-          </motion.div>
+          <motion.figure
+            className="pro-float is-stepper"
+            initial={false}
+            animate={{ clipPath: step >= 1 ? "inset(0 0% 0 0 round 10px)" : "inset(0 100% 0 0 round 10px)" }}
+            transition={{ duration: 1.6, ease: EASE }}
+          >
+            <Pic img={V3.stepper} sizes="(max-width: 960px) 90vw, 640px" />
+          </motion.figure>
+          <div className="pro-portal-progress" aria-hidden="true">
+            <motion.span initial={false} animate={{ scaleX: step >= 1 ? 1 : 0 }} transition={{ duration: 2.2, ease: EASE, delay: 0.3 }} />
+          </div>
+          <motion.figure
+            className="pro-float is-signoff"
+            initial={false}
+            animate={step >= 2 ? { opacity: 1, y: 0, x: 0, scale: 1 } : { opacity: 0, y: 90, x: 60, scale: 0.9 }}
+            transition={{ duration: 1, ease: EASE }}
+          >
+            <Pic img={V3.signoff} sizes="(max-width: 960px) 90vw, 440px" />
+          </motion.figure>
         </div>
       </div>
     </section>
@@ -280,7 +333,7 @@ export function ProMoneyScene() {
         <div className="pro-money-visual">
           <dl className="pro-sums">
             {SUMS.map((s, i) => (
-              <Reveal key={s.label} delay={i * 0.12} y={50} className="pro-sum">
+              <Reveal key={s.label} delay={i * 0.12} y={50} tilt={20} className="pro-sum">
                 <dt>{s.label}</dt>
                 <dd><Count value={s.value} prefix="£" /></dd> {/* the demo studio bills in GBP, as in the screenshots */}
                 <dd className="pro-sum-note">{s.note}</dd>
@@ -382,7 +435,7 @@ export function ProBento() {
         <Reveal><h2 id="pro-bento-title" className="pro-h2 is-center">Also in {name}</h2></Reveal>
         <div className="pro-bento-grid">
           {TILES.map((t, i) => (
-            <Reveal key={t.key} delay={(i % 2) * 0.14} className={cn("pro-tile", t.size === "wide" && "is-wide")}>
+            <Reveal key={t.key} delay={(i % 2) * 0.14} tilt={18} className={cn("pro-tile", t.size === "wide" && "is-wide")}>
               <div className="pro-tile-copy">
                 <h3>{t.title}</h3>
                 <p>{t.line}</p>
@@ -419,7 +472,7 @@ export function ProPlans({ headingLevel = "h3" }: { headingLevel?: "h2" | "h3" }
   return (
     <div className="pro-plans">
       {siteConfig.plans.map((plan, i) => (
-        <Reveal key={plan.id} delay={i * 0.12} className={cn("pro-plan", plan.highlighted && "is-featured")} data-plan={plan.id} data-to-confirm={plan.toConfirm ? "true" : undefined}>
+        <Reveal key={plan.id} delay={i * 0.12} tilt={16} className={cn("pro-plan", plan.highlighted && "is-featured")} data-plan={plan.id} data-to-confirm={plan.toConfirm ? "true" : undefined}>
           <article>
             <div className="pro-plan-top">
               <H className="pro-plan-name">{plan.name}{plan.highlighted && <span className="pro-plan-pick">Most popular</span>}</H>

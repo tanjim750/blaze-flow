@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { animate, motion, useInView, useMotionValueEvent, useScroll, useSpring, useTransform } from "motion/react";
+import { animate, motion, useInView, useMotionValueEvent, useScroll, useSpring, useTransform, type MotionValue } from "motion/react";
 import { Check, CloudUpload, GripVertical, MessageSquareText } from "@/components/icons";
 import { useReducedMotionSafe } from "@/components/marketing/motion-prefs";
 import { cn } from "@/lib/utils";
@@ -88,18 +88,21 @@ const CHAPTERS: Chapter[] = [
   },
 ];
 
-function StoryStage({ active }: { active: number }) {
+function StoryStage({ progress, active }: { progress: MotionValue<number>; active: number }) {
+  const rotY = useTransform(progress, [0, 0.5, 1], [-16, -4, 10]);
+  const rotX = useTransform(progress, [0, 1], [10, 4]);
   return (
     <div className="pro-story-stage">
-      <div className="pro-story-window">
+      <motion.div className="pro-story-window" style={{ rotateY: rotY, rotateX: rotX }}>
         {CHAPTERS.map((c, i) => (
           <motion.div key={c.id} className="pro-story-base" aria-hidden={i !== active} initial={false}
-            animate={{ opacity: i === active ? 1 : 0 }}
+            animate={{ opacity: i === active ? 1 : 0, scale: i === active ? 1 : 0.96, z: i === active ? 0 : -80 }}
             transition={{ duration: 0.6, ease: EASE }}>
             {c.base}
           </motion.div>
         ))}
-      </div>
+      </motion.div>
+      {CHAPTERS.map((c, i) => <div key={c.id} className="pro-story-layers" aria-hidden={i !== active}>{c.layers(i === active)}</div>)}
     </div>
   );
 }
@@ -149,7 +152,7 @@ export function ProPinnedStory() {
             </ol>
             <div className="pro-story-progress" aria-hidden="true"><motion.span style={{ scaleX: bar }} /></div>
           </div>
-          <StoryStage active={active} />
+          <StoryStage progress={progress} active={active} />
         </div>
       </div>
     </section>
@@ -162,7 +165,7 @@ export function ProPinnedStory() {
 
 function Tile({ className, title, line, children, delay = 0 }: { className?: string; title: string; line: string; children: ReactNode; delay?: number }) {
   return (
-    <Reveal className={cn("pro-live", className)} delay={delay}>
+    <Reveal className={cn("pro-live", className)} delay={delay} tilt={14}>
       <div className="pro-live-head"><h3>{title}</h3><p>{line}</p></div>
       <div className="pro-live-body">{children}</div>
     </Reveal>
@@ -191,8 +194,8 @@ function TypoDemo() {
       {!reduce && <span className="pro-scan-line" style={{ top: `${y}%`, opacity: y >= 100 ? 0 : 1 }} aria-hidden="true" />}
       {BOXES.map((b, i) => (
         <motion.span key={i} className="pro-typo-box" aria-hidden="true" style={{ left: `${b.left}%`, top: `${b.top}%`, width: `${b.width}%`, height: `${b.height}%` }}
-          initial={false} animate={{ opacity: y >= b.top + b.height / 2 ? 1 : 0 }}
-          transition={{ duration: 0.3 }} />
+          initial={false} animate={y >= b.top + b.height / 2 ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 1.5 }}
+          transition={{ type: "spring", stiffness: 260, damping: 18 }} />
       ))}
       <p className="pro-live-count" aria-live="off">{BOXES.filter((b) => y >= b.top + b.height / 2).length} of 3 found</p>
     </div>
