@@ -1,3 +1,4 @@
-export default function Loading() {
-  return <div className="pt-page" aria-busy="true" aria-live="polite"><p style={{ color: "var(--muted)" }}>Loading your project…</p></div>;
-}
+import { PageLoader } from "@/components/brand/page-loader";
+
+/** Route loading: branded Krewsys loader, revealed only if rendering takes longer than ~300ms. */
+export default function Loading() { return <PageLoader />; }

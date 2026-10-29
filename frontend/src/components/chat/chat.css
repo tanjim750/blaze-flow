@@ -18,7 +18,7 @@
   height:calc(100vh - 0px);
   margin:0;
   border-top:1px solid var(--border);
-  background:var(--bg,#0A0A0A);
+  background:var(--bg,var(--t-bg-0a0a0a));
   color:var(--text);
   overflow:hidden;
 }
@@ -37,14 +37,14 @@
   min-width:0;
   max-width:100%;
   border-right:1px solid var(--border);
-  background:var(--surface,#14141c);
+  background:var(--surface,var(--t-bg-14141c));
   overflow:hidden;
 }
 .ch-side-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 14px 8px;min-width:0}
 .ch-side-head h1{display:flex;align-items:center;gap:8px;margin:0;font-size:18px;letter-spacing:-.02em;min-width:0}
 .ch-side-head h1 svg{width:18px;height:18px;color:var(--primary-2);flex:none}
 .ch-side-count{flex:none;padding:3px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:11px;white-space:nowrap}
-.ch-search{display:flex;align-items:center;gap:8px;margin:0 12px 8px;padding:0 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2,#1a1a24);min-width:0}
+.ch-search{display:flex;align-items:center;gap:8px;margin:0 12px 8px;padding:0 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2,var(--t-bg-1a1a24));min-width:0}
 .ch-search svg{width:14px;height:14px;color:var(--muted);flex:none}
 .ch-search input{flex:1;min-width:0;height:34px;border:0;background:none;color:var(--text);font:inherit;font-size:13px;outline:none}
 .ch-search button{display:grid;place-items:center;width:22px;height:22px;border:0;border-radius:6px;background:none;color:var(--muted);cursor:pointer;flex:none}
@@ -58,30 +58,30 @@
 .ch-section-head.is-static{cursor:default}
 .ch-section-head svg{width:14px;height:14px;flex:none}
 .ch-section-head small{margin-left:auto;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted);flex:none}
-.ch-section-head:hover:not(.is-static){color:var(--text);background:var(--hover,#1d1d26)}
+.ch-section-head:hover:not(.is-static){color:var(--text);background:var(--hover,var(--t-bg-1d1d26))}
 .ch-channel{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border:0;border-radius:8px;background:none;color:var(--muted);font-size:13.5px;cursor:pointer;text-align:left;min-width:0}
 .ch-channel svg{width:14px;height:14px;flex:none;opacity:.7}
 .ch-channel-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ch-channel.is-unread .ch-channel-name{color:var(--text);font-weight:700}
 .ch-channel.is-active{background:var(--primary);color:#fff}
-.ch-channel.is-active svg{opacity:1;color:#fff}
-.ch-channel:hover:not(.is-active){background:var(--hover,#1d1d26);color:var(--text)}
-.ch-badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#ff5c7a;color:#fff;font-size:10.5px;font-weight:750;flex:none}
-.ch-badge.is-mention{background:#7c5cff}
-.ch-team-dot{width:8px;height:8px;border-radius:50%;background:#f5b546;flex:none}
+.ch-channel.is-active svg{opacity:1;color:var(--t-fg-ffffff)}
+.ch-channel:hover:not(.is-active){background:var(--hover,var(--t-bg-1d1d26));color:var(--text)}
+.ch-badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--t-bg-ff5c7a);color:#fff;font-size:10.5px;font-weight:750;flex:none}
+.ch-badge.is-mention{background:var(--t-bg-7c5cff)}
+.ch-team-dot{width:8px;height:8px;border-radius:50%;background:var(--t-bg-f5b546);flex:none}
 .ch-past-toggle{display:block;width:100%;padding:4px 10px;border:0;background:none;color:var(--muted);font-size:11.5px;text-align:left;cursor:pointer}
 .ch-past-toggle:hover{color:var(--text)}
 .ch-empty{margin:8px;color:var(--muted);font-size:12.5px}
 .ch-search-results{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 8px 16px;display:grid;align-content:start;gap:2px}
 .ch-search-label{margin:10px 8px 4px;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 .ch-search-hit{display:flex;align-items:flex-start;gap:8px;width:100%;padding:8px 10px;border:0;border-radius:10px;background:none;color:var(--text);text-align:left;cursor:pointer;min-width:0}
-.ch-search-hit:hover{background:var(--hover,#1d1d26)}
+.ch-search-hit:hover{background:var(--hover,var(--t-bg-1d1d26))}
 .ch-search-hit svg{width:14px;height:14px;margin-top:3px;color:var(--muted);flex:none}
 .ch-search-hit span{display:grid;gap:1px;min-width:0}
 .ch-search-hit small{color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ch-search-hit em{color:var(--muted);font-style:normal;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-.ch-main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg,#0A0A0A);overflow:hidden}
+.ch-main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg,var(--t-bg-0a0a0a));overflow:hidden}
 .ch-main-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);min-width:0;flex-wrap:wrap}
 .ch-back{display:none}
 .ch-main-title{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto}
@@ -90,7 +90,7 @@
 .ch-main-title strong{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ch-main-title small{display:block;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ch-open-project{flex:none;padding:6px 11px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);font-size:12.5px;text-decoration:none;white-space:nowrap}
-.ch-open-project:hover{background:var(--hover,#1d1d26)}
+.ch-open-project:hover{background:var(--hover,var(--t-bg-1d1d26))}
 .ch-thread{flex:1;min-height:0;min-width:0;padding:10px 14px 14px;overflow:hidden;display:flex;flex-direction:column}
 .ch-thread .mt-thread{height:100%;min-height:0;max-height:none}
 .ch-thread .mt-thread.is-studio,
@@ -179,7 +179,7 @@
 
 /* Loading skeletons: same boxes as the real layout, navy shimmer, shapes delayed ~150ms. */
 .ch-shell.sk-body{padding:0!important;animation:none}
-.ch-sk .sk{border-radius:8px;background:linear-gradient(90deg,#1A1E28 0%,#222733 50%,#1A1E28 100%);background-size:200% 100%;animation:ch-sk-shimmer 1.4s linear infinite,ch-sk-in 180ms ease-out 150ms both}
+.ch-sk .sk{border-radius:8px;background:linear-gradient(90deg,var(--t-bg-1a1e28) 0%,var(--t-bg-222733) 50%,var(--t-bg-1a1e28) 100%);background-size:200% 100%;animation:ch-sk-shimmer 1.4s linear infinite,ch-sk-in 180ms ease-out 150ms both}
 @keyframes ch-sk-shimmer{from{background-position:100% 0}to{background-position:-100% 0}}
 @keyframes ch-sk-in{from{opacity:0}to{opacity:1}}
 .ch-sk-msgs{display:grid;gap:18px;margin-top:auto;padding:14px 12px}

@@ -55,7 +55,7 @@
 .rt-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 @media (max-width: 640px) {
-  .rt-toolbar { mask-image: linear-gradient(90deg, #000 88%, transparent); padding-right: var(--bf-space-6); }
+  .rt-toolbar { mask-image: linear-gradient(90deg, var(--t-bg-000000) 88%, transparent); padding-right: var(--bf-space-6); }
   .rt-tool { width: 36px; height: 36px; }
   .rt-editable { min-height: 220px; padding: var(--bf-space-3); }
 }

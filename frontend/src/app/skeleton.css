@@ -1,6 +1,6 @@
 /* Loading placeholders and the navigation progress bar. */
 
-.sk { display: block; background: var(--shell-high, #26262b); border-radius: 7px; animation: sk-pulse 1.4s ease-in-out infinite; }
+.sk { display: block; background: var(--shell-high, var(--t-bg-26262b)); border-radius: 7px; animation: sk-pulse 1.4s ease-in-out infinite; }
 @keyframes sk-pulse { 50% { opacity: .42; } }
 
 .sk-line { height: 11px; width: 100%; }
@@ -23,7 +23,7 @@ main.flush > .sk-body { padding: 24px 28px; }
 .sk-tile { height: 190px; border-radius: 13px; }
 
 .sk-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(212px, 1fr); gap: 14px; overflow: hidden; }
-.sk-column { display: grid; gap: 10px; align-content: start; padding: 12px; border-radius: 13px; background: var(--shell-low, #1b1b1e); }
+.sk-column { display: grid; gap: 10px; align-content: start; padding: 12px; border-radius: 13px; background: var(--shell-low, var(--t-bg-1b1b1e)); }
 .sk-card { height: 128px; border-radius: 11px; }
 
 .sk-split { display: grid; grid-template-columns: minmax(0, 1fr) 370px; gap: 16px; }
@@ -41,7 +41,7 @@ main.flush > .sk-body { padding: 24px 28px; }
  * on an in-app link and cleared once the resolved route changes.
  */
 .nav-progress { position: fixed; inset: 0 0 auto; height: 2px; z-index: 200; pointer-events: none; background: transparent; }
-.nav-progress > i { display: block; height: 100%; width: 100%; transform-origin: 0 50%; background: linear-gradient(90deg, var(--bf-violet-400), var(--bf-violet-300)); box-shadow: 0 0 12px #8b6cffaa; animation: nav-progress-grow 10s cubic-bezier(.12, .82, .28, 1) forwards; }
+.nav-progress > i { display: block; height: 100%; width: 100%; transform-origin: 0 50%; background: linear-gradient(90deg, var(--bf-violet-400), var(--bf-violet-300)); box-shadow: 0 0 12px var(--t-shadow-8b6cffaa); animation: nav-progress-grow 10s cubic-bezier(.12, .82, .28, 1) forwards; }
 /* Appears only if the navigation takes longer than a blink, and finishes instead of vanishing. */
 .nav-progress { animation: nav-progress-in 120ms ease-out 80ms both; }
 .nav-progress.is-done { animation: nav-progress-out 220ms ease-out 60ms both; }

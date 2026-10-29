@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Flame, Menu, X } from "@/components/icons";
+import { Menu, X } from "@/components/icons";
 import { siteConfig } from "@/lib/site-config";
+import { BrandMark } from "@/components/brand/krewsys-logo";
 
 export const PRO_NAV = [
   { href: "/features", label: "Features" },
@@ -15,7 +16,7 @@ export const PRO_NAV = [
 export function ProBrand() {
   return (
     <Link className="pro-brand" href="/" aria-label={`${siteConfig.name} home`}>
-      <span className="pro-brand-mark" aria-hidden="true"><Flame /></span>
+      <BrandMark size={28} />
       <span>{siteConfig.name}</span>
     </Link>
   );

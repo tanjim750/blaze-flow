@@ -3,6 +3,7 @@ import { CircleOff } from "@/components/icons";
 import { request } from "@/lib/api";
 import type { PublicUploadLink } from "@/lib/client-uploads";
 import { PublicUploader } from "./uploader";
+import { KrewsysLogo } from "@/components/brand/krewsys-logo";
 import "./upload.css";
 
 export const metadata: Metadata = {
@@ -29,7 +30,7 @@ export default async function UploadLinkPage({ params }: PageProps<"/upload/[tok
           <p>{link.error.status === 0 ? "The studio's file service could not be reached. Try again in a minute." : link.error.detail}</p>
           <p className="ul-muted">If you still need to send files, ask the studio for a new link.</p>
         </section>
-        <footer className="ul-foot">Powered by <strong>Krewsys</strong></footer>
+        <footer className="ul-foot">Powered by <KrewsysLogo height={16} className="powered-logo" /></footer>
       </main>
     );
   }
