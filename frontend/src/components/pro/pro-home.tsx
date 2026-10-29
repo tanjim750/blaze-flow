@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode, type PointerEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { animate, motion, useInView, useMotionValue, useScroll, useSpring, useTransform } from "motion/react";
-import { ArrowRight, Check, Minus } from "@/components/icons";
+import { animate, motion, useInView } from "motion/react";
+import { ArrowRight, Check, CloudUpload, ListChecks, Minus } from "@/components/icons";
 import { DemoVideo } from "@/components/marketing/demo-video";
-import { useFinePointer, useReducedMotionSafe } from "@/components/marketing/motion-prefs";
+import { useReducedMotionSafe } from "@/components/marketing/motion-prefs";
 import { SCREENS, type ScreenKey } from "@/components/marketing/screenshot";
 import { siteConfig } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
@@ -66,17 +66,16 @@ export function Shot({ name: key, sizes, decorative = false }: { name: ScreenKey
 }
 
 /** One fade-and-rise when something first scrolls into view. */
-export function Reveal({ children, className, delay = 0, y = 64, tilt = 0, ...rest }: { children: ReactNode; className?: string; delay?: number; y?: number; tilt?: number; [data: `data-${string}`]: string | undefined }) {
+export function Reveal({ children, className, delay = 0, y = 64, ...rest }: { children: ReactNode; className?: string; delay?: number; y?: number; [data: `data-${string}`]: string | undefined }) {
   const reduce = useReducedMotionSafe();
   return (
     <motion.div
       {...rest}
       className={className}
-      initial={reduce ? false : { opacity: 0, y, rotateX: tilt, scale: tilt ? 0.96 : 1 }}
-      whileInView={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
+      initial={reduce ? false : { opacity: 0, y }}
+      whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "0px 0px -8% 0px" }}
       transition={{ duration: 1, ease: EASE, delay }}
-      style={tilt ? { transformPerspective: 1200 } : undefined}
     >
       {children}
     </motion.div>
@@ -98,17 +97,11 @@ function useSequence(steps: number, interval = 650) {
   return { ref, step: reduce ? steps : step, inView: inView || reduce };
 }
 
-/** A scroll-linked tilt that settles flat as the element reaches the middle of the screen. */
-export function useSettle(from: number, axis: "x" | "y" = "y") {
+/** Screenshots stay flat and full size: no scroll-linked tilt, scale or pan. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function useSettle(_from?: number, _axis?: "x" | "y") {
   const ref = useRef<HTMLDivElement>(null);
-  const lite = useLiteMotion();
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "center 55%"] });
-  const p = useSpring(scrollYProgress, { stiffness: 90, damping: 24, mass: 0.5 });
-  const rot = useTransform(p, [0, 1], [from, 0]);
-  const tip = useTransform(p, [0, 1], [14, 0]);
-  const scale = useTransform(p, [0, 1], [0.86, 1]);
-  const y = useTransform(p, [0, 1], [80, 0]);
-  return { ref, style: lite ? undefined : axis === "y" ? { rotateY: rot, rotateX: tip, scale, y } : { rotateX: rot, scale, y } };
+  return { ref, style: undefined };
 }
 
 export function TrialButton({ children = "Start free trial", light = false }: { children?: ReactNode; light?: boolean }) {
@@ -118,30 +111,8 @@ export function TrialButton({ children = "Start free trial", light = false }: { 
 /* ---------- hero ---------- */
 
 export function ProHero() {
-  const stage = useRef<HTMLDivElement>(null);
-  const lite = useLiteMotion();
-  const fine = useFinePointer();
   const reduce = useReducedMotionSafe();
-  const { scrollYProgress } = useScroll({ target: stage, offset: ["start end", "start 10%"] });
-  const p = useSpring(scrollYProgress, { stiffness: 130, damping: 30, mass: 0.4 });
-  const mx = useSpring(useMotionValue(0), { stiffness: 80, damping: 20 });
-  const my = useSpring(useMotionValue(0), { stiffness: 80, damping: 20 });
-  const tiltX = useTransform(p, [0, 1], [34, 0]);
-  const rotateX = useTransform([tiltX, my], ([a, b]: number[]) => a + b);
-  const rotateY = useTransform(mx, (v) => v);
-  const scale = useTransform(p, [0, 1], [0.84, 1]);
-  const near = useTransform(p, [0, 1], [200, -60]);
-  const mid = useTransform(p, [0, 1], [120, -20]);
-  const far = useTransform(p, [0, 1], [280, -90]);
-  const move = (event: PointerEvent<HTMLDivElement>) => {
-    if (lite || !fine) return;
-    const r = event.currentTarget.getBoundingClientRect();
-    mx.set(((event.clientX - r.left) / r.width - 0.5) * 10);
-    my.set(-((event.clientY - r.top) / r.height - 0.5) * 7);
-  };
-  const reset = () => { mx.set(0); my.set(0); };
   const enter = (delay: number) => (reduce ? {} : { initial: { opacity: 0, y: 48 }, animate: { opacity: 1, y: 0 }, transition: { duration: 1.1, ease: EASE, delay } });
-  const fly = (delay: number, x: number, y = 0) => (reduce ? {} : { initial: { opacity: 0, x, y, scale: 0.9 }, animate: { opacity: 1, x: 0, y: 0, scale: 1 }, transition: { duration: 1.3, ease: EASE, delay } });
 
   return (
     <section className="pro-hero" aria-labelledby="pro-hero-title">
@@ -157,20 +128,12 @@ export function ProHero() {
         <motion.p className="pro-fine" {...enter(0.22)}>From {symbol}{siteConfig.plans[0].monthly} a month after the trial. Clients don&rsquo;t need an account.</motion.p>
       </div>
 
-      <div className="pro-stage" ref={stage} onPointerMove={move} onPointerLeave={reset}>
-        <motion.div className="pro-scene" style={lite ? undefined : { rotateX, rotateY, scale }} {...(reduce ? {} : { initial: { opacity: 0, y: 120 }, animate: { opacity: 1, y: 0 }, transition: { duration: 1.4, ease: EASE, delay: 0.3 } })}>
+      {/* The whole product window, flat and uncropped: no scroll zoom, tilt or floating cards over it. */}
+      <div className="pro-stage">
+        <motion.div className="pro-scene" {...(reduce ? {} : { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 1, ease: EASE, delay: 0.3 } })}>
           <div className="pro-window">
             <DemoVideo label={`${name} review page: a client cut playing, with time-stamped comments and drawings beside it`} />
           </div>
-          <motion.figure className="pro-layer is-qa" style={lite ? undefined : { y: near }}>
-            <motion.div {...fly(0.7, -160)}><Pic img={V3.finding1} sizes="340px" /></motion.div>
-          </motion.figure>
-          <motion.figure className="pro-layer is-signoff" style={lite ? undefined : { y: far }}>
-            <motion.div {...fly(0.9, 160)}><Pic img={V3.signoff} sizes="420px" /></motion.div>
-          </motion.figure>
-          <motion.figure className="pro-layer is-money" style={lite ? undefined : { y: mid }}>
-            <motion.div {...fly(1.1, 0, 140)}><Pic img={V3.invoiceTotals} sizes="440px" /></motion.div>
-          </motion.figure>
         </motion.div>
       </div>
     </section>
@@ -223,8 +186,8 @@ export function ProQaScene() {
                   aria-hidden="true"
                   style={{ left: `${b.left}%`, top: `${b.top}%`, width: `${b.width}%`, height: `${b.height}%` }}
                   initial={false}
-                  animate={step > i ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 1.6 }}
-                  transition={{ type: "spring", stiffness: 260, damping: 18 }}
+                  animate={{ opacity: step > i ? 1 : 0 }}
+                  transition={{ duration: 0.3 }}
                 />
               ))}
             </motion.div>
@@ -234,9 +197,8 @@ export function ProQaScene() {
               <motion.li
                 key={img.src}
                 initial={false}
-                animate={step > i ? { opacity: 1, x: 0, rotateY: 0 } : { opacity: 0, x: 120, rotateY: -25 }}
+                animate={{ opacity: step > i ? 1 : 0 }}
                 transition={{ duration: 0.8, ease: EASE }}
-                style={{ transformPerspective: 900 }}
               >
                 <Pic img={img} sizes="(max-width: 960px) 80vw, 340px" />
               </motion.li>
@@ -270,25 +232,10 @@ export function ProPortalScene() {
               <Pic img={V3.portalProject} sizes="(max-width: 960px) 100vw, 760px" />
             </motion.div>
           </div>
-          <motion.figure
-            className="pro-float is-stepper"
-            initial={false}
-            animate={{ clipPath: step >= 1 ? "inset(0 0% 0 0 round 10px)" : "inset(0 100% 0 0 round 10px)" }}
-            transition={{ duration: 1.6, ease: EASE }}
-          >
-            <Pic img={V3.stepper} sizes="(max-width: 960px) 90vw, 640px" />
-          </motion.figure>
-          <div className="pro-portal-progress" aria-hidden="true">
-            <motion.span initial={false} animate={{ scaleX: step >= 1 ? 1 : 0 }} transition={{ duration: 2.2, ease: EASE, delay: 0.3 }} />
-          </div>
-          <motion.figure
-            className="pro-float is-signoff"
-            initial={false}
-            animate={step >= 2 ? { opacity: 1, y: 0, x: 0, scale: 1 } : { opacity: 0, y: 90, x: 60, scale: 0.9 }}
-            transition={{ duration: 1, ease: EASE }}
-          >
-            <Pic img={V3.signoff} sizes="(max-width: 960px) 90vw, 440px" />
-          </motion.figure>
+          <motion.div className="pro-below" initial={false} animate={{ opacity: step >= 1 ? 1 : 0 }} transition={{ duration: 0.8, ease: EASE }}>
+            <figure className="pro-flat"><Pic img={V3.stepper} sizes="(max-width: 960px) 90vw, 640px" /></figure>
+            <figure className="pro-flat is-half"><Pic img={V3.signoff} sizes="(max-width: 960px) 90vw, 440px" /></figure>
+          </motion.div>
         </div>
       </div>
     </section>
@@ -333,7 +280,7 @@ export function ProMoneyScene() {
         <div className="pro-money-visual">
           <dl className="pro-sums">
             {SUMS.map((s, i) => (
-              <Reveal key={s.label} delay={i * 0.12} y={50} tilt={20} className="pro-sum">
+              <Reveal key={s.label} delay={i * 0.12} y={50} className="pro-sum">
                 <dt>{s.label}</dt>
                 <dd><Count value={s.value} prefix="£" /></dd> {/* the demo studio bills in GBP, as in the screenshots */}
                 <dd className="pro-sum-note">{s.note}</dd>
@@ -359,12 +306,73 @@ export function ProMoneyScene() {
 
 /* ---------- bento: the rest of the app ---------- */
 
-/** `focus` frames the interesting part of each screenshot: rendered width and offset, in px. */
-const TILES: { key: ScreenKey; title: string; line: string; size?: "wide"; focus: [number, number, number] }[] = [
-  { key: "review", title: "Notes on the frame", line: "Comments, drawings and voice notes at a timecode.", size: "wide", focus: [1300, -330, -200] },
-  { key: "aiqaVideo", title: "QA on video too", line: "Each finding has its time range.", focus: [980, -250, -150] },
-  { key: "files", title: "1 GB uploads", line: "Masters upload in the background.", focus: [980, -330, -60] },
-  { key: "tasks", title: "Notes become tasks", line: "With the version and timecode attached.", size: "wide", focus: [1300, -240, -40] },
+/* Each tile is a small composed view of one feature, drawn at card size so it reads at a glance. */
+
+function NotesArt() {
+  return (
+    <div className="bt-notes" aria-hidden="true">
+      <div className="bt-frame">
+        <b className="bt-frame-t1">NORTHLIGHT COFFEE</b><span className="bt-frame-t2">Spring Launch</span>
+        <i className="bt-ring" style={{ left: "74%", top: "64%" }} />
+        <span className="bt-pin" style={{ left: "74%", top: "64%" }}>1</span>
+        <div className="bt-scrub"><span style={{ width: "40%" }} /><em style={{ left: "40%" }}>1</em></div>
+      </div>
+      <div className="bt-comment">
+        <p><span className="bt-pin is-sm">1</span><b>Rachel Kim</b><span className="bt-tc">00:00:12</span></p>
+        <p className="bt-comment-text">Colour on the cup is too orange. Match the brand red.</p>
+      </div>
+    </div>
+  );
+}
+
+function QaArt() {
+  return (
+    <div className="bt-qa">
+      <div className="bt-poster"><Pic img={V3.posterArt} sizes="200px" decorative /><span className="pro-typo-box" style={{ left: `${BOXES[0].left}%`, top: `${BOXES[0].top}%`, width: `${BOXES[0].width}%`, height: `${BOXES[0].height}%` }} aria-hidden="true" /></div>
+      <div className="bt-finding">
+        <p className="bt-finding-head"><span>Spelling</span><small>High confidence</small></p>
+        <p className="bt-finding-fix"><s>PREMUIM</s><span aria-hidden="true">→</span><b>PREMIUM</b></p>
+        <p className="bt-finding-meta">Poster v1 · “PREMUIM cotton tees”</p>
+      </div>
+    </div>
+  );
+}
+
+function UploadArt() {
+  return (
+    <div className="bt-upload" aria-label="Upload tray: spring_launch_master.mov, 640 MB of 1.0 GB, 48 MB/s">
+      <p className="bt-up-head"><CloudUpload aria-hidden="true" />Uploading 1 file</p>
+      <p className="bt-up-name">spring_launch_master.mov</p>
+      <div className="bt-up-bar"><span style={{ width: "64%" }} /></div>
+      <p className="bt-up-meta"><span>640 MB of 1.0 GB · 64%</span><span>48 MB/s · 8s left</span></p>
+      <p className="bt-up-note">Keep working — it finishes in the background.</p>
+    </div>
+  );
+}
+
+function TaskArt() {
+  return (
+    <div className="bt-tasks" aria-hidden="true">
+      <div className="bt-note">
+        <p><b>Sam (client)</b><span className="bt-tc">00:00:21</span></p>
+        <p className="bt-comment-text">Hold the price card a second longer.</p>
+        <span className="bt-make"><ListChecks />Make task</span>
+      </div>
+      <ArrowRight className="bt-arrow" />
+      <div className="bt-task">
+        <p className="bt-task-title">Hold the price card a second longer</p>
+        <p className="bt-task-tags"><span>V2</span><span className="bt-tc">00:00:21</span></p>
+        <p className="bt-task-who">Assigned to Jordan · Due Fri</p>
+      </div>
+    </div>
+  );
+}
+
+const TILES: { key: string; title: string; line: string; size?: "wide"; art: ReactNode }[] = [
+  { key: "notes", title: "Notes on the frame", line: "Comments, drawings and voice notes at a timecode.", size: "wide", art: <NotesArt /> },
+  { key: "qa", title: "QA on video too", line: "Each finding has its time range.", art: <QaArt /> },
+  { key: "upload", title: "1 GB uploads", line: "Masters upload in the background.", art: <UploadArt /> },
+  { key: "tasks", title: "Notes become tasks", line: "With the version and timecode attached.", size: "wide", art: <TaskArt /> },
 ];
 
 export function ProBento() {
@@ -374,12 +382,12 @@ export function ProBento() {
         <Reveal><h2 id="pro-bento-title" className="pro-h2 is-center">Also in {name}</h2></Reveal>
         <div className="pro-bento-grid">
           {TILES.map((t, i) => (
-            <Reveal key={t.key} delay={(i % 2) * 0.14} tilt={18} className={cn("pro-tile", t.size === "wide" && "is-wide")}>
+            <Reveal key={t.key} delay={(i % 2) * 0.14} className={cn("pro-tile", t.size === "wide" && "is-wide")}>
               <div className="pro-tile-copy">
                 <h3>{t.title}</h3>
                 <p>{t.line}</p>
               </div>
-              <div className="pro-tile-shot" style={{ "--w": `${t.focus[0]}px`, "--x": `${t.focus[1]}px`, "--y": `${t.focus[2]}px` } as CSSProperties}><Shot name={t.key} sizes="1300px" /></div>
+              <div className="pro-tile-art">{t.art}</div>
             </Reveal>
           ))}
         </div>
@@ -411,7 +419,7 @@ export function ProPlans({ headingLevel = "h3" }: { headingLevel?: "h2" | "h3" }
   return (
     <div className="pro-plans">
       {siteConfig.plans.map((plan, i) => (
-        <Reveal key={plan.id} delay={i * 0.12} tilt={16} className={cn("pro-plan", plan.highlighted && "is-featured")} data-plan={plan.id} data-to-confirm={plan.toConfirm ? "true" : undefined}>
+        <Reveal key={plan.id} delay={i * 0.12} className={cn("pro-plan", plan.highlighted && "is-featured")} data-plan={plan.id} data-to-confirm={plan.toConfirm ? "true" : undefined}>
           <article>
             <div className="pro-plan-top">
               <H className="pro-plan-name">{plan.name}{plan.highlighted && <span className="pro-plan-pick">Most popular</span>}</H>
