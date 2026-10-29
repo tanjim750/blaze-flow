@@ -3,79 +3,60 @@
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play } from "@/components/icons";
 
+/** The HD (2880×1800) app screenshots the hero cycles through. */
+export const DEMO_SLIDES = [
+  { src: "/marketing/tasks.webp", alt: "Tasks board with To do, In progress and Review columns" },
+  { src: "/marketing/dashboard.webp", alt: "Dashboard with approvals waiting, project health, review queue and team workload" },
+  { src: "/marketing/review.webp", alt: "Review page: a client cut with time-stamped comments" },
+  { src: "/marketing/files.webp", alt: "Files library" },
+  { src: "/marketing/portal.webp", alt: "Client portal" },
+];
+const HOLD_MS = 4000;
+
 /**
- * The hero's product clip: muted, looping, inline.
- *
- * It deliberately has no `autoPlay` attribute. The page is server-rendered, so an autoplay
- * attribute would start the clip before hydration — before we can check
- * `prefers-reduced-motion`. Instead playback starts here, on mount, only when the visitor
- * has not asked for reduced motion; otherwise the poster stays up with a Play button.
- * It also pauses while scrolled out of view, and the toggle satisfies WCAG 2.2.2
- * (moving content longer than five seconds can be paused).
+ * The hero's product tour: a slideshow of still, full-frame HD screenshots that crossfade.
+ * Each slide stays at scale 1 (no zoom/pan) — only opacity animates. Auto-advance is off for
+ * prefers-reduced-motion and while scrolled out of view, and the toggle satisfies WCAG 2.2.2.
  */
 export function DemoVideo({ label }: { label: string }) {
-  const ref = useRef<HTMLVideoElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [visible, setVisible] = useState(true);
   const userPaused = useRef(false);
 
   useEffect(() => {
-    const video = ref.current;
-    if (!video) return;
-    // React does not reliably reflect `muted` onto server-rendered markup, and browsers
-    // only allow unmuted playback after a user gesture, so set it on the element itself.
-    video.muted = true;
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const start = () => {
-      if (query.matches || userPaused.current) return;
-      // Older engines return nothing from play(); newer ones reject when autoplay is blocked.
-      video.play()?.catch(() => setPlaying(false));
-    };
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause);
-    // The media may already be playing/paused by the time this effect runs.
-    setPlaying(!video.paused);
-    const onMotionChange = () => (query.matches ? video.pause() : start());
-    query.addEventListener("change", onMotionChange);
+    const sync = () => setPlaying(!query.matches && !userPaused.current);
+    sync();
+    query.addEventListener("change", sync);
     let observer: IntersectionObserver | undefined;
-    if (typeof IntersectionObserver !== "undefined") {
-      observer = new IntersectionObserver(([entry]) => (entry?.isIntersecting ? start() : video.pause()), { threshold: 0 });
-      observer.observe(video);
-    } else {
-      start();
+    if (typeof IntersectionObserver !== "undefined" && ref.current) {
+      observer = new IntersectionObserver(([entry]) => setVisible(!!entry?.isIntersecting), { threshold: 0 });
+      observer.observe(ref.current);
     }
-    return () => {
-      video.removeEventListener("play", onPlay);
-      video.removeEventListener("pause", onPause);
-      query.removeEventListener("change", onMotionChange);
-      observer?.disconnect();
-    };
+    return () => { query.removeEventListener("change", sync); observer?.disconnect(); };
   }, []);
 
+  useEffect(() => {
+    if (!playing || !visible) return;
+    const id = window.setInterval(() => setIndex((i) => (i + 1) % DEMO_SLIDES.length), HOLD_MS);
+    return () => window.clearInterval(id);
+  }, [playing, visible]);
+
   const toggle = () => {
-    const video = ref.current;
-    if (!video) return;
-    if (video.paused) { userPaused.current = false; video.play()?.catch(() => setPlaying(false)); }
-    else { userPaused.current = true; video.pause(); }
+    userPaused.current = playing;
+    setPlaying(!playing);
   };
 
   return (
-    <div className="mk-video">
-      <video
-        ref={ref}
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        poster="/marketing/demo-poster.webp"
-        aria-label={label}
-        width={1920}
-        height={1200}
-      >
-        <source src="/marketing/demo-clip.webm" type="video/webm" />
-        <source src="/marketing/demo-clip.mp4" type="video/mp4" />
-      </video>
+    <div className="mk-video mk-slides" ref={ref} role="img" aria-label={label}>
+      {DEMO_SLIDES.map((s, i) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={s.src} src={s.src} alt="" width={2880} height={1800} decoding="async"
+          loading={i === 0 ? "eager" : "lazy"} fetchPriority={i === 0 ? "high" : "auto"}
+          className={i === index ? "is-active" : undefined} />
+      ))}
       <button type="button" className="mk-video-toggle" onClick={toggle} aria-pressed={!playing} aria-label={playing ? "Pause product demo" : "Play product demo"}>
         {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
         <span>{playing ? "Pause" : "Play demo"}</span>

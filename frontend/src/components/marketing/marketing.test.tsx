@@ -55,8 +55,8 @@ describe("marketing homepage", () => {
     const images = [...container.querySelectorAll("img")];
     expect(images.length).toBeGreaterThanOrEqual(12);
     for (const image of images) expect(decodeURIComponent(image.getAttribute("src") ?? "")).toMatch(/\/marketing\//);
-    expect(images.filter((image) => image.getAttribute("loading") !== "lazy")).toEqual([]);
-    expect(container.querySelector("video")).toHaveAttribute("poster", "/marketing/demo-poster.webp");
+    expect(images.filter((image) => image.getAttribute("loading") !== "lazy" && !image.closest(".mk-slides"))).toEqual([]);
+    expect(container.querySelectorAll(".mk-slides img")).toHaveLength(5);
   });
 
   it("shows the three plans with the 14-day trial, and keeps the FAQ", () => {
@@ -69,40 +69,31 @@ describe("marketing homepage", () => {
 });
 
 describe("DemoVideo", () => {
-  let play: ReturnType<typeof vi.fn>;
-  beforeEach(() => {
-    play = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(HTMLMediaElement.prototype, "play", { configurable: true, value: play });
-    Object.defineProperty(HTMLMediaElement.prototype, "pause", { configurable: true, value: vi.fn() });
-    // No IntersectionObserver in jsdom, so the component starts straight away.
-    vi.stubGlobal("IntersectionObserver", undefined);
-  });
-  afterEach(() => vi.unstubAllGlobals());
+  beforeEach(() => vi.stubGlobal("IntersectionObserver", undefined));
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
-  it("is muted, looping, inline and has no autoplay attribute (playback starts after the motion check)", () => {
+  it("renders the HD screenshots as a crossfading slideshow, no video", () => {
     mockMotion(false);
     const { container } = render(<DemoVideo label="Product tour" />);
-    const video = container.querySelector("video")!;
-    expect(video.muted).toBe(true);
-    expect(video).toHaveAttribute("loop");
-    expect(video).toHaveAttribute("playsinline");
-    expect(video).not.toHaveAttribute("autoplay");
-    expect(video).toHaveAttribute("poster", "/marketing/demo-poster.webp");
-    expect(play).toHaveBeenCalled();
+    expect(container.querySelector("video")).toBeNull();
+    const imgs = container.querySelectorAll(".mk-slides img");
+    expect(imgs).toHaveLength(5);
+    expect(imgs[0]).toHaveClass("is-active");
+    expect(imgs[0]).toHaveAttribute("width", "2880");
   });
 
-  it("stays paused on the poster for prefers-reduced-motion, with a Play control", () => {
+  it("advances slides over time", () => {
+    vi.useFakeTimers();
+    mockMotion(false);
+    const { container } = render(<DemoVideo label="Product tour" />);
+    act(() => { vi.advanceTimersByTime(4000); });
+    expect(container.querySelectorAll(".mk-slides img")[1]).toHaveClass("is-active");
+  });
+
+  it("stays still for prefers-reduced-motion, with a Play control", () => {
     mockMotion(true);
     render(<DemoVideo label="Product tour" />);
-    expect(play).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Play product demo" })).toBeInTheDocument();
-  });
-
-  it("lets the visitor play on demand", async () => {
-    mockMotion(true);
-    render(<DemoVideo label="Product tour" />);
-    await act(async () => screen.getByRole("button", { name: "Play product demo" }).click());
-    expect(play).toHaveBeenCalledTimes(1);
   });
 });
 
