@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-/** Real screenshots, captured at 1440×900 from the demo workspace and stored at 1920×1200. */
+/** Real screenshots, captured at 1440×900 @2x from the demo workspace and stored at 2880×1800. */
 export const SCREENS = {
   review: { src: "/marketing/review.webp", alt: "Review page: a client cut with an ellipse drawn on the frame and time-stamped comments beside it" },
   aiqaPoster: { src: "/marketing/aiqa-poster.webp", alt: "AI Visual QA on a poster: the misspelt word PREMUIM is outlined on the image and listed against the approved copy" },
@@ -36,8 +36,8 @@ export function Screenshot({ name, eager = false, className, caption, tape = tru
       <Image
         src={screen.src}
         alt={decorative ? "" : screen.alt}
-        width={1920}
-        height={1200}
+        width={2880}
+        height={1800}
         sizes={sizes}
         {...(eager ? { preload: true, fetchPriority: "high" as const } : { loading: "lazy" as const })}
       />

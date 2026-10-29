@@ -62,7 +62,7 @@ export function Pic({ img, sizes, className, decorative = false }: { img: Asset;
 
 export function Shot({ name: key, sizes, decorative = false }: { name: ScreenKey; sizes: string; decorative?: boolean }) {
   const s = SCREENS[key];
-  return <Image src={s.src} alt={decorative ? "" : s.alt} width={1920} height={1200} sizes={sizes} loading="lazy" />;
+  return <Image src={s.src} alt={decorative ? "" : s.alt} width={2880} height={1800} sizes={sizes} loading="lazy" />;
 }
 
 /** One fade-and-rise when something first scrolls into view. */

@@ -253,7 +253,7 @@ function ReviewDemo() {
   const fmt = (s: number) => `0:${String(Math.floor(s)).padStart(2, "0")}`;
   return (
     <div ref={ref} className="pro-live-review">
-      <div className="pro-live-frame"><Pic img={{ src: "/marketing/demo-poster.webp", w: 1280, h: 800, alt: "" }} sizes="(max-width: 960px) 80vw, 420px" decorative />
+      <div className="pro-live-frame"><Pic img={{ src: "/marketing/demo-poster.webp", w: 1920, h: 1200, alt: "" }} sizes="(max-width: 960px) 80vw, 420px" decorative />
         {SCRUB.map((n) => t >= n.at && <motion.span key={n.at} className="pro-live-pin" style={{ left: `${(n.at / 30) * 100}%` }} initial={{ scale: 0 }} animate={{ scale: 1 }} aria-hidden="true">{SCRUB.indexOf(n) + 1}</motion.span>)}
       </div>
       <label className="pro-live-scrub">
