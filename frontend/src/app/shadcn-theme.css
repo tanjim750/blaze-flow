@@ -12,7 +12,9 @@
  * would turn every `.muted` label into an unreadable dark block. So the shadcn names are
  * only ever produced as `--color-*` theme tokens, never written back.
  *
- * The app is dark-only (`html { color-scheme: dark }`), so there is a single palette.
+ * Light and dark come from the same variables: `tokens.css` defines them under
+ * `:root, .dark` and overrides them under `:root.light` (see `lib/theme.ts`), so this
+ * mapping needs no per-theme copy.
  */
 
 @theme inline {

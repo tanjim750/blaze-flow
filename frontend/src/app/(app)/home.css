@@ -333,3 +333,6 @@ a.activity-row:hover p { color: var(--text); }
 
 /* The panel clips overflow, so draw the footer link's focus ring inside it. */
 .panel-footer-link:focus-visible { outline: 2px solid var(--primary-2); outline-offset: -3px; }
+
+/* Light mode: the account heading inherits the subtitle grey; give it full-strength ink. */
+:root.light .dashboard-heading h1 { color: var(--text); }

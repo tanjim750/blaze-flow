@@ -1321,3 +1321,11 @@
 .rv-panel .rvc-mentions { background: var(--nv-card); border-color: var(--nv-line); }
 .rv-panel .rvc-mentions button:hover { background: var(--nv-hover); }
 .rv-panel .rvc-carry, .rv-panel .rvc-bulk { background: var(--nv-card); border-color: var(--nv-line); }
+
+/* Light mode: the media stage stays dark (standard for video review) — rescope the text
+   and line tokens inside it so overlays, empty/error states and Retry read on dark. */
+:root.light .rvp-stage {
+  --rv-canvas: #0b0c10; --text: #eceaf2; --muted: #a3a1b0; --rv-line: #2c2c36; --nv-card: #17171d;
+  --border: #2c2c36; background: #0b0c10; color: #eceaf2; color-scheme: dark;
+}
+:root.light .rvp-stage .rvp-retry:hover { color: #fff; }
