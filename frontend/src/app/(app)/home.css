@@ -336,3 +336,59 @@ a.activity-row:hover p { color: var(--text); }
 
 /* Light mode: the account heading inherits the subtitle grey; give it full-strength ink. */
 :root.light .dashboard-heading h1 { color: var(--text); }
+
+/* ---------- Light mode: livelier dashboard (light only; dark untouched) ---------- */
+:root.light body:has(.home-shell) {
+  background:
+    radial-gradient(900px 420px at 85% -120px, rgb(128 86 255 / .10), transparent 70%),
+    radial-gradient(700px 380px at 15% -160px, rgb(255 138 170 / .08), transparent 70%),
+    #f6f5fb;
+}
+:root.light .home-shell {
+  --hl-card: #ffffff;
+  --hl-line: #e8e5f2;
+  --hl-shadow: 0 1px 2px rgb(30 22 70 / .04), 0 6px 20px -8px rgb(60 40 140 / .12);
+  --border: var(--hl-line);
+}
+/* Hero greeting card */
+:root.light .home-shell .dashboard-heading {
+  position: relative; overflow: hidden; isolation: isolate;
+  padding: 22px 24px; border-radius: 18px; border: 1px solid #e3dcfb;
+  background: linear-gradient(120deg, #ffffff 0%, #f6f2ff 55%, #ede6ff 100%);
+  box-shadow: var(--hl-shadow);
+}
+:root.light .home-shell .dashboard-heading::after {
+  content: ""; position: absolute; z-index: -1; right: -60px; top: -90px; width: 280px; height: 280px; border-radius: 50%;
+  background: radial-gradient(circle, rgb(128 86 255 / .22), rgb(255 138 170 / .10) 55%, transparent 72%);
+  pointer-events: none;
+}
+:root.light .home-shell .dashboard-heading h1 { color: #1b1530; }
+:root.light .home-shell .dashboard-heading > div > div { color: #5b5670; }
+/* Today strip */
+:root.light .home-shell .today-strip { background: var(--hl-card); border-color: var(--hl-line); border-radius: 14px; box-shadow: var(--hl-shadow); }
+:root.light .home-shell .today-counter strong { color: #5b34e0; }
+:root.light .home-shell .today-counter.is-zero strong { color: #8a8699; }
+:root.light .home-shell .today-counter.is-danger strong { color: #d12c47; }
+/* Money stat cards: tinted wash + icon chip */
+:root.light .money-strip-card {
+  --tone: #6d44f0; --tone-wash: #f3efff;
+  position: relative; overflow: hidden; border-color: var(--hl-line, #e8e5f2); border-radius: 14px;
+  background: linear-gradient(140deg, var(--tone-wash) 0%, #ffffff 60%);
+  box-shadow: 0 1px 2px rgb(30 22 70 / .04), 0 6px 20px -8px rgb(60 40 140 / .12);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+:root.light .money-strip-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--tone); }
+:root.light .money-strip-card:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--tone) 35%, #e8e5f2); }
+:root.light .money-strip-card.tone-success { --tone: #12925f; --tone-wash: #eafaf2; }
+:root.light .money-strip-card.tone-warning { --tone: #b26a00; --tone-wash: #fff6e3; }
+:root.light .money-strip-card.tone-danger { --tone: #d12c47; --tone-wash: #fff0f2; }
+:root.light .money-strip-card span > svg { box-sizing: content-box; padding: 5px; border-radius: 8px; color: var(--tone); background: color-mix(in srgb, var(--tone) 13%, #fff); }
+:root.light .money-strip-card strong { color: #1b1530; }
+:root.light .money-strip-card.tone-success strong { color: #0d7a4f; }
+:root.light .money-strip-card.tone-warning strong { color: #8f5400; }
+:root.light .money-strip-card.tone-danger strong { color: #c0233d; }
+/* Panels and cards */
+:root.light .home-shell :is(.panel, .attention-card, .home-project-card) { background: var(--hl-card); border-color: var(--hl-line); border-radius: 16px; box-shadow: var(--hl-shadow); }
+:root.light .home-shell .panel-title h2 > svg { box-sizing: content-box; padding: 5px; border-radius: 8px; color: #6d44f0; background: #f1ecff; }
+:root.light .home-shell .review-row:hover { background: #f7f4ff; border-color: #e6defd; }
+:root.light .home-shell .home-progress-track, :root.light .home-shell .workload-track { background: #eeebf6; }

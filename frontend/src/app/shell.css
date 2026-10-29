@@ -270,3 +270,10 @@ button.studio-rail-search:hover, button.studio-rail-search:focus-visible { backg
 }
 @media (prefers-reduced-motion: reduce) { .shell-reconnect .is-spinning { animation: none; } }
 @media (max-width: 760px) { .studio-workspace-picker .ui-select-trigger { min-height: 40px; } }
+
+/* Light mode: soft lavender rail and a gradient active pill (light only). */
+:root.light .studio-sidebar { background: linear-gradient(180deg, #ffffff 0%, #faf8ff 100%); }
+:root.light .studio-sidebar nav a:hover { background: #f3efff; color: #2a2140; }
+:root.light .studio-sidebar nav a:hover > svg { color: #6d44f0; }
+:root.light .studio-sidebar nav a.active { background: linear-gradient(135deg, #7b4dff 0%, #5b34e0 100%); color: #fff; box-shadow: 0 6px 16px -6px rgb(91 52 224 / .55); }
+:root.light .studio-sidebar nav a.active > svg { color: #fff; }
