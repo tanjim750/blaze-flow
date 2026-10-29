@@ -29,8 +29,11 @@ function GoogleMark() {
 }
 
 /**
- * Google Identity Services button. GIS renders its own iframe; we size it to the form and
- * keep a same-size placeholder underneath so the layout does not jump while it loads.
+ * "Continue with Google" in our own design-system styling. Google's GIS button is rendered
+ * on top of it at opacity 0 and sized to our button, so clicks and keyboard activation go
+ * to the real GIS button (which keeps the ID-token credential flow verified by the backend)
+ * while users only ever see our button. The visual button is presentational; focus lands on
+ * the GIS iframe and the slot shows a single focus ring (focus events on the iframe, plus :focus-within).
  * Without NEXT_PUBLIC_GOOGLE_CLIENT_ID a disabled look-alike explains why.
  */
 export function GoogleSignIn({ destination = "/", inviteToken, label = "Continue with Google" }: { destination?: string; inviteToken?: string; label?: string }) {
@@ -39,6 +42,7 @@ export function GoogleSignIn({ destination = "/", inviteToken, label = "Continue
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  const [focused, setFocused] = useState(false);
   const initialized = useRef(false);
 
   function initialize() {
@@ -57,10 +61,26 @@ export function GoogleSignIn({ destination = "/", inviteToken, label = "Continue
         router.refresh();
       },
     });
-    const width = Math.min(400, Math.max(240, Math.round(mount.current.getBoundingClientRect().width)));
-    window.google.accounts.id.renderButton(mount.current, { theme: "filled_black", size: "large", width, shape: "rectangular", text: "continue_with", logo_alignment: "center" });
+    // GIS caps width at 400px; the overlay stretches the iframe to cover our full button.
+    const width = Math.min(400, Math.max(200, Math.round(mount.current.getBoundingClientRect().width)));
+    window.google.accounts.id.renderButton(mount.current, { theme: "outline", size: "large", width, shape: "rectangular", text: "continue_with", logo_alignment: "center" });
     setReady(true);
   }
+
+  // Focus moving into the cross-origin GIS iframe does not reliably fire focus events or
+  // :focus-within in the parent page, so track document.activeElement instead.
+  useEffect(() => {
+    const sync = () => setFocused(!!mount.current && mount.current.contains(document.activeElement));
+    const events = ["focusin", "focusout", "keyup"] as const;
+    events.forEach((e) => document.addEventListener(e, sync));
+    window.addEventListener("blur", sync);
+    window.addEventListener("focus", sync);
+    return () => {
+      events.forEach((e) => document.removeEventListener(e, sync));
+      window.removeEventListener("blur", sync);
+      window.removeEventListener("focus", sync);
+    };
+  }, []);
 
   // Remount (client-side navigation between sign-in and sign-up) with GIS already loaded.
   useEffect(() => { if (window.google) initialize(); });
@@ -78,9 +98,11 @@ export function GoogleSignIn({ destination = "/", inviteToken, label = "Continue
   return (
     <div className="google-auth" aria-busy={busy || undefined}>
       <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={initialize} />
-      <div className="google-slot">
-        {!ready && <span className="google-fallback is-loading" aria-hidden><GoogleMark />{label}</span>}
-        <div ref={mount} className="google-button" />
+      <div
+        className={`google-slot${ready ? " is-ready" : ""}${busy ? " is-busy" : ""}${focused ? " is-focused" : ""}`}
+      >
+        <span className="google-fallback google-face" aria-hidden><GoogleMark />{label}</span>
+        <div ref={mount} className="google-button" title={label} />
       </div>
       {busy && <p className="auth-hint" role="status">Signing you in with Google…</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
