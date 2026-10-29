@@ -7,7 +7,7 @@
  *
  * `url` can be overridden per deployment with NEXT_PUBLIC_SITE_URL (no trailing slash).
  */
-const DOMAIN = "blazeflow.app"; // PLACEHOLDER: confirm the production domain.
+const DOMAIN = "krewsys.com";
 
 export const siteConfig = {
   name: "Krewsys",
