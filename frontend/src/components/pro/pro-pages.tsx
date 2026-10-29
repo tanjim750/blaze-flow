@@ -31,7 +31,7 @@ export function ProCardGrid({ items, headingLevel = "h3" }: { items: { title: st
   return (
     <div className="pro-cards">
       {items.map((item, i) => (
-        <Reveal key={item.title} delay={(i % 3) * 0.1} className="pro-card">
+        <Reveal key={item.title} delay={(i % 3) * 0.1} tilt={14} className="pro-card">
           {item.icon && <span className="pro-card-icon" aria-hidden="true">{item.icon}</span>}
           <H>{item.title}</H>
           <p>{item.line}</p>
