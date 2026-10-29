@@ -47,6 +47,8 @@ def overview(*, days=30, now=None):
     pro = current.filter(plan=SubscriptionPlan.PRO)
     trialing = pro.filter(status=SubscriptionStatus.ACTIVE, trial_ends_at__gt=now)
     paying = pro.exclude(id__in=trialing.values('id'))
+    solo = current.filter(plan=SubscriptionPlan.SOLO)
+    solo_users = solo.values('user').distinct().count()
     users_total = users.count()
     pro_users = pro.values('user').distinct().count()
     churned = UserSubscription.objects.filter(plan=SubscriptionPlan.PRO).filter(
@@ -90,6 +92,7 @@ def overview(*, days=30, now=None):
         'generated_at': now,
         'currency': settings.PLATFORM_CURRENCY,
         'pro_price_minor': settings.PLATFORM_PRO_PRICE_MINOR,
+        'solo_price_minor': settings.PLATFORM_SOLO_PRICE_MINOR,
         'mrr_is_estimate': True,
         'demo_users': users.filter(email__endswith=DEMO_EMAIL_SUFFIX).count(),
         'users': {
@@ -99,9 +102,9 @@ def overview(*, days=30, now=None):
             'signups_by_day': signups_by_day,
         },
         'workspaces': {'total': workspaces_total, 'active': active_ws},
-        'plans': {'free': max(users_total - pro_users, 0), 'pro': pro_users, 'pro_paying': paying_count, 'trialing': trialing.count()},
+        'plans': {'free': max(users_total - pro_users - solo_users, 0), 'solo': solo_users, 'pro': pro_users, 'pro_paying': paying_count, 'trialing': trialing.count()},
         'revenue': {
-            'mrr_minor': paying_count * settings.PLATFORM_PRO_PRICE_MINOR,
+            'mrr_minor': paying_count * settings.PLATFORM_PRO_PRICE_MINOR + solo.count() * settings.PLATFORM_SOLO_PRICE_MINOR,
             'new_pro': UserSubscription.objects.filter(plan=SubscriptionPlan.PRO, started_at__gte=since).count(),
             'churned': churned,
             'churn_rate': round(churned / (paying_count + churned), 4) if (paying_count + churned) else 0,

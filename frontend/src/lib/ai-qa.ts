@@ -44,7 +44,9 @@ export type AiFinding = {
   comment_id: string | null; reviewed_at: string | null; created_at: string;
 };
 
-export type AiQaState = { supported: boolean; can_run: boolean; engine: string; max_video_seconds?: number; latest: AiReview | null };
+export type AiQaState = { supported: boolean; can_run: boolean;
+  /** False on a plan without AI QA (Solo): the panel shows an upgrade prompt. Absent on older backends. */
+  plan_allows?: boolean; plan?: string; upgrade_to?: string; engine: string; max_video_seconds?: number; latest: AiReview | null };
 
 export type AiTarget = { workspaceId: string; projectId: string; versionId: string };
 

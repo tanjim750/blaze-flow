@@ -4,18 +4,18 @@ import { formatMoney as formatAppMoney } from "./money";
  * No React and no fetch, so it is shared by server pages, client islands and tests.
  */
 export type UserRef = { id: string; email: string; name: string } | null;
-export type SubscriptionInfo = { plan: "FREE" | "PRO"; status: string; trial_ends_at: string | null; current_period_end: string | null; cancel_at_period_end: boolean };
+export type SubscriptionInfo = { plan: "FREE" | "SOLO" | "PRO"; status: string; trial_ends_at: string | null; current_period_end: string | null; cancel_at_period_end: boolean };
 export type Page<T> = { results: T[]; total: number; limit: number; offset: number };
 export type Attention = { code: string; severity: "critical" | "warning" | "info"; count: number; label: string; href: string };
 
 export type Overview = {
-  range_days: number; generated_at: string; currency: string; pro_price_minor: number; mrr_is_estimate: boolean; demo_users: number;
+  range_days: number; generated_at: string; currency: string; pro_price_minor: number; solo_price_minor?: number; mrr_is_estimate: boolean; demo_users: number;
   /** SIGNUP_MODE and the email backend: short name (resend / smtp / console / locmem),
    *  transport label ("Resend API", "SMTP", …) and whether mail really leaves the server. */
   signup_mode?: "open" | "invite_only"; email_backend?: string; email_transport?: string; email_sending?: boolean;
   users: { total: number; signups: number; verified: number; signups_by_day: { date: string; count: number }[] };
   workspaces: { total: number; active: number };
-  plans: { free: number; pro: number; pro_paying: number; trialing: number };
+  plans: { free: number; solo?: number; pro: number; pro_paying: number; trialing: number };
   revenue: { mrr_minor: number; new_pro: number; churned: number; churn_rate: number; cancelling: number; trials_ended: number; trials_converted: number; trial_conversion_rate: number | null };
   ai_qa: { runs: number; failed: number; minutes: number };
   attention: Attention[];
@@ -104,6 +104,10 @@ export function planLabel(sub: SubscriptionInfo | null): string {
   if (sub.status === "TRIALING") return "PRO trial";
   return sub.status === "ACTIVE" ? sub.plan : `${sub.plan} · ${sub.status.replace("_", " ").toLowerCase()}`;
 }
+
+/** Pill tone for a plan: PRO violet, SOLO green, FREE neutral. */
+export const planTone = (sub: SubscriptionInfo | null): "violet" | "good" | "neutral" =>
+  sub?.plan === "PRO" ? "violet" : sub?.plan === "SOLO" ? "good" : "neutral";
 
 /** Largest value for a bar chart, never zero (so empty ranges do not divide by zero). */
 export const chartMax = (values: number[]) => Math.max(1, ...values);

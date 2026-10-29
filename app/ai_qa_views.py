@@ -55,8 +55,12 @@ def ai_review_list_create(request, workspace_id, project_id, media_version_id):
     if request.method == 'GET':
         latest = AIReview.objects.filter(media_version=media_version).select_related('requested_by').first()
         can_run = has_project_permission(user=request.user, project=media_version.project, permission_key=REVIEW_COMMENT_CREATE)
+        from .services.plan_features import AI_QA, plan_has_feature, workspace_plan
+        plan = workspace_plan(media_version.project.workspace)
+        plan_allows = plan_has_feature(plan, AI_QA)
         return Response({
-            'supported': is_supported(media_version), 'can_run': can_run,
+            'plan_allows': plan_allows, 'plan': plan, 'upgrade_to': 'starter',
+            'supported': is_supported(media_version), 'can_run': can_run and plan_allows,
             'engine': settings.AI_QA_ENGINE,
             'max_video_seconds': settings.AI_QA_MAX_VIDEO_SECONDS,
             'latest': AIReviewSerializer(latest).data if latest else None,

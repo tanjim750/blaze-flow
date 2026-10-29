@@ -15,6 +15,8 @@ from app.models import (
     WorkspacePrincipalType,
 )
 
+from .plan_features import TEAM_MEMBERS, require_workspace_feature
+
 
 class InvitationError(Exception):
     pass
@@ -28,6 +30,7 @@ def _hash_token(token):
 def create_invitation(*, workspace, email, role, invited_by_membership, project_access_mode, expires_in_days=7):
     if role.workspace_id != workspace.id or role.status != RoleStatus.ACTIVE:
         raise InvitationError('Select an active role from this workspace.')
+    require_workspace_feature(workspace, TEAM_MEMBERS)
 
     now = timezone.now()
     WorkspaceInvite.objects.filter(
@@ -68,6 +71,8 @@ def accept_invitation(*, user, token):
         raise InvitationError('This invitation belongs to a different email address.')
     if invitation.role.status != RoleStatus.ACTIVE:
         raise InvitationError('The invitation role is no longer active.')
+    # An invite sent before the owner moved to Solo can't add a second person afterwards.
+    require_workspace_feature(invitation.workspace, TEAM_MEMBERS)
 
     membership = WorkspaceMembership.objects.filter(
         workspace=invitation.workspace,

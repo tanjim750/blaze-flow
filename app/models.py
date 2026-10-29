@@ -229,6 +229,7 @@ class WhatsAppOptOutMethod(models.TextChoices):
 
 class SubscriptionPlan(models.TextChoices):
     FREE = 'FREE'
+    SOLO = 'SOLO'
     PRO = 'PRO'
 
 

@@ -62,6 +62,7 @@
 .pf-legend .is-free { background: var(--bf-muted-foreground); opacity: .5; }
 .pf-legend .is-pro { background: var(--bf-primary); }
 .pf-legend .is-trial { background: var(--bf-violet-300); }
+.pf-legend .is-solo { background: var(--bf-info); }
 
 .pf-attention { display: grid; gap: var(--bf-space-2); margin: 0; padding: 0; list-style: none; }
 .pf-attention a { display: flex; align-items: center; gap: var(--bf-space-3); min-height: 44px; padding: 0 var(--bf-space-3); border: 1px solid var(--bf-border); border-radius: var(--bf-radius-md); color: var(--bf-foreground) !important; text-decoration: none; }

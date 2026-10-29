@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Search } from "@/components/icons";
 import { Empty, ErrorPanel, PageHead, Pager, Pill } from "@/components/platform/ui";
 import { listPlatformUsers } from "@/lib/platform-api";
-import { firstParam, planLabel, query, relativeTime } from "@/lib/platform-view";
+import { firstParam, planLabel, planTone, query, relativeTime } from "@/lib/platform-view";
 
 export default async function PlatformUsers({ searchParams }: PageProps<"/platform/users">) {
   const params = await searchParams;
@@ -21,7 +21,7 @@ export default async function PlatformUsers({ searchParams }: PageProps<"/platfo
         <thead><tr><th>User</th><th>Plan</th><th>Status</th><th>Verified</th><th>Joined</th><th>Last sign-in</th></tr></thead>
         <tbody>{result.data.results.map((u) => <tr key={u.id}>
           <td data-label="User"><Link href={`/platform/users/${u.id}`} className="pf-row-link"><b>{u.name}</b></Link><small className="pf-sub">{u.email}</small> {u.is_demo && <Pill tone="demo">demo</Pill>} {u.is_platform_staff && <Pill tone="violet">staff</Pill>}</td>
-          <td data-label="Plan"><Pill tone={u.subscription.plan === "PRO" ? "violet" : "neutral"}>{planLabel(u.subscription)}</Pill></td>
+          <td data-label="Plan"><Pill tone={planTone(u.subscription)}>{planLabel(u.subscription)}</Pill></td>
           <td data-label="Status">{u.status === "ACTIVE" ? "Active" : <Pill tone="warn">{u.status.toLowerCase()}</Pill>}</td>
           <td data-label="Verified">{u.email_verified_at ? "Yes" : <Pill tone="warn">no</Pill>}</td>
           <td data-label="Joined">{relativeTime(u.created_at)}</td>

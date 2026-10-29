@@ -1,5 +1,6 @@
 import type { DashboardRole, Workspace } from "./api";
 import { roleFor } from "./dashboard-role";
+import { isSolo } from "./plan";
 
 /**
  * Who sees which part of the app.
@@ -16,7 +17,7 @@ export type NavIcon =
 export type NavLink = { href: string; label: string; icon: NavIcon };
 export type RoleNav = { role: DashboardRole; primary: NavLink[]; secondary: NavLink[] };
 
-type Access = Pick<Workspace, "dashboard_role" | "my_membership_id" | "billing">;
+type Access = Pick<Workspace, "dashboard_role" | "my_membership_id" | "billing"> & Partial<Pick<Workspace, "plan" | "plan_features">>;
 
 export function navFor(workspace: Access | null | undefined): RoleNav {
   const role: DashboardRole = workspace ? roleFor(workspace) : "editor";
@@ -52,6 +53,26 @@ export function navFor(workspace: Access | null | undefined): RoleNav {
       ],
       secondary: [
         { href: "/settings", label: "My profile", icon: "settings" },
+        { href: "/help", label: "Help", icon: "help" },
+      ],
+    };
+  }
+  if (isSolo(workspace)) {
+    // Solo is one person: no Team & Roles (the page itself shows the upgrade prompt if opened).
+    return {
+      role,
+      primary: [
+        { href: "/", label: "Home", icon: "home" },
+        { href: "/projects", label: "Projects", icon: "projects" },
+        { href: "/tasks", label: "Tasks", icon: "tasks" },
+        { href: "/clients", label: "Clients", icon: "clients" },
+        { href: "/files", label: "Files", icon: "files" },
+        { href: "/chat", label: "Messages", icon: "chat" },
+        ...(billing?.view ? [{ href: "/money", label: "Invoices", icon: "money" as const }] : []),
+      ],
+      secondary: [
+        { href: "/settings/plan", label: "Plan", icon: "pay" },
+        { href: "/settings", label: "Settings", icon: "settings" },
         { href: "/help", label: "Help", icon: "help" },
       ],
     };

@@ -14,6 +14,7 @@ import {
   FINDINGS_PAGE, inScope, readBandScope, saveBandScope, scopeCounts, type BandScope,
 } from "@/lib/ai-qa";
 import "./ai-qa.css";
+import { UpgradePrompt } from "@/components/plan/upgrade-prompt";
 
 export type AiQa = {
   /** Null until the first answer; `available` false when the feature is off or not allowed. */
@@ -296,7 +297,9 @@ export function AiQaPanel({ qa, target, versionLabel, title, selectedId, onSelec
         )}
       </div>
 
-      {!review && (
+      {qa.state?.plan_allows === false && <UpgradePrompt feature="ai_qa" compact className="aiqa-upgrade" />}
+
+      {!review && qa.state?.plan_allows !== false && (
         <div className="aiqa-empty">
           <Sparkles size={22} aria-hidden="true" />
           <p>Check the visible text on <strong>{versionLabel}</strong> for likely spelling mistakes.</p>

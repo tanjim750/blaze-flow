@@ -20,6 +20,7 @@ from .payment_gateways import list_gateways
 from .permissions import TASK_READ, WORKSPACE_MANAGE, WORKSPACE_READ, has_project_permission, has_workspace_permission
 from .gateways import crypto
 from .services import billing, online_payments, payout_details, stripe_connect
+from .services.plan_features import EDITOR_PAYOUTS, require_workspace_feature
 
 
 def _workspace(request, workspace_id):
@@ -321,6 +322,7 @@ def invoice_payments(request, workspace_id, invoice_id):
 def payouts(request, workspace_id):
     """The payouts ledger by editor; POST records a payout (same record_payment path)."""
     workspace, access = _workspace(request, workspace_id)
+    require_workspace_feature(workspace, EDITOR_PAYOUTS)
     _require(access, 'rates_view' if request.method == 'GET' else 'manage', RATES_DENIED if request.method == 'GET' else MANAGE_DENIED)
     if request.method == 'GET':
         return Response({'currency': billing.workspace_currency(workspace), 'results': billing.payouts_ledger(workspace=workspace, with_payout_methods=access['manage'])})
@@ -395,6 +397,7 @@ def member_rates(request, workspace_id):
 @permission_classes([IsAuthenticated])
 def member_rate(request, workspace_id, membership_id):
     workspace, access = _workspace(request, workspace_id)
+    require_workspace_feature(workspace, EDITOR_PAYOUTS)
     _require(access, 'manage', MANAGE_DENIED)
     membership = get_object_or_404(WorkspaceMembership, id=membership_id, workspace=workspace, principal_type=WorkspacePrincipalType.USER)
     serializer = RateSerializer(data=request.data)

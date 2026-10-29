@@ -43,6 +43,28 @@ export const siteConfig = {
     { id: "scale", name: "Scale", monthly: 119.99, features: ["4 TB storage", "Unlimited users", "Unlimited clients and projects"], highlighted: false, toConfirm: true },
   ],
   /**
+   * Solo: the one-person plan. Deliberately not in `plans` (no fourth big card): the Starter
+   * card links to a small "Working alone?" details block on /pricing#solo instead. The app's
+   * plan picker and upgrade prompts read the same entry. Keep `monthly` equal to the backend's
+   * PLATFORM_SOLO_PRICE_MINOR (599).
+   */
+  solo: {
+    id: "solo",
+    name: "Solo",
+    monthly: 5.99,
+    storage: "200 GB storage",
+    users: "Just you (1 user)",
+    included: [
+      "Projects, task board and due dates",
+      "Clients, contacts and project history",
+      "Client review links and approvals",
+      "Simple invoicing and getting paid",
+      "200 GB storage",
+      "Unlimited clients",
+    ],
+    excluded: ["Team members and editor roles", "Editor payouts", "AI QA on posters and video", "More than 200 GB storage"],
+  },
+  /**
    * Monthly-only for now. Set a yearly price per plan here (and flip this on) to show the
    * monthly/yearly toggle on /pricing; without one the toggle stays hidden.
    */

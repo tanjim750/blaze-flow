@@ -119,6 +119,9 @@ from .throttles import (
     EmailVerificationThrottle, InvitePreviewThrottle, LoginThrottle, PasswordResetThrottle, RegistrationThrottle,
 )
 from .models import (
+    SubscriptionPlan,
+    SubscriptionStatus,
+    UserSubscription,
     ClientUpload,
     WorkspaceInvite,
     MediaVersion,
@@ -490,10 +493,15 @@ def current_user(request):
 
 def _subscription_response(subscription):
     data = SubscriptionSerializer(subscription).data
+    from .services.plan_features import plan_features, GATED_FEATURES
+    features = plan_features(subscription.plan)
     data['limits'] = {
         'max_workspaces_owned': get_plan_limit(subscription.plan, 'max_workspaces_owned'),
         'max_projects_per_workspace': get_plan_limit(subscription.plan, 'max_projects_per_workspace'),
+        'max_storage_bytes': get_plan_limit(subscription.plan, 'max_storage_bytes'),
+        'max_members': settings.PLAN_LIMITS.get(subscription.plan, {}).get('max_members'),
     }
+    data['features'] = {f: f in features for f in GATED_FEATURES}
     return data
 
 
@@ -508,10 +516,22 @@ def subscription_detail(request):
 @permission_classes([IsAuthenticated])
 def subscription_upgrade(request):
     try:
-        subscription = upgrade_to_pro(user=request.user)
+        from .services.subscriptions import change_plan
+        plan = str(request.data.get('plan') or 'PRO').upper()
+        subscription = change_plan(user=request.user, plan=plan)
     except SubscriptionError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(_subscription_response(subscription), status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def workspace_entitlements(request, workspace_id):
+    """What the workspace owner's plan includes, for upgrade prompts in the app."""
+    from .services.plan_features import workspace_entitlements as entitlements
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    _require_workspace_permission(request, workspace, WORKSPACE_READ)
+    return Response(entitlements(workspace))
 
 
 @api_view(['POST'])
@@ -566,6 +586,23 @@ def workspace_list_create(request):
         from .models import DEFAULT_BILLING_CURRENCY, WorkspaceBillingSettings
         currencies = {str(pk): code for pk, code in WorkspaceBillingSettings.objects.filter(
             workspace_id__in=[workspace.id for workspace in workspaces]).values_list('workspace_id', 'currency')}
+        # The owner's plan per workspace (two queries for the whole list) so the app can show
+        # the Solo dashboard and upgrade prompts without another request.
+        from .services.plan_features import GATED_FEATURES, plan_features
+        owner_of = dict(WorkspaceMembership.objects.filter(
+            workspace_id__in=[workspace.id for workspace in workspaces], is_primary_owner=True,
+            status=WorkspaceMembershipStatus.ACTIVE,
+        ).values_list('workspace_id', 'user_id'))
+        plan_of = dict(UserSubscription.objects.filter(
+            user_id__in=list(owner_of.values()),
+            status__in=(SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE),
+        ).values_list('user_id', 'plan'))
+        for item in data:
+            owner_id = owner_of.get(by_id[str(item['id'])].id)
+            item['plan'] = plan_of.get(owner_id, SubscriptionPlan.FREE)
+            allowed = plan_features(item['plan'])
+            # A list of the gated features this plan includes (Solo: none).
+            item['plan_features'] = [feature for feature in GATED_FEATURES if feature in allowed]
         for item in data:
             # Workspace display currency (ISO 4217) for money formatting everywhere in the app.
             item['currency'] = currencies.get(str(item['id']), DEFAULT_BILLING_CURRENCY)
