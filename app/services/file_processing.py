@@ -137,12 +137,109 @@ def enqueue_file_event(*, file, topic):
     )[0]
 
 
+SKIPPED_LARGE_MEDIA = 'skipped_large_media'
+BLOCKED_TOO_LARGE = 'too_large_to_scan'
+# ffprobe `format_name` values we accept as real video containers. Image, audio-only and
+# "raw" demuxers are deliberately absent, so a renamed PNG/PDF/ZIP never qualifies.
+_VIDEO_FORMAT_NAMES = {
+    'mov', 'mp4', 'm4a', '3gp', '3g2', 'mj2', 'matroska', 'webm', 'avi', 'mpegts', 'mpeg',
+    'flv', 'asf', 'mxf', 'ogg',
+}
+
+
+def _sniff_video_container(header):
+    """Name of the video container the leading bytes belong to, or None.
+
+    Magic bytes only; the client's filename and MIME type are never consulted.
+    """
+    if len(header) >= 12 and header[4:8] == b'ftyp':
+        return 'isobmff'
+    if len(header) >= 8 and header[4:8] in {b'moov', b'mdat', b'wide', b'free', b'skip'}:
+        return 'quicktime'
+    if header.startswith(b'\x1a\x45\xdf\xa3'):
+        return 'matroska'
+    if len(header) >= 12 and header[:4] == b'RIFF' and header[8:12] == b'AVI ':
+        return 'avi'
+    if header.startswith(b'\x00\x00\x01\xba') or header.startswith(b'\x00\x00\x01\xb3'):
+        return 'mpeg-ps'
+    if len(header) >= 189 and header[0] == 0x47 and header[188] == 0x47:
+        return 'mpeg-ts'
+    if header.startswith(b'FLV'):
+        return 'flv'
+    if header.startswith(b'\x30\x26\xb2\x75\x8e\x66\xcf\x11'):
+        return 'asf'
+    if header.startswith(b'\x06\x0e\x2b\x34\x02\x05\x01\x01'):
+        return 'mxf'
+    return None
+
+
+def _probe_input(file):
+    """Something ffprobe can open without copying the whole object: a path or a signed URL."""
+    try:
+        return default_storage.path(file.object_key)
+    except NotImplementedError:
+        return default_storage.url(file.object_key)
+
+
+def _ffprobe_video_streams(file):
+    """(format_name, video_stream_count) as ffprobe reports them, or None when it cannot tell."""
+    import json
+    executable = shutil.which(settings.FFPROBE_COMMAND)
+    if not executable:
+        return None
+    try:
+        result = subprocess.run(
+            [executable, '-v', 'error', '-show_entries', 'format=format_name:stream=codec_type,codec_name',
+             '-of', 'json', _probe_input(file)],
+            capture_output=True, text=True, timeout=120,
+        )
+        data = json.loads(result.stdout or '{}') if result.returncode == 0 else None
+    except (subprocess.SubprocessError, OSError, ValueError):
+        return None
+    if not data:
+        return None
+    formats = set((data.get('format') or {}).get('format_name', '').split(','))
+    videos = [
+        st for st in data.get('streams', [])
+        if st.get('codec_type') == 'video' and st.get('codec_name') not in {'png', 'mjpeg', 'bmp', 'gif'}
+    ]
+    return formats, len(videos)
+
+
+def verified_large_video(file):
+    """Evidence that an over-limit file really is a video, or None.
+
+    Both checks must pass: the leading bytes match a video container, and ffprobe finds a
+    video stream in a video container format.
+    """
+    with default_storage.open(file.object_key, 'rb') as stream:
+        header = stream.read(512)
+    container = _sniff_video_container(header)
+    if not container:
+        return None
+    probe = _ffprobe_video_streams(file)
+    if not probe:
+        return None
+    formats, video_streams = probe
+    if not video_streams or not (formats & _VIDEO_FORMAT_NAMES):
+        return None
+    return {'container': container, 'format_name': ','.join(sorted(formats)), 'video_streams': video_streams}
+
+
+def _over_scan_limit(file):
+    limit = getattr(settings, 'CLAMAV_MAX_STREAM_BYTES', None)
+    size = file.size_bytes or 0
+    return bool(limit) and size > limit
+
+
 def process_security_scan(*, file_id):
     file = File.objects.get(id=file_id, deleted_at__isnull=True)
     scan = FileSecurityScan.objects.get(file=file)
     if scan.status in {FileSecurityScanStatus.CLEAN, FileSecurityScanStatus.INFECTED}:
         return scan
     scanner = scanner_backend()
+    if _over_scan_limit(file):
+        return _handle_over_limit(file_id=file_id, file=file, scanner=scanner)
     try:
         with default_storage.open(file.object_key, 'rb') as stream:
             result = scanner.scan(stream)
@@ -171,6 +268,52 @@ def process_security_scan(*, file_id):
         scan.scanned_at = timezone.now()
         scan.save(update_fields=['engine', 'status', 'result', 'scanned_at', 'updated_at'])
         file.updated_at = timezone.now()
+        file.save(update_fields=['status', 'updated_at'])
+    return scan
+
+
+def _handle_over_limit(*, file_id, file, scanner):
+    """Too big for the scanner: verified video skips the scan, anything else is blocked."""
+    limit = settings.CLAMAV_MAX_STREAM_BYTES
+    evidence = verified_large_video(file)
+    now = timezone.now()
+    with transaction.atomic():
+        file = File.objects.select_for_update().get(id=file_id, deleted_at__isnull=True)
+        scan = FileSecurityScan.objects.select_for_update().get(file=file)
+        if scan.status in {FileSecurityScanStatus.CLEAN, FileSecurityScanStatus.INFECTED}:
+            return scan
+        scan.engine = scanner.name
+        scan.scanned_at = now
+        if evidence:
+            scan.status = FileSecurityScanStatus.CLEAN
+            scan.result = {
+                'clean': True, 'skipped': True, 'scan_status': SKIPPED_LARGE_MEDIA,
+                'reason': f'Verified video larger than the {limit}-byte scan limit; malware scan skipped.',
+                'size_bytes': file.size_bytes, **evidence,
+            }
+            file.status = FileStatus.READY
+            enqueue_file_event(file=file, topic=PREVIEW_TOPIC)
+            logger.warning(
+                'Security scan skipped for large verified video file=%s size=%s limit=%s container=%s',
+                file.id, file.size_bytes, limit, evidence['container'],
+            )
+        else:
+            scan.status = FileSecurityScanStatus.FAILED
+            scan.result = {
+                'clean': False, 'scan_status': BLOCKED_TOO_LARGE,
+                'error': (
+                    f'This file is {file.size_bytes} bytes, over the {limit}-byte malware-scan limit, '
+                    'and is not a verified video, so it was blocked.'
+                ),
+                'size_bytes': file.size_bytes,
+            }
+            file.status = FileStatus.FAILED
+            logger.warning(
+                'Security scan blocked oversized non-video file=%s size=%s limit=%s',
+                file.id, file.size_bytes, limit,
+            )
+        scan.save(update_fields=['engine', 'status', 'result', 'scanned_at', 'updated_at'])
+        file.updated_at = now
         file.save(update_fields=['status', 'updated_at'])
     return scan
 
