@@ -106,6 +106,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'app.middleware.RequestIdMiddleware',
+    # After auth: refuses writes from platform staff who are viewing a customer workspace.
+    'app.platform.workspace_view.PlatformViewReadOnlyMiddleware',
     # Last, so its process_exception runs first for view errors.
     'app.middleware.DatabaseUnavailableMiddleware',
 ]

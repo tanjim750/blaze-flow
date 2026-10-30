@@ -49,10 +49,12 @@ function withPreview<T extends { href: string }>(link: T, role: string): T {
 /** Mirrors the cookie the layout reads, so a reload opens at the width you left it. */
 const RAIL_COOKIE = "blazeflow_rail";
 
-export function AppShell({ children, user = null, workspaces = [], selectedWorkspaceId = null, railCollapsed = false, degraded = false }: {
+export function AppShell({ children, user = null, workspaces = [], selectedWorkspaceId = null, railCollapsed = false, degraded = false, notice = null }: {
   children: React.ReactNode; user?: ShellUser | null;
   /** The layout could not load the user or their workspaces (API briefly down). */
   degraded?: boolean;
+  /** A strip above the page body (the platform staff read-only banner). */
+  notice?: React.ReactNode;
   workspaces?: Workspace[]; selectedWorkspaceId?: string | null;
   /** Read from a cookie by the layout, so the first paint is already the right width. */
   railCollapsed?: boolean;
@@ -228,6 +230,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
 
       <div className="studio-main">
         {degraded && <ShellReconnect />}
+        {notice}
         <UniversalReviewLayout pathname={pathname}>
           <PageTransition routeKey={pathname} className={flush ? "flush" : undefined}>{children}</PageTransition>
         </UniversalReviewLayout>

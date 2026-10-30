@@ -137,9 +137,32 @@ CLIENT_PERMISSION_KEYS = (
 ALL_PERMISSION_KEYS = frozenset(OWNER_PERMISSION_KEYS) | {REVIEW_DECISION_CREATE}
 
 
+def _staff_view_owner_memberships(*, user, workspace_id=None):
+    """While platform staff view a workspace read-only, they see it as its owner does.
+
+    Returns the owner's membership queryset for the viewed workspace (restricted to
+    ``workspace_id`` when given), or None when the user has no open view. Writes are refused
+    separately by ``PlatformViewReadOnlyMiddleware``.
+    """
+    from .platform.workspace_view import active_view
+
+    view = active_view(user)
+    if view is None:
+        return None
+    if workspace_id is not None and str(workspace_id) != str(view.workspace_id):
+        return WorkspaceMembership.objects.none()
+    return WorkspaceMembership.objects.filter(
+        workspace_id=view.workspace_id, status=WorkspaceMembershipStatus.ACTIVE,
+        principal_type=WorkspacePrincipalType.USER, is_primary_owner=True,
+    )
+
+
 def active_memberships_for_user(*, user, workspace):
     if not user or not user.is_authenticated:
         return WorkspaceMembership.objects.none()
+    viewing = _staff_view_owner_memberships(user=user, workspace_id=getattr(workspace, 'id', workspace))
+    if viewing is not None:
+        return viewing.select_related('role')
 
     client_team_ids = ClientTeamMember.objects.filter(
         user=user,
@@ -178,6 +201,12 @@ def has_workspace_permission(*, user, workspace, permission_key):
 def workspace_ids_with_permission(*, user, permission_key):
     if not user or not user.is_authenticated:
         return WorkspaceMembership.objects.none().values_list('workspace_id', flat=True)
+    viewing = _staff_view_owner_memberships(user=user)
+    if viewing is not None:
+        role_ids = RolePermission.objects.filter(
+            permission_key=permission_key, role__status=RoleStatus.ACTIVE,
+        ).values_list('role_id', flat=True)
+        return viewing.filter(role_id__in=role_ids).values_list('workspace_id', flat=True)
     team_ids = ClientTeamMember.objects.filter(
         user=user,
         status=ClientTeamMemberStatus.ACTIVE,
