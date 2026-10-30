@@ -4,6 +4,7 @@ import { AppToaster } from "@/components/app-toaster";
 import { loadSession } from "@/lib/session";
 import { toShellUser } from "@/lib/user";
 import { loadWorkspaceContext } from "@/lib/workspace";
+import { PlatformViewBanner } from "@/components/platform/view-banner";
 
 /**
  * The signed-in chrome, rendered once for every route in this group.
@@ -22,6 +23,7 @@ import { loadWorkspaceContext } from "@/lib/workspace";
  */
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const [session, context, jar] = await Promise.all([loadSession(), loadWorkspaceContext(), cookies()]);
+  const viewed = context.ok && context.data.selected?.platform_view ? context.data.selected : null;
   return (
     <>
       <AppShell
@@ -30,6 +32,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         selectedWorkspaceId={context.ok ? context.data.selected?.id : null}
         railCollapsed={jar.get("blazeflow_rail")?.value === "1"}
         degraded={!session.user || !context.ok}
+        notice={viewed && <PlatformViewBanner workspaceId={viewed.id} name={viewed.name} />}
       >
         {children}
       </AppShell>

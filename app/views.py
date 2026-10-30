@@ -611,6 +611,12 @@ def workspace_list_create(request):
             # What the viewer may do with money here (Money page, prices, pay). Always false
             # for someone who reaches the workspace only through a client team.
             item['billing'] = billing.billing_access(user=request.user, workspace=by_id[str(item['id'])])
+        from .platform.workspace_view import active_view
+        viewing = active_view(request.user)
+        for item in data:
+            # Set while platform staff look at this workspace read-only; the app shows a
+            # banner and hides write controls (writes are refused server-side regardless).
+            item['platform_view'] = bool(viewing and str(viewing.workspace_id) == str(item['id']))
         return Response(data)
 
     _require_verified_email(request)
