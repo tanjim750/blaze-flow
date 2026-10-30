@@ -58,6 +58,11 @@ def process_outbox_events(
                 retry_max_seconds,
                 retry_base_seconds * (2 ** max(event.attempts - 1, 0)),
             )
+            short_retry = getattr(exc, 'retry_after_seconds', None)
+            if short_retry is not None:
+                # Transient (e.g. the row the job is about has not committed yet): come back
+                # soon rather than waiting out the exponential schedule.
+                retry_delay = min(retry_delay, short_retry * (2 ** max(event.attempts - 1, 0)))
             failed_at = timezone.now()
             OutboxEvent.objects.filter(
                 id=event.id,
