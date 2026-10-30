@@ -245,12 +245,12 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const crumbs = folderTrail(current, folders);
   const rootLabel = projectName || "All files";
   useEffect(() => { onFolderChange?.(folderId); }, [folderId, onFolderChange]);
+  const setFolderId = (id: string | null) => { setFolderIdRaw(id); setSelection({ selected: new Set(), anchor: null }); setFocusedId(null); setTreeDrawer(false); };
   useEffect(() => {
     const toRoot = () => setFolderId(null);
     window.addEventListener(FILES_ROOT_EVENT, toRoot);
     return () => window.removeEventListener(FILES_ROOT_EVENT, toRoot);
   });
-  const setFolderId = (id: string | null) => { setFolderIdRaw(id); setSelection({ selected: new Set(), anchor: null }); setFocusedId(null); setTreeDrawer(false); };
 
   // Layout: dock tree + inspector at viewport ≥1280 (Chat lesson). Panel `width` is already
   // minus the app rail, so using it alone never reached 1280 at a 1440 viewport. Below that,
