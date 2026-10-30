@@ -871,11 +871,12 @@
 
 /* Empty Files: the whole panel is one drop zone (Frame.io style). */
 .fx-content:has(> .fx-dropzone) { display: flex; flex-direction: column; }
-.fx-dropzone { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: max(360px, calc(100dvh - 220px)); padding: 32px 20px; border: 1px dashed color-mix(in oklab, var(--border) 85%, var(--foreground) 15%); border-radius: 16px; color: var(--muted-foreground); text-align: center; transition: border-color var(--duration-base, 150ms) ease, background-color var(--duration-base, 150ms) ease; }
+.fx-content:has(> .fx-dropzone) > :not(.fx-dropzone) { flex: none; }
+.fx-dropzone { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 320px; margin: 0; padding: 24px; border: 1px dashed color-mix(in oklab, var(--border) 85%, var(--foreground) 15%); border-radius: 16px; color: var(--muted-foreground); text-align: center; transition: border-color var(--duration-base, 150ms) ease, background-color var(--duration-base, 150ms) ease; }
 .fx-dropzone.is-over { border-color: var(--primary); border-style: dashed; border-width: 1.5px; background: color-mix(in oklab, var(--primary) 6%, transparent); }
 .fx-dropzone-art { width: 120px; height: 80px; }
 .fx-dropzone-cloud { fill: color-mix(in oklab, var(--muted-foreground) 22%, transparent); }
 .fx-dropzone-arrow { stroke: color-mix(in oklab, var(--muted-foreground) 70%, var(--background)); }
 .fx-dropzone.is-over .fx-dropzone-cloud { fill: color-mix(in oklab, var(--primary) 25%, transparent); }
 .fx-dropzone > p { margin: 0; font-size: var(--text-sm); line-height: 20px; }
-@media (max-width: 480px) { .fx-dropzone { min-height: max(320px, calc(100dvh - 260px)); padding: 24px 16px; } .fx-dropzone-art { width: 96px; height: 64px; } }
+@media (max-width: 480px) { .fx-dropzone { min-height: 280px; padding: 16px; } .fx-dropzone-art { width: 96px; height: 64px; } }

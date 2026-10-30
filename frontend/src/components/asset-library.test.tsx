@@ -292,6 +292,28 @@ describe("AssetLibrary", () => {
     expect(screen.getByTestId("files-dropzone")).toHaveClass("is-over");
   });
 
+  it("renders search and folder crumbs into page-header slots, with ancestors clickable", () => {
+    replaceLibrary({
+      deletedIds: [], files: [],
+      folders: [
+        { id: "a", name: "Footage", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-10", createdBy: "Ada" },
+        { id: "b", name: "Day 1", clientId: null, projectId: null, parentFolderId: "a", createdAt: "2026-09-10", createdBy: "Ada" },
+      ],
+    });
+    const search = document.createElement("div"); const crumbs = document.createElement("ol");
+    document.body.append(search, crumbs);
+    const onFolderChange = vi.fn();
+    render(<AssetLibrary view={view} headerSlots={{ search, crumbs }} onFolderChange={onFolderChange} initialQuery="folder=b" />);
+    expect(search.querySelector("input[placeholder='Search this location']")).not.toBeNull();
+    expect(screen.getAllByPlaceholderText("Search this location")).toHaveLength(1);
+    expect(within(crumbs).getByText("Day 1")).toHaveAttribute("aria-current", "page");
+    fireEvent.click(within(crumbs).getByRole("button", { name: "Footage" }));
+    expect(onFolderChange).toHaveBeenLastCalledWith("a");
+    fireEvent(window, new Event("bf:files-root"));
+    expect(onFolderChange).toHaveBeenLastCalledWith(null);
+    search.remove(); crumbs.remove();
+  });
+
   it("says nothing matches a search instead of offering an upload", () => {
     replaceLibrary({
       deletedIds: [], folders: [],

@@ -455,3 +455,31 @@
 /* At ~1024 the client link ran under the Share/more buttons: let the title side shrink instead. */
 .pb-title-row > .pb-title { flex: 1 1 auto; }
 .pb-title > h1, .pb-title > .pb-client-link { flex: 0 1 auto; min-width: 0; }
+
+/* Breadcrumb: every ancestor is a link; the current page is plain text. */
+.pb-crumbs ol { display: flex; align-items: center; gap: 4px; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.pb-crumbs li { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.pb-crumbs li > svg { flex: none; width: 13px; height: 13px; color: var(--shell-outline); }
+.pb-crumb { display: inline-block; max-width: 220px; padding: 3px 6px; overflow: hidden; border: 0; border-radius: 6px; background: none; color: var(--shell-outline); font: inherit; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; transition: background-color 120ms ease, color 120ms ease; }
+a.pb-crumb:hover, button.pb-crumb:hover { background: var(--shell-container); color: var(--shell-on); text-decoration: underline; text-underline-offset: 3px; }
+a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var(--ring, var(--primary)); outline-offset: 1px; color: var(--shell-on); }
+.pb-crumb.is-current { color: var(--shell-on); font-weight: 600; cursor: default; }
+/* Search pill on the right of the breadcrumb row (Frame.io style). */
+.pb-crumbs-search { display: flex; flex: none; align-items: center; justify-content: flex-end; margin-left: auto; }
+.pb-crumbs-search .fx-head-search { display: flex; align-items: center; }
+.pb-crumbs-search .fx-search { position: relative; display: flex; align-items: center; width: 240px; min-width: 0; max-width: none; flex: none; transition: width 180ms ease; }
+.pb-crumbs-search .fx-search:focus-within, .pb-crumbs-search .fx-search:has(input:not(:placeholder-shown)) { width: 320px; }
+.pb-crumbs-search .fx-search input { height: 32px; border: 1px solid var(--border); border-radius: 999px; background: var(--shell-container, transparent); }
+.pb-crumbs-search .fx-search-toggle { display: none; }
+@media (max-width: 640px) {
+  .pb-crumbs-search .fx-search-toggle { display: grid; width: 40px; height: 40px; }
+  .pb-crumbs-search .fx-search { display: none; }
+  .pb-crumbs-row:has(.is-search-open) .pb-crumbs { display: none; }
+  .pb-crumbs-search:has(.is-search-open) { flex: 1; margin-left: 0; }
+  .pb-crumbs-search .is-search-open { flex: 1; }
+  .pb-crumbs-search .is-search-open .fx-search-toggle { display: none; }
+  .pb-crumbs-search .is-search-open .fx-search { display: flex; flex: 1; width: auto; }
+  .pb-crumbs-search .is-search-open .fx-search input { height: 40px; padding-right: 44px; }
+  .pb-crumb { max-width: 110px; }
+}
+@media (prefers-reduced-motion: reduce) { .pb-crumbs-search .fx-search { transition: none; } }
