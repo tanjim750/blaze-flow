@@ -254,6 +254,9 @@ function WorkspacePicker({ workspaces, selectedWorkspaceId, pathname, degraded =
     <input type="hidden" name="returnTo" value={pathname} />
     <label htmlFor="workspace-switcher">Workspace</label>
     <Select
+      // Uncontrolled: remount when the selection or the list changes (a new workspace,
+      // a switch) so it never keeps showing the previous choice.
+      key={`${selectedWorkspaceId ?? ""}:${workspaces.map((workspace) => workspace.id).join(",")}`}
       id="workspace-switcher" name="workspaceId" aria-label="Switch workspace" defaultValue={selectedWorkspaceId ?? workspaces[0].id}
       options={workspaces.map((workspace) => ({ value: workspace.id, label: workspace.name }))}
       // Let the hidden input pick up the new value before the form submits.
