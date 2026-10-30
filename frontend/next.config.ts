@@ -36,6 +36,12 @@ const nextConfig: NextConfig = {
   images: { formats: ["image/avif", "image/webp"] },
   experimental: {
     /**
+     * Upload /complete re-reads the whole object from R2 to scan and hash it, which takes
+     * over a minute for multi-GB videos. Next's default 30s rewrite proxy timeout hung up
+     * on it and the browser saw a 500 although Django finished with 201.
+     */
+    proxyTimeout: 15 * 60 * 1000,
+    /**
      * Revisiting a page within 30 s reuses the rendered page instead of a fresh server
      * round trip (sidebar back-and-forth was the most common "laggy" path). Mutations call
      * `router.refresh()` / revalidate, which clears this cache, so edits still show at once.

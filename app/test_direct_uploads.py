@@ -113,6 +113,21 @@ class DirectUploadTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(again.json()['id'], done.json()['id'])
         self.assertEqual(File.objects.filter(object_key=upload.object_key).count(), 1)
 
+    def test_status_reports_pending_then_completed_with_the_file(self):
+        body = self.init('poster.png', len(PNG), 'image/png').json()
+        pending = self.client.get(self.url('api-direct-upload-cancel', body['id']))
+        self.assertEqual(pending.status_code, 200, pending.content)
+        self.assertNotEqual(pending.json()['state'], 'COMPLETED')
+        self.assertIsNone(pending.json()['project_file'])
+        upload = DirectUpload.objects.get(id=body['id'])
+        self.s3.put(upload.object_key, PNG)
+        done = self.client.post(self.url('api-direct-upload-complete', upload.id)).json()
+        status_body = self.client.get(self.url('api-direct-upload-cancel', upload.id)).json()
+        self.assertEqual(status_body['state'], 'COMPLETED')
+        self.assertEqual(status_body['project_file']['id'], done['id'])
+        self.client.force_authenticate(self.member_user)
+        self.assertEqual(self.client.get(self.url('api-direct-upload-cancel', upload.id)).status_code, 404)
+
     def test_multipart_uses_server_listed_parts_and_verifies_size(self):
         size = 5 * 1024 * 1024 + 100
         data = MP4 + b'\x01' * (size - len(MP4))

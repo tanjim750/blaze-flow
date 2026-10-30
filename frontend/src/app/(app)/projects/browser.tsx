@@ -11,6 +11,7 @@ import {
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
 import { AssetLibrary, FILES_SHARE_EVENT } from "@/components/asset-library";
+import { ProjectCrumbs } from "./project-crumbs";
 import { ProjectBrief } from "@/components/project-brief";
 import { ProjectPricing } from "@/components/money/project-pricing";
 import { ActivityFeed } from "@/components/activity/activity-feed";
@@ -163,6 +164,9 @@ const tabSlug = (value: string) => value.toLowerCase().replace(/[^a-z]+/g, "-").
 
 export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initialQuery = "" }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string; initialQuery?: string }) {
   const router = useRouter();
+  const [crumbSlot, setCrumbSlot] = useState<HTMLOListElement | null>(null);
+  const [searchSlot, setSearchSlot] = useState<HTMLDivElement | null>(null);
+  const [filesFolder, setFilesFolder] = useState<string | null>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]>(
     () => TABS.find((value) => value.toLowerCase() === initialTab?.toLowerCase() || (initialTab ? tabSlug(value) === tabSlug(initialTab) : false)) ?? "Files",
   );
@@ -209,11 +213,8 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
         <div className="pb-canvas-head">
           <div className="pb-crumbs-row">
             <button type="button" className="pb-sheet-open" aria-expanded={sheetOpen} onClick={() => setSheetOpen(true)}><Users size={14} aria-hidden="true" />Clients</button>
-            <nav className="pb-crumbs" aria-label="Breadcrumb">
-              <span>Projects</span><ChevronRight size={13} />
-              <span>{view.selectedClient?.name ?? "—"}</span><ChevronRight size={13} />
-              <b>{view.selectedCampaign?.name ?? "No campaign"}<Pencil size={11} /></b>
-            </nav>
+            <ProjectCrumbs ref={setCrumbSlot} client={view.selectedClient} project={view.selectedCampaign} inFolder={Boolean(filesFolder) && tab === "Files"} />
+            {tab === "Files" && view.selectedCampaign && <div className="pb-crumbs-search" ref={setSearchSlot} />}
           </div>
 
           <div className="pb-title-row">
@@ -254,7 +255,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
 
 
         {tab === "Files" && view.selectedCampaign ? (
-          <AssetLibrary compact view={filesView} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null} />
+          <AssetLibrary compact view={filesView} headerSlots={{ search: searchSlot, crumbs: crumbSlot }} onFolderChange={setFilesFolder} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null} />
         ) : tab === "Chat" && view.selectedCampaign && view.workspaceId ? (
           <div className="pb-chat-preview"><ChatPreview workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} /></div>
         ) : tab === "Tasks" && view.selectedCampaign ? (

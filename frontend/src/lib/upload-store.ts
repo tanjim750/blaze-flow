@@ -95,6 +95,19 @@ const entries = new Map<string, Entry>();
 let order: string[] = [];
 let snapshot: UploadItem[] = [];
 const listeners = new Set<() => void>();
+export type LandedEvent = { id: string; source: UploadSource; stage: "landed" | "ready" };
+const landedListeners = new Set<(event: LandedEvent) => void>();
+/** Fires when an upload's file exists on the server ("landed") and again when processing ends
+ * ("ready"), so pages listing files can refresh without a reload. */
+export function onUploadLanded(listener: (event: LandedEvent) => void) {
+  landedListeners.add(listener);
+  return () => { landedListeners.delete(listener); };
+}
+function announce(id: string, stage: LandedEvent["stage"]) {
+  const entry = entries.get(id);
+  if (!entry) return;
+  landedListeners.forEach((listener) => { try { listener({ id, source: entry.request.source, stage }); } catch { /* a listener must not break the queue */ } });
+}
 const xhr: UploadTransport = { id: "xhr", supports: () => true, send: (job, progress, signal) => xhrTransport(job, progress, signal) };
 let transports: UploadTransport[] = [];
 let fallback: UploadTransport = xhr;
@@ -200,6 +213,7 @@ async function send(id: string) {
   patch(id, { loaded: current.item.size, href: info.href ?? null, finishedAt: now() });
   current.request.onSuccess?.(result.data);
   settle(current, result);
+  announce(id, "landed");
   if (info.fileId && info.workspaceId) void follow(id, info.workspaceId, info.fileId);
   else patch(id, { status: "ready", processing: { stage: "ready", label: "Sent", ready: true } });
   pump();
@@ -236,9 +250,10 @@ async function follow(id: string, workspaceId: string, fileId: string) {
     if (!entry || entry.item.status !== "processing") return;
     const state = await fetchProcessing(workspaceId, fileId).catch(() => null);
     if (!entries.has(id)) return;
-    if (state?.stage === "failed") { patch(id, { status: "failed", error: state.label, processing: state }); return; }
+    if (state?.stage === "failed") { patch(id, { status: "failed", error: state.label, processing: state }); announce(id, "ready"); return; }
     if (!state || state.ready || now() - started > PROCESSING_GIVE_UP_MS) {
       patch(id, { status: "ready", processing: state ?? { stage: "ready", label: "Uploaded", ready: true } });
+      announce(id, "ready");
       return;
     }
     patch(id, { processing: state });
@@ -389,5 +404,5 @@ export const __test = {
   },
   setProcessing(next: ProcessingFetcher) { fetchProcessing = next; },
   setClock(next: () => number) { now = next; },
-  reset() { entries.clear(); order = []; snapshot = []; counter = 0; fallback = xhr; transports = []; fetchProcessing = defaultFetchProcessing; now = () => Date.now(); },
+  reset() { entries.clear(); landedListeners.clear(); order = []; snapshot = []; counter = 0; fallback = xhr; transports = []; fetchProcessing = defaultFetchProcessing; now = () => Date.now(); },
 };

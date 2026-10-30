@@ -8,6 +8,7 @@ import "@/components/brand/brand.css";
 import { NavProgress } from "@/components/nav-progress";
 import { SubmitFeedback } from "@/components/submit-feedback";
 import { UploadTray } from "@/components/uploads/upload-tray";
+import { UploadRefresh } from "@/components/uploads/upload-refresh";
 import { siteConfig } from "@/lib/site-config";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { ThemeSync } from "@/components/theme/use-theme";
@@ -44,6 +45,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ThemeSync />
         <SubmitFeedback />
         <UploadTray />
+        <UploadRefresh />
         {children}
       </body>
     </html>

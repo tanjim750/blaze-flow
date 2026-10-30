@@ -868,3 +868,16 @@
 
 /* Section heading ("Folders", group titles) + chevron share the folder-tile meta colour ("1 Item" / "1 Assets • 1.4 GB" line) in both themes. */
 .fx .fx-section-head button, .fx .fx-section-head .fx-chevron { color: var(--bf-muted-foreground, var(--t-fg-9aa3b5)); }
+
+/* Empty Files: the whole panel is one drop zone (Frame.io style). */
+.fx .fx-content:has(> .fx-dropzone), .fx.is-compact .fx-content:has(> .fx-dropzone) { display: flex; flex-direction: column; padding: 24px; overflow: hidden; }
+.fx-content:has(> .fx-dropzone) > :not(.fx-dropzone) { flex: none; }
+.fx-dropzone { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 320px; margin: 0; padding: 24px; border: 1px dashed color-mix(in oklab, var(--border) 85%, var(--foreground) 15%); border-radius: 16px; color: var(--muted-foreground); text-align: center; transition: border-color var(--duration-base, 150ms) ease, background-color var(--duration-base, 150ms) ease; }
+.fx-dropzone.is-over { border-color: var(--primary); border-style: dashed; border-width: 1.5px; background: color-mix(in oklab, var(--primary) 6%, transparent); }
+.fx-dropzone-art { display: block; flex: none; width: 120px; height: 81px; }
+.fx-dropzone-cloud { fill: color-mix(in oklab, var(--muted-foreground) 22%, transparent); }
+.fx-dropzone-arrow { stroke: color-mix(in oklab, var(--muted-foreground) 70%, var(--background)); }
+.fx-dropzone.is-over .fx-dropzone-cloud { fill: color-mix(in oklab, var(--primary) 25%, transparent); }
+.fx-dropzone > p { margin: 0; font-size: var(--text-sm); line-height: 20px; }
+@media (max-width: 640px) { .fx .fx-content:has(> .fx-dropzone), .fx.is-compact .fx-content:has(> .fx-dropzone) { padding: 16px; } }
+@media (max-width: 480px) { .fx-dropzone { min-height: 280px; padding: 16px; } .fx-dropzone-art { width: 96px; height: 65px; } }

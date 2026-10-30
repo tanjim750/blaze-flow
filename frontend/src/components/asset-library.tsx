@@ -13,12 +13,13 @@
  * failure). The pure rules (filtering, grouping, selection, keyboard movement) live in
  * `lib/files-panel.ts` and the presentational pieces in `components/files/`.
  */
+import { createPortal } from "react-dom";
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { useDoParam } from "@/lib/do-param";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
-import { Archive, Check, ChevronDown, ChevronRight, Plus, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "@/components/icons";
+import { Check, ChevronDown, ChevronRight, Plus, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "@/components/icons";
 import type { ProjectFile } from "@/lib/api";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
@@ -108,6 +109,13 @@ type Props = {
   view?: FilesView; projectId?: string | null; projectName?: string; clientId?: string | null; compact?: boolean;
   /** The page's query string. With `syncUrl`, folder, search, filters and sort live in the URL, so Back from review restores them. */
   initialQuery?: string; syncUrl?: boolean;
+  /**
+   * Page-header slots (project Files page): the search pill renders into `search` and the folder
+   * trail into `crumbs` (as list items continuing the page breadcrumb) instead of the toolbar.
+   */
+  headerSlots?: { search: HTMLElement | null; crumbs: HTMLElement | null };
+  /** Reports the open folder so the page breadcrumb can link the project crumb back to the root. */
+  onFolderChange?: (folderId: string | null) => void;
 };
 
 /** A choice remembered in localStorage. Read after mount, so server and client render the same first frame. */
@@ -177,7 +185,7 @@ const VIEW_MODES = ["grid", "list"] as const;
 const DENSITIES = ["comfortable", "compact"] as const;
 const GROUPINGS = ["project", "type", "none"] as const;
 
-export function AssetLibrary({ view, projectId = null, projectName, clientId = null, compact = false, initialQuery = "", syncUrl = false }: Props) {
+export function AssetLibrary({ view, projectId = null, projectName, clientId = null, compact = false, initialQuery = "", syncUrl = false, headerSlots, onFolderChange }: Props) {
   const initial = useMemo(() => parseFilesQuery(new URLSearchParams(initialQuery)), [initialQuery]);
   const router = useRouter();
   const [writeError, setWriteError] = useState<string | null>(null);
@@ -236,7 +244,13 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const byId = new Map<string, LibraryFile | LibraryFolder>([...folders, ...files].map((item) => [item.id, item]));
   const crumbs = folderTrail(current, folders);
   const rootLabel = projectName || "All files";
+  useEffect(() => { onFolderChange?.(folderId); }, [folderId, onFolderChange]);
   const setFolderId = (id: string | null) => { setFolderIdRaw(id); setSelection({ selected: new Set(), anchor: null }); setFocusedId(null); setTreeDrawer(false); };
+  useEffect(() => {
+    const toRoot = () => setFolderId(null);
+    window.addEventListener(FILES_ROOT_EVENT, toRoot);
+    return () => window.removeEventListener(FILES_ROOT_EVENT, toRoot);
+  });
 
   // Layout: dock tree + inspector at viewport ≥1280 (Chat lesson). Panel `width` is already
   // minus the app rail, so using it alone never reached 1280 at a 1440 viewport. Below that,
@@ -330,12 +344,14 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   useEffect(() => {
     if (!workingKey || !view?.workspaceId) return;
     if (polls.current.key !== workingKey) polls.current = { key: workingKey, count: 0 };
-    if (polls.current.count >= 20) return;
+    // Every 3s for the first minute, then every 15s for up to ~10 more minutes, so long video
+    // proxies still flip from "processing" to ready on screen.
+    if (polls.current.count >= 60) return;
     const timer = setTimeout(() => {
       polls.current.count += 1;
       setPoll((value) => value + 1);
       router.refresh();
-    }, 3000);
+    }, polls.current.count < 20 ? 3000 : 15000);
     return () => clearTimeout(timer);
   }, [workingKey, poll, router, view?.workspaceId]);
   // Drives the count on the filter button, so a narrowed list is never a silent surprise.
@@ -653,7 +669,27 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
     </aside>
   );
 
+  const searchControls = <>
+          <button type="button" className="fx-icon-btn fx-search-toggle" aria-label="Search files" aria-expanded={searchOpen} onClick={() => { setSearchOpen(true); window.setTimeout(() => searchRef.current?.focus(), 0); }}><Search aria-hidden="true" /></button>
+          <label className={`fx-search${searchOpen ? " is-open" : ""}`}>
+            <Search aria-hidden="true" />
+            <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this location" aria-label={searchEverywhere ? "Search all folders" : "Search this location"}
+              onBlur={(event) => { if (!event.currentTarget.value && !event.currentTarget.parentElement?.contains(event.relatedTarget as Node)) setSearchOpen(false); }}
+              onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (query) setQuery(""); else { setSearchOpen(false); event.currentTarget.blur(); } } }} />
+            {(query || searchOpen) && <button type="button" className="fx-icon-btn is-xs" onClick={() => { if (query) { setQuery(""); searchRef.current?.focus(); } else setSearchOpen(false); }} aria-label={query ? "Clear search text" : "Close search"}><X /></button>}
+          </label>
+  </>;
+  // Folder crumbs continuing the page breadcrumb: every ancestor is a link-like button; the open
+  // folder is the current page and is plain text.
+  const folderCrumbs = current ? crumbs.map((folder) => <li key={folder.id}><ChevronRight aria-hidden="true" />
+    {folder.id === folderId
+      ? <span className="pb-crumb is-current" aria-current="page">{folder.name}</span>
+      : <button type="button" className="pb-crumb" onClick={() => setFolderId(folder.id)}>{folder.name}</button>}
+  </li>) : null;
+  const searchPortal = headerSlots?.search ? createPortal(<div className={`fx-head-search${searchOpen || query ? " is-search-open" : ""}`}>{searchControls}</div>, headerSlots.search) : null;
+  const crumbsPortal = headerSlots?.crumbs && folderCrumbs ? createPortal(folderCrumbs, headerSlots.crumbs) : null;
   return <RefreshContext.Provider value={() => router.refresh()}><ReportContext.Provider value={setWriteError}>
+    {searchPortal}{crumbsPortal}
     <div ref={rootRef} className={`fx asset-library ${compact ? "is-compact" : ""} ${phone ? "is-phone" : ""}`} data-tree={hasTree ? (treeDocked ? "docked" : "drawer") : "none"} data-inspector={inspectorVisible ? (inspectorDocked ? "docked" : "sheet") : "closed"}>
       {tree && treeDocked && tree}
       {tree && !treeDocked && treeDrawer && <><button type="button" className="fx-scrim" aria-label="Close library panel" tabIndex={-1} onClick={() => setTreeDrawer(false)} /><SheetFocus active onClose={() => setTreeDrawer(false)}>{tree}</SheetFocus></>}
@@ -663,16 +699,9 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
         <header className={`fx-toolbar fx-toolbar-one${searchOpen || query ? " is-search-open" : ""}`}>
           {hasTree && !treeDocked && <button type="button" className="fx-icon-btn" onClick={() => setTreeDrawer(true)} aria-label="Open library panel" aria-expanded={treeDrawer}><PanelLeft /></button>}
           {/* Phones: search starts as an icon and expands over the whole toolbar row. */}
-          <button type="button" className="fx-icon-btn fx-search-toggle" aria-label="Search files" aria-expanded={searchOpen} onClick={() => { setSearchOpen(true); window.setTimeout(() => searchRef.current?.focus(), 0); }}><Search aria-hidden="true" /></button>
-          <label className={`fx-search${searchOpen ? " is-open" : ""}`}>
-            <Search aria-hidden="true" />
-            <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this location" aria-label={searchEverywhere ? "Search all folders" : "Search this location"}
-              onBlur={(event) => { if (!event.currentTarget.value && !event.currentTarget.parentElement?.contains(event.relatedTarget as Node)) setSearchOpen(false); }}
-              onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (query) setQuery(""); else { setSearchOpen(false); event.currentTarget.blur(); } } }} />
-            {(query || searchOpen) && <button type="button" className="fx-icon-btn is-xs" onClick={() => { if (query) { setQuery(""); searchRef.current?.focus(); } else setSearchOpen(false); }} aria-label={query ? "Clear search text" : "Close search"}><X /></button>}
-          </label>
+          {!headerSlots?.search && searchControls}
           {/* The folder trail only appears inside a subfolder; at the root the page header names the project. */}
-          {current && <nav className="fx-crumbs" aria-label="Breadcrumb">
+          {current && !headerSlots?.crumbs && <nav className="fx-crumbs" aria-label="Breadcrumb">
             <ol>
               <li><button type="button" onClick={() => setFolderId(null)}>{rootLabel}</button></li>
               {crumbs.map((folder) => <li key={folder.id}><ChevronRight aria-hidden="true" /><button type="button" onClick={() => setFolderId(folder.id)} aria-current={folder.id === folderId ? "page" : undefined}>{folder.name}</button></li>)}
@@ -778,14 +807,13 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
                   {query.trim() && !searchEverywhere && <button type="button" className="fx-btn is-ghost" onClick={() => setSearchEverywhere(true)}>Search all folders</button>}
                 </div>
               </div>
-            : <div className="fx-empty">
-                <span><Archive aria-hidden="true" /></span>
-                <strong>{current ? "This folder is empty" : "No files yet"}</strong>
-                <p>Drop files here or upload to start a review.</p>
-                <div><button type="button" className="fx-btn is-primary" onClick={() => setDialog("upload")}><Upload />Upload files</button></div>
+            : <div className={`fx-dropzone${osDrag ? " is-over" : ""}`} data-testid="files-dropzone">
+                <CloudUploadArt />
+                <p>{current ? "This folder is empty. Drag files and folders here." : "Drag files and folders to begin."}</p>
+                <button type="button" className="fx-btn is-primary is-sm" onClick={() => setDialog("upload")}>Upload</button>
               </div>)}
         </div>
-        {osDrag && <div className="fx-os-drop" aria-hidden="true"><Upload /><strong>Upload to {current?.name ?? rootLabel}</strong><span>Release to stage these files</span></div>}
+        {osDrag && itemTotal > 0 && <div className="fx-os-drop" aria-hidden="true"><Upload /><strong>Upload to {current?.name ?? rootLabel}</strong><span>Release to stage these files</span></div>}
       </section>
 
       {inspector && !inspectorDocked && <button type="button" className="fx-scrim" aria-label="Close details" tabIndex={-1} onClick={() => setSheetOpen(false)} />}
@@ -1302,6 +1330,8 @@ function triggerDownload(url: string, name: string) {
 
 /** Fired by the project header's Share menu to open the files share dialog. */
 export const FILES_SHARE_EVENT = "bf:files-share";
+/** Dispatched by the page breadcrumb's project crumb: go back to the library root. */
+export const FILES_ROOT_EVENT = "bf:files-root";
 
 /**
  * A small click-to-open menu for the toolbar (New, View options). Hand-rolled like the filter
@@ -1322,4 +1352,12 @@ function ToolbarMenu({ label, className = "", trigger, children }: { label: stri
     <button type="button" className="fx-tb-trigger" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} data-state={open ? "open" : "closed"} onClick={() => setOpen(!open)}>{trigger}</button>
     {open && <div className="fx-tb-menu" role="menu" aria-label={label}>{children(() => setOpen(false))}</div>}
   </div>;
+}
+
+/** The soft cloud-with-arrow on the empty drop zone. The viewBox is cropped to the cloud and centred on the arrow, so it lines up with the text; colours come from CSS. */
+function CloudUploadArt() {
+  return <svg className="fx-dropzone-art" viewBox="8 8 107 72" aria-hidden="true" focusable="false">
+    <path className="fx-dropzone-cloud" d="M32 78h60a22 22 0 0 0 2-43.9A30 30 0 0 0 36.5 28 25 25 0 0 0 32 78Z" />
+    <path className="fx-dropzone-arrow" d="M61.5 74V40m-11 11 11-11 11 11" fill="none" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>;
 }
