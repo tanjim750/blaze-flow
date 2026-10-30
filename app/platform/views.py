@@ -462,3 +462,144 @@ def platform_audit(request):
     if p.get('actor'):
         qs = qs.filter(actor_user__email__icontains=p['actor'])
     return _page(request, qs, _audit_row)
+
+
+# --- View a workspace (read-only) ----------------------------------------------------------
+
+def _view_payload(view):
+    if view is None:
+        return {'active': False}
+    return {
+        'active': True, 'id': str(view.id),
+        'workspace': {'id': str(view.workspace_id), 'name': view.workspace.name},
+        'started_at': view.started_at, 'expires_at': view.expires_at,
+    }
+
+
+@api_view(['GET'])
+@permission_classes([IsPlatformStaff])
+def platform_current_view(request):
+    from .workspace_view import active_view
+    return Response(_view_payload(active_view(request.user)))
+
+
+@api_view(['POST'])
+@permission_classes([IsPlatformStaff])
+def platform_workspace_view_start(request, workspace_id):
+    from .workspace_view import start_view
+    ws = get_object_or_404(Workspace, id=workspace_id)
+    reason = str((request.data or {}).get('reason') or '').strip()[:500] or 'Viewing workspace from platform admin'
+    with transaction.atomic():
+        view, ended = start_view(user=request.user, workspace=ws, reason=reason)
+        for old in ended:
+            record_platform_audit(
+                request=request, action='platform.workspace.view_ended', entity_type='workspace',
+                entity_id=old.workspace_id, reason='Switched to another workspace', workspace_id=old.workspace_id,
+                metadata={'view_id': str(old.id)},
+            )
+        record_platform_audit(
+            request=request, action='platform.workspace.view_started', entity_type='workspace',
+            entity_id=ws.id, reason=reason, workspace=ws, metadata={'view_id': str(view.id), 'read_only': True},
+        )
+    return Response(_view_payload(view), status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([IsPlatformStaff])
+def platform_view_end(request):
+    from .workspace_view import end_view
+    with transaction.atomic():
+        ended = end_view(user=request.user)
+        for old in ended:
+            record_platform_audit(
+                request=request, action='platform.workspace.view_ended', entity_type='workspace',
+                entity_id=old.workspace_id, reason='Exited read-only view', workspace=old.workspace,
+                metadata={'view_id': str(old.id), 'duration_seconds': int((timezone.now() - old.started_at).total_seconds())},
+            )
+    return Response({'active': False, 'ended': len(ended)})
+
+
+# --- Change plan ---------------------------------------------------------------------------
+
+def _plan_warnings(*, owner, workspace, plan):
+    """What a plan change leaves over its limits. Nothing is deleted; new creates are
+    refused by the normal limit checks from the moment the plan changes."""
+    from app.models import ProjectStatus, WorkspaceStatus
+    warnings = []
+    storage = File.objects.filter(workspace=workspace, deleted_at__isnull=True).aggregate(t=Sum('size_bytes'))['t'] or 0
+    limit = get_plan_limit(plan, 'max_storage_bytes')
+    if storage > limit:
+        warnings.append({'code': 'storage', 'detail': f'Storage is over the new limit ({storage} of {limit} bytes). Existing files are kept; new uploads are refused.'})
+    projects = Project.objects.filter(workspace=workspace).exclude(status=ProjectStatus.ARCHIVED).count()
+    limit = get_plan_limit(plan, 'max_projects_per_workspace')
+    if projects > limit:
+        warnings.append({'code': 'projects', 'detail': f'{projects} active projects, the new plan allows {limit}. Nothing is archived; new projects are refused.'})
+    seats = WorkspaceMembership.objects.filter(workspace=workspace, status=WorkspaceMembershipStatus.ACTIVE, user__isnull=False).count()
+    try:
+        limit = get_plan_limit(plan, 'max_members')
+    except Exception:
+        limit = None
+    if limit is not None and seats > limit:
+        warnings.append({'code': 'seats', 'detail': f'{seats} members, the new plan allows {limit}. Nobody is removed.'})
+    owned = WorkspaceMembership.objects.filter(
+        user=owner, is_primary_owner=True, status=WorkspaceMembershipStatus.ACTIVE, workspace__status=WorkspaceStatus.ACTIVE,
+    ).count()
+    limit = get_plan_limit(plan, 'max_workspaces_owned')
+    if owned > limit:
+        warnings.append({'code': 'workspaces', 'detail': f'The owner has {owned} workspaces, the new plan allows {limit}. None are archived.'})
+    return warnings
+
+
+class _ChangePlanSerializer(serializers.Serializer):
+    plan = serializers.ChoiceField(choices=[])
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    def __init__(self, *args, **kwargs):
+        from app.models import SubscriptionPlan
+        super().__init__(*args, **kwargs)
+        self.fields['plan'].choices = SubscriptionPlan.choices
+
+
+@api_view(['POST'])
+@permission_classes([IsPlatformStaff])
+def platform_workspace_change_plan(request, workspace_id):
+    """Moves the workspace owner's plan. App-side only: it never touches a payment
+    provider (Stripe or otherwise), so billing stays as it was."""
+    from app.models import SubscriptionStatus
+    ws = get_object_or_404(Workspace, id=workspace_id)
+    body = _ChangePlanSerializer(data=request.data)
+    body.is_valid(raise_exception=True)
+    plan, reason = body.validated_data['plan'], body.validated_data.get('reason', '').strip()
+    owner = _owner(ws)
+    if owner is None:
+        return Response({'detail': 'This workspace has no owner to change the plan for.'}, status=status.HTTP_409_CONFLICT)
+    now = timezone.now()
+    with transaction.atomic():
+        sub = UserSubscription.objects.select_for_update().filter(
+            user=owner, status__in=(SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE),
+        ).first()
+        old_plan = sub.plan if sub else 'FREE'
+        if old_plan == plan:
+            return Response({'detail': f'This workspace is already on {plan}.', 'code': 'unchanged'}, status=status.HTTP_409_CONFLICT)
+        if sub is None:
+            import uuid
+            sub = UserSubscription.objects.create(
+                id=uuid.uuid4(), user=owner, plan=plan, status=SubscriptionStatus.ACTIVE,
+                started_at=now, created_at=now, updated_at=now,
+            )
+        else:
+            # Only the plan moves. provider / provider_subscription_id / periods are left
+            # alone so a connected billing provider is never changed from here.
+            sub.plan = plan
+            sub.updated_at = now
+            sub.save(update_fields=['plan', 'updated_at'])
+        warnings = _plan_warnings(owner=owner, workspace=ws, plan=plan)
+        record_platform_audit(
+            request=request, action='platform.workspace.plan_changed', entity_type='workspace',
+            entity_id=ws.id, reason=reason, workspace=ws,
+            metadata={
+                'old_plan': old_plan, 'new_plan': plan, 'owner': owner.email,
+                'billing_changed': False, 'provider': sub.provider, 'warnings': [w['code'] for w in warnings],
+            },
+        )
+    return Response({'old_plan': old_plan, 'new_plan': plan, 'billing_changed': False, 'warnings': warnings, 'workspace': _workspace_summary(ws)})

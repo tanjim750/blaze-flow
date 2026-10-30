@@ -86,7 +86,7 @@
 .pf-search { position: relative; }
 .pf-search > svg { position: absolute; left: 10px; top: 50%; translate: 0 -50%; color: var(--bf-subtle-foreground); pointer-events: none; }
 .pf-search input[name="q"] { padding-left: 32px !important; width: 260px; }
-.pf-search input, .pf-search select, .pf-filters input, .pf-filters select, .pf-form input, .pf-composer textarea, .pf-ticket-controls select {
+.pf-search input, .pf-search select, .pf-filters input, .pf-filters select, .pf-form input, .pf-form select, .pf-composer textarea, .pf-ticket-controls select {
   min-height: var(--bf-control-height-md); padding: 0 var(--bf-space-3); border: 1px solid var(--bf-border); border-radius: var(--bf-radius-md); background: var(--bf-input); color: var(--bf-foreground); font: inherit; font-size: var(--bf-text-sm);
 }
 .pf-filters { margin-bottom: var(--bf-space-4); align-items: flex-end; }
@@ -216,3 +216,10 @@ input[type="checkbox"] { accent-color: var(--bf-primary); width: 16px; height: 1
   .pf-search > select, .pf-search .pf-btn { flex: 1; }
   .pf-filters label { flex: 1 1 140px; }
 }
+
+.pf-row-click { cursor: pointer; }
+.pf-row-click:hover td, .pf-row-click:focus-visible td { background: var(--bf-muted, rgba(127,127,127,.08)); }
+.pf-row-action { text-align: right; }
+.pf-row-action form { margin: 0; }
+.pf-plan-warn { margin: 0; padding: 10px 12px; border: 1px solid var(--bf-warning-border, #f59e0b); border-radius: var(--bf-radius-md, 8px); background: var(--bf-warning-subtle, rgba(245,158,11,.1)); font-size: var(--bf-text-sm); }
+.pf-plan-warn ul { margin: 6px 0 0; padding-left: 18px; }

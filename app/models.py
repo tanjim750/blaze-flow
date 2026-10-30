@@ -2683,3 +2683,24 @@ class DirectUpload(models.Model):
             models.Index(fields=['workspace', 'state']),
             models.Index(fields=['state', 'expires_at']),
         ]
+
+
+class PlatformWorkspaceView(models.Model):
+    """A platform staffer looking at one customer workspace, read-only.
+
+    While a row is open (``ended_at`` null and not expired) the staffer's permission checks
+    resolve to the workspace owner's view of that workspace, and every write they attempt
+    anywhere in the API is refused (``PlatformViewReadOnlyMiddleware``). Start and end both
+    leave an AuditLog row.
+    """
+    id = models.UUIDField(primary_key=True)
+    staff_user = models.ForeignKey(User, on_delete=models.DO_NOTHING, db_column='staff_user_id', related_name='+')
+    workspace = models.ForeignKey(Workspace, on_delete=models.DO_NOTHING, db_column='workspace_id', related_name='+')
+    reason = models.CharField(max_length=500, blank=True, default='')
+    started_at = models.DateTimeField()
+    expires_at = models.DateTimeField()
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'platform_workspace_views'
+        indexes = [models.Index(fields=['staff_user', 'ended_at'], name='platform_view_staff_idx')]

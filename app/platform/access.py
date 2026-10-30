@@ -35,10 +35,11 @@ def require_reason(data):
     return reason[:REASON_MAX]
 
 
-def record_platform_audit(*, request, action, entity_type, entity_id, reason, workspace=None, metadata=None):
+def record_platform_audit(*, request, action, entity_type, entity_id, reason, workspace=None, workspace_id=None, metadata=None):
     return AuditLog.objects.create(
         id=uuid.uuid4(),
         workspace=workspace,
+        **({'workspace_id': workspace_id} if workspace is None and workspace_id else {}),
         actor_type=AuditActorType.PLATFORM_STAFF,
         actor_user=request.user,
         action=action,

@@ -18,6 +18,8 @@ export type Workspace = {
   id: string; name: string; slug: string; timezone: string; status: string; created_at: string;
   /** The viewer's own membership here (what task assignee ids refer to). Null via a client team; absent on older backends. */
   my_membership_id?: string | null;
+  /** True when platform staff are viewing this workspace read-only from /platform. */
+  platform_view?: boolean;
   /** Which dashboard layout fits the viewer here, derived from permissions. Absent on older backends. */
   dashboard_role?: DashboardRole | null;
   /** What the viewer may do with money here (billing demo). Always all-false via a client team. Absent on older backends. */
