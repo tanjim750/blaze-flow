@@ -124,17 +124,53 @@ def scanner_backend():
     return scanner_class()
 
 
-def enqueue_file_event(*, file, topic):
+class FileNotCommittedYet(Exception):
+    """The job's File row is not visible (yet). Retried on a short backoff by the outbox."""
+
+    retry_after_seconds = 5
+
+
+def _write_file_event(*, file_id, topic):
     now = timezone.now()
     return OutboxEvent.objects.get_or_create(
-        deduplication_key=f'{topic}:{file.id}',
+        deduplication_key=f'{topic}:{file_id}',
         defaults={
             'id': uuid.uuid4(), 'topic': topic, 'aggregate_type': 'file',
-            'aggregate_id': str(file.id), 'payload': {'file_id': str(file.id)},
+            'aggregate_id': str(file_id), 'payload': {'file_id': str(file_id)},
             'status': OutboxEventStatus.PENDING, 'available_at': now,
             'created_at': now, 'updated_at': now,
         },
     )[0]
+
+
+def enqueue_file_event(*, file, topic):
+    """Queue a post-upload job for `file`.
+
+    This is a transactional outbox: the event row is written on the same connection and in
+    the same transaction as the File, so it commits (or rolls back) together with it. A
+    worker can therefore never claim the job before the File row is committed, which is
+    the guarantee `transaction.on_commit` would give, without the window where a crash
+    after commit loses the job. `test_file_job_race` pins this down.
+    """
+    return _write_file_event(file_id=file.id, topic=topic)
+
+
+def _load_job_file(file_id, **filters):
+    """The File a job is about, or None when it was deleted and the job has nothing to do.
+
+    A row that does not exist at all raises `FileNotCommittedYet` so the outbox retries
+    it quickly instead of burning exponential attempts on an upload still committing.
+    """
+    file = File.objects.filter(id=file_id).first()
+    if file is None:
+        raise FileNotCommittedYet(f'File {file_id} is not visible yet.')
+    if file.deleted_at is not None:
+        logger.info('Skipping job for deleted file %s', file_id)
+        return None
+    for field, value in filters.items():
+        if getattr(file, field) != value:
+            raise File.DoesNotExist(f'File {file_id} is not {field}={value}.')
+    return file
 
 
 SKIPPED_LARGE_MEDIA = 'skipped_large_media'
@@ -233,7 +269,9 @@ def _over_scan_limit(file):
 
 
 def process_security_scan(*, file_id):
-    file = File.objects.get(id=file_id, deleted_at__isnull=True)
+    file = _load_job_file(file_id)
+    if file is None:
+        return None
     scan = FileSecurityScan.objects.get(file=file)
     if scan.status in {FileSecurityScanStatus.CLEAN, FileSecurityScanStatus.INFECTED}:
         return scan
@@ -714,7 +752,9 @@ def generate_preview(*, file_id):
     because failing the whole event would leave the file unplayable over a missing
     thumbnail.
     """
-    file = File.objects.get(id=file_id, status=FileStatus.READY, deleted_at__isnull=True)
+    file = _load_job_file(file_id, status=FileStatus.READY)
+    if file is None:
+        return None
 
     # The poster goes first, before the proxy. Extracting one frame takes a moment;
     # transcoding the whole cut can take minutes, and the thumbnail every list is waiting
