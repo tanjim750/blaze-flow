@@ -80,6 +80,29 @@ export function putBlob(url: string, body: Blob, headers: Record<string, string>
   });
 }
 
+export const COMPLETE_POLL_MS = 5000;
+export const COMPLETE_POLL_GIVE_UP_MS = 5 * 60_000;
+type SessionStatus = { state: string; error?: string; project_file: unknown | null };
+const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
+  const timer = setTimeout(resolve, ms);
+  signal.addEventListener("abort", () => { clearTimeout(timer); reject(new DOMException("Cancelled.", "AbortError")); }, { once: true });
+});
+
+/** Polls the upload session until the server says it finished (returns the file) or failed. */
+async function awaitCompletion(path: string, signal: AbortSignal, original: HttpError): Promise<unknown> {
+  const started = Date.now();
+  for (;;) {
+    await sleep(COMPLETE_POLL_MS, signal);
+    const status = await api<SessionStatus>(path, { signal }).catch((error) => {
+      if (error instanceof HttpError && error.status >= 400 && error.status < 500) throw error;
+      return null; // still unreachable: keep waiting
+    });
+    if (status?.state === "COMPLETED" && status.project_file) return status.project_file;
+    if (status && ["FAILED", "CANCELLED", "EXPIRED", "ABORTED"].includes(status.state)) throw new HttpError(400, status.error || original.message);
+    if (Date.now() - started >= COMPLETE_POLL_GIVE_UP_MS) throw original;
+  }
+}
+
 async function directSend(job: TransportJob, onProgress: (loaded: number, total: number) => void, signal: AbortSignal): Promise<UploadResult> {
   const workspaceId = job.direct!.workspaceId;
   const base = `/workspaces/${workspaceId}/uploads`;
@@ -132,7 +155,16 @@ async function directSend(job: TransportJob, onProgress: (loaded: number, total:
       });
       remember({ ...current, completed });
     }
-    const data = await api<unknown>(`${base}/${current.id}/complete/`, { method: "POST", signal });
+    let data: unknown;
+    try {
+      data = await api<unknown>(`${base}/${current.id}/complete/`, { method: "POST", signal });
+    } catch (error) {
+      // All bytes are in the bucket; a 5xx or dropped connection on /complete usually means
+      // the answer was lost (e.g. a proxy timeout while Django scanned a big file), not that
+      // the upload failed. Ask the server how it ended before reporting anything.
+      if (signal.aborted || !(error instanceof HttpError) || (error.status !== 0 && error.status < 500)) throw error;
+      data = await awaitCompletion(`${base}/${current.id}/`, signal, error);
+    }
     save(key, null);
     job.saveResume(undefined);
     return { ok: true, data };

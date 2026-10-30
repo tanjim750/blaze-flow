@@ -127,9 +127,19 @@ def direct_upload_complete(request, workspace_id, upload_id):
     return Response(ProjectFileSerializer(item).data, status=status.HTTP_201_CREATED)
 
 
-@api_view(['DELETE'])
+@api_view(['GET', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def direct_upload_cancel(request, workspace_id, upload_id):
     upload = _own_upload(request, workspace_id, upload_id)
+    if request.method == 'GET':
+        # Lets the tray confirm an upload whose /complete answer was lost (proxy timeout,
+        # dropped connection) actually finished, instead of reporting a false failure.
+        item = upload.project_file if upload.project_file_id else None
+        return Response({
+            'id': str(upload.id),
+            'state': upload.state,
+            'error': upload.error,
+            'project_file': ProjectFileSerializer(item).data if item else None,
+        })
     service.cancel(upload)
     return Response(status=status.HTTP_204_NO_CONTENT)

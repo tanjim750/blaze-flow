@@ -25,6 +25,8 @@ class FakeXhr {
 
 const calls: { path: string; body: unknown; method: string }[] = [];
 let configEnabled = true;
+let completeFails = 0;
+let statusQueue: unknown[] = [];
 let initResponse: { status: number; body: unknown } = { status: 201, body: {} };
 function fetchMock(input: string, init: RequestInit) {
   const path = input.replace(/^\/api/, "");
@@ -34,7 +36,8 @@ function fetchMock(input: string, init: RequestInit) {
   if (path.endsWith("/uploads/config/")) return json(200, { enabled: configEnabled });
   if (path.endsWith("/uploads/") && init.method === "POST") return json(initResponse.status, initResponse.body);
   if (path.endsWith("/parts/")) return json(200, { parts: (body as { part_numbers: number[] }).part_numbers.map((n) => ({ part_number: n, url: `https://r2.example/key?part=${n}` })) });
-  if (path.endsWith("/complete/")) return json(201, { id: "pf-1" });
+  if (path.endsWith("/complete/")) return completeFails ? json(completeFails, {}) : json(201, { id: "pf-1" });
+  if (/\/uploads\/[^/]+\/$/.test(path) && (init.method ?? "GET") === "GET") return json(200, statusQueue.shift() ?? { state: "FINALIZING", project_file: null });
   if (init.method === "DELETE") return json(204, null);
   return json(404, {});
 }
@@ -46,7 +49,7 @@ const job = (file: File, resume: unknown = undefined): TransportJob & { saved: u
 const MB = 1024 * 1024;
 
 beforeEach(() => {
-  puts = []; calls.length = 0; configEnabled = true; failPart = null; __r2test.reset();
+  puts = []; calls.length = 0; configEnabled = true; failPart = null; completeFails = 0; statusQueue = []; __r2test.reset();
   vi.stubGlobal("XMLHttpRequest", FakeXhr);
   vi.stubGlobal("fetch", vi.fn(fetchMock));
 });
@@ -121,5 +124,35 @@ describe("r2 transport", () => {
     for (let i = 0; i < 2; i += 1) await r2Transport.send(job(new File([new Uint8Array(4)], `f${i}.png`)), () => {}, new AbortController().signal);
     expect(calls.filter((c) => c.path.endsWith("/uploads/config/"))).toHaveLength(1);
     expect(calls.filter((c) => c.path.endsWith("/uploads/") && c.method === "POST")).toHaveLength(2);
+  });
+
+  it("a 500 on /complete is confirmed by polling the session and counts as success", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      initResponse = { status: 201, body: { id: "u9", mode: "single", url: "https://r2.example/key?sig", headers: {} } };
+      completeFails = 500;
+      statusQueue = [{ state: "FINALIZING", project_file: null }, { state: "COMPLETED", project_file: { id: "pf-9" } }];
+      const pending = r2Transport.send(job(new File([new Uint8Array(10)], "big.mp4")), () => {}, new AbortController().signal);
+      await vi.advanceTimersByTimeAsync(11_000);
+      expect(await pending).toEqual({ ok: true, data: { id: "pf-9" } });
+      expect(calls.filter((c) => c.path === "/workspaces/ws/uploads/u9/" && c.method === "GET")).toHaveLength(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("reports the failure when the session ends FAILED, and gives up after the poll window", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      initResponse = { status: 201, body: { id: "u10", mode: "single", url: "https://r2.example/key?sig", headers: {} } };
+      completeFails = 502;
+      statusQueue = [{ state: "FAILED", error: "Virus found.", project_file: null }];
+      const failed = r2Transport.send(job(new File([new Uint8Array(10)], "x.mp4")), () => {}, new AbortController().signal);
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(await failed).toMatchObject({ ok: false, error: "Virus found." });
+
+      initResponse = { status: 201, body: { id: "u11", mode: "single", url: "https://r2.example/key?sig", headers: {} } };
+      const timedOut = r2Transport.send(job(new File([new Uint8Array(10)], "y.mp4")), () => {}, new AbortController().signal);
+      await vi.advanceTimersByTimeAsync(6 * 60_000);
+      expect(await timedOut).toMatchObject({ ok: false, status: 502 });
+    } finally { vi.useRealTimers(); }
   });
 });

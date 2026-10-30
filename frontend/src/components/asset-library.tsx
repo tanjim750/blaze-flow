@@ -18,7 +18,7 @@ import { useDoParam } from "@/lib/do-param";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
-import { Archive, Check, ChevronDown, ChevronRight, Plus, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "@/components/icons";
+import { Check, ChevronDown, ChevronRight, Plus, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "@/components/icons";
 import type { ProjectFile } from "@/lib/api";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
@@ -330,12 +330,14 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   useEffect(() => {
     if (!workingKey || !view?.workspaceId) return;
     if (polls.current.key !== workingKey) polls.current = { key: workingKey, count: 0 };
-    if (polls.current.count >= 20) return;
+    // Every 3s for the first minute, then every 15s for up to ~10 more minutes, so long video
+    // proxies still flip from "processing" to ready on screen.
+    if (polls.current.count >= 60) return;
     const timer = setTimeout(() => {
       polls.current.count += 1;
       setPoll((value) => value + 1);
       router.refresh();
-    }, 3000);
+    }, polls.current.count < 20 ? 3000 : 15000);
     return () => clearTimeout(timer);
   }, [workingKey, poll, router, view?.workspaceId]);
   // Drives the count on the filter button, so a narrowed list is never a silent surprise.
@@ -778,14 +780,13 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
                   {query.trim() && !searchEverywhere && <button type="button" className="fx-btn is-ghost" onClick={() => setSearchEverywhere(true)}>Search all folders</button>}
                 </div>
               </div>
-            : <div className="fx-empty">
-                <span><Archive aria-hidden="true" /></span>
-                <strong>{current ? "This folder is empty" : "No files yet"}</strong>
-                <p>Drop files here or upload to start a review.</p>
-                <div><button type="button" className="fx-btn is-primary" onClick={() => setDialog("upload")}><Upload />Upload files</button></div>
+            : <div className={`fx-dropzone${osDrag ? " is-over" : ""}`} data-testid="files-dropzone">
+                <CloudUploadArt />
+                <p>{current ? "This folder is empty. Drag files and folders here." : "Drag files and folders to begin."}</p>
+                <button type="button" className="fx-btn is-primary is-sm" onClick={() => setDialog("upload")}>Upload</button>
               </div>)}
         </div>
-        {osDrag && <div className="fx-os-drop" aria-hidden="true"><Upload /><strong>Upload to {current?.name ?? rootLabel}</strong><span>Release to stage these files</span></div>}
+        {osDrag && itemTotal > 0 && <div className="fx-os-drop" aria-hidden="true"><Upload /><strong>Upload to {current?.name ?? rootLabel}</strong><span>Release to stage these files</span></div>}
       </section>
 
       {inspector && !inspectorDocked && <button type="button" className="fx-scrim" aria-label="Close details" tabIndex={-1} onClick={() => setSheetOpen(false)} />}
@@ -1322,4 +1323,12 @@ function ToolbarMenu({ label, className = "", trigger, children }: { label: stri
     <button type="button" className="fx-tb-trigger" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} data-state={open ? "open" : "closed"} onClick={() => setOpen(!open)}>{trigger}</button>
     {open && <div className="fx-tb-menu" role="menu" aria-label={label}>{children(() => setOpen(false))}</div>}
   </div>;
+}
+
+/** The soft cloud-with-arrow on the empty drop zone; colours come from CSS so it follows the theme. */
+function CloudUploadArt() {
+  return <svg className="fx-dropzone-art" viewBox="0 0 120 80" aria-hidden="true" focusable="false">
+    <path className="fx-dropzone-cloud" d="M32 78h60a22 22 0 0 0 2-43.9A30 30 0 0 0 36.5 28 25 25 0 0 0 32 78Z" />
+    <path className="fx-dropzone-arrow" d="M60 76V40m-11 11 11-11 11 11" fill="none" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>;
 }

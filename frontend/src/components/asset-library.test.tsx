@@ -281,6 +281,17 @@ describe("AssetLibrary", () => {
   });
 
 
+  it("an empty library is one big drop zone that lights up while files are dragged over it", () => {
+    replaceLibrary({ deletedIds: [], folders: [], files: [] });
+    render(<AssetLibrary view={view} />);
+    const zone = screen.getByTestId("files-dropzone");
+    expect(zone).toHaveTextContent("Drag files and folders to begin.");
+    expect(screen.queryByText("No files yet")).not.toBeInTheDocument();
+    expect(zone.querySelector("button")).toHaveTextContent("Upload");
+    fireEvent.dragOver(zone, { dataTransfer: { types: ["Files"], files: [], dropEffect: "none" } });
+    expect(screen.getByTestId("files-dropzone")).toHaveClass("is-over");
+  });
+
   it("says nothing matches a search instead of offering an upload", () => {
     replaceLibrary({
       deletedIds: [], folders: [],
