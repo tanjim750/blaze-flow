@@ -1,0 +1,39 @@
+/* Solo dashboard: hero, quick actions and money snapshot. Panels reuse home.css. */
+.solo-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px 24px; padding: 24px; margin-bottom: 18px; border: 1px solid var(--border); border-radius: 16px; background: radial-gradient(120% 140% at 0% 0%, color-mix(in oklab, var(--primary) 12%, var(--surface)) 0%, var(--surface) 55%); }
+.solo-hero-date { font: 10.5px var(--font-geist-mono), monospace; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+.solo-hero-date span { color: var(--primary); font-weight: 600; }
+.solo-hero h1 { margin: 0 0 8px; font-size: 30px; line-height: 1.1; letter-spacing: -.035em; font-weight: 700; color: var(--text); }
+.solo-hero-line { font-size: 14px; color: var(--muted); margin: 0; }
+.solo-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.solo-action { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 13px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; font-weight: 550; text-decoration: none; transition: border-color .15s, background .15s; }
+.solo-action svg { color: var(--primary); }
+.solo-action:hover { border-color: color-mix(in oklab, var(--primary) 50%, var(--border)); background: var(--hover); }
+.solo-action:focus-visible, .solo-money-card:focus-visible, .solo-task:focus-visible { outline: none; box-shadow: var(--premium-ring); }
+.solo-money { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.solo-money-card { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); text-decoration: none; min-width: 0; }
+.solo-money-card span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.solo-money-card strong { font-size: 22px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
+.solo-money-card small { font-size: 11.5px; color: var(--muted); }
+.solo-money-card.is-good strong { color: var(--hs-success, var(--text)); }
+.solo-money-card.is-danger strong { color: var(--hs-danger, var(--danger)); }
+.solo-money-card:hover { border-color: color-mix(in oklab, var(--primary) 40%, var(--border)); }
+.solo-columns { margin-bottom: 18px; }
+.solo-task-list { display: grid; gap: 2px; }
+.solo-task { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px; border-radius: 9px; border: 1px solid transparent; color: var(--text); text-decoration: none; }
+.solo-task:hover { background: var(--surface-2); border-color: var(--border); }
+.solo-task-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hs-warning, var(--warning)); }
+.solo-task-dot.is-overdue { background: var(--hs-danger, var(--danger)); }
+.solo-task-main { display: grid; min-width: 0; }
+.solo-task-main strong { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.solo-task-main small { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.solo-task time { font: 11px var(--font-geist-mono), monospace; color: var(--hs-subtle, var(--muted)); white-space: nowrap; }
+.solo-task time.is-overdue { color: var(--hs-danger, var(--danger)); }
+@media (max-width: 720px) {
+  .solo-hero { grid-template-columns: 1fr; padding: 18px; }
+  .solo-hero h1 { font-size: 25px; }
+  .solo-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .solo-action { justify-content: flex-start; min-height: 44px; }
+  .solo-money { grid-template-columns: 1fr; gap: 8px; }
+  .solo-money-card { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .solo-money-card strong { grid-row: span 2; font-size: 19px; text-align: right; }
+}

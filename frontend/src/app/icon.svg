@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="2 0 62 64"><style>.d{display:none}@media (prefers-color-scheme:dark){.l{display:none}.d{display:inline}}</style><g class="l"><path d="M12 6L26 12V58L12 52Z" fill="#7C3AED"/>
+<path d="M26 12L52 6L26 34Z" fill="#5B21B6"/>
+<path d="M26 34L52 6V20Z" fill="#A78BFA"/>
+<path d="M26 34L54 58H38L26 46Z" fill="#5B21B6"/>
+<path d="M26 34L38 58L26 58Z" fill="#7C3AED"/></g><g class="d"><path d="M12 6L26 12V58L12 52Z" fill="#7C3AED"/>
+<path d="M26 12L52 6L26 34Z" fill="#A78BFA"/>
+<path d="M26 34L52 6V20Z" fill="#C4B5FD"/>
+<path d="M26 34L54 58H38L26 46Z" fill="#A78BFA"/>
+<path d="M26 34L38 58L26 58Z" fill="#7C3AED"/></g></svg>
