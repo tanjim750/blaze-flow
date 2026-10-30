@@ -1354,10 +1354,10 @@ function ToolbarMenu({ label, className = "", trigger, children }: { label: stri
   </div>;
 }
 
-/** The soft cloud-with-arrow on the empty drop zone; colours come from CSS so it follows the theme. */
+/** The soft cloud-with-arrow on the empty drop zone. The viewBox is cropped to the cloud and centred on the arrow, so it lines up with the text; colours come from CSS. */
 function CloudUploadArt() {
-  return <svg className="fx-dropzone-art" viewBox="0 0 120 80" aria-hidden="true" focusable="false">
+  return <svg className="fx-dropzone-art" viewBox="8 8 107 72" aria-hidden="true" focusable="false">
     <path className="fx-dropzone-cloud" d="M32 78h60a22 22 0 0 0 2-43.9A30 30 0 0 0 36.5 28 25 25 0 0 0 32 78Z" />
-    <path className="fx-dropzone-arrow" d="M60 76V40m-11 11 11-11 11 11" fill="none" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+    <path className="fx-dropzone-arrow" d="M61.5 74V40m-11 11 11-11 11 11" fill="none" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
   </svg>;
 }
