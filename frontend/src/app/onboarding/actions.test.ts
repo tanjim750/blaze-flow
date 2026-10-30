@@ -21,18 +21,19 @@ beforeEach(() => {
 });
 
 describe("createWorkspaceAction", () => {
-  it("selects the new workspace and refreshes the app shell before redirecting", async () => {
+  it("selects the new workspace, refreshes the app shell and tells the form where to go", async () => {
     api.createWorkspace.mockResolvedValue({ ok: true, data: { id: "ws-new", name: "Jacobie" } });
-    await expect(createWorkspaceAction(initial, form("Jacobie"))).rejects.toThrow("REDIRECT:/");
+    const state = await createWorkspaceAction(initial, form("Jacobie"));
+    expect(state).toMatchObject({ error: null, redirectTo: "/" });
+    expect(redirect).not.toHaveBeenCalled();
     expect(jar.set).toHaveBeenCalledWith("blazeflow_workspace", "ws-new", expect.objectContaining({ path: "/", httpOnly: true }));
     expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
-    expect(revalidatePath.mock.invocationCallOrder[0]).toBeLessThan(redirect.mock.invocationCallOrder[0]);
   });
 
   it("takes a repeated submit into the workspace the first submit already made", async () => {
     api.createWorkspace.mockResolvedValue({ ok: false, error: { status: 400, detail: "The FREE plan allows up to 1 owned workspace(s). Upgrade to create another." } });
     api.listWorkspaces.mockResolvedValue({ ok: true, data: [{ id: "ws-made", name: "Jacobie", created_at: new Date().toISOString() }] });
-    await expect(createWorkspaceAction(initial, form("Jacobie"))).rejects.toThrow("REDIRECT:/");
+    await expect(createWorkspaceAction(initial, form("Jacobie"))).resolves.toMatchObject({ error: null, redirectTo: "/" });
     expect(jar.set).toHaveBeenCalledWith("blazeflow_workspace", "ws-made", expect.anything());
     expect(revalidatePath).toHaveBeenCalledWith("/", "layout");
   });
