@@ -3,7 +3,7 @@ import { planLimitOf, type PlanLimit } from "@/lib/plan-limit";
 import { isProjectStatus } from "@/lib/project-status";
 
 import { revalidatePath } from "next/cache";
-import { archiveProject, createClientTeam, createFolder, createProject, deleteProjectFolder, listWorkspaces, renameProjectFolder, updateProject } from "@/lib/api";
+import { archiveProject, createClientTeam, createFolder, createProject, deleteProjectFolder, listWorkspaces, renameProjectFolder, updateClientTeam, updateProject } from "@/lib/api";
 import { selectWorkspace } from "@/lib/workspace";
 
 /**
@@ -69,6 +69,21 @@ export async function createFolderAction(_prev: ActionState, form: FormData): Pr
   const folder = await createFolder(workspace.id, campaignId, parentId ? { name, parent_folder_id: parentId } : { name });
   if (!folder.ok) return { error: folder.error.detail, savedAt: null };
   revalidatePath("/projects");
+  return ok();
+}
+
+/** Renames a client team (the top level of the tree). The synthetic "Unassigned" group is not a team. */
+export async function renameClientAction(clientId: string, name: string): Promise<ActionState> {
+  const trimmed = name.trim();
+  if (!trimmed) return { error: "Enter a name.", savedAt: null };
+  if (!clientId || clientId === "unassigned") return { error: "Unassigned can't be renamed.", savedAt: null };
+  const workspace = await currentWorkspaceId();
+  if (isFailure(workspace)) return workspace;
+
+  const updated = await updateClientTeam(workspace.id, clientId, { name: trimmed });
+  if (!updated.ok) return { error: updated.error.detail, savedAt: null };
+  revalidatePath("/projects");
+  revalidatePath("/clients");
   return ok();
 }
 
