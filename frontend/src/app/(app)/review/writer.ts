@@ -9,7 +9,6 @@ import { initialsFrom, type NoteDrawing, type ReviewNote } from "@/lib/review-no
 import { timecode } from "@/lib/timecode";
 import { EMPTY_OVERLAY, applyOverlay, dropEntry, pruneOverlay, type Overlay } from "@/lib/review-optimistic";
 import type { ReviewView } from "@/lib/review-view";
-import { addLocalAnnotation, addLocalNote, editLocalNote, removeLocalAnnotation, removeLocalNote, setLocalAnnotationWindow, setLocalNoteResolved, toggleLocalReaction, updateLocalAnnotation } from "@/lib/review-local";
 import { syncedTasksMessage, updateAssetFile } from "@/lib/asset-api-client";
 import {
   addAnnotationAction, deleteAnnotationAction, deleteNoteAction, editNoteAction, postNoteAction, reactToCommentAction, setAnnotationWindowAction,
@@ -67,7 +66,6 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const target = view.target;
-  const mediaId = view.version?.id ?? null;
 
   /*
    * Optimistic writes. Post, edit, resolve, delete and a drawing's duration show at once;
@@ -143,20 +141,7 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
       setError("Write a comment or record one first.");
       return false;
     }
-    if (!target) {
-      if (!mediaId) return false;
-      const note = addLocalNote(mediaId, {
-        text: input.text.trim(),
-        startMs: input.startMs,
-        endMs: input.endMs ?? null,
-        author,
-        parentId: input.parentId,
-        mentions: input.mentions,
-        recording: input.recording ? { url: input.recording.url, mimeType: input.recording.mimeType, kind: input.recording.kind } : null,
-        annotation: input.annotation?.length ? { elements: input.annotation, endMs: input.annotationEndMs ?? null } : null,
-      });
-      return Boolean(note);
-    }
+    if (!target) { setError("Move this file into a project to review it."); return false; }
     const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const startMs = input.parentId ? null : input.startMs;
     const endMs = input.parentId ? null : input.endMs ?? null;
@@ -198,10 +183,10 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
       toast.error("Comment not posted", { description: `${message} Your text is back in the box.` });
       return false;
     }
-  }, [attachRecording, author, authorId, mediaId, router, target]);
+  }, [attachRecording, author, authorId, router, target]);
 
   const setResolved = useCallback((note: ReviewNote, resolved: boolean) => {
-    if (!target || note.local) { if (mediaId) setLocalNoteResolved(mediaId, note.id, resolved); return; }
+    if (!target) return;
     if (note.pending) return;
     setOverlay((current) => ({ ...current, resolved: { ...current.resolved, [note.id]: resolved } }));
     void optimistic(
@@ -209,25 +194,25 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
       () => setOverlay((current) => dropEntry(current, "resolved", note.id)),
       resolved ? "Couldn't resolve the note" : "Couldn't reopen the note",
     );
-  }, [mediaId, optimistic, target]);
+  }, [optimistic, target]);
 
   /** Rewrites the viewer's own note or reply. Resolves false (and restores the old text) on failure. */
   const editNote = useCallback(async (note: ReviewNote, text: string): Promise<boolean> => {
     const next = text.trim();
     if (!next) { setError("A note can't be empty. Delete it instead."); return false; }
     if (next === note.text.trim()) return true;
-    if (!target || note.local) { if (mediaId) editLocalNote(mediaId, note.id, next); return true; }
+    if (!target) return false;
     setOverlay((current) => ({ ...current, edits: { ...current.edits, [note.id]: next } }));
     return optimistic(
       () => editNoteAction(target.workspaceId, target.projectId, target.versionId, note.id, next),
       () => setOverlay((current) => dropEntry(current, "edits", note.id)),
       "Couldn't save your edit",
     );
-  }, [mediaId, optimistic, target]);
+  }, [optimistic, target]);
 
   /** Deletes a note (with its thread) or a reply; it comes back if the server refuses. */
   const deleteNote = useCallback(async (note: ReviewNote): Promise<boolean> => {
-    if (!target || note.local) { if (mediaId) removeLocalNote(mediaId, note.id); return true; }
+    if (!target) return false;
     if (note.pending) return false;
     setOverlay((current) => ({ ...current, deleted: [...current.deleted, note.id] }));
     return optimistic(
@@ -235,7 +220,7 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
       () => setOverlay((current) => dropEntry(current, "deleted", note.id)),
       "Couldn't delete the note",
     );
-  }, [mediaId, optimistic, target]);
+  }, [optimistic, target]);
 
   /**
    * Changes how long a posted drawing stays on screen (`endMs === startMs`: just its frame).
@@ -243,10 +228,7 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
    */
   const setDrawingWindow = useCallback(async (drawing: NoteDrawing, endMs: number): Promise<boolean> => {
     if (drawing.startMs === null) return false;
-    if (!target || drawing.annotationId.startsWith("local-")) {
-      if (mediaId) setLocalAnnotationWindow(mediaId, drawing.annotationId, endMs);
-      return true;
-    }
+    if (!target) return false;
     const startMs = drawing.startMs;
     setOverlay((current) => ({ ...current, windows: { ...current.windows, [drawing.annotationId]: endMs } }));
     return optimistic(
@@ -254,31 +236,31 @@ export function useReviewWriter(view: ReviewView, author: string, authorId: stri
       () => setOverlay((current) => dropEntry(current, "windows", drawing.annotationId)),
       "Couldn't change how long the drawing shows",
     );
-  }, [mediaId, optimistic, target]);
+  }, [optimistic, target]);
 
   const react = useCallback((note: ReviewNote, emoji: string) => {
-    if (!target || note.local) { if (mediaId) toggleLocalReaction(mediaId, note.id, emoji); return; }
+    if (!target) return;
     void run(() => reactToCommentAction(target.workspaceId, target.projectId, target.versionId, note.id, emoji));
-  }, [mediaId, run, target]);
+  }, [run, target]);
 
   const removeNote = useCallback((note: ReviewNote) => {
-    if (note.local && mediaId) removeLocalNote(mediaId, note.id);
-  }, [mediaId]);
+    void note;
+  }, []);
 
   const draw = useCallback((element: AnnotationElement, atMs: number) => {
-    if (!target) { if (mediaId) addLocalAnnotation(mediaId, [element], atMs); return; }
+    if (!target) { setError("Move this file into a project to review it."); return; }
     void run(() => addAnnotationAction(target.workspaceId, target.projectId, target.versionId, element, atMs));
-  }, [mediaId, run, target]);
+  }, [run, target]);
 
   const eraseAnnotation = useCallback((annotationId: string) => {
-    if (!target || annotationId.startsWith("local-")) { if (mediaId) removeLocalAnnotation(mediaId, annotationId); return; }
+    if (!target) return;
     void run(() => deleteAnnotationAction(target.workspaceId, target.projectId, target.versionId, annotationId));
-  }, [mediaId, run, target]);
+  }, [run, target]);
 
   const moveAnnotation = useCallback((annotationId: string, elements: AnnotationElement[]) => {
-    if (!target || annotationId.startsWith("local-")) { if (mediaId) updateLocalAnnotation(mediaId, annotationId, elements); return; }
+    if (!target) return;
     void run(() => updateAnnotationElementsAction(target.workspaceId, target.projectId, target.versionId, annotationId, elements));
-  }, [mediaId, run, target]);
+  }, [run, target]);
 
   const recolorAnnotation = useCallback((annotationId: string, elements: AnnotationElement[], color: string) => {
     if (!target || annotationId.startsWith("local-")) return;
