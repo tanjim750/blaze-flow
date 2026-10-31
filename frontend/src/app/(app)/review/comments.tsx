@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Ellipsis, Link2 } from "@/components/icons";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ArrowLeftRight, AtSign, Check, CheckSquare, CircleCheck, History, ListChecks, ListFilter, CornerDownRight, Sparkles, Eye, Lock, MessageSquareText, Paperclip, Pencil, PencilLine, Repeat, Reply, RotateCcw, Search, Send, SmilePlus, Timer, Trash2, Users, X } from "@/components/icons";
@@ -933,6 +933,10 @@ function Composer({ view, writer, positionMs, replyTo, onReplyTo, notes, canWrit
     onMark?.({ inMs, outMs: outMs > inMs ? outMs : null });
   };
 
+  // Grow with the text up to the CSS max-height, then scroll. `field-sizing: content` does this
+  // where supported; this covers Safari and Firefox and re-measures after a send clears the field.
+  useLayoutEffect(() => { autoGrow(field.current); }, [text]);
+
   const disabled = view.target ? !view.canComment : !view.version;
   const team = effectiveVisibility === "team";
 
@@ -1217,4 +1221,13 @@ function holdSpan(startMs: number, hold: HoldChoice, durationMs: number): string
   if (hold.kind === "hold") return `${hold.ms / 1000}s`;
   const end = drawingEndMs(startMs, hold, durationMs);
   return end !== null && end > startMs ? `${Math.round((end - startMs) / 100) / 10}s range` : "range";
+}
+
+/** Sizes a textarea to its content, capped by its computed max-height (then it scrolls). */
+export function autoGrow(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "auto";
+  const max = parseFloat(getComputedStyle(el).maxHeight);
+  const next = el.scrollHeight;
+  el.style.height = `${Number.isFinite(max) && max > 0 ? Math.min(next, max) : next}px`;
 }

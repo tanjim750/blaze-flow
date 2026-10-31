@@ -1286,7 +1286,7 @@
 .rv-panel .rvc-attachments span, .rv-panel .rvc-attachments a, .rv-panel .rvc-recording video { background: var(--nv-card); }
 
 /* Composer: one line */
-.rv-panel .rvc-composer { gap: 7px; padding: 10px 12px; border-top-color: var(--nv-line); background: var(--nv-page); }
+.rv-panel .rvc-composer { grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 7px; padding: 10px 12px; border-top-color: var(--nv-line); background: var(--nv-page); }
 .rvc-line {
   display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px; padding: 4px;
   border: 1px solid var(--nv-line); border-radius: 11px; background: var(--nv-card);
@@ -1294,11 +1294,21 @@
 }
 .rvc-line:focus-within { border-color: var(--nv-violet); }
 .rvc-composer.is-team .rvc-line { border-color: color-mix(in oklch, var(--rv-team) 45%, var(--nv-line)); }
+/* The composer is a grid whose implicit column is `auto`, so its min-content width came from the
+   textarea; with `field-sizing: content` that is the longest unbroken word, which pushed the line
+   (and the timecode and send button) past the panel edge. Pin the column to the panel width and let
+   the text break anywhere, so only the textarea's height ever changes. */
+.rv-panel .rvc-composer > * { min-width: 0; }
+.rvc-line { min-width: 0; max-width: 100%; }
 .rv-panel .rvc-composer .rvc-line textarea {
-  flex: 1 1 120px; min-width: 0; min-height: 30px; max-height: 140px; padding: 6px 4px; resize: none;
+  flex: 1 1 0; width: 0; min-width: 0; min-height: 30px; max-height: 140px; padding: 6px 4px; resize: none;
   border: 0; border-radius: 0; background: none; field-sizing: content;
+  overflow-x: hidden; overflow-y: auto; overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap;
 }
-.rvc-line-tools { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.rvr-attach-btn { flex: none; }
+.rvc-line-tools { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 2px; margin-left: auto; }
+.rvc-time { flex: none; white-space: nowrap; }
+.rv-panel, .rv-panel-body, .rvc { min-width: 0; overflow-x: clip; }
 .rvr-attach-btn, .rvc-vis { width: 30px; height: 30px; border-radius: 8px; }
 .rvr-attach-btn svg { width: 16px; height: 16px; }
 .rvc-vis.is-team { color: var(--rv-team); }
@@ -1310,7 +1320,7 @@
 .rvc-time:hover { background: var(--t-bg-4a3a1c); color: var(--rv-marker); }
 .rvc-time.is-range { background: var(--t-bg-8b6cff26); color: var(--t-fg-cbbcff); }
 .rvc-time.is-off { background: none; border-color: var(--nv-line); color: var(--muted); }
-.rvc-send-btn { width: 30px; height: 30px; border-radius: 8px; background: var(--nv-violet); color: var(--t-fg-ffffff); }
+.rvc-send-btn { flex: none; width: 30px; height: 30px; border-radius: 8px; background: var(--nv-violet); color: var(--t-fg-ffffff); }
 .rvc-send-btn:hover { background: var(--nv-violet-2); }
 .rvc-send-btn:disabled { opacity: .4; cursor: not-allowed; }
 .rvc-line-hint { color: var(--muted); font-size: 10.5px; }
