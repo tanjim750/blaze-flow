@@ -19,7 +19,7 @@ import { useDoParam } from "@/lib/do-param";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import NextImage from "next/image";
-import { Check, ChevronDown, ChevronRight, Plus, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "@/components/icons";
+import { Check, ChevronDown, ChevronRight, Plus, Clapperboard, Copy, Download, Ellipsis, Eye, FolderOpen, FolderPlus, Info, LayoutGrid, List, ListFilter, Move, PanelLeft, PanelRight, Pencil, RefreshCw, Share2, RotateCcw, Search, SearchX, Tag, Trash2, TriangleAlert, Upload, X, ArrowDown, ArrowUp } from "@/components/icons";
 import type { ProjectFile } from "@/lib/api";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
@@ -524,18 +524,33 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const locationLabel = (id: string | null) => { const folder = folders.find((item) => item.id === id) ?? null; return [rootLabel, ...folderTrail(folder, folders).map((item) => item.name)].join(" / "); };
   const folderItemCount = (folder: LibraryFolder) => files.filter((file) => file.folderId === folder.id && file.versioning.isLatest).length + folders.filter((item) => item.parentFolderId === folder.id).length;
   const showRelation = !compact && groupBy !== "project";
-  const [shareOpen, setShareOpen] = useState(false);
+  const [shareOpen, setShareOpenRaw] = useState(false);
+  // A file shared from its own ⋯ menu; null means the toolbar/selection share.
+  const [shareFile, setShareFile] = useState<LibraryFile | null>(null);
+  const setShareOpen = (open: boolean) => { setShareOpenRaw(open); if (!open) setShareFile(null); };
+  // Only people who may create client review links see Share on an item (clients and
+  // read-only members never do); the offline sample library has nothing to share.
+  const canShareItems = Boolean(view?.workspaceId) && view?.canShare !== false;
+  const shareEntity = (file: LibraryFile) => {
+    // Review links are made for review versions. A file that has not landed on the server
+    // yet (still uploading or duplicating) has none, so say so instead of a dead dialog.
+    if (!file.fileId || isProcessing(file)) {
+      toast.info("Not ready to share yet", { description: `“${file.name}” has no review version yet. Wait for it to finish processing, then open it in review (use Publish to project if asked) and share from there.` });
+      return;
+    }
+    setShareFile(file); setShareOpenRaw(true);
+  };
   const [searchOpen, setSearchOpen] = useState(false);
   // The project header's single Share menu opens this panel's share dialog.
   useEffect(() => {
-    const open = () => setShareOpen(true);
+    const open = () => setShareOpenRaw(true);
     window.addEventListener(FILES_SHARE_EVENT, open);
     return () => window.removeEventListener(FILES_SHARE_EVENT, open);
   }, []);
   const shareSingle = selected.size === 1 ? [...selectedFiles, ...selectedFolders][0] : null;
-  const shareTitle = shareSingle?.name ?? (selected.size > 1 ? `${selected.size} items` : current?.name ?? rootLabel);
-  const shareProjectId = projectId ?? shareSingle?.projectId ?? current?.projectId ?? (projectFilter || null);
-  const shareUrl = typeof window === "undefined" ? "" : `${window.location.origin}${window.location.pathname}${current || shareSingle ? `?${new URLSearchParams({ folder: (shareSingle && !("kind" in shareSingle) ? shareSingle.id : current?.id) ?? "" })}` : ""}`;
+  const shareTitle = shareFile?.name ?? shareSingle?.name ?? (selected.size > 1 ? `${selected.size} items` : current?.name ?? rootLabel);
+  const shareProjectId = shareFile ? (shareFile.projectId ?? projectId) : projectId ?? shareSingle?.projectId ?? current?.projectId ?? (projectFilter || null);
+  const shareUrl = typeof window === "undefined" ? "" : shareFile ? `${window.location.origin}${reviewHref(shareFile) ?? ""}` : `${window.location.origin}${window.location.pathname}${current || shareSingle ? `?${new URLSearchParams({ folder: (shareSingle && !("kind" in shareSingle) ? shareSingle.id : current?.id) ?? "" })}` : ""}`;
   const copySelectionLink = async () => {
     const links = [...selectedFiles.map((file) => reviewHref(file) ?? (file.folderId ? `/files?folder=${file.folderId}` : "/files")), ...selectedFolders.map((folder) => `/files?folder=${folder.id}`)].map((path) => `${window.location.origin}${path}`);
     toast[(await copyText(links.join("\n"))) ? "success" : "error"](links.length === 1 ? "Link copied" : `${links.length} links copied`);
@@ -555,7 +570,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
       renaming: renameField(entity, "item"),
       menu: <ItemMenu entity={entity} folders={folders} view={view} open={menuFor === entity.id} onOpenChange={(open) => setMenuFor(open ? entity.id : null)}
         returnFocus={() => itemRefs.current.get(entity.id)?.focus()}
-        onOpen={() => openEntity(entity)} onDetails={() => showDetails(entity)} onRename={() => setRenaming({ id: entity.id, where: "item" })}
+        onOpen={() => openEntity(entity)} onShare={isFile && canShareItems ? () => shareEntity(entity as LibraryFile) : undefined} onDetails={() => showDetails(entity)} onRename={() => setRenaming({ id: entity.id, where: "item" })}
         onDuplicate={isFile ? () => duplicate(entity) : undefined} onDownload={isFile ? () => download(entity) : undefined}
         onDownloadManifest={!isFile ? () => downloadManifest(entity) : undefined} onDelete={() => removeEntities([entity])} />,
       onPointerSelect: (event) => onPointerSelect(event, entity),
@@ -761,7 +776,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
               <DropdownMenuItem className="is-danger" onSelect={() => removeEntities([...selectedFiles, ...selectedFolders])}><Trash2 />Delete</DropdownMenuItem>
             </DropdownMenuContent></DropdownMenu>}
         />
-        <ShareModal open={shareOpen} onOpenChange={setShareOpen} title={shareTitle} internalUrl={shareUrl}
+        <ShareModal key={shareFile?.id ?? "selection"} open={shareOpen} onOpenChange={setShareOpen} title={shareTitle} internalUrl={shareUrl}
           workspaceId={view?.workspaceId ?? null} projectId={shareProjectId} canCreateLinks={!offline} />
 
         <div className="fx-content">
@@ -1040,10 +1055,10 @@ function FilterField({ label, value, placeholder, options, onChange, clearable =
  * The ⋯ menu on a tile or row. Controlled, so right-click and Shift+F10 open the same menu
  * from the item itself; closing it hands focus back to the item, not to the hidden trigger.
  */
-function ItemMenu({ entity, folders, view, open, onOpenChange, returnFocus, onOpen, onDetails, onRename, onDuplicate, onDownload, onDownloadManifest, onDelete }: {
+function ItemMenu({ entity, folders, view, open, onOpenChange, returnFocus, onOpen, onShare, onDetails, onRename, onDuplicate, onDownload, onDownloadManifest, onDelete }: {
   entity: LibraryFile | LibraryFolder; folders: LibraryFolder[]; view?: FilesView;
   open: boolean; onOpenChange: (open: boolean) => void; returnFocus: () => void;
-  onOpen: () => void; onDetails: () => void; onRename: () => void;
+  onOpen: () => void; onDetails: () => void; onRename: () => void; onShare?: () => void;
   onDuplicate?: () => void; onDownload?: () => void; onDownloadManifest?: () => void; onDelete: () => void;
 }) {
   const isFile = "kind" in entity;
@@ -1055,6 +1070,7 @@ function ItemMenu({ entity, folders, view, open, onOpenChange, returnFocus, onOp
         {!isFile && <DropdownMenuItem onSelect={onOpen}><FolderOpen />Open</DropdownMenuItem>}
         {review && <DropdownMenuItem onSelect={onOpen}><Clapperboard />Open in review</DropdownMenuItem>}
         {isFile && !review && <DropdownMenuItem onSelect={onOpen}><Eye />Preview</DropdownMenuItem>}
+        {isFile && onShare && <DropdownMenuItem onSelect={onShare}><Share2 />Share</DropdownMenuItem>}
         <DropdownMenuItem onSelect={onDetails}><Info />Details</DropdownMenuItem>
         <DropdownMenuItem onSelect={onRename}><Pencil />Rename</DropdownMenuItem>
         <AssignmentMenu entity={entity} folders={folders} view={view} />
