@@ -58,6 +58,23 @@ describe("TasksBoard", () => {
     expect(screen.getByRole("heading", { name: "Project tasks" })).toBeInTheDocument();
   });
 
+  it("keeps horizontal scrolling on the board: sized to the viewport, stage jumps scroll only the board", () => {
+    const original = { scrollIntoView: Element.prototype.scrollIntoView, scrollTo: HTMLElement.prototype.scrollTo };
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const scrollTo = vi.fn();
+    HTMLElement.prototype.scrollTo = scrollTo as unknown as HTMLElement["scrollTo"];
+    render(<TasksBoard view={view} />);
+    const board = screen.getByRole("list", { name: "Task stages" });
+    expect(board.style.getPropertyValue("--tb-board-h")).toMatch(/^\d+px$/);
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Jump to stage" })).getByRole("button", { name: /Revisions/ }));
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ left: expect.any(Number) }));
+    expect(scrollTo.mock.contexts[0]).toBe(board);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    Element.prototype.scrollIntoView = original.scrollIntoView;
+    HTMLElement.prototype.scrollTo = original.scrollTo;
+  });
+
   it("renders every stage with its label, and Client Review and Approved take no quick add", () => {
     render(<TasksBoard view={view} />);
     expect(screen.getAllByRole("listitem").map((item) => item.getAttribute("aria-labelledby") && within(item).getByRole("heading", { level: 3 }).textContent)).toEqual(["To Do", "Revisions", "Client Review", "Approved"]);
