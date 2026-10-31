@@ -523,6 +523,9 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
     return { ...item, window, opacity: windowOpacity(window, positionMs, playing) };
   });
   const visible = timedAnnotations.filter((item) => item.opacity > 0);
+  // A timed cut keeps a fixed-height row for the drawings list (see below), so playback
+  // crossing a drawing's window never changes the player's height.
+  const reserveList = !still && (canDraw || annotations.length > 0);
   // The AI highlight uses the same display-window rule as a held drawing, and follows a
   // moving word along its track.
   const aiWindow = highlight && !still ? findingWindow(highlight) : null;
@@ -838,8 +841,12 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
       </div>
 
       <AnnotationBoundary label="The annotation list couldn’t be shown.">
-      {visible.length > 0 && (
-        <ul className="rvp-annotation-list">
+      {/* The row is reserved for as long as this cut can carry drawings, not only while one is
+          on screen: mounting it as the playhead entered or left a drawing's window resized the
+          stage under the reviewer every few seconds, which read as the page jumping while they
+          typed a comment. Only its contents follow the playhead now. */}
+      {(reserveList || visible.length > 0) && (
+        <ul className={`rvp-annotation-list ${reserveList ? "is-reserved" : ""}`} aria-label="Drawings at the playhead">
           {visible.map((annotation, index) => (
             <li key={annotation.id}>
               <button type="button" onClick={() => { if (annotation.startMs !== null) seek(annotation.startMs); if (annotation.noteId) onFocusNote(annotation.noteId); }}>
