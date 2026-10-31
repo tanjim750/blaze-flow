@@ -57,3 +57,19 @@ export function reviewAccess(answer: PermissionsAnswer | null): ReviewAccess | n
     react: has.has("review.reaction.create"),
   };
 }
+
+/** Projects tree: who may rename clients, projects (subfolders) and project folders. */
+export type TreeAccess = { renameClient: boolean; renameProject: boolean; renameFolder: boolean };
+
+export const FULL_TREE_ACCESS: TreeAccess = { renameClient: true, renameProject: true, renameFolder: true };
+
+export function treeAccess(answer: PermissionsAnswer | null): TreeAccess {
+  if (answer?.dashboard_role === "client") return { renameClient: false, renameProject: false, renameFolder: false };
+  if (!answer) return FULL_TREE_ACCESS;
+  const has = new Set(answer.permissions);
+  return {
+    renameClient: has.has("client_team.manage"),
+    renameProject: has.has("project.update"),
+    renameFolder: has.has("project_file.update"),
+  };
+}

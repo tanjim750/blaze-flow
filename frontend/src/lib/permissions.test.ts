@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FULL_TASK_ACCESS, isReadOnlyTasks, reviewAccess, taskAccess, type PermissionsAnswer } from "./permissions";
+import { FULL_TASK_ACCESS, FULL_TREE_ACCESS, isReadOnlyTasks, reviewAccess, taskAccess, treeAccess, type PermissionsAnswer } from "./permissions";
 
 const answer = (permissions: string[], project: string[] | null = null, role: PermissionsAnswer["dashboard_role"] = "editor"): PermissionsAnswer => ({
   workspace_id: "ws", dashboard_role: role, permissions, project: project ? { id: "p", permissions: project } : null,
@@ -30,5 +30,16 @@ describe("reviewAccess", () => {
   it("is unknown without a project", () => {
     expect(reviewAccess(answer(["task.read"]))).toBeNull();
     expect(reviewAccess(null)).toBeNull();
+  });
+});
+
+describe("treeAccess", () => {
+  it("maps rename rights from client_team.manage, project.update and project_file.update", () => {
+    expect(treeAccess(answer(["client_team.manage"]))).toEqual({ renameClient: true, renameProject: false, renameFolder: false });
+    expect(treeAccess(answer(["project.update", "project_file.update"]))).toEqual({ renameClient: false, renameProject: true, renameFolder: true });
+  });
+  it("never lets a client rename, and falls back to full access when unknown", () => {
+    expect(treeAccess(answer(["client_team.manage", "project.update"], null, "client"))).toEqual({ renameClient: false, renameProject: false, renameFolder: false });
+    expect(treeAccess(null)).toEqual(FULL_TREE_ACCESS);
   });
 });

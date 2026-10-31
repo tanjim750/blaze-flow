@@ -6,7 +6,7 @@ import { useActionState, useEffect, useMemo, useRef, useState, useTransition, ty
 import { useRouter } from "next/navigation";
 import {
   Activity, Archive, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
-  FolderInput, FolderOpen, Gauge, MessagesSquare, Pencil, Plus, RotateCcw, Search, Share2, Sparkles, Trash2, TriangleAlert, UploadCloud, Users, Wallet, X,
+  FolderInput, FolderOpen, Gauge, MessagesSquare, Pencil, Plus, RotateCcw, Share2, Sparkles, Trash2, TriangleAlert, UploadCloud, Users, Wallet, X,
 } from "@/components/icons";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
@@ -22,10 +22,9 @@ import "@/components/project-brief.css";
 import { LinkPending } from "@/components/nav-progress";
 import { TasksBoard } from "@/app/(app)/tasks/board";
 import type { TasksView } from "@/lib/tasks-view";
-import { filterClientTree } from "@/lib/client-filter";
 import "../tasks/tasks.css";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, moveCampaignToClientAction, renameCampaignAction, renameFolderAction, type ActionState } from "./actions";
+import { createCampaignAction, createClientAction, createFolderAction, deleteCampaignAction, deleteFolderAction, moveCampaignToClientAction, renameCampaignAction, renameClientAction, renameFolderAction, type ActionState } from "./actions";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { planLabel, type PlanLimit } from "@/lib/plan-limit";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -34,6 +33,11 @@ import { reviewHref } from "@/lib/open-in-review";
 import { ProjectActionsMenu, StatusPill } from "@/components/projects/project-actions-menu";
 import { ArchivePicker, ArchivedNotice, OpenProjectsContext, type OpenProject } from "@/components/projects/archive-picker";
 import { Select } from "@/components/ui/select";
+import { DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
+import { FULL_TREE_ACCESS } from "@/lib/permissions";
+
+const CONTEXT_PARTS = { Item: ContextMenuItem, Sub: ContextMenuSub, SubTrigger: ContextMenuSubTrigger, SubContent: ContextMenuSubContent, Separator: ContextMenuSeparator };
+const DROPDOWN_PARTS = { Item: DropdownMenuItem, Sub: DropdownMenuSub, SubTrigger: DropdownMenuSubTrigger, SubContent: DropdownMenuSubContent, Separator: DropdownMenuSeparator };
 
 const initialState: ActionState = { error: null, savedAt: null };
 
@@ -162,7 +166,7 @@ const TABS = ["Files", "Tasks", "Chat", "Brief & Specs", "Activity Log", "Client
 /** "Client uploads" also answers to `?tab=client-uploads` (what notifications and the feed link to). */
 const tabSlug = (value: string) => value.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
 
-export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initialQuery = "" }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string; initialQuery?: string }) {
+export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string }) {
   const router = useRouter();
   const [crumbSlot, setCrumbSlot] = useState<HTMLOListElement | null>(null);
   const [searchSlot, setSearchSlot] = useState<HTMLDivElement | null>(null);
@@ -202,8 +206,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
     <OpenProjectsContext.Provider value={openProjects}>
     <div className={`pb-layout${railClosed ? " is-rail-closed" : ""}${sheetOpen ? " is-sheet-open" : ""}`}>
       {sheetOpen && <button type="button" className="pb-sheet-backdrop" aria-label="Close clients" onClick={() => setSheetOpen(false)} />}
-      {/* Keyed on the query so a new sidebar search replaces the filter instead of being ignored. */}
-      <ClientRail key={initialQuery} initialFilter={initialQuery} view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} onNavigate={() => setSheetOpen(false)} />
+      <ClientRail view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} onNavigate={() => setSheetOpen(false)} />
 
       <section className="pb-canvas">
         {view.notice && (
@@ -362,11 +365,9 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
   </dialog>;
 }
 
-function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onToggle, onNavigate }: { view: ProjectsView; initialFilter: string; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void; onNavigate?: () => void }) {
-  const [filter, setFilter] = useState(initialFilter);
+export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNavigate }: { view: ProjectsView; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void; onNavigate?: () => void }) {
   const [creating, setCreating] = useState(false);
   useDoParam("new", () => setCreating(true));
-  const rows = filterClientTree(view.clients, filter);
   const toggle = (id: string) => setExpanded(expanded.includes(id) ? expanded.filter((value) => value !== id) : [...expanded, id]);
 
   return (
@@ -393,12 +394,6 @@ function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onTogg
           </button>
         </div>
 
-        <div className="pb-rail-search">
-          <Search size={14} />
-          <input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Filter clients & projects" aria-label="Filter clients and projects" />
-          {filter && <button type="button" className="pb-rail-clear" onClick={() => setFilter("")} aria-label="Clear filter"><X size={12} /></button>}
-        </div>
-
         {creating && (
           <InlineCreate
             action={createClientAction}
@@ -409,33 +404,41 @@ function ClientRail({ view, initialFilter, expanded, setExpanded, closed, onTogg
         )}
 
         <div className="pb-tree">
-          {rows.map(({ client, campaigns, matchedCampaign }) => (
-            <ClientBranch key={client.id} client={client} campaigns={campaigns} view={view} open={matchedCampaign || expanded.includes(client.id)} onToggle={() => toggle(client.id)} />
+          {view.clients.map((client) => (
+            <ClientBranch key={client.id} client={client} view={view} open={expanded.includes(client.id)} onToggle={() => toggle(client.id)} />
           ))}
-          {!rows.length && (
-            <p className="pb-rail-empty" role="status">
-              No matches for “{filter.trim()}”.{" "}
-              <button type="button" className="pb-rail-empty-clear" onClick={() => setFilter("")}>Clear</button>
-            </p>
-          )}
         </div>
-        {view.workspaceId && <Link className="pb-archived-link" href="/projects/archived"><Archive size={13} />Archived projects</Link>}
       </div>
+      {/* Pinned to the foot of the rail: the tree above scrolls, this stays put. */}
+      {view.workspaceId && <div className="pb-rail-foot"><Link className="pb-archived-link" href="/projects/archived"><Archive size={13} />Archived projects</Link></div>}
     </aside>
   );
 }
 
-function ClientBranch({ client, campaigns = client.campaigns, view, open, onToggle }: { client: ClientNode; campaigns?: ClientNode["campaigns"]; view: ProjectsView; open: boolean; onToggle: () => void }) {
+function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; view: ProjectsView; open: boolean; onToggle: () => void }) {
   const [adding, setAdding] = useState(false);
   const { renaming, setRenaming, error, setError, remove } = useRowActions();
   const isSelected = view.selectedClient?.id === client.id;
   const mover = useMoveToClient();
   const clientTargets = view.clients.filter((item) => item.id !== "unassigned").map((item) => ({ id: item.id, name: item.name }));
+  const campaigns = client.campaigns;
+  const access = view.access ?? FULL_TREE_ACCESS;
+  const [renamingClient, setRenamingClient] = useState(false);
+  // "Unassigned" is a synthetic group, not a client team, so it has nothing to rename.
+  const canRenameClient = access.renameClient && client.id !== "unassigned" && Boolean(view.workspaceId);
 
   return (
     <div className={open || isSelected ? "pb-client open" : "pb-client"}>
       {/* A row, not one big button: the Details link cannot live inside a <button>. */}
-      <div className="pb-client-head">
+      {renamingClient ? (
+        <InlineRename initial={client.name} onSave={(name) => renameClientAction(client.id, name)} onClose={() => setRenamingClient(false)} />
+      ) : (
+      <RowMenu
+        label={client.name}
+        className="pb-client-head"
+        onRename={canRenameClient ? () => setRenamingClient(true) : undefined}
+        details={client.id !== "unassigned" ? `/clients?client=${client.id}` : undefined}
+      >
         <button type="button" className="pb-client-toggle" onClick={onToggle} aria-expanded={open}>
           {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
           <span className="pb-client-mark">{client.initial}</span>
@@ -446,7 +449,8 @@ function ClientBranch({ client, campaigns = client.campaigns, view, open, onTogg
           <ArrowUpRight size={11} strokeWidth={2.5} />
           <LinkPending />
         </Link>
-      </div>
+      </RowMenu>
+      )}
 
       {open && (
         <div className="pb-subtree">
@@ -467,9 +471,9 @@ function ClientBranch({ client, campaigns = client.campaigns, view, open, onTogg
               <RowMenu
                 key={campaign.id}
                 label={campaign.name}
-                onRename={() => setRenaming(campaign.id)}
+                onRename={access.renameProject ? () => setRenaming(campaign.id) : undefined}
                 onDelete={() => remove(() => deleteCampaignAction(campaign.id))}
-                move={view.workspaceId ? { clients: clientTargets, current: client.id === "unassigned" ? null : client.id, onMove: (clientId) => mover.move(campaign.id, clientId) } : undefined}
+                move={view.workspaceId && access.renameProject ? { clients: clientTargets, current: client.id === "unassigned" ? null : client.id, onMove: (clientId) => mover.move(campaign.id, clientId) } : undefined}
               >
                 <Link href={`/projects?client=${client.id}&campaign=${campaign.id}`} className={active ? "pb-sub active" : "pb-sub"}>
                   {active ? <FolderOpen size={14} /> : <Folder size={14} />}
@@ -499,7 +503,7 @@ function ClientBranch({ client, campaigns = client.campaigns, view, open, onTogg
           {error && <p className="pb-row-error" role="alert">{error}<button type="button" onClick={() => setError(null)} aria-label="Dismiss"><X size={11} /></button></p>}
           {mover.error && <p className="pb-row-error" role="alert">{mover.error}</p>}
 
-          {view.selectedCampaign && isSelected && <NestedFolders view={view} />}
+          {view.selectedCampaign && isSelected && <NestedFolders view={view} canRename={access.renameFolder} />}
         </div>
       )}
     </div>
@@ -529,31 +533,52 @@ function useRowActions() {
  */
 type MoveTargets = { clients: { id: string; name: string }[]; current: string | null; onMove: (clientId: string | null) => void };
 
-function RowMenu({ label, onRename, onDelete, move, children }: {
-  label: string; onRename: () => void; onDelete: () => void; move?: MoveTargets; children: React.ReactNode;
+function RowMenu({ label, onRename, onDelete, move, details, className = "pb-row", children }: {
+  label: string; onRename?: () => void; onDelete?: () => void; move?: MoveTargets; details?: string; className?: string; children: React.ReactNode;
 }) {
+  const router = useRouter();
+  const hasActions = Boolean(onRename || onDelete || move);
+  if (!hasActions) return <div className={className}>{children}</div>;
+  // One list of actions, rendered by both the right-click menu and the "…" button's menu.
+  const items = (M: typeof CONTEXT_PARTS | typeof DROPDOWN_PARTS) => (
+    <>
+      {onRename && <M.Item onSelect={onRename}><Pencil />Rename</M.Item>}
+      {details && <M.Item onSelect={() => router.push(details)}><ArrowUpRight />Details</M.Item>}
+      {move && <M.Sub>
+        <M.SubTrigger><FolderInput />Move to client</M.SubTrigger>
+        <M.SubContent className="pb-context-menu">
+          {move.clients.map((client) => (
+            <M.Item key={client.id} disabled={client.id === move.current} onSelect={() => move.onMove(client.id)}>
+              {client.name}{client.id === move.current ? " (current)" : ""}
+            </M.Item>
+          ))}
+          {!move.clients.length && <M.Item disabled>No clients yet</M.Item>}
+          <M.Separator />
+          <M.Item disabled={!move.current} onSelect={() => move.onMove(null)}>No client (unassigned)</M.Item>
+        </M.SubContent>
+      </M.Sub>}
+      {onDelete && <M.Item variant="destructive" onSelect={() => { if (confirm(`Delete ${label}?`)) onDelete(); }}>
+        <Trash2 />Delete
+      </M.Item>}
+    </>
+  );
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="pb-context-menu">
-        <ContextMenuItem onSelect={onRename}><Pencil />Rename</ContextMenuItem>
-        {move && <ContextMenuSub>
-          <ContextMenuSubTrigger><FolderInput />Move to client</ContextMenuSubTrigger>
-          <ContextMenuSubContent className="pb-context-menu">
-            {move.clients.map((client) => (
-              <ContextMenuItem key={client.id} disabled={client.id === move.current} onSelect={() => move.onMove(client.id)}>
-                {client.name}{client.id === move.current ? " (current)" : ""}
-              </ContextMenuItem>
-            ))}
-            {!move.clients.length && <ContextMenuItem disabled>No clients yet</ContextMenuItem>}
-            <ContextMenuSeparator />
-            <ContextMenuItem disabled={!move.current} onSelect={() => move.onMove(null)}>No client (unassigned)</ContextMenuItem>
-          </ContextMenuSubContent>
-        </ContextMenuSub>}
-        <ContextMenuItem variant="destructive" onSelect={() => { if (confirm(`Delete ${label}?`)) onDelete(); }}>
-          <Trash2 />Delete
-        </ContextMenuItem>
-      </ContextMenuContent>
+      <ContextMenuTrigger asChild>
+        <div
+          className={`${className} has-menu`}
+          onDoubleClick={onRename ? (event) => { event.preventDefault(); onRename(); } : undefined}
+        >
+          {children}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="pb-row-more" aria-label={`Actions for ${label}`}><Ellipsis size={14} /></button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="pb-context-menu">{items(DROPDOWN_PARTS)}</DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="pb-context-menu">{items(CONTEXT_PARTS)}</ContextMenuContent>
     </ContextMenu>
   );
 }
@@ -562,7 +587,7 @@ function RowMenu({ label, onRename, onDelete, move, children }: {
  * Renames in place. Enter commits, Escape abandons, and leaving the field unchanged is
  * treated as abandoning rather than as a no-op write.
  */
-function InlineRename({ initial, onSave, onClose, nested = false }: {
+export function InlineRename({ initial, onSave, onClose, nested = false }: {
   initial: string;
   onSave: (name: string) => Promise<ActionState>;
   onClose: () => void;
@@ -572,9 +597,11 @@ function InlineRename({ initial, onSave, onClose, nested = false }: {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const commit = () => {
+  const commit = (fromBlur = false) => {
     const name = value.trim();
-    if (!name || name === initial) return onClose();
+    // An empty name is never saved: Enter says why, leaving the field just abandons it.
+    if (!name) { if (fromBlur) return onClose(); setError("Name can't be empty."); return; }
+    if (name === initial) return onClose();
     start(async () => {
       const result = await onSave(name);
       if (result.error) setError(result.error);
@@ -589,14 +616,14 @@ function InlineRename({ initial, onSave, onClose, nested = false }: {
       onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}
       // Committing on the input's own blur would save on the way to the cancel button,
       // which pressed Cancel and renamed anyway. Only leaving the form entirely commits.
-      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) commit(); }}
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null) && !pending) commit(true); }}
     >
       <input
         aria-label={`Rename ${initial}`}
         autoFocus
         value={value}
         disabled={pending}
-        onChange={(event) => setValue(event.target.value)}
+        onChange={(event) => { setValue(event.target.value); setError(null); }}
         onFocus={(event) => event.target.select()}
       />
       <button type="submit" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
@@ -607,7 +634,7 @@ function InlineRename({ initial, onSave, onClose, nested = false }: {
 }
 
 /** Folders inside the selected campaign — the "and so on" level below a subfolder. */
-function NestedFolders({ view }: { view: ProjectsView }) {
+function NestedFolders({ view, canRename }: { view: ProjectsView; canRename: boolean }) {
   const [adding, setAdding] = useState(false);
   const { renaming, setRenaming, error, setError, remove } = useRowActions();
   const campaign = view.selectedCampaign!;
@@ -629,7 +656,7 @@ function NestedFolders({ view }: { view: ProjectsView }) {
         <RowMenu
           key={folder.id}
           label={folder.name}
-          onRename={() => setRenaming(folder.id)}
+          onRename={canRename ? () => setRenaming(folder.id) : undefined}
           onDelete={() => remove(() => deleteFolderAction(campaign.id, folder.id))}
         >
           <span className="pb-nested-row"><Folder size={12} />{folder.name}</span>
