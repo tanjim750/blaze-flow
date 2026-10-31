@@ -57,5 +57,6 @@ export const allowsDecisions = (invite: { allow_decisions?: boolean; permissions
   invite.allow_decisions ?? invite.permissions.includes(DECISION_PERMISSION);
 
 /** Carries the one-time token back to the dialog, because the API never returns it again. */
-export type GuestInviteState = { error: string | null; token: string | null; inviteId?: string | null };
+/** `mediaVersionId`: the shared file's review version, so the link opens on exactly that file (`&cut=`). */
+export type GuestInviteState = { error: string | null; token: string | null; inviteId?: string | null; mediaVersionId?: string | null };
 export const emptyGuestInviteState: GuestInviteState = { error: null, token: null, inviteId: null };

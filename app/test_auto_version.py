@@ -119,3 +119,35 @@ class AutoVersionTests(WorkspaceAccessSetupMixin, TestCase):
         )
         self.assertIn(response.status_code, (200, 201), response.content)
         self.assertEqual(MediaVersion.objects.filter(original_file_id=item['file']['id']).count(), 1)
+
+
+class FileScopedGuestLinkTests(AutoVersionTests):
+    """A guest link for one file opens that file's version: no publish step, no 409."""
+
+    def invite(self, asset_file_id):
+        return self.client.post(
+            f'/api/workspaces/{self.workspace.id}/projects/{self.project.id}/guest-invites/',
+            {'permissions': ['media.read'], 'expires_in_hours': 24, 'asset_file_id': str(asset_file_id)}, format='json',
+        )
+
+    def test_link_for_an_uploaded_file_returns_its_version(self):
+        item = self.upload()
+        response = self.invite(item['id'])
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()['media_version_id'], item['review_version_id'])
+
+    def test_link_for_an_unsorted_file_is_refused_without_creating_anything(self):
+        item = self.upload(project=False)
+        response = self.invite(item['id'])
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertFalse(MediaVersion.objects.filter(original_file_id=item['file']['id']).exists())
+
+    def test_link_for_a_non_reviewable_file_is_refused(self):
+        item = self.upload(project=False)
+        File.objects.filter(id=item['file']['id']).update(mime_type='application/zip')
+        ProjectFile.objects.filter(id=item['id']).update(project=self.project)
+        self.assertEqual(self.invite(item['id']).status_code, 400)
+        self.assertFalse(MediaVersion.objects.filter(original_file_id=item['file']['id']).exists())
+
+    # Inherited upload tests need not run twice.
+    test_upload_into_a_project_is_a_review_version = None

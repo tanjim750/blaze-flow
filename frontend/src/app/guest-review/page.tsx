@@ -23,9 +23,11 @@ export const metadata: Metadata = {
 export default async function GuestReview({ searchParams }: PageProps<"/guest-review">) {
   const params = await searchParams;
   const token = typeof params.token === "string" ? params.token : "";
+  // A link shared for one file carries that file's review version, so it opens on it.
+  const cut = typeof params.cut === "string" ? params.cut : null;
   return (
     <>
-      <GuestReviewer token={token} />
+      <GuestReviewer token={token} cut={cut} />
       {/* Outside the signed-in layout, so this is the page's only toaster (player notices). */}
       <AppToaster />
     </>

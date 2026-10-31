@@ -4,6 +4,9 @@
  * Frame-style share modal. What is real vs. not yet backed:
  *  - Private link (workspace members only): the in-app URL, copy only — always works.
  *  - Public link: creates a project guest invite (`createGuestInviteAction`), wiring
+ *    Sharing one file (`assetFileId`) scopes the link to that file's review version: if the
+ *    upload is already a review version (auto-versioning), and the link
+ *    carries `&cut=<version>` so the guest lands on exactly that file.
  *    comments → "comment" preset, downloads → "review" preset (the only preset with
  *    `media.download`), and expiry → `expires_in_hours`. Needs a project to scope it to.
  *  - Email invite, passphrase and watermark have no backend yet, so they render disabled.
@@ -23,9 +26,9 @@ export function presetFor(allowComments: boolean, allowDownloads: boolean): Gues
   return allowComments ? "comment" : "view";
 }
 
-export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId, projectId, canCreateLinks }: {
+export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId, projectId, assetFileId, canCreateLinks }: {
   open: boolean; onOpenChange: (open: boolean) => void; title: string; internalUrl: string;
-  workspaceId?: string | null; projectId?: string | null; canCreateLinks: boolean;
+  workspaceId?: string | null; projectId?: string | null; assetFileId?: string | null; canCreateLinks: boolean;
 }) {
   const [access, setAccess] = useState<"private" | "public">("private");
   const [comments, setComments] = useState(true);
@@ -36,7 +39,7 @@ export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId
   const [state, create, pending] = useActionState(createGuestInviteAction, emptyGuestInviteState);
   const scoped = Boolean(workspaceId && projectId);
   const publicAllowed = canCreateLinks && scoped;
-  const publicUrl = state.token && typeof window !== "undefined" ? `${window.location.origin}/guest-review?token=${state.token}` : "";
+  const publicUrl = state.token && typeof window !== "undefined" ? `${window.location.origin}/guest-review?token=${state.token}${state.mediaVersionId ? `&cut=${state.mediaVersionId}` : ""}` : "";
   const link = access === "public" ? publicUrl : internalUrl;
 
   const copy = async () => { if (link && await copyText(link)) { setCopied(true); window.setTimeout(() => setCopied(false), 1600); } };
@@ -65,6 +68,7 @@ export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId
             <input type="hidden" name="label" value={title} />
             <input type="hidden" name="preset" value={presetFor(comments, downloads)} />
             <input type="hidden" name="expiresInDays" value={expires ? days : 365} />
+            {assetFileId && <input type="hidden" name="assetFileId" value={assetFileId} />}
             <ul className="frm-share-opts">
               <li><span>Allow comments</span><Switch checked={comments || downloads} onCheckedChange={setComments} label="Allow comments" /></li>
               <li><span>Allow downloads</span><Switch checked={downloads} onCheckedChange={setDownloads} label="Allow downloads" /></li>
