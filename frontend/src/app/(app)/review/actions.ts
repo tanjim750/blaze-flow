@@ -173,6 +173,8 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
   const days = Number(form.get("expiresInDays") ?? 7);
   // An unticked checkbox is simply absent from the form.
   const allowDecisions = form.get("allowDecisions") === "on";
+  const assetFileId = String(form.get("assetFileId") ?? "");
+  const publishFile = form.get("publishFile") === "on";
 
   if (!workspaceId || !projectId) {
     return { error: "This review is showing demo content, so links cannot be created.", token: null };
@@ -186,11 +188,17 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
     ...(label ? { label } : {}),
     permissions: invitePermissions(preset, allowDecisions),
     expires_in_hours: Math.round(days * 24),
+    ...(assetFileId ? { asset_file_id: assetFileId, publish_file: publishFile } : {}),
   });
-  if (!created.ok) return { error: created.error.detail, token: null };
+  if (!created.ok) {
+    // 409 = the shared file is not published yet; the modal asks before publishing it.
+    if (assetFileId && created.error.status === 409) return { error: null, token: null, needsPublish: true };
+    return { error: created.error.detail, token: null };
+  }
 
   revalidatePath("/review");
-  return { error: null, token: created.data.token, inviteId: created.data.id };
+  if (publishFile) { revalidatePath("/files"); revalidatePath("/projects"); }
+  return { error: null, token: created.data.token, inviteId: created.data.id, mediaVersionId: created.data.media_version_id ?? null };
 }
 
 /**

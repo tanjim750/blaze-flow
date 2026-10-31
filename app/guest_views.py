@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.core import signing
 from django.core.files.storage import default_storage
+from django.db import transaction
 from django.http import Http404
 from django.urls import reverse
 from django.utils import timezone
@@ -15,10 +16,13 @@ from rest_framework.response import Response
 from .http_range import ranged_file_response
 from .models import (
     Annotation, AnnotationElement, AnnotationRevision, FileStatus, FileVariant, GuestInvite, GuestInvitePermission,
-    GuestReviewAccess, GuestReviewAccessPermission, MediaVersion, Project,
+    GuestReviewAccess, GuestReviewAccessPermission, MediaVersion, Project, ProjectFile,
     ReviewComment, ReviewCommentContent, ReviewCommentRevision, ReviewDecisionKind,
 )
-from .permissions import REVIEW_COMMENT_MANAGE, active_memberships_for_user, has_project_permission
+from .permissions import (
+    MEDIA_CREATE, PROJECT_FILE_UPDATE, REVIEW_COMMENT_MANAGE, active_memberships_for_user, has_project_permission,
+)
+from .services.publish import PublishError, publish_library_file, published_version_for
 from .pagination import paginated_response
 from .serializers import (
     AnnotationRevisionSerializer, AnnotationSerializer, AnnotationWriteSerializer, ReviewAttachmentSerializer,
@@ -60,6 +64,11 @@ class GuestInviteCreateSerializer(serializers.Serializer):
         allow_empty=False,
     )
     expires_in_hours = serializers.IntegerField(min_value=1, max_value=24 * 365, default=168)
+    # Sharing one file from Files: the link must open that file's review version. Guests
+    # only ever see published media versions, so an unpublished file would share an empty
+    # project. Without ``publish_file`` that case is refused with code ``not_published``.
+    asset_file_id = serializers.UUIDField(required=False)
+    publish_file = serializers.BooleanField(required=False, default=False)
 
 
 class GuestInviteUpdateSerializer(serializers.Serializer):
@@ -144,6 +153,38 @@ def _guest_manager(request, project):
     return active_memberships_for_user(user=request.user, workspace=project.workspace).first()
 
 
+def _shared_file_version(request, project, asset_file_id, publish_file):
+    """The review version a file-scoped share should open, publishing it when asked to.
+
+    Returns a ``MediaVersion`` or an error ``Response``.
+    """
+    item = get_object_or_404(
+        ProjectFile.objects.select_related('file'), id=asset_file_id, workspace_id=project.workspace_id, deleted_at__isnull=True,
+    )
+    existing = published_version_for(item.file_id)
+    if existing is not None:
+        if existing.project_id != project.id:
+            return Response({'detail': f'This file is published to {existing.project.name}. Share it from that project.'}, status=status.HTTP_400_BAD_REQUEST)
+        if existing.status != 'ACTIVE':
+            return Response({'detail': 'This file\'s review version is archived, so guests cannot see it.'}, status=status.HTTP_400_BAD_REQUEST)
+        return existing
+    if item.project_id and item.project_id != project.id:
+        return Response({'detail': 'This file belongs to another project.'}, status=status.HTTP_400_BAD_REQUEST)
+    if not publish_file:
+        return Response({
+            'code': 'not_published',
+            'detail': f'This file is not published to {project.name} yet, so a guest would see no cut. Publish it as a review version first.',
+        }, status=status.HTTP_409_CONFLICT)
+    for key in (PROJECT_FILE_UPDATE, MEDIA_CREATE):
+        if not has_project_permission(user=request.user, project=project, permission_key=key):
+            raise PermissionDenied('You do not have permission to publish this file as a review version.')
+    try:
+        media_version, _, _ = publish_library_file(project_file=item, project=project, user=request.user)
+    except PublishError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return media_version
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def project_guest_invites(request, workspace_id, project_id):
@@ -155,11 +196,22 @@ def project_guest_invites(request, workspace_id, project_id):
         return Response([_invite_data(invite, statuses.get(str(invite.id))) for invite in invites])
     serializer = GuestInviteCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
+    data = dict(serializer.validated_data)
+    asset_file_id = data.pop('asset_file_id', None)
+    publish_file = data.pop('publish_file', False)
     try:
-        invite, token = create_guest_invite(project=project, membership=membership, actor=request.user, **serializer.validated_data)
+        with transaction.atomic():
+            media_version = None
+            if asset_file_id:
+                media_version = _shared_file_version(request, project, asset_file_id, publish_file)
+                if isinstance(media_version, Response):
+                    return media_version
+            invite, token = create_guest_invite(project=project, membership=membership, actor=request.user, **data)
     except GuestAccessError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     data = _invite_data(invite)
+    if media_version is not None:
+        data['media_version_id'] = str(media_version.id)
     data.update({'token': token, 'warning': 'The token is returned only once. Store and share it securely.'})
     return Response(data, status=status.HTTP_201_CREATED)
 

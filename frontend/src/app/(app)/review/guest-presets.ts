@@ -57,5 +57,10 @@ export const allowsDecisions = (invite: { allow_decisions?: boolean; permissions
   invite.allow_decisions ?? invite.permissions.includes(DECISION_PERMISSION);
 
 /** Carries the one-time token back to the dialog, because the API never returns it again. */
-export type GuestInviteState = { error: string | null; token: string | null; inviteId?: string | null };
+/**
+ * `needsPublish`: a file shared from Files has no review version yet, so the link would open
+ * an empty project; the modal asks before publishing it. `mediaVersionId` is the cut the
+ * link should open.
+ */
+export type GuestInviteState = { error: string | null; token: string | null; inviteId?: string | null; needsPublish?: boolean; mediaVersionId?: string | null };
 export const emptyGuestInviteState: GuestInviteState = { error: null, token: null, inviteId: null };

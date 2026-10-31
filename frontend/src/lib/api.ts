@@ -466,8 +466,9 @@ export type GuestInvite = {
 
 export const listGuestInvites = (workspaceId: string, projectId: string) =>
   request<GuestInvite[]>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/`);
-export const createGuestInvite = (workspaceId: string, projectId: string, payload: { label?: string; permissions: GuestPermission[]; expires_in_hours: number }) =>
-  request<GuestInvite & { token: string }>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/`, jsonBody(payload));
+export const createGuestInvite = (workspaceId: string, projectId: string, payload: { label?: string; permissions: GuestPermission[]; expires_in_hours: number; asset_file_id?: string; publish_file?: boolean }) =>
+  // `media_version_id` comes back when the link was made for one file (`asset_file_id`).
+  request<GuestInvite & { token: string; media_version_id?: string }>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/`, jsonBody(payload));
 /** Turns "Allow decisions" on or off for a link and everyone already using it. */
 export const updateGuestInvite = (workspaceId: string, projectId: string, inviteId: string, payload: { allow_decisions: boolean }) =>
   request<GuestInvite>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/${inviteId}/`, { ...jsonBody(payload), method: "PATCH" });

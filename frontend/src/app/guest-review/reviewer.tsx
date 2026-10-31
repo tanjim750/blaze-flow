@@ -40,7 +40,7 @@ const noop = () => {};
  */
 const NO_ANNOTATIONS: DrawnAnnotation[] = [];
 
-export function GuestReviewer({ token }: { token: string }) {
+export function GuestReviewer({ token, cut = null }: { token: string; cut?: string | null }) {
   /** sessionStorage is browser-only, so the stored session is read after hydration. */
   const [mounted, setMounted] = useState(false);
   const [session, setSession] = useState<GuestSession | null>(null);
@@ -70,8 +70,11 @@ export function GuestReviewer({ token }: { token: string }) {
       return;
     }
     setReview(result.data);
-    if (!keepVersion) setVersionId(result.data.media_versions.at(-1)?.id ?? null);
-  }, [session]);
+    if (!keepVersion) {
+      const versions = result.data.media_versions;
+      setVersionId((cut && versions.some((item) => item.id === cut) ? cut : versions.at(-1)?.id) ?? null);
+    }
+  }, [session, cut]);
 
   useEffect(() => {
     if (!session) return;
@@ -221,7 +224,10 @@ export function GuestReviewer({ token }: { token: string }) {
           ) : (
             <div className="gr-stage">
               {loading || (versionId && pendingPlayback) ? <Loader size={22} className="gr-spin" /> : <Film size={26} />}
-              <strong>{version?.title ?? (loading ? "Loading…" : "No cut available")}</strong>
+              <strong>{version?.title ?? (loading ? "Loading…" : review && review.media_versions.length === 0 ? "Nothing has been shared for review yet" : "No cut available")}</strong>
+              {!loading && review && review.media_versions.length === 0 && (
+                <small className="gr-empty-hint">No cut has been published to {review.project.name} yet. Ask the person who sent this link to publish the file for review, then reload this page.</small>
+              )}
               {playback?.error && playback.versionId === versionId && <small>{playback.error}</small>}
             </div>
           )}

@@ -35,6 +35,7 @@
 .gr-stage{display:grid;place-items:center;align-content:center;gap:9px;padding:40px;text-align:center;background:radial-gradient(circle,var(--t-bg-252334),var(--t-bg-0a0a0a) 68%);color:var(--muted)}
 .gr-stage strong{color:var(--text);font-size:15px}
 .gr-stage small{max-width:340px;line-height:1.6}
+@media (max-width:480px){.gr-stage{padding:28px 18px}}
 .gr-spin{animation:gr-rotate 1.1s linear infinite}
 @keyframes gr-rotate{to{transform:rotate(360deg)}}
 
@@ -133,3 +134,5 @@
 .gr-note-actions button.is-readonly{cursor:default}
 .gr-note-actions button.is-readonly:hover{color:var(--muted);background:var(--surface)}
 .gr-readonly-note{margin:0;padding:12px;border-top:1px solid var(--border);color:var(--muted);font-size:12px;line-height:1.45}
+
+.gr-project strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
