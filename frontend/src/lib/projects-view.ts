@@ -1,4 +1,5 @@
-import { getProject, listClientTeams, listFolders, listMediaVersions, listProjects, listWorkspaces } from "./api";
+import { getProject, getWorkspacePermissions, listClientTeams, listFolders, listMediaVersions, listProjects, listWorkspaces } from "./api";
+import { treeAccess, type TreeAccess } from "./permissions";
 import type { Project, ProjectFolder } from "./api";
 import { selectWorkspace } from "./workspace";
 
@@ -23,6 +24,8 @@ export type ProjectsView = {
   notice: string | null;
   /** Billing demo: true when the viewer holds billing.view here (shows the Pricing tab). */
   canSeeBilling?: boolean;
+  /** Who may rename rows in the client tree. Absent (demo) means everything is allowed. */
+  access?: TreeAccess;
 };
 
 function buildFolders(folders: ProjectFolder[]): FolderNode[] {
@@ -51,7 +54,7 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
   const workspace = await selectWorkspace(workspaces.data);
   if (!workspace) return demoView(params, "This account has no workspace yet.");
 
-  const [teams, projects] = await Promise.all([listClientTeams(workspace.id), listProjects(workspace.id)]);
+  const [teams, projects, permissions] = await Promise.all([listClientTeams(workspace.id), listProjects(workspace.id), getWorkspacePermissions(workspace.id)]);
   if (!teams.ok) return demoView(params, describe(teams.error.status, teams.error.detail));
   if (!projects.ok) return demoView(params, describe(projects.error.status, projects.error.detail));
 
@@ -105,6 +108,7 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
     selectedCampaign,
     notice: null,
     canSeeBilling: Boolean(workspace.billing?.view),
+    access: treeAccess(permissions.ok ? permissions.data : null),
   };
 }
 
