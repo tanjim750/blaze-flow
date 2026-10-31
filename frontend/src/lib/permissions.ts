@@ -57,3 +57,14 @@ export function reviewAccess(answer: PermissionsAnswer | null): ReviewAccess | n
     react: has.has("review.reaction.create"),
   };
 }
+
+/**
+ * Whether the viewer may share a project out to guest reviewers (create client review links).
+ * The guest-invite API checks `review.comment.manage` on the project; clients never share.
+ * Unknown (the permissions call failed) means "show it and let the server decide".
+ */
+export function canShareReview(answer: PermissionsAnswer | null): boolean {
+  if (!answer) return true;
+  if (answer.dashboard_role === "client") return false;
+  return new Set(answer.project?.permissions ?? answer.permissions).has("review.comment.manage");
+}
