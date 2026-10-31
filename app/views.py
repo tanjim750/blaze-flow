@@ -1474,6 +1474,9 @@ def _with_card_fields(queryset):
             ).values('media_asset_id').annotate(top=Max('version_number')).values('top')[:1],
             output_field=IntegerField(),
         ),
+        review_version_id_annotation=Subquery(
+            MediaVersion.objects.filter(original_file_id=OuterRef('file_id')).order_by('created_at').values('id')[:1],
+        ),
     ).select_related('media_asset')
 
 

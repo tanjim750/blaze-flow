@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from django.db.models import Max
 
-from app.models import FileStatus, FileVariant, ProjectFile, ProjectFolder, ReviewComment
+from app.models import FileStatus, FileVariant, MediaVersion, ProjectFile, ProjectFolder, ReviewComment
 from app.services.file_processing import POSTER_VARIANT_TYPE
 
 
@@ -33,11 +33,20 @@ class ProjectFileSerializer(serializers.ModelSerializer):
     poster = serializers.SerializerMethodField()
     comment_count = serializers.SerializerMethodField()
     media_asset = serializers.SerializerMethodField()
+    review_version_id = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectFile
-        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'folder_id', 'task_stage_id', 'file', 'added_by', 'poster', 'comment_count', 'version_number', 'media_asset', 'created_at')
+        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'folder_id', 'task_stage_id', 'file', 'added_by', 'poster', 'comment_count', 'version_number', 'media_asset', 'review_version_id', 'created_at')
         read_only_fields = fields
+
+    def get_review_version_id(self, project_file):
+        """The media version reviewing these bytes (made automatically once the file is in a project)."""
+        if hasattr(project_file, 'review_version_id_annotation'):
+            value = project_file.review_version_id_annotation
+        else:
+            value = MediaVersion.objects.filter(original_file_id=project_file.file_id).order_by('created_at').values_list('id', flat=True).first()
+        return str(value) if value else None
 
     def get_comment_count(self, project_file):
         """Review notes on this media.

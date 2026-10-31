@@ -18,6 +18,7 @@ from app.models import (
 )
 
 from .file_processing import SCAN_TOPIC, enqueue_file_event
+from .auto_version import ensure_review_version
 from .notifications import notify_library_version_added
 from .media import _storage_backend, detect_media_type, sha256_upload
 from .review_assets import detect_attachment_type
@@ -162,6 +163,8 @@ def add_file_as_version(*, source, target, actor=None):
 
         asset.updated_at = timezone.now()
         asset.save(update_fields=['updated_at'])
+        # Stacked onto an asset in a project: it is that asset's next review version.
+        ensure_review_version(project_file=source, user=actor, notify=False)
         notify_library_version_added(project_file=source, actor=actor)
         return source
 
@@ -215,6 +218,7 @@ def duplicate_project_file(*, project_file, membership):
             copy.full_clean()
             copy.save()
             enqueue_file_event(file=file_record, topic=SCAN_TOPIC)
+            ensure_review_version(project_file=copy, user=getattr(membership, 'user', None))
             return copy
     except Exception:
         default_storage.delete(stored_key)
@@ -247,6 +251,8 @@ def update_project_file(*, project_file, name=None, workspace=None, client_team=
         project_file.save(update_fields=['workspace', 'client_team', 'project', 'folder', 'task_stage', 'updated_at'])
     except ValidationError as exc:
         raise ProjectFileError('The file cannot be moved to that location.') from exc
+    # Moving an Unsorted file into a project makes it reviewable there.
+    ensure_review_version(project_file=project_file)
     return project_file
 
 
@@ -377,6 +383,8 @@ def create_project_file_records(
         project_file.full_clean()
         project_file.save()
         enqueue_file_event(file=file_record, topic=SCAN_TOPIC)
+        # Uploading into a project is publishing: the file is a review version from the start.
+        ensure_review_version(project_file=project_file, user=getattr(membership, 'user', None))
         return project_file
 
 
