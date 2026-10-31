@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FULL_TASK_ACCESS, FULL_TREE_ACCESS, isReadOnlyTasks, reviewAccess, taskAccess, treeAccess, type PermissionsAnswer } from "./permissions";
+import { canShareReview, FULL_TASK_ACCESS, FULL_TREE_ACCESS, isReadOnlyTasks, reviewAccess, taskAccess, treeAccess, type PermissionsAnswer } from "./permissions";
 
 const answer = (permissions: string[], project: string[] | null = null, role: PermissionsAnswer["dashboard_role"] = "editor"): PermissionsAnswer => ({
   workspace_id: "ws", dashboard_role: role, permissions, project: project ? { id: "p", permissions: project } : null,
@@ -41,5 +41,15 @@ describe("treeAccess", () => {
   it("never lets a client rename, and falls back to full access when unknown", () => {
     expect(treeAccess(answer(["client_team.manage", "project.update"], null, "client"))).toEqual({ renameClient: false, renameProject: false, renameFolder: false });
     expect(treeAccess(null)).toEqual(FULL_TREE_ACCESS);
+  });
+});
+
+describe("canShareReview", () => {
+  it("lets the server decide when the answer is unknown", () => expect(canShareReview(null)).toBe(true));
+  it("never lets a client share", () => expect(canShareReview(answer(["review.comment.manage"], null, "client"))).toBe(false));
+  it("needs review.comment.manage, the key the guest-invite API checks", () => {
+    expect(canShareReview(answer(["review.comment.manage"]))).toBe(true);
+    expect(canShareReview(answer(["review.comment.read"]))).toBe(false);
+    expect(canShareReview(answer(["review.comment.manage"], ["review.comment.read"]))).toBe(false);
   });
 });

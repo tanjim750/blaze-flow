@@ -268,6 +268,14 @@
 .rvp-annotation-list button:hover { color: var(--text); }
 .rvp-annotation-list button:last-child { padding-left: 0; }
 .rvp-annotation-list svg { width: 11px; height: 11px; }
+/* Reserved on a timed cut: one fixed-height line that scrolls sideways instead of wrapping,
+   so neither the playhead nor the number of drawings on screen changes the stage's height. */
+.rvp-annotation-list.is-reserved {
+  box-sizing: border-box; height: 34px; padding-bottom: 8px; align-items: center;
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain;
+}
+.rvp-annotation-list.is-reserved::-webkit-scrollbar { display: none; }
+.rvp-annotation-list.is-reserved li { flex: none; white-space: nowrap; }
 
 /* Right panel ------------------------------------------------------------- */
 .rv-panel {

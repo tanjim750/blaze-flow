@@ -5,7 +5,7 @@
  * drops, Escape cancels). There is deliberately no touch sensor: on phones a swipe scrolls,
  * and moving is done from the card menu. Every drop calls the board's single `onMove`.
  */
-import { Fragment, useId, useMemo, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
+import { Fragment, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
 import {
   closestCorners, DndContext, DragOverlay, KeyboardSensor, MouseSensor, useDroppable, useSensor, useSensors,
   type Announcements, type DragEndEvent, type DragOverEvent, type DragStartEvent, type UniqueIdentifier,
@@ -64,6 +64,14 @@ export function KanbanBoard(props: KanbanProps) {
   const dndId = useId();
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
   const [overId, setOverId] = useState<UniqueIdentifier | null>(null);
+  const boardRef = useBoardViewportHeight();
+  const jumpTo = useCallback((stageId: string) => {
+    // Scroll only the board. `scrollIntoView` also scrolls every ancestor, including the
+    // shell's `overflow: hidden` page wrapper, which then stays shifted with no way back.
+    const board = boardRef.current;
+    const column = document.getElementById(`tb-col-${stageId}`);
+    if (board && column) board.scrollTo({ left: column.offsetLeft, behavior: reduceMotion ? "auto" : "smooth" });
+  }, [boardRef, reduceMotion]);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space", "Enter"] } }),
@@ -148,11 +156,11 @@ export function KanbanBoard(props: KanbanProps) {
     autoScroll={{ threshold: { x: 0.08, y: 0.1 }, acceleration: 12 }}
   >
     <nav className="tb-stage-strip" aria-label="Jump to stage">
-      {columns.map((column) => <button key={column.stage.id} type="button" onClick={() => document.getElementById(`tb-col-${column.stage.id}`)?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", inline: "start", block: "nearest" })}>
+      {columns.map((column) => <button key={column.stage.id} type="button" onClick={() => jumpTo(column.stage.id)}>
         <StageDot stage={column.stage} />{column.stage.name}<span className="tb-count">{column.tasks.length + column.files.length}</span>
       </button>)}
     </nav>
-    <div className="tb-board" role="list" aria-label="Task stages">
+    <div ref={boardRef} className="tb-board" role="list" aria-label="Task stages">
       {columns.map((column) => <Column key={column.stage.id} column={column} {...props}
         isOver={Boolean(overTarget && overTarget.column.stage.id === column.stage.id && activeTask?.column.stage.id !== column.stage.id)}
         dropBeforeId={overTarget && overTarget.column.stage.id === column.stage.id && activeTask && activeTask.column.stage.id !== column.stage.id ? column.tasks[overTarget.position]?.id ?? null : null}
@@ -164,6 +172,31 @@ export function KanbanBoard(props: KanbanProps) {
         : activeFile ? <FileCardView overlay file={activeFile.file} stage={activeFile.column.stage} context={props.fileContextOf(activeFile.file)} onOpen={() => undefined} /> : null}
     </DragOverlay>
   </DndContext>;
+}
+
+/**
+ * Fits the board to the space left in the viewport (via `--tb-board-h`), so its horizontal
+ * scrollbar is always on screen instead of under the tallest column, and tall columns
+ * scroll inside themselves.
+ */
+function useBoardViewportHeight() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const board = ref.current;
+    if (!board || typeof window === "undefined") return;
+    const fit = () => {
+      const main = board.closest("main");
+      const reserve = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+      const top = board.getBoundingClientRect().top + window.scrollY;
+      board.style.setProperty("--tb-board-h", `${Math.max(360, Math.floor(window.innerHeight - top - Math.min(reserve, 24)))}px`);
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fit);
+    if (observer && board.parentElement) observer.observe(board.parentElement);
+    return () => { window.removeEventListener("resize", fit); observer?.disconnect(); };
+  }, []);
+  return ref;
 }
 
 function Column({ column, isOver, dropBeforeId, activeId, ...props }: KanbanProps & { column: BoardColumn; isOver: boolean; dropBeforeId: string | null; activeId: UniqueIdentifier | null }) {

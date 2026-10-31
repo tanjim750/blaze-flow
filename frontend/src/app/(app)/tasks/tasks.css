@@ -441,3 +441,28 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
 
 /* The filter strip scrolls (overflow-x), which clipped focus rings on its buttons and search. */
 .tb-filter-row { padding: 4px; margin: -4px; }
+
+/* ---- Board scrolling ------------------------------------------------------------------
+   The board is the only horizontal scroller. It is sized to the viewport (--tb-board-h,
+   set by the board) so its scrollbar is always visible, and each column scrolls its own
+   cards. No desktop scroll-snap or edge mask: proximity snapping pulled short trackpad
+   swipes back and parked the board at its end with the first column half cut off, and
+   the mask hid the last column. The global `* { scrollbar-width: thin }` gives an overlay
+   scrollbar that macOS hides until you scroll; resetting it here lets the ::-webkit-scrollbar
+   styles below draw a real, always-visible bar in Chrome and Safari. */
+.tb-board { position: relative; height: var(--tb-board-h, auto); grid-auto-rows: minmax(0, 100%); overflow: auto hidden; touch-action: pan-x pan-y; scrollbar-width: auto; scrollbar-color: auto; scroll-padding-inline: 0; }
+.tb-board::-webkit-scrollbar { height: 10px; }
+.tb-board::-webkit-scrollbar-track { background: transparent; }
+.tb-board::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: var(--tb-border-strong) padding-box; }
+.tb-board::-webkit-scrollbar-thumb:hover { background-color: var(--tb-muted-fg); }
+@supports (-moz-appearance: none) { .tb-board { scrollbar-width: thin; scrollbar-color: var(--tb-border-strong) transparent; } }
+.tb-column { max-height: 100%; min-height: min(240px, 100%); }
+.tb-column-head, .tb-column-foot { flex: none; }
+.tb-column-body { min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; }
+@media (min-width: 761px) {
+  .tb-board { scroll-snap-type: none; -webkit-mask-image: none; mask-image: none; padding-right: 0; }
+}
+@media (max-width: 767px) {
+  .tb-board { min-height: 0; }
+  .tb-column { min-height: 0; height: 100%; }
+}
