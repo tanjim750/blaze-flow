@@ -72,7 +72,8 @@ export function GuestReviewer({ token, cut = null }: { token: string; cut?: stri
     setReview(result.data);
     if (!keepVersion) {
       const versions = result.data.media_versions;
-      setVersionId((cut && versions.some((item) => item.id === cut) ? cut : versions.at(-1)?.id) ?? null);
+      const target = cut ?? session.cut ?? null;
+      setVersionId((target && versions.some((item) => item.id === target) ? target : versions.at(-1)?.id) ?? null);
     }
   }, [session, cut]);
 
@@ -406,6 +407,7 @@ function Identify({ token, onIdentified }: { token: string; onIdentified: (sessi
       guestSessionId: result.data.guest_session_id,
       accessKey: result.data.access_key,
       name: name.trim(),
+      cut: result.data.media_version_id ?? null,
     };
     // Persist before rendering the review: the key is never returned again.
     writeGuestSession(session, { remember });

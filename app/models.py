@@ -1392,6 +1392,12 @@ class GuestInvite(models.Model):
     project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', related_name='+')
     label = models.CharField(max_length=255, null=True, blank=True)
     token_hash = models.CharField(max_length=255, unique=True)
+    # The short share link (/r/<short_code>): 8 random base62 characters, an alternative
+    # to the long ?token= link (which keeps working). Kept readable so share dialogs can
+    # show it again; it carries the same expiry, revoke and permission checks.
+    short_code = models.CharField(max_length=16, unique=True, null=True, blank=True)
+    # A link shared for one file opens that file's review version.
+    shared_media_version_id = models.UUIDField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
     created_by_workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.DO_NOTHING, db_column='created_by_workspace_membership_id', related_name='+')

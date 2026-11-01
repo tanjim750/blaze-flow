@@ -39,7 +39,9 @@ export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId
   const [state, create, pending] = useActionState(createGuestInviteAction, emptyGuestInviteState);
   const scoped = Boolean(workspaceId && projectId);
   const publicAllowed = canCreateLinks && scoped;
-  const publicUrl = state.token && typeof window !== "undefined" ? `${window.location.origin}/guest-review?token=${state.token}${state.mediaVersionId ? `&cut=${state.mediaVersionId}` : ""}` : "";
+  // The short link (/r/<code>) is what gets shared; it opens the shared file's cut by itself.
+  // The long ?token= form is only a fallback for an older backend without short codes.
+  const publicUrl = state.shortUrl ?? (state.token && typeof window !== "undefined" ? `${window.location.origin}/guest-review?token=${state.token}${state.mediaVersionId ? `&cut=${state.mediaVersionId}` : ""}` : "");
   const link = access === "public" ? publicUrl : internalUrl;
 
   const copy = async () => { if (link && await copyText(link)) { setCopied(true); window.setTimeout(() => setCopied(false), 1600); } };

@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.core import signing
 from django.core.files.storage import default_storage
 from django.db import transaction
@@ -8,12 +9,13 @@ from django.urls import reverse
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .http_range import ranged_file_response
+from .throttles import GuestExchangeThrottle
 from .models import (
     Annotation, AnnotationElement, AnnotationRevision, FileStatus, FileVariant, GuestInvite, GuestInvitePermission,
     GuestReviewAccess, GuestReviewAccessPermission, MediaVersion, Project, ProjectFile,
@@ -125,6 +127,10 @@ def _invite_data(invite, activity=None):
     permissions = list(GuestInvitePermission.objects.filter(guest_invite=invite).values_list('permission_key', flat=True))
     return {
         'id': str(invite.id), 'project_id': str(invite.project_id), 'label': invite.label,
+        # The short link is /r/<short_code>; the long token is still only returned once.
+        'short_code': invite.short_code,
+        'short_url': f'{settings.SHORT_LINK_BASE_URL}/{invite.short_code}' if invite.short_code else None,
+        'media_version_id': str(invite.shared_media_version_id) if invite.shared_media_version_id else None,
         'permissions': permissions,
         # Whether a guest on this link may approve or request changes.
         'allow_decisions': GUEST_DECISION_PERMISSION in permissions,
@@ -186,12 +192,13 @@ def project_guest_invites(request, workspace_id, project_id):
                 media_version = _shared_file_version(project, asset_file_id)
                 if isinstance(media_version, Response):
                     return media_version
-            invite, token = create_guest_invite(project=project, membership=membership, actor=request.user, **data)
+            invite, token = create_guest_invite(
+                project=project, membership=membership, actor=request.user,
+                shared_media_version_id=media_version.id if media_version is not None else None, **data,
+            )
     except GuestAccessError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     data = _invite_data(invite)
-    if media_version is not None:
-        data['media_version_id'] = str(media_version.id)
     data.update({'token': token, 'warning': 'The token is returned only once. Store and share it securely.'})
     return Response(data, status=status.HTTP_201_CREATED)
 
@@ -235,6 +242,7 @@ def project_guest_access_detail(request, workspace_id, project_id, access_id):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@throttle_classes([GuestExchangeThrottle])
 def guest_exchange(request):
     serializer = GuestExchangeSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -245,6 +253,8 @@ def guest_exchange(request):
     return Response({
         'project_id': str(access.guest_invite.project_id),
         'guest_session_id': str(access.guest_session_id), 'access_key': access_key,
+        # A link shared for one file opens on that file's cut (short links carry no ?cut=).
+        'media_version_id': str(access.guest_invite.shared_media_version_id) if access.guest_invite.shared_media_version_id else None,
         'warning': 'The access key is returned only once. Send it as X-Guest-Access-Key.',
     }, status=status.HTTP_201_CREATED)
 

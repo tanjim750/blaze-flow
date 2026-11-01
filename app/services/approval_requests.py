@@ -214,6 +214,7 @@ def request_client_approval(*, media_version, entry, stage, actor=None):
             invite, token = create_guest_invite(
                 project=project, membership=creator, label=f'Approval request · {user.get_full_name() or user.email}',
                 permissions=GUEST_APPROVAL_PERMISSIONS, expires_in_hours=expiry_hours, actor=actor,
+                shared_media_version_id=media_version.id,
             )
             query = urlencode({'token': token, 'media': str(media_version.id)})
             link, link_kind, expires_at = _absolute(f'/guest-review?{query}'), 'guest', invite.expires_at

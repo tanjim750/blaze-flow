@@ -16,7 +16,8 @@ import type { DecisionKind, ReviewDecision } from "./review-decisions";
  */
 export type GuestResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
-export type GuestSession = { token: string; projectId: string; guestSessionId: string; accessKey: string; name: string };
+/** `cut`: the review version a single-file link opens on (short links carry no `?cut=`). */
+export type GuestSession = { token: string; projectId: string; guestSessionId: string; accessKey: string; name: string; cut?: string | null };
 export type GuestMediaVersion = {
   id: string; title: string; version_number: number;
   /** Open notes the client can see on this cut; the approve dialog warns with it. */
@@ -131,7 +132,7 @@ const jsonInit = (method: string, payload: unknown): RequestInit => ({
  * link, and each gets a distinct guest session. The key is returned exactly once, so the
  * caller must persist it before navigating.
  */
-export async function exchangeGuestInvite(token: string, name: string, email: string): Promise<GuestResult<{ project_id: string; guest_session_id: string; access_key: string }>> {
+export async function exchangeGuestInvite(token: string, name: string, email: string): Promise<GuestResult<{ project_id: string; guest_session_id: string; access_key: string; media_version_id?: string | null }>> {
   let response: Response;
   try {
     response = await fetch("/api/guest-access/exchange/", {

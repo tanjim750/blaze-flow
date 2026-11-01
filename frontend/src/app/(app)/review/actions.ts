@@ -192,7 +192,7 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
   if (!created.ok) return { error: created.error.detail, token: null };
 
   revalidatePath("/review");
-  return { error: null, token: created.data.token, inviteId: created.data.id, mediaVersionId: created.data.media_version_id ?? null };
+  return { error: null, token: created.data.token, inviteId: created.data.id, mediaVersionId: created.data.media_version_id ?? null, shortUrl: created.data.short_url ?? null };
 }
 
 /**
@@ -208,7 +208,7 @@ export async function replaceGuestInviteAction(workspaceId: string, projectId: s
   if (!created.ok) return { error: created.error.detail, token: null };
   const revoked = await revokeGuestInvite(workspaceId, projectId, invite.id);
   revalidatePath("/review");
-  return { error: revoked.ok ? null : `New link created, but the old one couldn't be revoked: ${revoked.error.detail}`, token: created.data.token, inviteId: created.data.id };
+  return { error: revoked.ok ? null : `New link created, but the old one couldn't be revoked: ${revoked.error.detail}`, token: created.data.token, inviteId: created.data.id, shortUrl: created.data.short_url ?? null };
 }
 
 /** Revokes the link itself. Sessions already exchanged from it stop working too. */

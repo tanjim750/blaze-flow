@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { config, MARKETING_HOME, proxy, SESSION_COOKIE } from "./proxy";
 
@@ -23,7 +23,30 @@ describe("proxy: who sees what at /", () => {
     expect(proxy(request("csrftoken=x; blazeflow_rail=1")).headers.get("x-middleware-rewrite")).toContain(MARKETING_HOME);
   });
 
-  it("only ever runs on the root path, never on app routes, /platform or the API", () => {
-    expect(config.matcher).toBe("/");
+  it("only runs on the root path and bare 8-character paths, never on /platform or the API", () => {
+    expect(config.matcher).toEqual(["/", "/:code([A-Za-z0-9]{8})"]);
+  });
+});
+
+describe("proxy: short-link domain", () => {
+  const at = (url: string) => new NextRequest(url, { headers: { host: new URL(url).host } });
+  afterEach(() => { vi.unstubAllEnvs(); });
+
+  it("rewrites /<code> on the short domain to /r/<code>, keeping the short URL", () => {
+    vi.stubEnv("SHORT_LINK_BASE_URL", "https://xyz.io");
+    const response = proxy(at("https://xyz.io/Z70ayQFE"));
+    expect(response.headers.get("x-middleware-rewrite")).toBe("https://xyz.io/r/Z70ayQFE");
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("leaves 8-letter app routes alone on the main domain", () => {
+    vi.stubEnv("SHORT_LINK_BASE_URL", "https://xyz.io");
+    const response = proxy(at("https://krewsys.com/projects"));
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+  });
+
+  it("does nothing with the default base URL, which is served by /r/[code]", () => {
+    vi.stubEnv("SHORT_LINK_BASE_URL", "");
+    expect(proxy(at("https://krewsys.com/Z70ayQFE")).headers.get("x-middleware-rewrite")).toBeNull();
   });
 });

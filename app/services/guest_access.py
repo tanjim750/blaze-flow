@@ -1,5 +1,6 @@
 import hashlib
 import secrets
+import string
 import uuid
 from datetime import timedelta
 
@@ -39,8 +40,26 @@ def _hash(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
 
+SHORT_CODE_ALPHABET = string.ascii_letters + string.digits  # base62, URL-safe
+SHORT_CODE_LENGTH = 8  # 62**8 ≈ 2.2e14 codes; lookups are rate-limited
+
+
+def generate_short_code(exists=None):
+    """A fresh random short code, checked for uniqueness against existing invites."""
+    exists = exists or (lambda code: GuestInvite.objects.filter(short_code=code).exists())
+    for _ in range(10):
+        code = ''.join(secrets.choice(SHORT_CODE_ALPHABET) for _ in range(SHORT_CODE_LENGTH))
+        if not exists(code):
+            return code
+    raise GuestAccessError('Could not create a share link. Try again.')
+
+
+def is_short_code(value):
+    return len(value) == SHORT_CODE_LENGTH and all(ch in SHORT_CODE_ALPHABET for ch in value)
+
+
 @transaction.atomic
-def create_guest_invite(*, project, membership, permissions, label='', expires_in_hours=168, actor=None):
+def create_guest_invite(*, project, membership, permissions, label='', expires_in_hours=168, actor=None, shared_media_version_id=None):
     requested = set(permissions)
     if not requested or not requested.issubset(GUEST_ALLOWED_PERMISSIONS):
         raise GuestAccessError('Select one or more supported guest permissions.')
@@ -48,6 +67,7 @@ def create_guest_invite(*, project, membership, permissions, label='', expires_i
     now = timezone.now()
     invite = GuestInvite.objects.create(
         id=uuid.uuid4(), project=project, label=label or '', token_hash=_hash(token),
+        short_code=generate_short_code(), shared_media_version_id=shared_media_version_id,
         expires_at=now + timedelta(hours=expires_in_hours),
         created_by_workspace_membership=membership, created_at=now, updated_at=now,
     )
@@ -66,9 +86,11 @@ def create_guest_invite(*, project, membership, permissions, label='', expires_i
 
 @transaction.atomic
 def exchange_guest_invite(*, token, name, email):
+    """Redeem a link credential: the long token, or the short code from /r/<code>."""
     now = timezone.now()
+    lookup = {'short_code': token} if is_short_code(token) else {'token_hash': _hash(token)}
     invite = GuestInvite.objects.select_for_update().select_related('project__workspace').filter(
-        token_hash=_hash(token), revoked_at__isnull=True,
+        revoked_at__isnull=True, **lookup,
     ).first()
     if invite is None or (invite.expires_at and invite.expires_at <= now):
         raise GuestAccessError('This guest invitation is invalid or expired.')
