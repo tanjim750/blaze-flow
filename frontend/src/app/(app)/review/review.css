@@ -238,7 +238,7 @@
 .rvp-transport .rvp-play:hover:not(:disabled) { background: var(--primary); color: #fff; }
 .rvp-transport svg { width: 15px; height: 15px; }
 
-.rvp-clock { display: flex; align-items: baseline; gap: 5px; font: 12px var(--font-geist-mono), monospace; }
+.rvp-clock { display: flex; flex: none; align-items: baseline; gap: 5px; white-space: nowrap; font: 12px var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; }
 .rvp-clock strong { font-weight: 600; }
 .rvp-clock.is-seeking strong { color: var(--muted); }
 .rvp-clock span { color: var(--muted); font-size: 11px; }
@@ -746,7 +746,7 @@
   .rv-version, .rv-compare-toggle { max-width: 46vw; }
   .rv-spec-warn { order: 10; }
   .rvp-transport { gap: 6px; padding: 8px 10px; }
-  .rvp-volume input, .rvp-select:has(select[aria-label="Playback quality"]) { display: none; }
+  .rvp-volume input, .rvp-select:has([aria-label="Playback quality"]) { display: none; }
   .rv-panel { min-height: 60vh; }
 }
 
