@@ -14,6 +14,7 @@ from pathlib import Path
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from django.conf import settings
+from django.core.files import File as DjangoFile
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import transaction
@@ -524,16 +525,106 @@ def _mp3_waveform(file):
 
 
 HQ_PROXY_VARIANT_TYPE = 'VIDEO_PROXY_HQ'
+VIDEO_PROXY_VARIANT_TYPE = 'VIDEO_PROXY'
+FALLBACK_CARD_VARIANT_TYPE = 'REVIEW_CARD'
+
+
+class VideoProxyFailed(RuntimeError):
+    """The proxy encode for a video failed (ffmpeg error, timeout or output over its cap).
+
+    Raised out of the preview job instead of storing the review-card fallback: a card is not
+    something a `<video>` can play, and storing one marked the job done, so the cut sat on
+    "may still be generating" forever. Raising lets the outbox retry and then dead-letter
+    it, which the review page shows as "Proxy failed — re-render".
+    """
+
+    # A proxy encode is expensive and usually fails the same way twice (a timeout, a broken
+    # source), so it gets fewer attempts than the outbox default.
+    @property
+    def max_attempts(self):
+        return settings.VIDEO_PROXY_MAX_ATTEMPTS
+
+
+class ProducedFile:
+    """A preview written to a temporary file rather than held in memory.
+
+    A 12-minute proxy is hundreds of MB, too much to read into a worker capped at 2 GB.
+    `_store_variant` streams it to storage and then calls `cleanup()`.
+    """
+
+    def __init__(self, path, directory):
+        self.path = Path(path)
+        self.directory = directory
+
+    def cleanup(self):
+        shutil.rmtree(self.directory, ignore_errors=True)
+
+
+def _rate_bits_per_second(rate):
+    """'5M' -> 5_000_000, '128k' -> 128_000, '800000' -> 800_000."""
+    rate = str(rate).strip()
+    units = {'k': 1_000, 'm': 1_000_000, 'g': 1_000_000_000}
+    if rate and rate[-1].lower() in units:
+        return int(float(rate[:-1]) * units[rate[-1].lower()])
+    return int(float(rate))
+
+
+def file_duration_seconds(file):
+    duration_ms = (file.metadata or {}).get('duration_ms')
+    try:
+        return max(0.0, float(duration_ms) / 1000) if duration_ms else None
+    except (TypeError, ValueError):
+        return None
+
+
+def video_proxy_timeout_seconds(file):
+    """How long the encoder may run for this cut: scaled with its runtime, never below the floor.
+
+    A fixed 10 minutes could not fit a 12-minute 1080p cut on two cores, so it always timed
+    out. With no known duration the floor applies.
+    """
+    floor = settings.VIDEO_PROXY_TIMEOUT_SECONDS
+    duration = file_duration_seconds(file)
+    if not duration:
+        return floor
+    scaled = duration * settings.VIDEO_PROXY_TIMEOUT_PER_SECOND + settings.VIDEO_PROXY_TIMEOUT_MARGIN_SECONDS
+    return int(min(max(floor, scaled), settings.VIDEO_PROXY_TIMEOUT_MAX_SECONDS))
+
+
+def video_proxy_max_output_bytes(file, maxrate):
+    """The largest proxy we accept: what the bitrate cap allows for this runtime, plus headroom.
+
+    Never below the configured floor. Without a duration (or a cap) the floor applies.
+    """
+    floor = settings.VIDEO_PROXY_MAX_OUTPUT_BYTES
+    duration = file_duration_seconds(file)
+    if not duration or not maxrate:
+        return floor
+    bits = (_rate_bits_per_second(maxrate) + _rate_bits_per_second(settings.VIDEO_PROXY_AUDIO_BITRATE)) * duration
+    return max(floor, int(bits / 8 * settings.VIDEO_PROXY_OUTPUT_HEADROOM))
+
+
+def _stderr_tail(stderr, limit=2000):
+    if not stderr:
+        return ''
+    text = stderr.decode('utf-8', errors='replace') if isinstance(stderr, bytes) else str(stderr)
+    return text.strip()[-limit:]
 
 
 def _encode_proxy(file, *, max_width, max_height, crf, variant_type, maxrate=None):
     executable = shutil.which(settings.FFMPEG_COMMAND)
     if not executable:
-        raise OSError('Video proxy encoder is unavailable.')
-    with tempfile.TemporaryDirectory(prefix='blazeflow-video-proxy-') as directory:
+        raise VideoProxyFailed('Video proxy encoder is unavailable.')
+    timeout = video_proxy_timeout_seconds(file)
+    max_output = video_proxy_max_output_bytes(file, maxrate)
+    directory = tempfile.mkdtemp(prefix='blazeflow-video-proxy-')
+    try:
         source = Path(directory) / 'source'
         output = Path(directory) / 'proxy.mp4'
-        _copy_private_object(file, source, max_bytes=settings.VIDEO_PROXY_MAX_INPUT_BYTES)
+        try:
+            _copy_private_object(file, source, max_bytes=settings.VIDEO_PROXY_MAX_INPUT_BYTES)
+        except ValueError as exc:
+            raise VideoProxyFailed(f'{variant_type} for file {file.id}: {exc}') from exc
         # The box turns with the picture: a 9:16 cut gets 720x1280, not a 404x720 sliver
         # of the landscape box.
         scale = (
@@ -543,24 +634,59 @@ def _encode_proxy(file, *, max_width, max_height, crf, variant_type, maxrate=Non
         )
         rate = ['-maxrate', maxrate, '-bufsize', _double(maxrate)] if maxrate else []
         threads = video_proxy_thread_args()
-        subprocess.run(
-            [executable, '-v', 'error', '-y', '-i', str(source),
-             '-vf', scale, '-c:v', 'libx264', '-preset', settings.VIDEO_PROXY_PRESET,
-             '-crf', str(crf), *rate, *threads, '-pix_fmt', 'yuv420p', '-profile:v', 'high',
-             '-force_key_frames', f'expr:gte(t,n_forced*{settings.VIDEO_PROXY_KEYFRAME_SECONDS})',
-             '-movflags', '+faststart', '-c:a', 'aac', '-b:a', settings.VIDEO_PROXY_AUDIO_BITRATE,
-             '-ac', '2', str(output)],
-            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            timeout=settings.VIDEO_PROXY_TIMEOUT_SECONDS,
-        )
+        command = [
+            executable, '-v', 'error', '-y', '-i', str(source),
+            '-vf', scale, '-c:v', 'libx264', '-preset', settings.VIDEO_PROXY_PRESET,
+            '-crf', str(crf), *rate, *threads, '-pix_fmt', 'yuv420p', '-profile:v', 'high',
+            '-force_key_frames', f'expr:gte(t,n_forced*{settings.VIDEO_PROXY_KEYFRAME_SECONDS})',
+            '-movflags', '+faststart', '-c:a', 'aac', '-b:a', settings.VIDEO_PROXY_AUDIO_BITRATE,
+            '-ac', '2', str(output),
+        ]
+        started = timezone.now()
+        try:
+            subprocess.run(
+                command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            logger.error(
+                '%s encode timed out for file %s after %ss (duration %ss). ffmpeg stderr: %s',
+                variant_type, file.id, timeout, file_duration_seconds(file), _stderr_tail(exc.stderr),
+            )
+            raise VideoProxyFailed(
+                f'{variant_type} encode timed out after {timeout}s for file {file.id}.'
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            tail = _stderr_tail(exc.stderr)
+            logger.error(
+                '%s encode failed for file %s (exit %s). ffmpeg stderr: %s',
+                variant_type, file.id, exc.returncode, tail,
+            )
+            raise VideoProxyFailed(
+                f'{variant_type} encode failed for file {file.id} (ffmpeg exit {exc.returncode}): {tail[-500:]}'
+            ) from exc
         if not output.exists() or output.stat().st_size == 0:
-            raise ValueError('Video proxy encoder returned no usable output.')
-        if output.stat().st_size > settings.VIDEO_PROXY_MAX_OUTPUT_BYTES:
-            raise ValueError('Video proxy output exceeds its configured limit.')
-        return output.read_bytes(), 'video/mp4', 'mp4', variant_type, {
+            raise VideoProxyFailed(f'{variant_type} encoder returned no usable output for file {file.id}.')
+        size = output.stat().st_size
+        if size > max_output:
+            logger.error('%s for file %s is %s bytes, over its %s byte limit.', variant_type, file.id, size, max_output)
+            raise VideoProxyFailed(
+                f'{variant_type} output for file {file.id} is {size} bytes, over its {max_output} byte limit.'
+            )
+        logger.info(
+            '%s made for file %s: %s bytes in %ss (limit %ss).',
+            variant_type, file.id, size, round((timezone.now() - started).total_seconds()), timeout,
+        )
+        source.unlink(missing_ok=True)
+        produced = ProducedFile(output, directory)
+        directory = None  # owned by `produced` now; `_store_variant` cleans it up
+        return produced, 'video/mp4', 'mp4', variant_type, {
             'max_width': max_width, 'max_height': max_height, 'crf': crf,
             'preset': settings.VIDEO_PROXY_PRESET, **({'maxrate': maxrate} if maxrate else {}),
         }
+    finally:
+        if directory is not None:
+            shutil.rmtree(directory, ignore_errors=True)
 
 
 def _double(rate):
@@ -572,7 +698,7 @@ def _double(rate):
 def _video_proxy(file):
     return _encode_proxy(
         file, max_width=settings.VIDEO_PROXY_MAX_WIDTH, max_height=settings.VIDEO_PROXY_MAX_HEIGHT,
-        crf=settings.VIDEO_PROXY_CRF, variant_type='VIDEO_PROXY', maxrate=settings.VIDEO_PROXY_MAXRATE,
+        crf=settings.VIDEO_PROXY_CRF, variant_type=VIDEO_PROXY_VARIANT_TYPE, maxrate=settings.VIDEO_PROXY_MAXRATE,
     )
 
 
@@ -683,11 +809,13 @@ def _probe_duration_ms(file):
 
 
 def _preview_content(file):
+    # A video gets its proxy or nothing: the review card is not playable, and storing it
+    # would mark the job done and leave the cut on "may still be generating" for good.
+    if file.mime_type.startswith('video/'):
+        return _video_proxy(file)
     try:
         if file.mime_type.startswith('image/'):
             return _image_thumbnail(file)
-        if file.mime_type.startswith('video/'):
-            return _video_proxy(file)
         if file.mime_type == 'audio/wav':
             return _audio_waveform(file)
         if file.mime_type == 'application/pdf':
@@ -715,10 +843,24 @@ def _store_variant(file, produce, *, types):
     if existing:
         return existing
     content, mime_type, extension, variant_type, metadata = produce(file)
-    digest = hashlib.sha256(content).hexdigest()
     suffix = '' if variant_type in PREVIEW_VARIANT_TYPES else '.hq' if variant_type == HQ_PROXY_VARIANT_TYPE else '.poster'
     object_key = f'{Path(file.object_key).parent}/previews/{file.id}{suffix}.{extension}'
-    stored_key = default_storage.save(object_key, ContentFile(content))
+    if isinstance(content, ProducedFile):
+        try:
+            digest_state = hashlib.sha256()
+            with open(content.path, 'rb') as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+                    digest_state.update(chunk)
+            digest = digest_state.hexdigest()
+            size_bytes = content.path.stat().st_size
+            with open(content.path, 'rb') as handle:
+                stored_key = default_storage.save(object_key, DjangoFile(handle))
+        finally:
+            content.cleanup()
+    else:
+        digest = hashlib.sha256(content).hexdigest()
+        size_bytes = len(content)
+        stored_key = default_storage.save(object_key, ContentFile(content))
     now = timezone.now()
     try:
         with transaction.atomic():
@@ -735,7 +877,7 @@ def _store_variant(file, produce, *, types):
                 id=uuid.uuid4(), file=locked, storage_backend=locked.storage_backend,
                 object_key=stored_key,
                 original_name=f'{locked.original_name}.preview.{extension}',
-                mime_type=mime_type, size_bytes=len(content), checksum=digest,
+                mime_type=mime_type, size_bytes=size_bytes, checksum=digest,
                 checksum_algorithm='sha256',
                 metadata={'variant_type': variant_type, **metadata},
                 status=FileStatus.READY, created_at=now, updated_at=now,
@@ -776,12 +918,16 @@ def generate_preview(*, file_id):
             logger.warning('Duration probe failed for file %s', file.id, exc_info=True)
             duration_ms = None
         if duration_ms:
-            File.objects.filter(id=file.id).update(
-                metadata={**(file.metadata or {}), 'duration_ms': duration_ms},
-                updated_at=timezone.now(),
-            )
+            file.metadata = {**(file.metadata or {}), 'duration_ms': duration_ms}
+            File.objects.filter(id=file.id).update(metadata=file.metadata, updated_at=timezone.now())
 
-    preview = _store_variant(file, _preview_content, types=PREVIEW_VARIANT_TYPES)
+    if file.mime_type.startswith('video/'):
+        # Only a real proxy counts for a video: a review card left by an older failed run
+        # must not satisfy the "already has a preview" check, or a re-render is a no-op.
+        preview = _store_variant(file, _preview_content, types=(VIDEO_PROXY_VARIANT_TYPE,))
+        retire_fallback_cards(file)
+    else:
+        preview = _store_variant(file, _preview_content, types=PREVIEW_VARIANT_TYPES)
     # The 1080p proxy comes after the 720p one, so a cut is playable as soon as possible,
     # and is best effort: without it the player simply offers 720p.
     try:
@@ -790,6 +936,23 @@ def generate_preview(*, file_id):
     except Exception:
         logger.warning('HQ proxy generation failed for file %s', file.id, exc_info=True)
     return preview
+
+
+def video_fallback_cards(file_ids=None):
+    """Live review-card variants on video files: what a failed proxy used to leave behind."""
+    cards = FileVariant.objects.filter(
+        metadata__variant_type=FALLBACK_CARD_VARIANT_TYPE, deleted_at__isnull=True,
+        file__mime_type__startswith='video/',
+    )
+    if file_ids is not None:
+        cards = cards.filter(file_id__in=file_ids)
+    return cards
+
+
+def retire_fallback_cards(file):
+    """Soft-deletes a video's review-card variants. The rows (and objects) stay for the record."""
+    now = timezone.now()
+    return video_fallback_cards([file.id]).update(deleted_at=now, updated_at=now)
 
 
 def handle_security_scan_event(event):

@@ -95,3 +95,38 @@ export function describePlaybackError(code: number | null | undefined): Playback
       return { title: "Playback failed", detail: "Something went wrong while loading this cut.", retryable: true };
   }
 }
+
+/** What the API says about a cut's review proxy (`preview_status`). */
+export type ProxyStatus = "READY" | "PENDING" | "PROCESSING" | "RETRYING" | "FAILED" | "CANCELLED";
+
+export type ProxyNotice = { tone: "working" | "failed"; title: string; detail: string; chip: string };
+
+/**
+ * What to show in place of the video while its review proxy is not playable, or null when
+ * it is (or when the API did not say). A failed proxy says so plainly instead of the old
+ * "may still be generating", which never resolved on its own.
+ */
+export function proxyNotice(status: string | null | undefined, canRerender = false): ProxyNotice | null {
+  switch (status) {
+    case "PENDING":
+    case "PROCESSING":
+      return { tone: "working", chip: "Making proxy", title: "Making the review proxy…", detail: "Long cuts can take a while. This updates on its own when the proxy is ready." };
+    case "RETRYING":
+      return { tone: "working", chip: "Retrying proxy", title: "Retrying the review proxy…", detail: "The first attempt didn't finish, so it is running again." };
+    case "FAILED":
+    case "CANCELLED":
+      return {
+        tone: "failed", chip: "Proxy failed", title: "Proxy failed — re-render",
+        detail: canRerender
+          ? "The review proxy for this cut couldn't be made. Re-render it to try again."
+          : "The review proxy for this cut couldn't be made. Ask the team to re-render it.",
+      };
+    default:
+      return null;
+  }
+}
+
+/** Statuses that change on their own, so the page should poll for the result. */
+export function proxyInFlight(status: string | null | undefined): boolean {
+  return status === "PENDING" || status === "PROCESSING" || status === "RETRYING";
+}

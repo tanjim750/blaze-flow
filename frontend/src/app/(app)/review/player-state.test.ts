@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bufferedSpans, canSeekTo, clampSeekMs, describePlaybackError, positionFromPointer,
-  sameSpans, seekLanded, type RangeList,
+  proxyInFlight, proxyNotice, sameSpans, seekLanded, type RangeList,
 } from "./player-state";
 
 const ranges = (...pairs: [number, number][]): RangeList => ({
@@ -85,5 +85,25 @@ describe("describePlaybackError", () => {
   });
   it("falls back for an unknown code", () => {
     expect(describePlaybackError(null).title).toBe("Playback failed");
+  });
+});
+
+describe("proxyNotice", () => {
+  it("says nothing once the proxy is ready or the API is silent", () => {
+    expect(proxyNotice("READY")).toBeNull();
+    expect(proxyNotice(undefined)).toBeNull();
+  });
+  it("says a failed proxy failed, with the re-render way out", () => {
+    const notice = proxyNotice("FAILED", true)!;
+    expect(notice.title).toBe("Proxy failed — re-render");
+    expect(notice.chip).toBe("Proxy failed");
+    expect(notice.detail).toMatch(/Re-render it/);
+    expect(proxyNotice("FAILED", false)!.detail).toMatch(/Ask the team/);
+  });
+  it("shows work in progress, and only that is polled", () => {
+    expect(proxyNotice("PROCESSING")!.tone).toBe("working");
+    expect(proxyNotice("RETRYING")!.title).toMatch(/Retrying/);
+    expect(proxyInFlight("PENDING")).toBe(true);
+    expect(proxyInFlight("FAILED")).toBe(false);
   });
 });

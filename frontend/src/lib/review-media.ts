@@ -48,6 +48,8 @@ export type ReviewVersion = {
   /** The proxies the API has for this cut ("hq" = 1080p, "sd" = 720p); absent for library-only files. */
   qualities?: ("hq" | "sd")[];
   stageName: string | null;
+  /** The review proxy's state (`preview_status`): READY, PENDING, PROCESSING, RETRYING, FAILED… */
+  previewStatus?: string | null;
   /** Non-null only for a project media version — the thing review data attaches to. */
   target: ReviewTarget | null;
   /** The asset-library row for this file, when it has one. */
@@ -227,6 +229,7 @@ export function buildCatalogue(input: CatalogueInput): ReviewAsset[] {
         known.label = `V${media.version_number}`;
         known.src = previewSrc(target);
         known.qualities = media.preview_qualities ?? [];
+        known.previewStatus = media.preview_status ?? null;
         // The review version's own title ("Cold brew spot") reads better than the file name.
         if (media.title) known.title = media.title;
         known.stageName = media.current_stage?.name ?? known.stageName;
@@ -245,6 +248,7 @@ export function buildCatalogue(input: CatalogueInput): ReviewAsset[] {
         mimeType: media.file.mime_type,
         src: previewSrc(target),
         qualities: media.preview_qualities ?? [],
+        previewStatus: media.preview_status ?? null,
         stageName: media.current_stage?.name ?? null,
         uploadedBy: null,
         target,

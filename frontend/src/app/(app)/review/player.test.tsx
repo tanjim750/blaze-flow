@@ -296,3 +296,35 @@ describe("Review page QA fixes", () => {
     window.localStorage.removeItem("bf.review.quality");
   });
 });
+
+describe("Player proxy state", () => {
+  const base = {
+    title: "Cut", notes: [], annotations: [], pending: null, canDraw: false,
+    onTime: () => undefined, onMeta: () => undefined, onDraw: () => undefined,
+    onDeleteAnnotation: () => undefined, onFocusNote: () => undefined,
+  };
+  it("shows a failed proxy with a working re-render, and offers the original", () => {
+    const onRerender = vi.fn();
+    const { container } = render(
+      <Player
+        {...base} handle={createRef<PlayerHandle>()} proxyStatus="FAILED" onRerender={onRerender}
+        sources={[{ id: "proxy", label: "Review proxy", src: "/api/preview/" }, { id: "original", label: "Original file", src: "/api/original/" }]}
+      />,
+    );
+    const view = within(container);
+    expect(view.getByText("Proxy failed — re-render")).toBeTruthy();
+    expect(view.queryByText(/may still be generating/)).toBeNull();
+    // The SVG fallback is never loaded into the video element.
+    expect(container.querySelector("video")!.getAttribute("src")).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: /Re-render/ }));
+    expect(onRerender).toHaveBeenCalledTimes(1);
+    fireEvent.click(view.getByRole("button", { name: /Play original file/ }));
+    expect(container.querySelector("video")!.getAttribute("src")).toBe("/api/original/");
+    expect(view.queryByText("Proxy failed — re-render")).toBeNull();
+  });
+  it("says the proxy is being made rather than failing", () => {
+    const view = within(render(<Player {...base} handle={createRef<PlayerHandle>()} proxyStatus="PROCESSING" sources={[{ id: "proxy", label: "Review proxy", src: "/api/preview/" }]} />).container);
+    expect(view.getByText("Making the review proxy…")).toBeTruthy();
+    expect(view.queryByRole("button", { name: /Re-render/ })).toBeNull();
+  });
+});

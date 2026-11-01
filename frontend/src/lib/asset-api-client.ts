@@ -1,4 +1,4 @@
-import type { ProjectFile, ProjectFolder } from "./api";
+import type { MediaVersion, ProjectFile, ProjectFolder } from "./api";
 import { reviewHref } from "./open-in-review";
 import { startUpload } from "./upload-store";
 
@@ -57,3 +57,10 @@ export function syncedTasksMessage(result: SyncedTasks | null | undefined, stage
   const where = stageName ? ` to ${stageName}` : "";
   return tasks.length === 1 ? `Task “${tasks[0].title}” moved${where} too` : `${tasks.length} linked tasks moved${where} too`;
 }
+
+/** Re-queues a review version's preview render (the "Proxy failed — re-render" action). */
+export const retryMediaRender = (workspaceId: string, projectId: string, mediaVersionId: string) =>
+  call<{ status: string }>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/${mediaVersionId}/render/`, json("POST", { action: "retry" }));
+/** The project's review versions, for polling a proxy that is being made. */
+export const fetchMediaVersions = (workspaceId: string, projectId: string) =>
+  call<MediaVersion[]>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/`, { method: "GET" });

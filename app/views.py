@@ -2191,10 +2191,10 @@ def media_version_preview(request, workspace_id, project_id, media_version_id):
             file=media_version.original_file, status=FileStatus.READY, deleted_at__isnull=True,
             metadata__variant_type=HQ_PROXY_VARIANT_TYPE,
         ).order_by('-created_at').first()
-    variant = variant or FileVariant.objects.filter(
-        file=media_version.original_file, status=FileStatus.READY, deleted_at__isnull=True,
-        metadata__variant_type__in=PREVIEW_VARIANT_TYPES,
-    ).order_by('-created_at').first()
+    # A video plays its proxy or nothing: a review card left by a failed encode is an SVG,
+    # which the <video> element can only fail on.
+    from app.services.preview_state import playable_variant
+    variant = variant or playable_variant(media_version.original_file)
     if variant is None or not default_storage.exists(variant.object_key):
         raise Http404('No preview is available for this media version yet.')
     return ranged_file_response(
@@ -2234,7 +2234,7 @@ def media_version_render_control(request, workspace_id, project_id, media_versio
     with transaction.atomic():
         event = OutboxEvent.objects.select_for_update().filter(
             topic='file.preview.requested', aggregate_id=str(media_version.original_file_id)
-        ).first()
+        ).order_by('-created_at').first()
         if event is None:
             if action == 'retry':
                 # Uploads from before every type was queued have no job at all: start one.
@@ -2245,7 +2245,10 @@ def media_version_render_control(request, workspace_id, project_id, media_versio
             return Response({'detail': 'No render job exists for this media version.'}, status=status.HTTP_404_NOT_FOUND)
         if event.status == 'PROCESSING':
             return Response({'detail': 'A running render cannot be changed safely.'}, status=status.HTTP_409_CONFLICT)
-        if FileVariant.objects.filter(file=media_version.original_file, status=FileStatus.READY, deleted_at__isnull=True, metadata__variant_type__in=PREVIEW_VARIANT_TYPES).exists():
+        # Only a playable preview blocks a re-render: a video's fallback review card is what
+        # "Proxy failed — re-render" exists to replace.
+        from app.services.preview_state import playable_variant
+        if playable_variant(media_version.original_file) is not None:
             return Response({'detail': 'This media version already has a ready preview.'}, status=status.HTTP_409_CONFLICT)
         now = timezone.now()
         payload = dict(event.payload)

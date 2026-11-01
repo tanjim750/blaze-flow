@@ -15,6 +15,8 @@ import { ShortcutsDialog } from "./shortcuts";
 import type { ReviewView } from "@/lib/review-view";
 import { clientView, type NoteDrawing, type ReviewNote } from "@/lib/review-notes";
 import type { AnnotationElement } from "@/lib/api";
+import { fetchMediaVersions, retryMediaRender } from "@/lib/asset-api-client";
+import { proxyInFlight, proxyNotice } from "./player-state";
 import { loadDraft, patchDraft, unsavedWarning } from "@/lib/review-drafts";
 import { DEFAULT_HOLD, displayWindow, drawingEndMs, rememberedHold, windowOpacity, type HoldChoice } from "@/lib/annotation-window";
 import { specMismatches } from "@/lib/project-brief";
@@ -93,6 +95,37 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const [keysOpen, setKeysOpen] = useState(false);
 
   const { asset, version } = view;
+  // The proxy's state as last heard, so a re-render shows progress without a page reload.
+  const [proxyOverride, setProxyOverride] = useState<{ versionId: string; status: string } | null>(null);
+  const [rerendering, setRerendering] = useState(false);
+  const target = version?.target ?? null;
+  const proxyStatus = target && proxyOverride?.versionId === target.versionId ? proxyOverride.status : version?.previewStatus ?? null;
+  const rerender = useCallback(async () => {
+    if (!target) return;
+    setRerendering(true);
+    try {
+      await retryMediaRender(target.workspaceId, target.projectId, target.versionId);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't queue the re-render.");
+      return;
+    } finally {
+      setRerendering(false);
+    }
+    setProxyOverride({ versionId: target.versionId, status: "PENDING" });
+    toast.success("Re-render queued. The proxy plays here as soon as it's ready.");
+  }, [target]);
+  // While a proxy is being made, check back so the player switches over when it lands.
+  useEffect(() => {
+    if (!target || !proxyInFlight(proxyStatus)) return;
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      const rows = await fetchMediaVersions(target.workspaceId, target.projectId).catch(() => null);
+      if (cancelled || !rows) return; // try again on the next tick
+      const row = rows.find((item) => item.id === target.versionId);
+      if (row?.preview_status) setProxyOverride({ versionId: target.versionId, status: row.preview_status });
+    }, 15000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [proxyStatus, target]);
   const mediaId = version?.id ?? null;
   const surface = version ? reviewSurface(version.mimeType, version.title) : "video";
 
@@ -446,6 +479,15 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
               {version.stageName ?? asset.stage?.name}
             </span>
           )}
+          {surface === "video" && (() => {
+            const chip = proxyNotice(proxyStatus);
+            return chip && (
+              <span className={`rv-proxy-chip is-${chip.tone}`} role="status" title="Review proxy (separate from the workflow stage)">
+                {chip.tone === "failed" ? <TriangleAlert size={11} /> : <RotateCcw size={11} />}
+                {chip.chip}
+              </span>
+            );
+          })()}
 
           {mismatches.length > 0 && (
             <span className="rv-spec-warn" role="status" title={mismatches.map((item) => item.message).join(". ")}>
@@ -637,6 +679,9 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           surface={surface}
           downloadHref={downloadHref}
           sources={sources}
+          proxyStatus={proxyStatus}
+          onRerender={target && canWriteTeam ? rerender : null}
+          rerendering={rerendering}
           title={version.title}
           notes={notes}
           annotations={annotations}

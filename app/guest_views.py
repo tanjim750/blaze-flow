@@ -47,7 +47,6 @@ from .services.decisions import (
     MESSAGE_MAX_LENGTH, ReviewDecisionError, decision_data, decisions_for, open_client_notes, record_decision,
 )
 from .serializers.media import media_poster_variant
-from .services.file_processing import PREVIEW_VARIANT_TYPES
 from .services.activity import guest_link_status
 from .services.review_assets import (
     ReviewAttachmentError, delete_guest_review_attachment, upload_review_attachment,
@@ -290,7 +289,8 @@ def guest_exchange(request):
 def guest_review(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     access = _guest_access(request, project, 'media.read')
-    media_qs = MediaVersion.objects.filter(project=project, status='ACTIVE')
+    from app.services.preview_state import file_preview_status
+    media_qs = MediaVersion.objects.filter(project=project, status='ACTIVE').select_related('original_file')
     if _scoped_media_id(access) is not None:
         media_qs = media_qs.filter(id=_scoped_media_id(access))
     media = list(media_qs.order_by('sequence_number', 'created_at'))
@@ -312,6 +312,8 @@ def guest_review(request, project_id):
         'media_versions': [
             {
                 'id': str(item.id), 'title': item.title, 'version_number': item.version_number,
+                # So the player can say "proxy failed" rather than "still generating".
+                'preview_status': file_preview_status(item.original_file),
                 # Only client-visible notes are counted: the approve dialog warns with this.
                 'open_notes': open_client_notes(item),
                 'decision': decision_data(
@@ -334,10 +336,8 @@ def _playback_token(access, media, kind):
 
 
 def _playable_variant(media):
-    return FileVariant.objects.filter(
-        file=media.original_file, status=FileStatus.READY, deleted_at__isnull=True,
-        metadata__variant_type__in=PREVIEW_VARIANT_TYPES,
-    ).order_by('-created_at').first()
+    from app.services.preview_state import playable_variant
+    return playable_variant(media.original_file)
 
 
 @api_view(['GET'])
@@ -355,7 +355,17 @@ def guest_playback(request, project_id, media_version_id):
     access = _guest_access(request, project, 'media.read')
     variant = _playable_variant(media)
     if variant is None or not default_storage.exists(variant.object_key):
-        return Response({'detail': 'This cut is still being prepared for playback. Try again in a minute.'}, status=status.HTTP_409_CONFLICT)
+        from app.services.preview_state import FAILED, file_preview_status
+        preview = file_preview_status(media.original_file)
+        if preview == FAILED:
+            return Response({
+                'detail': "This cut's review proxy could not be made. The team has to re-render it before it can be played.",
+                'preview_status': preview,
+            }, status=status.HTTP_409_CONFLICT)
+        return Response({
+            'detail': 'This cut is still being prepared for playback. Try again in a minute.',
+            'preview_status': preview,
+        }, status=status.HTTP_409_CONFLICT)
     record_guest_view(access=access, media_version=media)
     expires_at = timezone.now() + PLAYBACK_MAX_AGE
     stream = reverse('api-guest-media-stream', args=[project.id, media.id])

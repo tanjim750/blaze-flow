@@ -220,7 +220,9 @@ VIDEO_PROXY_MAX_HEIGHT = int(os.environ.get('VIDEO_PROXY_MAX_HEIGHT', '720'))
 VIDEO_PROXY_CRF = int(os.environ.get('VIDEO_PROXY_CRF', '23'))
 # Caps the bitrate on noisy footage, where CRF alone can make a proxy larger than its source.
 VIDEO_PROXY_MAXRATE = os.environ.get('VIDEO_PROXY_MAXRATE', '5M')
-VIDEO_PROXY_PRESET = os.environ.get('VIDEO_PROXY_PRESET', 'medium')
+# veryfast: a long 1080p cut on two cores encodes several times quicker than `medium`, at a
+# slightly larger file for the same CRF, which the bitrate cap bounds anyway.
+VIDEO_PROXY_PRESET = os.environ.get('VIDEO_PROXY_PRESET', 'veryfast')
 # Encoder threads for proxies; match OUTBOX_CPU_LIMIT. 0 lets ffmpeg use every core it sees.
 VIDEO_PROXY_THREADS = int(os.environ.get('VIDEO_PROXY_THREADS', '2'))
 # A keyframe every second, so scrubbing and frame-stepping land quickly and exactly.
@@ -233,8 +235,19 @@ VIDEO_PROXY_HQ_CRF = int(os.environ.get('VIDEO_PROXY_HQ_CRF', '20'))
 VIDEO_PROXY_HQ_MAXRATE = os.environ.get('VIDEO_PROXY_HQ_MAXRATE', '10M')
 VIDEO_PROXY_AUDIO_BITRATE = os.environ.get('VIDEO_PROXY_AUDIO_BITRATE', '128k')
 VIDEO_PROXY_MAX_INPUT_BYTES = int(os.environ.get('VIDEO_PROXY_MAX_INPUT_BYTES', str(MAX_MEDIA_UPLOAD_BYTES)))
+# The output cap and the encode timeout both scale with the cut's runtime (see
+# app/services/file_processing.py); these are the floors used for short or unknown durations.
 VIDEO_PROXY_MAX_OUTPUT_BYTES = int(os.environ.get('VIDEO_PROXY_MAX_OUTPUT_BYTES', str(200 * 1024 * 1024)))
+# Scaled cap = (video maxrate + audio bitrate) x duration x headroom.
+VIDEO_PROXY_OUTPUT_HEADROOM = float(os.environ.get('VIDEO_PROXY_OUTPUT_HEADROOM', '1.25'))
 VIDEO_PROXY_TIMEOUT_SECONDS = int(os.environ.get('VIDEO_PROXY_TIMEOUT_SECONDS', '600'))
+# Scaled timeout = duration x PER_SECOND + MARGIN, between the floor above and the MAX below.
+VIDEO_PROXY_TIMEOUT_PER_SECOND = float(os.environ.get('VIDEO_PROXY_TIMEOUT_PER_SECOND', '2'))
+VIDEO_PROXY_TIMEOUT_MARGIN_SECONDS = int(os.environ.get('VIDEO_PROXY_TIMEOUT_MARGIN_SECONDS', '300'))
+VIDEO_PROXY_TIMEOUT_MAX_SECONDS = int(os.environ.get('VIDEO_PROXY_TIMEOUT_MAX_SECONDS', str(4 * 3600)))
+# A failed proxy is retried this many times in total before it is dead-lettered and shown as
+# "Proxy failed — re-render". Encodes are expensive and tend to fail the same way again.
+VIDEO_PROXY_MAX_ATTEMPTS = int(os.environ.get('VIDEO_PROXY_MAX_ATTEMPTS', '2'))
 
 # Subscription plan resource limits. Kept in environment configuration rather than the
 # database for the MVP; consumers must read these through app.services.plan_config.get_plan_limit
