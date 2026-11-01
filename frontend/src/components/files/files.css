@@ -882,11 +882,17 @@
 @media (max-width: 640px) { .fx .fx-content:has(> .fx-dropzone), .fx.is-compact .fx-content:has(> .fx-dropzone) { padding: 16px; } }
 @media (max-width: 480px) { .fx-dropzone { min-height: 280px; padding: 16px; } .fx-dropzone-art { width: 96px; height: 65px; } }
 
-/* 390px phones: the one-row toolbar (search, filter, layout, details, share, New) overflowed
- * by ~20px and clipped New. Tighten gaps and make New icon-only; its label stays the name. */
+/* Phones (<480px): one row of identical 44px square icon controls, every icon centred.
+ * Labels are visually hidden (display:none so they take no space; aria-label names the button). */
 @media (max-width: 480px) {
   .fx-toolbar { gap: 4px; padding-inline: 12px; }
-  .fx-toolbar-actions { gap: 4px; min-width: 0; }
-  .fx-new .fx-tb-trigger > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .fx-new .fx-tb-trigger { width: 40px; min-width: 40px; padding: 0; justify-content: center; }
+  .fx-toolbar-actions { gap: 4px; min-width: 0; flex-wrap: nowrap; align-items: center; }
+  .fx-toolbar .fx-tb-trigger > span, .fx .fx-share-btn > span, .fx-toolbar .al-filter-trigger > span { display: none; }
+  .fx-toolbar .fx-icon-btn, .fx .fx-toolbar .fx-share-btn, .fx-toolbar .fx-new .fx-tb-trigger, .fx-toolbar .al-filter-trigger {
+    display: inline-grid !important; place-items: center; justify-content: center; align-items: center; gap: 0;
+    box-sizing: border-box; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; margin: 0; flex: none; line-height: 0;
+  }
+  .fx-toolbar .fx-segmented { box-sizing: border-box; height: 44px; align-items: center; flex: none; }
+  .fx-toolbar .fx-segmented button { width: 38px; height: 38px; min-height: 0; }
+  .fx-toolbar svg { display: block; margin: 0; }
 }
