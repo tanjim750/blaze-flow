@@ -222,13 +222,22 @@ def after_note_resolution(*, comment, user, resolved):
 # -- last round's notes as a checklist ---------------------------------------------------
 
 def previous_version(version):
-    """The cut this one replaces: same title in the project if there is one, else the version before."""
-    earlier = MediaVersion.objects.filter(project=version.project, status=MediaVersionStatus.ACTIVE, version_number__lt=version.version_number)
+    """The cut this one replaces: the asset's previous version, else the same title earlier in
+    the project, else the upload before it."""
+    from app.models import ProjectFile
+    row = ProjectFile.objects.filter(file_id=version.original_file_id, media_asset__isnull=False).first()
+    if row is not None:
+        files = ProjectFile.objects.filter(media_asset_id=row.media_asset_id, version_number__lt=row.version_number, deleted_at__isnull=True).order_by('-version_number').values_list('file_id', flat=True)
+        for file_id in files:
+            hit = MediaVersion.objects.filter(original_file_id=file_id, status=MediaVersionStatus.ACTIVE).order_by('created_at').first()
+            if hit:
+                return hit
+    earlier = MediaVersion.objects.filter(project=version.project, status=MediaVersionStatus.ACTIVE, sequence_number__lt=version.sequence_number)
     if version.title:
-        same = earlier.filter(title=version.title).order_by('-version_number').first()
+        same = earlier.filter(title=version.title).order_by('-sequence_number').first()
         if same:
             return same
-    return earlier.order_by('-version_number').first()
+    return earlier.order_by('-sequence_number').first()
 
 
 def _open_notes(version):

@@ -79,12 +79,14 @@ def ensure_review_version(*, project_file, user=None, title=None, notify=True):
         existing = review_version_for(file_record.id)
         if existing is not None:
             return existing
-        number = project.next_media_version_number
-        project.next_media_version_number = number + 1
+        sequence = project.next_media_version_number
+        project.next_media_version_number = sequence + 1
+        number = project_file.version_number or 1
         project.updated_at = now
         project.save(update_fields=['next_media_version_number', 'updated_at'])
         media_version = MediaVersion.objects.create(
             id=uuid.uuid4(), project=project, original_file=file_record, version_number=number,
+            sequence_number=sequence,
             title=(title or file_record.original_name)[:200], note='', created_by_user=actor,
             created_at=now, updated_at=now,
         )
@@ -97,9 +99,61 @@ def ensure_review_version(*, project_file, user=None, title=None, notify=True):
         record_user_audit(
             user=actor, workspace=project.workspace, action='media.auto_versioned', entity_type='media_version',
             entity_id=media_version.id,
-            metadata={'file_id': str(file_record.id), 'project_file_id': str(project_file.id), 'version_number': number},
+            metadata={'file_id': str(file_record.id), 'project_file_id': str(project_file.id), 'version_number': number, 'sequence_number': sequence},
         )
     if notify and project_file.version_number and project_file.version_number > 1:
         # V2+ of an asset: tell the people on the earlier cuts.
         notify_library_version_added(project_file=project_file, actor=actor)
     return media_version
+
+
+def sync_review_version_number(project_file):
+    """Keeps the review version's V-label equal to the file's per-asset version number."""
+    if not project_file.version_number:
+        return 0
+    return MediaVersion.objects.filter(original_file_id=project_file.file_id).exclude(
+        version_number=project_file.version_number,
+    ).update(version_number=project_file.version_number, updated_at=timezone.now())
+
+
+def move_review_versions(*, project_file, user=None):
+    """Moves the file's review versions (and their review history) to the file's project.
+
+    Comments, annotations, stage history and AI QA hang off the media version by id, so they
+    follow it untouched. Decisions also carry the project, so those are re-pointed. The version
+    gets a fresh project sequence in its new project (the old one could collide); its per-asset
+    V-label is unchanged. Nothing is deleted. A file moved out to Unsorted keeps its versions
+    where they were, because a media version needs a project.
+    """
+    from app.models import ReviewDecision
+    if not project_file.project_id:
+        return []
+    stray = list(MediaVersion.objects.filter(original_file_id=project_file.file_id).exclude(project_id=project_file.project_id))
+    if not stray:
+        return []
+    actor = _actor_for(project_file, user)
+    moved = []
+    now = timezone.now()
+    with transaction.atomic():
+        project = Project.objects.select_for_update().get(pk=project_file.project_id)
+        for media_version in stray:
+            old_project_id = media_version.project_id
+            sequence = project.next_media_version_number
+            project.next_media_version_number = sequence + 1
+            MediaVersion.objects.filter(pk=media_version.pk).update(
+                project=project, sequence_number=sequence,
+                version_number=project_file.version_number or media_version.version_number, updated_at=now,
+            )
+            ReviewDecision.objects.filter(media_version_id=media_version.pk).update(project=project)
+            moved.append(media_version.pk)
+            if actor is not None:
+                from .audit import record_user_audit
+                record_user_audit(
+                    user=actor, workspace=project.workspace, action='media.moved', entity_type='media_version',
+                    entity_id=media_version.id,
+                    metadata={'from_project_id': str(old_project_id), 'to_project_id': str(project.id),
+                              'project_file_id': str(project_file.id)},
+                )
+        project.updated_at = now
+        project.save(update_fields=['next_media_version_number', 'updated_at'])
+    return moved

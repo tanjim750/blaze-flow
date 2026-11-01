@@ -18,7 +18,7 @@ from app.models import (
 )
 
 from .file_processing import SCAN_TOPIC, enqueue_file_event
-from .auto_version import ensure_review_version
+from .auto_version import ensure_review_version, move_review_versions, sync_review_version_number
 from .notifications import notify_library_version_added
 from .media import _storage_backend, detect_media_type, sha256_upload
 from .review_assets import detect_attachment_type
@@ -91,6 +91,10 @@ def move_project_folder(*, folder, workspace, client_team=None, project=None, pa
     ProjectFile.objects.filter(folder_id__in=descendant_ids, deleted_at__isnull=True).update(
         workspace=workspace, client_team=client_team, project=project, updated_at=now,
     )
+    # Files carried along with the folder take their review versions with them.
+    for row in ProjectFile.objects.filter(folder_id__in=descendant_ids, deleted_at__isnull=True):
+        move_review_versions(project_file=row)
+        ensure_review_version(project_file=row, notify=False)
     folder.workspace = workspace
     folder.client_team = client_team
     folder.project = project
@@ -163,7 +167,12 @@ def add_file_as_version(*, source, target, actor=None):
 
         asset.updated_at = timezone.now()
         asset.save(update_fields=['updated_at'])
-        # Stacked onto an asset in a project: it is that asset's next review version.
+        if target.version_number == 1:
+            sync_review_version_number(target)
+        # Stacked onto an asset in a project: it is that asset's next review version. If the
+        # file was already being reviewed elsewhere its versions follow it, relabelled.
+        move_review_versions(project_file=source, user=actor)
+        sync_review_version_number(source)
         ensure_review_version(project_file=source, user=actor, notify=False)
         notify_library_version_added(project_file=source, actor=actor)
         return source
@@ -251,7 +260,9 @@ def update_project_file(*, project_file, name=None, workspace=None, client_team=
         project_file.save(update_fields=['workspace', 'client_team', 'project', 'folder', 'task_stage', 'updated_at'])
     except ValidationError as exc:
         raise ProjectFileError('The file cannot be moved to that location.') from exc
-    # Moving an Unsorted file into a project makes it reviewable there.
+    # A file that is already reviewed takes its versions (comments, decisions…) with it;
+    # an Unsorted file moved into a project becomes reviewable there.
+    move_review_versions(project_file=project_file)
     ensure_review_version(project_file=project_file)
     return project_file
 

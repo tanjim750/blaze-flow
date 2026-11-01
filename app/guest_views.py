@@ -255,7 +255,7 @@ def guest_exchange(request):
 def guest_review(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     access = _guest_access(request, project, 'media.read')
-    media = list(MediaVersion.objects.filter(project=project, status='ACTIVE').order_by('version_number'))
+    media = list(MediaVersion.objects.filter(project=project, status='ACTIVE').order_by('sequence_number', 'created_at'))
     granted = set(GuestReviewAccessPermission.objects.filter(guest_review_access=access).values_list('permission_key', flat=True))
     latest = decisions_for(media)
     return Response({

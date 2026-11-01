@@ -2088,7 +2088,7 @@ def media_version_list_create(request, workspace_id, project_id):
     if request.method == 'GET':
         media_versions = MediaVersion.objects.filter(project=project).select_related(
             'original_file', 'project'
-        ).order_by('version_number')
+        ).order_by('sequence_number', 'created_at')
         return Response(MediaVersionSerializer(media_versions, many=True).data)
 
     serializer = MediaUploadSerializer(data=request.data)

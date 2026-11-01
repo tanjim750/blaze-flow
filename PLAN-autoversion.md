@@ -61,7 +61,7 @@ The share modal is scoped to the file: it uses `review_version_id` and appends `
   - The video preview job is enqueued as before.
 
 ## 9. Risks
-- Moving a versioned file to another project leaves its `MediaVersion` in the old project (follow-up: move or re-link it).
-- Version labels use the project-wide number; per-asset V-labels are a follow-up.
+- ~~Moved files leave versions behind~~ — resolved: versions, decisions and comments follow the file (`move_review_versions`). Moving to Unsorted keeps versions in the old project; old project-scoped guest invites don't reach a moved file.
+- ~~Project-wide labels~~ — resolved: `version_number` is per asset; project order is `sequence_number` (migration 0062, UPDATE-only, reversible).
 - On big projects the backfill makes many inserts. It is batched per project under a lock; run it in a quiet window.
 - Old clients still calling `/publish` keep working.

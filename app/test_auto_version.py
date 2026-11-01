@@ -120,6 +120,64 @@ class AutoVersionTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertIn(response.status_code, (200, 201), response.content)
         self.assertEqual(MediaVersion.objects.filter(original_file_id=item['file']['id']).count(), 1)
 
+    def test_version_numbers_count_per_asset_not_per_project(self):
+        first = self.upload('hero.png')
+        other = self.upload('logo.png', content=_png('#00ff00'))
+        second = self.upload('hero v2.png', project=False, content=_png('#222222'))
+        self.client.post(reverse('api-asset-file-versions', args=[self.workspace.id, first['id']]), {'file_id': second['id']}, format='json')
+        numbers = {
+            name: MediaVersion.objects.get(original_file_id=item['file']['id']).version_number
+            for name, item in (('hero', first), ('logo', other), ('hero2', second))
+        }
+        self.assertEqual(numbers, {'hero': 1, 'logo': 1, 'hero2': 2})
+        sequences = list(MediaVersion.objects.filter(project=self.project).values_list('sequence_number', flat=True))
+        self.assertEqual(len(sequences), len(set(sequences)))
+
+    def test_per_asset_migration_relabels_without_deleting(self):
+        first = self.upload('hero.png')
+        other = self.upload('logo.png', content=_png('#00ff00'))
+        MediaVersion.objects.filter(original_file_id=other['file']['id']).update(version_number=7, sequence_number=None)
+        before = MediaVersion.objects.count()
+        per_asset = importlib.import_module('app.migrations.0062_media_version_per_asset_numbers')
+        per_asset.forwards(django_apps, None)
+        self.assertEqual(MediaVersion.objects.count(), before)
+        moved = MediaVersion.objects.get(original_file_id=other['file']['id'])
+        self.assertEqual((moved.version_number, moved.sequence_number), (1, 7))
+        per_asset.backwards(django_apps, None)
+        self.assertEqual(MediaVersion.objects.get(original_file_id=other['file']['id']).version_number, 7)
+        self.assertTrue(MediaVersion.objects.filter(original_file_id=first['file']['id']).exists())
+
+    def test_moving_a_versioned_file_takes_its_versions_and_comments_along(self):
+        import uuid as _uuid
+        from django.utils import timezone as _tz
+        from .models import ReviewComment
+        item = self.upload('hero.png')
+        version = MediaVersion.objects.get(original_file_id=item['file']['id'])
+        now = _tz.now()
+        comment = ReviewComment.objects.create(id=_uuid.uuid4(), media_version=version, author_user=self.owner, created_at=now, updated_at=now)
+        response = self.client.post(reverse('api-projects', args=[self.workspace.id]), {'name': 'Autumn'}, format='json')
+        target = Project.objects.get(id=response.json()['id'])
+        self.upload('already-here.png', content=_png('#123456'))  # occupies sequence 1 in the old project only
+        target_item = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile('t.png', _png('#654321'), content_type='image/png'), 'project_id': str(target.id)}, format='multipart',
+        )
+        self.assertEqual(target_item.status_code, 201)
+        moved = self.client.patch(
+            reverse('api-asset-file-detail', args=[self.workspace.id, item['id']]), {'project_id': str(target.id)}, format='json',
+        )
+        self.assertEqual(moved.status_code, 200, moved.content)
+        self.assertEqual(moved.json()['review_version_id'], str(version.id))
+        version.refresh_from_db()
+        self.assertEqual(version.project_id, target.id)
+        self.assertEqual(version.version_number, 1)
+        self.assertEqual(MediaVersion.objects.filter(original_file_id=item['file']['id']).count(), 1)
+        comment.refresh_from_db()
+        self.assertEqual(comment.media_version_id, version.id)
+        listed = self.client.get(reverse('api-media-versions', args=[self.workspace.id, target.id]))
+        self.assertIn(str(version.id), [row['id'] for row in listed.json()])
+        self.assertTrue(AuditLog.objects.filter(action='media.moved', entity_id=version.id).exists())
+
 
 class FileScopedGuestLinkTests(AutoVersionTests):
     """A guest link for one file opens that file's version: no publish step, no 409."""
