@@ -507,3 +507,13 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
   .pb-canvas > .tb-root > .tb-board { flex: 1 1 0; min-height: 200px; height: auto; align-items: stretch; padding-bottom: 4px; }
   .pb-canvas > .tb-root > .tb-board > .tb-column { height: auto; min-height: 0; max-height: none; }
 }
+
+/* Project title: always one line, truncate with ellipsis at every width. */
+.pb-title > h1 { display: block; flex: 1 1 auto; min-width: 48px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; -webkit-line-clamp: unset; line-clamp: none; }
+.pb-title > :not(h1) { flex-shrink: 0; }
+
+/* Tablet (rail stacked): stretch columns to the board so the scrollbar sits right under them. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .pb-canvas > .tb-root > .tb-board { align-items: stretch; }
+  .pb-canvas > .tb-root > .tb-board > .tb-column { height: auto; min-height: 0; max-height: none; }
+}
