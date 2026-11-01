@@ -1474,6 +1474,9 @@ def _with_card_fields(queryset):
             ).values('media_asset_id').annotate(top=Max('version_number')).values('top')[:1],
             output_field=IntegerField(),
         ),
+        review_version_id_annotation=Subquery(
+            MediaVersion.objects.filter(original_file_id=OuterRef('file_id')).order_by('created_at').values('id')[:1],
+        ),
     ).select_related('media_asset')
 
 
@@ -2085,7 +2088,7 @@ def media_version_list_create(request, workspace_id, project_id):
     if request.method == 'GET':
         media_versions = MediaVersion.objects.filter(project=project).select_related(
             'original_file', 'project'
-        ).order_by('version_number')
+        ).order_by('sequence_number', 'created_at')
         return Response(MediaVersionSerializer(media_versions, many=True).data)
 
     serializer = MediaUploadSerializer(data=request.data)

@@ -51,7 +51,7 @@ describe("Share in an asset's ⋯ menu", () => {
     const menu = await openMenu("bravo.mp4");
     await act(async () => { fireEvent.click(within(menu).getByRole("menuitem", { name: "Share" })); });
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(info).toHaveBeenCalledWith("Not ready to share yet", expect.objectContaining({ description: expect.stringContaining("no review version") }));
+    expect(info).toHaveBeenCalledWith("Not ready to share yet", expect.objectContaining({ description: expect.stringContaining("still uploading") }));
   });
 
   it("is hidden from people who may not share", async () => {

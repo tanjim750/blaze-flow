@@ -742,7 +742,12 @@ class MediaVersion(models.Model):
     id = models.UUIDField(primary_key=True)
     project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, db_column='project_id', related_name='+')
     original_file = models.ForeignKey(File, on_delete=models.DO_NOTHING, db_column='original_file_id', related_name='+')
+    # The number people see (V1, V2…): it counts per asset, mirroring the linked
+    # ``ProjectFile.version_number``. Two assets in one project can both be at V1.
     version_number = models.IntegerField()
+    # Project-wide upload order, allocated from ``Project.next_media_version_number``.
+    # Unique within a project; used for ordering, never shown as a label.
+    sequence_number = models.IntegerField(null=True, blank=True)
     title = models.CharField(max_length=200)
     note = models.TextField(null=True, blank=True)
     priority = models.CharField(max_length=20, choices=PriorityLevel.choices, default=PriorityLevel.MEDIUM)
@@ -755,7 +760,13 @@ class MediaVersion(models.Model):
 
     class Meta:
         db_table = 'media_versions'
-        constraints = [models.UniqueConstraint(fields=['project', 'version_number'], name='media_versions_project_version_number_uniq')]
+        constraints = [models.UniqueConstraint(fields=['project', 'sequence_number'], name='media_versions_project_sequence_uniq')]
+
+    def save(self, *args, **kwargs):
+        # Rows created without an explicit sequence keep the old behaviour (sequence == number).
+        if self.sequence_number is None:
+            self.sequence_number = self.version_number
+        super().save(*args, **kwargs)
 
 
 class MediaVersionStageEntry(models.Model):

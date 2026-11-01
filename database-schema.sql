@@ -323,6 +323,7 @@ CREATE TABLE "media_versions" (
   "project_id" uuid NOT NULL,
   "original_file_id" uuid NOT NULL,
   "version_number" integer NOT NULL,
+  "sequence_number" integer,
   "title" varchar(200) NOT NULL,
   "note" text,
   "priority" priority_level NOT NULL DEFAULT 'MEDIUM',
@@ -709,7 +710,7 @@ CREATE INDEX ON "workflow_stage_statuses" ("workflow_stage_id");
 
 CREATE INDEX ON "workflow_stage_statuses" ("sort_order");
 
-CREATE UNIQUE INDEX ON "media_versions" ("project_id", "version_number");
+CREATE UNIQUE INDEX ON "media_versions" ("project_id", "sequence_number");
 
 CREATE INDEX ON "media_versions" ("project_id");
 

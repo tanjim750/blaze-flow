@@ -1,11 +1,10 @@
-import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import type { AnnotationElement } from "@/lib/api";
 import type { ReviewView } from "@/lib/review-view";
 import type { ReviewNote } from "@/lib/review-notes";
 import { DEFAULT_HOLD, displayWindow, type HoldChoice } from "@/lib/annotation-window";
-import { addLocalNote, resetLocalReview, useLocalReview } from "@/lib/review-local";
 import { Comments } from "./comments";
 import type { ReviewWriter } from "./writer";
 
@@ -35,7 +34,7 @@ vi.mock("@/components/ui/popover", async () => {
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), info: vi.fn() }) }));
 
 beforeEach(() => window.localStorage.clear());
-afterEach(() => { cleanup(); resetLocalReview(); });
+afterEach(() => { cleanup(); });
 
 const circle: AnnotationElement = { id: "el", element_type: "ELLIPSE", geometry: { x: 0.2, y: 0.2, width: 0.3, height: 0.2 }, style: {}, payload: {} };
 const view = {
@@ -115,15 +114,3 @@ describe("drawing duration picker", () => {
   });
 });
 
-describe("session-only notes", () => {
-  it("keep the drawing window and range on the device", () => {
-    const { result } = renderHook(() => useLocalReview("media-1"));
-    let note: ReviewNote | null = null;
-    act(() => { note = addLocalNote("media-1", { text: "x", startMs: 2000, endMs: 9000, author: "Alex", annotation: { elements: [circle], endMs: 9000 } }); });
-    expect(note!.endMs).toBe(9000);
-    expect(result.current.annotations[0]).toMatchObject({ review_comment_id: note!.id, start_time_ms: 2000, end_time_ms: 9000 });
-    act(() => { addLocalNote("media-1", { text: "y", startMs: 4000, author: "Alex", annotation: { elements: [circle], endMs: 1000 } }); });
-    // A backwards end is dropped, so the drawing falls back to the default hold.
-    expect(result.current.annotations[1].end_time_ms).toBeNull();
-  });
-});

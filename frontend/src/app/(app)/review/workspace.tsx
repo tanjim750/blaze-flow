@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { BadgeCheck, Sparkles, Check, ChevronLeft, Columns2, HardDriveDownload, Info, Keyboard, Link2, MessageSquareText, MoreHorizontal, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, UploadCloud, X } from "@/components/icons";
+import { BadgeCheck, Sparkles, Check, ChevronLeft, Columns2, HardDriveDownload, Info, Keyboard, Link2, MessageSquareText, MoreHorizontal, RotateCcw, Share2, SlidersHorizontal, TriangleAlert, X } from "@/components/icons";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { markIn, markOut, type LoopRange, type MarkRange } from "@/lib/review-range";
@@ -13,7 +13,6 @@ import { timecode } from "@/lib/timecode";
 import { playerShouldIgnoreKey } from "./player-keys";
 import { ShortcutsDialog } from "./shortcuts";
 import type { ReviewView } from "@/lib/review-view";
-import { useLocalReview } from "@/lib/review-local";
 import { clientView, type NoteDrawing, type ReviewNote } from "@/lib/review-notes";
 import type { AnnotationElement } from "@/lib/api";
 import { loadDraft, patchDraft, unsavedWarning } from "@/lib/review-drafts";
@@ -30,7 +29,6 @@ import "../tasks/tasks.css";
 import "./review-controls.css";
 import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } from "./player";
 import { SharePanel } from "./share-panel";
-import { PublishDialog } from "./publish-dialog";
 import { TaskPanel } from "./task-panel";
 import { REVIEW_FROM_KEY } from "@/components/universal-review";
 import { returnLabel, reviewSurface, safeReturnPath } from "@/lib/open-in-review";
@@ -71,7 +69,6 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     [view],
   );
   const compareWriter = useReviewWriter(comparisonView, author, userId);
-  const local = useLocalReview(view.version?.id ?? null);
 
   const [panel, setPanel] = useState<"comments" | "fields" | "ai">(initialPanel ?? "comments");
   const [aiRunRequest, setAiRunRequest] = useState(0);
@@ -89,7 +86,6 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   // drawing itself, so both are saved to and restored from the draft together.
   const [hold, setHold] = useState<HoldChoice>(DEFAULT_HOLD);
   const [revisionDirty, setRevisionDirty] = useState(false);
-  const [publishOpen, setPublishOpen] = useState(false);
   /** In/out points for the next note (I/O keys, shift-drag on the timeline, the Range button). */
   const [mark, setMark] = useState<MarkRange | null>(null);
   /** A range note playing on repeat; Esc or a seek elsewhere ends it. */
@@ -129,9 +125,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     if (drawingReady) patchDraft(mediaId, { annotation: pending, hold: pending ? hold : null });
   }, [drawingReady, hold, mediaId, pending]);
 
-  const localNotes = view.target ? 0 : local.notes.length;
   const navWarning = unsavedWarning({ text: composer.text, annotation: Boolean(pending), recording: composer.recording, revision: revisionDirty, localNotes: 0 });
-  const unloadWarning = unsavedWarning({ text: composer.text, annotation: Boolean(pending), recording: composer.recording, revision: revisionDirty, localNotes });
+  const unloadWarning = unsavedWarning({ text: composer.text, annotation: Boolean(pending), recording: composer.recording, revision: revisionDirty, localNotes: 0 });
   const navigate = useCallback((href: string, top: boolean) => {
     if (top && window.top) window.top.location.href = href;
     else router.push(href);
@@ -149,7 +144,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   const endOf = useCallback((id: string, endMs: number | null) => writer.overlay.windows[id] ?? endMs, [writer.overlay.windows]);
   const allNotes: ReviewNote[] = useMemo(() => {
     const drawings = new Map<string, NoteDrawing>();
-    for (const item of [...view.annotations, ...local.annotations]) {
+    for (const item of view.annotations) {
       if (item.review_comment_id && !drawings.has(item.review_comment_id)) {
         drawings.set(item.review_comment_id, {
           annotationId: item.id, elements: item.elements, startMs: item.start_time_ms,
@@ -159,11 +154,11 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
     }
     // Optimistic posts, edits, resolves and deletes are laid over the server's notes here,
     // so the feed, the timeline markers and the counts all agree while a save is in flight.
-    return applyWrites([...view.notes, ...local.notes]).map((note) => {
+    return applyWrites(view.notes).map((note) => {
       const drawing = drawings.get(note.id);
       return drawing ? { ...note, drawing, drawingWindow: displayWindow(drawing.startMs, drawing.endMs) } : note;
     });
-  }, [applyWrites, endOf, local.annotations, local.notes, view.annotations, view.notes]);
+  }, [applyWrites, endOf, view.annotations, view.notes]);
   // "See what the client sees" applies the guest endpoints' rule on the page: no team notes,
   // no replies in their threads, and no drawings saved with them.
   const teamNoteIds = useMemo(() => new Set(allNotes.flatMap((note) => [
@@ -190,12 +185,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
       .filter((item) => !item.review_comment_id || existingNoteIds.has(item.review_comment_id))
       .filter((item) => !clientPreview || !item.review_comment_id || !teamNoteIds.has(item.review_comment_id))
       .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: endOf(item.id, item.end_time_ms), noteId: item.review_comment_id, editable: Boolean(view.target && view.canComment && userId && item.author_user_id === userId) })),
-    ...local.annotations
-      .filter((item) => !item.review_comment_id || existingNoteIds.has(item.review_comment_id))
-      .map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: item.end_time_ms, noteId: item.review_comment_id, editable: true })),
-  ], [clientPreview, endOf, existingNoteIds, local.annotations, teamNoteIds, userId, view.annotations, view.canComment, view.target]);
-  // A library file with no review version yet can be published into a project from here.
-  const canPublish = Boolean(!view.target && view.publish && view.workspaceId);
+  ], [clientPreview, endOf, existingNoteIds, teamNoteIds, userId, view.annotations, view.canComment, view.target]);
   const canWriteTeam = Boolean(view.target && userId && view.members.some((member) => member.id === userId));
 
   const sources: PlayerSource[] = useMemo(() => {
@@ -468,11 +458,6 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
         <div className="rv-actions">
           {/* The decision: what moves the cut on. Always in view, labelled where there is room. */}
           <div className="rv-actions-decide" role="group" aria-label="Decision">
-            {canPublish && (
-              <button type="button" className="rv-publish-btn" onClick={() => setPublishOpen(true)} title="Make this file a review version in a project, keeping this session's notes">
-                <UploadCloud size={14} /><span>Publish to project</span>
-              </button>
-            )}
             {(actions.requestChanges || !view.target) && (
               <button
                 type="button"
@@ -480,7 +465,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
                 disabled={!view.target}
                 aria-pressed={revisionOpen}
                 title={!view.target
-                  ? "Publish this file to a project to request changes"
+                  ? "Move this file into a project to request changes"
                   : approved ? "Reopens this approved cut: posts your note and moves it back to Revision" : "Request changes"}
               >
                 <RotateCcw size={14} /><span>Request changes</span>
@@ -491,7 +476,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
                 type="button"
                 className="rv-approve"
                 disabled={!view.target || writer.busy}
-                title={!view.target ? "Publish this file to a project to approve it" : `Approve ${version.label}`}
+                title={!view.target ? "Move this file into a project to approve it" : `Approve ${version.label}`}
                 onClick={() => { writer.setError(null); setApproveOpen(true); }}
               >
                 <Check size={14} /><span>Approve</span>
@@ -617,27 +602,8 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
       {!view.target && (
         <p className="rv-banner is-local" role="status">
           <Info size={14} />
-          <span>
-            This file has not been published into a project as a review version, so its notes,
-            drawings and recordings are kept on this device for this session only.
-            {canPublish
-              ? <> Publish it to a project to save them as comments.</>
-              : <> You&rsquo;ll be warned before reloading or closing the tab while it has notes.</>}
-          </span>
-          {canPublish && <button type="button" className="rv-banner-action" onClick={() => setPublishOpen(true)}>Publish to project</button>}
+          <span>This file isn&rsquo;t in a project yet. Move it into a project from Files and it becomes a review version automatically, ready for comments and approval.</span>
         </p>
-      )}
-
-      {canPublish && view.publish && view.workspaceId && (
-        <PublishDialog
-          open={publishOpen}
-          onClose={() => setPublishOpen(false)}
-          workspaceId={view.workspaceId}
-          mediaId={version.id}
-          fileName={version.title}
-          options={view.publish}
-          local={local}
-        />
       )}
 
       {shareOpen && view.target && (

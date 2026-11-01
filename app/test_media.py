@@ -71,7 +71,12 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(first.status_code, 201)
         self.assertEqual(second.status_code, 201)
         self.assertEqual(first.json()['version_number'], 1)
-        self.assertEqual(second.json()['version_number'], 2)
+        # Different assets: each is its own V1; the project-wide order lives in sequence_number.
+        self.assertEqual(second.json()['version_number'], 1)
+        self.assertEqual(
+            list(MediaVersion.objects.filter(project=self.project).order_by('sequence_number').values_list('sequence_number', flat=True)),
+            [1, 2],
+        )
         self.assertEqual(first.json()['current_stage']['slug'], 'queued')
         self.assertEqual(MediaVersion.objects.filter(project=self.project).count(), 2)
         self.assertEqual(MediaVersionStageEntry.objects.filter(exited_at__isnull=True).count(), 2)

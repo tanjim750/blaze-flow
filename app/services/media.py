@@ -175,8 +175,9 @@ def upload_media_version(*, project, user, upload, title, note='', priority='MED
                 additional_bytes=upload.size,
                 lock=True,
             )
-            version_number = locked_project.next_media_version_number
-            locked_project.next_media_version_number = version_number + 1
+            sequence_number = locked_project.next_media_version_number
+            locked_project.next_media_version_number = sequence_number + 1
+            version_number = sequence_number
             locked_project.updated_at = now
             locked_project.save(update_fields=['next_media_version_number', 'updated_at'])
             backend = _storage_backend(now)
@@ -200,6 +201,7 @@ def upload_media_version(*, project, user, upload, title, note='', priority='MED
                 project=locked_project,
                 original_file=file_record,
                 version_number=version_number,
+                sequence_number=sequence_number,
                 title=title,
                 note=note,
                 priority=priority,
@@ -208,7 +210,12 @@ def upload_media_version(*, project, user, upload, title, note='', priority='MED
                 created_at=now,
                 updated_at=now,
             )
-            _add_to_project_files(project=locked_project, file_record=file_record, title=title, user=user, now=now)
+            listed = _add_to_project_files(project=locked_project, file_record=file_record, title=title, user=user, now=now)
+            # The V-label counts per asset: take the number the file got in its asset.
+            if listed is not None and listed.version_number != version_number:
+                version_number = listed.version_number
+                MediaVersion.objects.filter(pk=media_version.pk).update(version_number=version_number)
+                media_version.version_number = version_number
             MediaVersionStageEntry.objects.create(
                 id=uuid.uuid4(),
                 media_version=media_version,

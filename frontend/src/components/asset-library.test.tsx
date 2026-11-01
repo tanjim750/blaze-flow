@@ -163,7 +163,7 @@ describe("AssetLibrary", () => {
     render(<AssetLibrary view={view} />);
 
     const grids = screen.getAllByRole("grid");
-    expect(grids.map((grid) => grid.getAttribute("aria-label"))).toEqual(["Folders", "Summer Campaign", "Unassigned"]);
+    expect(grids.map((grid) => grid.getAttribute("aria-label"))).toEqual(["Folders", "Summer Campaign", "Unsorted · not in review"]);
     expect(within(grids[0]).getByRole("row", { name: /Testing folder, folder/ })).toBeInTheDocument();
     expect(within(grids[1]).getByRole("row", { name: /^take\.mov/ })).toBeInTheDocument();
 

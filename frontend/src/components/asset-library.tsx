@@ -535,7 +535,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
     // Review links are made for review versions. A file that has not landed on the server
     // yet (still uploading or duplicating) has none, so say so instead of a dead dialog.
     if (!file.fileId || isProcessing(file)) {
-      toast.info("Not ready to share yet", { description: `“${file.name}” has no review version yet. Wait for it to finish processing, then open it in review (use Publish to project if asked) and share from there.` });
+      toast.info("Not ready to share yet", { description: `“${file.name}” is still uploading. Wait for it to finish uploading, then share it again.` });
       return;
     }
     setShareFile(file); setShareOpenRaw(true);
@@ -549,6 +549,9 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   }, []);
   const shareSingle = selected.size === 1 ? [...selectedFiles, ...selectedFolders][0] : null;
   const shareTitle = shareFile?.name ?? shareSingle?.name ?? (selected.size > 1 ? `${selected.size} items` : current?.name ?? rootLabel);
+  // One server-backed file: the public link opens that file's review version (every project upload already is one).
+  const shareAsset = shareFile ?? (shareSingle && "kind" in shareSingle ? shareSingle : null);
+  const shareAssetFileId = shareAsset?.fileId ? shareAsset.id : null;
   const shareProjectId = shareFile ? (shareFile.projectId ?? projectId) : projectId ?? shareSingle?.projectId ?? current?.projectId ?? (projectFilter || null);
   const shareUrl = typeof window === "undefined" ? "" : shareFile ? `${window.location.origin}${reviewHref(shareFile) ?? ""}` : `${window.location.origin}${window.location.pathname}${current || shareSingle ? `?${new URLSearchParams({ folder: (shareSingle && !("kind" in shareSingle) ? shareSingle.id : current?.id) ?? "" })}` : ""}`;
   const copySelectionLink = async () => {
@@ -777,7 +780,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
             </DropdownMenuContent></DropdownMenu>}
         />
         <ShareModal key={shareFile?.id ?? "selection"} open={shareOpen} onOpenChange={setShareOpen} title={shareTitle} internalUrl={shareUrl}
-          workspaceId={view?.workspaceId ?? null} projectId={shareProjectId} canCreateLinks={!offline} />
+          workspaceId={view?.workspaceId ?? null} projectId={shareProjectId} assetFileId={shareAssetFileId} canCreateLinks={!offline} />
 
         <div className="fx-content">
           {writeError && <p className="fx-notice" data-tone="danger" role="alert"><TriangleAlert />{writeError}<button type="button" className="fx-icon-btn is-xs" onClick={() => setWriteError(null)} aria-label="Dismiss error"><X /></button></p>}

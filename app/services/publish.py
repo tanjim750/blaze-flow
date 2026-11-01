@@ -29,6 +29,7 @@ from app.models import (
 )
 
 from .annotations import create_annotation
+from .auto_version import ensure_review_version
 from .audit import record_user_audit
 from .comments import ReviewCommentError, create_review_comment, set_review_comment_resolution
 from .file_processing import PREVIEW_TOPIC, PREVIEW_VARIANT_TYPES, enqueue_file_event
@@ -83,7 +84,7 @@ def publish_library_file(*, project_file, project, user, folder=None, version_of
         if version_of.workspace_id != project.workspace_id or version_of.project_id != project.id:
             raise PublishError('Pick an asset that lives in the chosen project.')
 
-    stage = _initial_stage(project.workspace)
+    _initial_stage(project.workspace)
     try:
         if version_of is not None:
             project_file = add_file_as_version(source=project_file, target=version_of, actor=user)
@@ -95,28 +96,21 @@ def publish_library_file(*, project_file, project, user, folder=None, version_of
     except ProjectFileError as exc:
         raise PublishError(str(exc)) from exc
 
-    now = timezone.now()
-    locked_project = Project.objects.select_for_update().get(pk=project.pk)
-    number = locked_project.next_media_version_number
-    locked_project.next_media_version_number = number + 1
-    locked_project.updated_at = now
-    locked_project.save(update_fields=['next_media_version_number', 'updated_at'])
+    # Moving the row into the project already made it a review version (auto-versioning);
+    # this only fetches it, creating it if the move did not (e.g. same project, new folder).
+    media_version = ensure_review_version(project_file=project_file, user=user, title=title, notify=False)
+    if media_version is None:
+        raise PublishError('This file type cannot be reviewed.')
+    if title and media_version.title != title[:200]:
+        media_version.title = title[:200]
+        media_version.save(update_fields=['title'])
     file_record = File.objects.get(pk=project_file.file_id)
-    media_version = MediaVersion.objects.create(
-        id=uuid.uuid4(), project=locked_project, original_file=file_record, version_number=number,
-        title=(title or file_record.original_name)[:200], note='', created_by_user=user,
-        created_at=now, updated_at=now,
-    )
-    MediaVersionStageEntry.objects.create(
-        id=uuid.uuid4(), media_version=media_version, workflow_stage=stage,
-        snapshot={'workflow_stage_id': str(stage.id), 'workflow_stage_name': stage.name, 'workflow_stage_slug': stage.slug},
-        entered_at=now, changed_by_user=user, created_at=now,
-    )
     record_user_audit(
-        user=user, workspace=locked_project.workspace, action='media.published', entity_type='media_version',
+        user=user, workspace=project.workspace, action='media.published', entity_type='media_version',
         entity_id=media_version.id,
         metadata={
-            'file_id': str(file_record.id), 'project_file_id': str(project_file.id), 'version_number': number,
+            'file_id': str(file_record.id), 'project_file_id': str(project_file.id),
+            'version_number': media_version.version_number,
             'as_version_of': str(version_of.id) if version_of else None, 'note_count': len(notes),
         },
     )

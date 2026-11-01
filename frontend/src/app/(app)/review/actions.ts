@@ -173,6 +173,7 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
   const days = Number(form.get("expiresInDays") ?? 7);
   // An unticked checkbox is simply absent from the form.
   const allowDecisions = form.get("allowDecisions") === "on";
+  const assetFileId = String(form.get("assetFileId") ?? "");
 
   if (!workspaceId || !projectId) {
     return { error: "This review is showing demo content, so links cannot be created.", token: null };
@@ -186,11 +187,12 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
     ...(label ? { label } : {}),
     permissions: invitePermissions(preset, allowDecisions),
     expires_in_hours: Math.round(days * 24),
+    ...(assetFileId ? { asset_file_id: assetFileId } : {}),
   });
   if (!created.ok) return { error: created.error.detail, token: null };
 
   revalidatePath("/review");
-  return { error: null, token: created.data.token, inviteId: created.data.id };
+  return { error: null, token: created.data.token, inviteId: created.data.id, mediaVersionId: created.data.media_version_id ?? null };
 }
 
 /**

@@ -95,7 +95,7 @@ export const KIND_NAME: Record<LibraryKind, string> = { video: "Video", image: "
  *
  * Folders always come first, in their own section, because they are how you move around.
  * Files follow, grouped by campaign (project) or by type. Campaigns are listed A–Z with
- * "Unassigned" last. Empty sections are never returned, so a heading always has something under it.
+ * "Unsorted · not in review" (files with no project, so no review version yet) last. Empty sections are never returned, so a heading always has something under it.
  */
 export function groupSections(folders: LibraryFolder[], files: LibraryFile[], groupBy: GroupBy, projectName: (id: string) => string | undefined): Section[] {
   if (groupBy === "none") return folders.length || files.length ? [{ id: "all", title: "All items", folders, files }] : [];
@@ -116,7 +116,7 @@ export function groupSections(folders: LibraryFolder[], files: LibraryFile[], gr
   [...byProject.keys()].filter(Boolean)
     .sort((a, b) => projectName(a)!.localeCompare(projectName(b)!))
     .forEach((id) => sections.push({ id: `project:${id}`, title: projectName(id)!, folders: [], files: byProject.get(id)! }));
-  if (byProject.has("")) sections.push({ id: "project:none", title: "Unassigned", folders: [], files: byProject.get("")! });
+  if (byProject.has("")) sections.push({ id: "project:none", title: "Unsorted · not in review", folders: [], files: byProject.get("")! });
   return sections;
 }
 
