@@ -1,0 +1,75 @@
+import type { NextConfig } from "next";
+
+const API_ORIGIN = process.env.BLAZEFLOW_API_URL ?? "http://127.0.0.1:8000";
+
+/** Extra dev-server origins (e.g. an ngrok tunnel), comma separated. Dev only. */
+const DEV_ORIGINS = (process.env.NEXT_ALLOWED_DEV_ORIGINS ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const nextConfig: NextConfig = {
+  /**
+   * `next build` emits a self-contained server in `.next/standalone` (used by the
+   * production Dockerfile). `next dev` / `next start` are unaffected.
+   */
+  output: "standalone",
+  allowedDevOrigins: DEV_ORIGINS,
+  /**
+   * Django owns trailing slashes (`APPEND_SLASH`) and every one of its API routes ends in
+   * one. Next, by default, answers `/api/auth/login/` with a 308 to the slashless path,
+   * which Django 301s straight back — an infinite redirect that broke every browser-side
+   * API call. `skipTrailingSlashRedirect` drops Next's 308.
+   */
+  skipTrailingSlashRedirect: true,
+  /**
+   * The Next dev-tools badge only ever renders under `next dev`. Its default bottom-left
+   * spot sat on top of the sidebar's account row and notification bell, so it moves to the
+   * empty bottom-right corner. Production builds are unaffected.
+   */
+  devIndicators: { position: "bottom-right" },
+  /**
+   * Marketing screenshots are stored at 2x (2880×1800). next/image serves AVIF where the
+   * browser supports it (WebP otherwise) at the srcset width the `sizes` hint picks, so
+   * phones never pull the full-size master.
+   */
+  images: { formats: ["image/avif", "image/webp"] },
+  experimental: {
+    /**
+     * Upload /complete re-reads the whole object from R2 to scan and hash it, which takes
+     * over a minute for multi-GB videos. Next's default 30s rewrite proxy timeout hung up
+     * on it and the browser saw a 500 although Django finished with 201.
+     */
+    proxyTimeout: 15 * 60 * 1000,
+    /**
+     * Revisiting a page within 30 s reuses the rendered page instead of a fresh server
+     * round trip (sidebar back-and-forth was the most common "laggy" path). Mutations call
+     * `router.refresh()` / revalidate, which clears this cache, so edits still show at once.
+     */
+    staleTimes: { dynamic: 30 },
+    /**
+     * Every browser-side call reaches Django through the rewrite below, uploads included,
+     * and Next caps a proxied request body at 10 MiB by default. Past that the rewrite
+     * answered 500 before Django ever saw the request, so any video over ~10 MB failed
+     * with no server-side trace of it — Django's log showed nothing at all.
+     *
+     * Kept level with `MAX_PROJECT_FILE_BYTES`, which is the limit that should decide
+     * whether an upload is too big, so the proxy stops being the thing that answers first.
+     */
+    proxyClientMaxBodySize: 1024 * 1024 * 1024,
+  },
+  async rewrites() {
+    return [{
+      source: "/api/:path*",
+      /**
+       * Next strips the trailing slash before filling `:path*`, so the slash is restored
+       * here — otherwise Django receives `/api/auth/login` and 301s it back, moving the
+       * same redirect loop server-side. Unconditional because all 89 API routes end in a
+       * slash; revisit if a slashless route is ever added.
+       */
+      destination: `${API_ORIGIN}/api/:path*/`,
+    }];
+  },
+};
+
+export default nextConfig;

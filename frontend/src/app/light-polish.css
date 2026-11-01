@@ -1,0 +1,126 @@
+/*
+ * Light-mode polish shared across the app (light only — every rule is scoped to
+ * :root.light so dark mode is untouched). Same language as the dashboard in
+ * (app)/home.css: lavender-tinted canvas with soft glows, white rounded cards with
+ * layered shadows, tinted chips/pills, one consistent purple, gentle hover lifts.
+ */
+:root.light {
+  --lp-canvas: #f6f5fb;
+  --lp-card: #ffffff;
+  --lp-line: #e8e5f2;
+  --lp-line-strong: #d9d3ec;
+  --lp-shadow: 0 1px 2px rgb(30 22 70 / .04), 0 6px 20px -8px rgb(60 40 140 / .12);
+  --lp-shadow-lift: 0 2px 4px rgb(30 22 70 / .05), 0 12px 28px -10px rgb(60 40 140 / .2);
+  --lp-shadow-pop: 0 4px 10px rgb(30 22 70 / .06), 0 24px 48px -16px rgb(40 24 110 / .28);
+  --lp-brand: #6d44f0;
+  --lp-brand-ink: #5b34e0;
+  --lp-brand-wash: #f1ecff;
+  /* One status palette (text on its own tint passes AA). */
+  --lp-ok: #0d7a4f;     --lp-ok-bg: #e6f7ef;   --lp-ok-line: #bfe8d4;
+  --lp-warn: #8f5400;   --lp-warn-bg: #fff3dc; --lp-warn-line: #f6dba6;
+  --lp-bad: #c0233d;    --lp-bad-bg: #ffecef;  --lp-bad-line: #f8c4cd;
+  --lp-info: #2350c8;   --lp-info-bg: #e9efff; --lp-info-line: #c8d5fb;
+  --lp-acc: #5b34e0;    --lp-acc-bg: #f1ecff;  --lp-acc-line: #dcd0fd;
+}
+
+/* ---- Canvas: tinted background with gentle top glows on the main app & public pages ---- */
+:root.light body {
+  background:
+    radial-gradient(900px 420px at 85% -120px, rgb(128 86 255 / .10), transparent 70%),
+    radial-gradient(700px 380px at 15% -160px, rgb(255 138 170 / .07), transparent 70%),
+    var(--lp-canvas);
+  background-attachment: fixed;
+}
+
+/* ---- Cards & panels ---- */
+:root.light :is(.pb-card, .pb-board-card, .pb-row, .tb-card, .money-panel, .settings-card, .gateway-card, .stripe-card,
+  .rv-panel, .aiqa-card, .pay-card, .ul-card, .gr-card, .frm-card, .pp-card, .pt-card, .nf-card, .cd-card) {
+  background: var(--lp-card);
+  border-color: var(--lp-line);
+  box-shadow: var(--lp-shadow);
+}
+:root.light :is(.pb-card, .pb-board-card, .money-panel, .settings-card, .gateway-card, .stripe-card,
+  .pay-card, .ul-card, .gr-card) { border-radius: 16px; }
+:root.light :is(.pb-card, .pb-board-card, .tb-card, .gateway-card) { transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+:root.light :is(.pb-card, .pb-board-card, .tb-card, .gateway-card):hover {
+  transform: translateY(-1px); box-shadow: var(--lp-shadow-lift); border-color: var(--lp-line-strong);
+}
+/* Board columns: soft lavender lanes so white cards pop */
+:root.light :is(.tb-column, .pb-column) { background: rgb(241 236 255 / .55); border-color: var(--lp-line); border-radius: 16px; }
+
+/* Page titles: deep ink + small brand accent */
+:root.light :is(.pb-title, .tb-title, .settings-title, .invoice-title) h1,
+:root.light :is(.pb-title, .tb-title, .settings-title, .invoice-title) > h1 { color: #1b1530; }
+
+/* ---- Status pills: one consistent palette ---- */
+:root.light :is(.home-badge, .money-badge).danger, :root.light .money-badge.tone-danger,
+:root.light .pay-banner.tone-danger { color: var(--lp-bad); background: var(--lp-bad-bg); border-color: var(--lp-bad-line); }
+:root.light :is(.home-badge, .money-badge).warning, :root.light .money-badge.tone-warning,
+:root.light .pay-banner.tone-warning { color: var(--lp-warn); background: var(--lp-warn-bg); border-color: var(--lp-warn-line); }
+:root.light :is(.home-badge, .money-badge).success, :root.light .money-badge.tone-success { color: var(--lp-ok); background: var(--lp-ok-bg); border-color: var(--lp-ok-line); }
+:root.light :is(.home-badge, .money-badge).blue, :root.light .money-badge.tone-blue { color: var(--lp-info); background: var(--lp-info-bg); border-color: var(--lp-info-line); }
+:root.light :is(.home-badge, .money-badge).accent, :root.light .money-badge.tone-accent { color: var(--lp-acc); background: var(--lp-acc-bg); border-color: var(--lp-acc-line); }
+:root.light :is(.home-badge, .money-badge) { border-radius: 999px; padding-inline: 8px; }
+
+/* ---- Overlays: dialogs, dropdowns, popovers, selects, command palette, toasts ---- */
+:root.light .ui-dialog-overlay, :root.light .qs-overlay { background: rgb(27 21 48 / .28); backdrop-filter: blur(3px); }
+:root.light :is(.ui-dialog-content, .qs-dialog) {
+  background: var(--lp-card); border: 1px solid var(--lp-line); border-radius: 18px; box-shadow: var(--lp-shadow-pop);
+}
+:root.light :is(.ui-popover, .ui-select-content, [data-slot=dropdown-menu-content], [data-slot=context-menu-content], [data-slot=popover-content]) {
+  background: var(--lp-card); border: 1px solid var(--lp-line); border-radius: 12px; box-shadow: var(--lp-shadow-pop);
+}
+:root.light :is([data-slot=dropdown-menu-item], [data-slot=context-menu-item])[data-highlighted],
+:root.light .qs-row[aria-selected=true], :root.light .qs-row:hover { background: var(--lp-brand-wash); color: #2a2140; }
+:root.light .qs-icon { color: var(--lp-brand); background: var(--lp-brand-wash); border-radius: 8px; }
+:root.light .qs-field { border-bottom-color: var(--lp-line); }
+:root.light .qs-foot { background: #faf9fe; border-top-color: var(--lp-line); }
+:root.light [data-sonner-toaster] [data-sonner-toast].bf-toast {
+  background: var(--lp-card); border: 1px solid var(--lp-line); border-radius: 14px; box-shadow: var(--lp-shadow-pop); color: #1b1530;
+}
+:root.light [data-sonner-toaster] [data-sonner-toast].bf-toast[data-type=success] { border-left: 3px solid var(--lp-ok); }
+:root.light [data-sonner-toaster] [data-sonner-toast].bf-toast[data-type=error] { border-left: 3px solid var(--lp-bad); }
+
+/* ---- Empty states: friendly tinted icon block ---- */
+:root.light :is(.home-empty-state, .money-empty, .tb-empty, .pb-empty, .aiqa-empty, .rvc-empty, .cd-empty) > svg,
+:root.light :is(.money-empty, .tb-empty, .pb-empty, .aiqa-empty) > :first-child:is(svg) {
+  box-sizing: content-box; padding: 14px; border-radius: 18px;
+  color: var(--lp-brand);
+  background: radial-gradient(circle at 30% 25%, #ffffff 0%, #efe8ff 60%, #e6dcff 100%);
+  box-shadow: inset 0 0 0 1px #e1d6fd, 0 8px 20px -10px rgb(91 52 224 / .45);
+}
+:root.light :is(.tb-column-empty, .pb-rail-empty) { border-color: var(--lp-line-strong); background: rgb(255 255 255 / .6); border-radius: 12px; }
+
+/* ---- Auth: brand hero panel ---- */
+:root.light .auth-story {
+  position: relative; isolation: isolate; overflow: hidden;
+  background:
+    radial-gradient(600px 400px at 0% 0%, rgb(128 86 255 / .16), transparent 65%),
+    radial-gradient(500px 360px at 100% 100%, rgb(255 138 170 / .14), transparent 65%),
+    linear-gradient(160deg, #fbfaff 0%, #f1ecff 100%);
+}
+:root.light .auth-story-card { box-shadow: var(--lp-shadow-pop); border-color: var(--lp-line); border-radius: 18px; }
+:root.light .auth-form-wrap { background: transparent; }
+
+/* ---- Public pages: pay / upload / guest review ---- */
+:root.light :is(.pay-shell, .ul-shell, .gr-shell) { background: transparent; }
+:root.light :is(.pay-card, .ul-card, .gr-card) { box-shadow: var(--lp-shadow-pop); }
+:root.light .pay-amount { color: #1b1530; }
+:root.light .pay-monogram { background: linear-gradient(135deg, #7b4dff, #5b34e0); color: #fff; }
+
+/* ---- Review chrome (stage stays dark via review.css) ---- */
+:root.light .rvp-head { background: rgb(255 255 255 / .9); border-bottom: 1px solid var(--lp-line); }
+
+/* ---- Primary buttons: same purple gradient as the active nav pill ---- */
+:root.light :is(.tb-button.primary, .pb-button.primary, .pay-button, .auth-form .submit, .button.primary):not(:disabled) {
+  background: linear-gradient(135deg, #7b4dff 0%, #5b34e0 100%); border-color: transparent; color: #fff;
+  box-shadow: 0 6px 16px -8px rgb(91 52 224 / .6);
+}
+
+/* ---- Money totals: same tinted stat-card treatment as the dashboard ---- */
+:root.light .money-total {
+  border-color: var(--lp-line); border-radius: 16px; box-shadow: var(--lp-shadow);
+  background: linear-gradient(140deg, color-mix(in srgb, var(--tone-color, #6d44f0) 9%, #fff) 0%, #fff 62%);
+}
+:root.light .money-total::before { height: 3px; }
+:root.light .money-total > strong { color: #1b1530; }

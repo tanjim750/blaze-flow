@@ -1,0 +1,64 @@
+/* Global upload tray: bottom-right card on desktop, bottom sheet on phones. */
+.ut { position: fixed; right: 20px; bottom: 20px; z-index: 90; width: 360px; max-height: min(70vh, 520px); display: flex; flex-direction: column;
+  border: 1px solid var(--t-line-ffffff1a); border-radius: 14px; background: linear-gradient(160deg, var(--t-bg-212027fa), var(--t-bg-16161cfa));
+  box-shadow: 0 18px 50px var(--t-shadow-00000099); color: var(--text, #eee); overflow: hidden; animation: ut-in var(--bf-duration-normal, .2s) var(--bf-ease-out, ease-out); }
+@keyframes ut-in { from { opacity: 0; transform: translateY(10px); } }
+.ut-head { display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 12px; border-bottom: 1px solid var(--t-line-ffffff0f); }
+.ut.is-collapsed .ut-head { border-bottom: 0; }
+.ut-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.ut-toggle > svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.ut-icon svg { width: 18px; height: 18px; color: var(--bf-violet-300, var(--t-fg-b69aff)); }
+.ut-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 600; }
+.ut-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--bf-primary, var(--t-bg-7c5cff)); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.ut-clear { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.ut-clear:hover { background: var(--t-bg-ffffff0f); color: var(--text); }
+.ut-clear svg { width: 13px; height: 13px; }
+.ut-overall { display: block; height: 2px; background: var(--bf-primary, var(--t-bg-7c5cff)); transition: width .3s linear; }
+.ut-list { list-style: none; margin: 0; padding: 4px 0; overflow: auto; }
+.ut-row { padding: 8px 12px; display: grid; gap: 6px; }
+.ut-row + .ut-row { border-top: 1px solid var(--t-line-ffffff0a); }
+.ut-row-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ut-file { width: 18px; height: 18px; flex: none; color: var(--muted); }
+.ut-name { flex: 1; min-width: 0; display: grid; }
+.ut-name strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 600; }
+.ut-name small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 11px; }
+.ut-actions { display: flex; gap: 2px; }
+.ut-actions :is(button, a) { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+.ut-actions :is(button, a):hover { background: var(--t-bg-ffffff12); color: var(--text); }
+.ut-actions svg { width: 15px; height: 15px; }
+.ut-bar { height: 4px; border-radius: 999px; background: var(--t-bg-ffffff14); overflow: hidden; }
+.ut-bar i { display: block; height: 100%; border-radius: inherit; background: var(--bf-primary, var(--t-bg-7c5cff)); transition: width .25s linear; }
+.ut-row.is-processing .ut-bar i { background: linear-gradient(90deg, var(--t-bg-7c5cff), var(--t-bg-b69aff), var(--t-bg-7c5cff)); background-size: 200% 100%; animation: ut-shimmer 1.4s linear infinite; }
+.ut-row.is-ready .ut-bar i { background: var(--t-bg-3fb950); }
+.ut-row.is-failed .ut-bar i { background: var(--t-bg-f85149); }
+.ut-row.is-cancelled { opacity: .6; }
+@keyframes ut-shimmer { to { background-position: -200% 0; } }
+.ut-status { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ut-status svg { width: 13px; height: 13px; flex: none; }
+.ut-status span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ut-row.is-ready .ut-status svg { color: var(--t-fg-3fb950); }
+.ut-row.is-failed .ut-status { color: var(--t-fg-ff9ba3); }
+.ut-retry, .ut-open { padding: 2px 8px; border: 1px solid var(--t-line-ffffff24); border-radius: 6px; background: transparent; color: var(--text); font-size: 12px; text-decoration: none; cursor: pointer; }
+.ut-spin { animation: ut-spin 1s linear infinite; }
+@keyframes ut-spin { to { transform: rotate(360deg); } }
+@media (max-width: 640px) {
+  .ut { left: 0; right: 0; bottom: 0; width: auto; max-height: 60vh; border-radius: 16px 16px 0 0; border-bottom: 0; padding-bottom: env(safe-area-inset-bottom); }
+  .ut-actions :is(button, a) { width: 40px; height: 40px; }
+  .ut-retry, .ut-open { min-height: 36px; padding: 0 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ut, .ut-bar i, .ut-overall { animation: none; transition: none; }
+  .ut-spin, .ut-row.is-processing .ut-bar i { animation: none; }
+}
+
+/* Whole-tray summary (bytes moved / left, combined speed, ETA). */
+.ut-summary { display: grid; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--t-line-ffffff0f); font-size: 12px; color: var(--muted); }
+.ut-summary-top { display: flex; justify-content: space-between; gap: 8px; }
+.ut-summary-top b { color: var(--text, var(--t-fg-eeeeee)); font-weight: 600; }
+.ut-summary-top strong { color: var(--text, var(--t-fg-eeeeee)); font-variant-numeric: tabular-nums; }
+.ut-summary small { font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.ut-close { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+.ut-close:hover { background: var(--t-bg-ffffff0f); color: var(--text); }
+.ut-close svg { width: 15px; height: 15px; }
+/* The review sidebar keeps its comment composer bottom-right: sit bottom-left there instead. */
+@media (min-width: 761px) { body:has([data-review-composer]) .ut { right: auto; left: 20px; } }

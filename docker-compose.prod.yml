@@ -1,0 +1,197 @@
+# Krewsys production stack (single host). See docs/deploy.md.
+#
+#   cp .env.production.example .env.production   # fill in real values; never commit it
+#   (always pass --env-file .env.production: db's POSTGRES_* are interpolated from it)
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml run --rm migrate
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Optional profiles:
+#   --profile caddy    TLS-terminating reverse proxy on :80/:443 (skip when using a
+#                      Cloudflare Tunnel or another proxy pointed at frontend:3000)
+#   --profile malware  ClamAV daemon (set FILE_SECURITY_SCANNER to the ClamAV scanner)
+#
+# No source mounts, no pgAdmin, Postgres is not published to the host.
+
+x-backend: &backend
+  image: ${BACKEND_IMAGE:-blazeflow-backend:latest}
+  build:
+    context: .
+    target: web
+  env_file:
+    - ${ENV_FILE:-.env.production}
+  environment:
+    DJANGO_SETTINGS_MODULE: blazeflow.settings
+    POSTGRES_HOST: db
+    POSTGRES_PORT: "5432"
+  volumes:
+    # Only used with STORAGE_DRIVER=local; harmless with s3/R2.
+    - media:/app/media
+  restart: unless-stopped
+  logging: &logging
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # Only the three POSTGRES_* values, interpolated from the --env-file, and deliberately
+    # no env_file: sharing .env.production meant any edit (a throttle rate, the tunnel
+    # hostname) changed db's config, so `up -d <svc>` recreated Postgres and every service
+    # briefly failed with "Temporary failure in name resolution".
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-blazeflow}
+      POSTGRES_USER: ${POSTGRES_USER:-blazeflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD and run compose with --env-file .env.production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    shm_size: 256m
+    logging: *logging
+
+  # One-shot release step: `docker compose -f docker-compose.prod.yml run --rm migrate`.
+  # Long-running services do not depend on it, so a restart never re-runs migrations.
+  migrate:
+    <<: *backend
+    # createcachetable is idempotent: it creates the shared throttle/cache table once.
+    command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py createcachetable"]
+    restart: "no"
+    profiles: ["release"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    <<: *backend
+    command: ["gunicorn", "blazeflow.wsgi:application", "--config", "/app/deploy/gunicorn.conf.py"]
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/api/health/live/', headers={'Host': 'web'}), timeout=4).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: ${WEB_MEMORY_LIMIT:-1g}
+
+  # Durable outbox: notifications, emails, previews and FFmpeg video proxies.
+  outbox-worker:
+    <<: *backend
+    command: ["python", "manage.py", "run_outbox_worker", "--batch-size", "100", "--interval-seconds", "5"]
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "${OUTBOX_CPU_LIMIT:-2}"
+          memory: ${OUTBOX_MEMORY_LIMIT:-2g}
+
+  # AI Visual QA (PaddleOCR). Built from the `ai` Dockerfile target (requirements-ai.txt).
+  ai-qa-worker:
+    <<: *backend
+    image: ${BACKEND_AI_IMAGE:-blazeflow-backend-ai:latest}
+    build:
+      context: .
+      target: ai
+    command: ["python", "manage.py", "run_ai_qa_worker"]
+    volumes:
+      - media:/app/media
+      - paddle_models:/home/app/.paddlex
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "${AI_QA_CPU_LIMIT:-4}"
+          memory: ${AI_QA_MEMORY_LIMIT:-3g}
+
+  # Maintenance commands on a schedule (deploy/crontab), run by supercronic.
+  scheduler:
+    <<: *backend
+    command: ["supercronic", "-passthrough-logs", "/app/deploy/crontab"]
+    # supercronic must not be PID 1 (its zombie reaper re-execs itself); tini takes that role.
+    init: true
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-blazeflow-frontend:latest}
+    build:
+      context: ./frontend
+      args:
+        # Baked into the Next build (rewrites + client bundle). Rebuild after changing.
+        BLAZEFLOW_API_URL: http://web:8000
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+        # Public site URL for canonical links, the sitemap and Open Graph cards.
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+    restart: unless-stopped
+    environment:
+      # Used at runtime by server components calling Django directly.
+      BLAZEFLOW_API_URL: http://web:8000
+    ports:
+      # Bound to localhost: reach it through Caddy, a Cloudflare Tunnel, or an SSH tunnel.
+      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      web:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: ${FRONTEND_MEMORY_LIMIT:-768m}
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["caddy"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+    logging: *logging
+
+  clamav:
+    # clamav/clamav is amd64-only; on ARM hosts set CLAMAV_IMAGE=clamav/clamav-debian:stable.
+    image: ${CLAMAV_IMAGE:-clamav/clamav:stable}
+    profiles: ["malware"]
+    restart: unless-stopped
+    expose:
+      - "3310"
+    volumes:
+      - clamav_data:/var/lib/clamav
+    logging: *logging
+
+volumes:
+  postgres_data:
+  media:
+  paddle_models:
+  caddy_data:
+  caddy_config:
+  clamav_data:
