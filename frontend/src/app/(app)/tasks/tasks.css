@@ -466,3 +466,16 @@ button.tb-card-title:hover { text-decoration: underline; text-underline-offset: 
   .tb-board { min-height: 0; }
   .tb-column { min-height: 0; height: 100%; }
 }
+
+/* UI critic R3 #6 (phones): the list was a 740px-wide table in a 356px box. Each task becomes a
+   two-line row (title, then assignee · priority · due) with the actions on the right. */
+@media (max-width: 640px) {
+  .tb-list-head { display: none; }
+  .tb-list [role=row] { min-width: 0; grid-template-columns: minmax(0, 1fr) auto auto 44px; row-gap: 4px; }
+  .tb-list-row { height: auto; padding-block: 8px; }
+  .tb-list-row > .tb-list-title { grid-column: 1 / 4; }
+  .tb-list-row > .tb-list-actions { grid-column: 4; grid-row: 1 / span 2; }
+  .tb-list-row > .tb-list-person { min-width: 0; text-overflow: ellipsis; }
+}
+/* UI critic R3 #8: a gutter after the last column, so the board doesn't end flush on the edge. */
+@media (min-width: 761px) { .tb-board { padding-inline-end: 16px; } }
