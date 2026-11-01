@@ -462,6 +462,9 @@ export type GuestInvite = {
   activity?: GuestLinkActivity | null;
   /** Returned only by the create call, and only once. */
   token?: string;
+  /** The short share link's code and full URL (`<SHORT_LINK_BASE_URL>/<code>`). Absent on older backends. */
+  short_code?: string | null;
+  short_url?: string | null;
 };
 
 export const listGuestInvites = (workspaceId: string, projectId: string) =>
