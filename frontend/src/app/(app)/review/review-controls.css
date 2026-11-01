@@ -13,7 +13,12 @@
   background: var(--t-bg-151922); color: var(--muted); font-size: 11px; font-weight: 500;
 }
 .rv-top-cut .rv-compare-toggle.ui-select-trigger:hover { background: var(--t-bg-222733); color: var(--text); }
-.rvp-select .ui-select-trigger {
+/* The generic `.rvp-transport button` rule (30px square, display:grid) also matches the
+   Select trigger; without resetting display/width the label and chevron stack and long
+   labels like "Review proxy" spill out of the 30px box. */
+.rvp-transport .rvp-select .ui-select-trigger {
+  display: inline-flex; flex-direction: row; flex-wrap: nowrap; align-items: center; white-space: nowrap;
+  width: auto; min-width: 0; max-width: 140px;
   min-height: 0; height: 28px; padding: 0 6px 0 8px; gap: 4px;
   border: 1px solid var(--rv-line); border-radius: 7px;
   background: var(--t-bg-151922); color: var(--text); font-size: 11px;
