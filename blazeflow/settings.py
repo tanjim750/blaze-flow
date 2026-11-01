@@ -317,6 +317,10 @@ GATEWAY_REQUEST_TIMEOUT_SECONDS = float(os.environ.get('GATEWAY_REQUEST_TIMEOUT_
 # Public base URL of this API, used for webhook/IPN and return URLs given to gateways
 # (e.g. https://api.example.com). Defaults to APP_BASE_URL (same origin behind a proxy).
 API_PUBLIC_URL = os.environ.get('API_PUBLIC_URL', '').strip().rstrip('/')
+# Base of short guest share links: <base>/<code>. Defaults to the app's /r/ route; can be a
+# dedicated short domain (e.g. https://xyz.io) whose bare /<code> the frontend proxy resolves
+# when the frontend is given the same SHORT_LINK_BASE_URL.
+SHORT_LINK_BASE_URL = (os.environ.get('SHORT_LINK_BASE_URL', '').strip() or 'https://krewsys.com/r').rstrip('/')
 # Platform admin revenue estimate until Stripe is connected: what one PRO seat is assumed to
 # pay per month, in minor units of PLATFORM_CURRENCY. Purely for the /platform dashboard.
 PLATFORM_PRO_PRICE_MINOR = int(os.environ.get('PLATFORM_PRO_PRICE_MINOR', '2900'))
@@ -519,6 +523,7 @@ REST_FRAMEWORK = {
         'password_reset': os.environ.get('PASSWORD_RESET_THROTTLE_RATE', '5/hour'),
         'email_verification': os.environ.get('EMAIL_VERIFICATION_THROTTLE_RATE', '5/hour'),
         'invite_preview': os.environ.get('INVITE_PREVIEW_THROTTLE_RATE', '60/hour'),
+        'guest_exchange': os.environ.get('GUEST_EXCHANGE_THROTTLE_RATE', '60/hour'),
         # Public upload links: page loads plus one request per file, per client IP.
         'upload_link': os.environ.get('UPLOAD_LINK_THROTTLE_RATE', '240/hour'),
         # "Report a problem" submissions, per signed-in user.

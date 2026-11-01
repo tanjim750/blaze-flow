@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.core import signing
 from django.core.files.storage import default_storage
 from django.db import transaction
@@ -8,12 +9,13 @@ from django.urls import reverse
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .http_range import ranged_file_response
+from .throttles import GuestExchangeThrottle
 from .models import (
     Annotation, AnnotationElement, AnnotationRevision, FileStatus, FileVariant, GuestInvite, GuestInvitePermission,
     GuestReviewAccess, GuestReviewAccessPermission, MediaVersion, Project, ProjectFile,
@@ -108,13 +110,38 @@ def _guest_annotations(media):
 
 def _guest_access(request, project, permission):
     try:
-        return authenticate_guest_access(
+        access = authenticate_guest_access(
             project=project,
             access_key=request.headers.get('X-Guest-Access-Key', ''),
             permission=permission,
         )
     except GuestAccessError as exc:
         raise PermissionDenied(str(exc)) from exc
+    # A link shared for one file reaches only that file's cut, on every per-cut route.
+    kwargs = getattr(request, 'parser_context', None) or {}
+    media_version_id = (kwargs.get('kwargs') or {}).get('media_version_id')
+    if media_version_id is not None:
+        _ensure_in_scope(access, media_version_id)
+    return access
+
+
+def _scoped_media_id(access):
+    """The one cut a file-scoped link may open, or None for a project-wide link."""
+    return access.guest_invite.shared_media_version_id
+
+
+def _ensure_in_scope(access, media_version_id):
+    scoped = _scoped_media_id(access)
+    if scoped is not None and str(scoped) != str(media_version_id):
+        # Same answer as a missing cut, so a guest cannot probe the project's other files.
+        raise Http404('No such cut.')
+
+
+def _scoped_contents(access):
+    contents = ReviewCommentContent.objects.select_related('file')
+    if _scoped_media_id(access) is not None:
+        contents = contents.filter(review_comment__media_version_id=_scoped_media_id(access))
+    return contents
 
 
 def _invite_data(invite, activity=None):
@@ -124,6 +151,10 @@ def _invite_data(invite, activity=None):
     permissions = list(GuestInvitePermission.objects.filter(guest_invite=invite).values_list('permission_key', flat=True))
     return {
         'id': str(invite.id), 'project_id': str(invite.project_id), 'label': invite.label,
+        # The short link is /r/<short_code>; the long token is still only returned once.
+        'short_code': invite.short_code,
+        'short_url': f'{settings.SHORT_LINK_BASE_URL}/{invite.short_code}' if invite.short_code else None,
+        'media_version_id': str(invite.shared_media_version_id) if invite.shared_media_version_id else None,
         'permissions': permissions,
         # Whether a guest on this link may approve or request changes.
         'allow_decisions': GUEST_DECISION_PERMISSION in permissions,
@@ -185,12 +216,13 @@ def project_guest_invites(request, workspace_id, project_id):
                 media_version = _shared_file_version(project, asset_file_id)
                 if isinstance(media_version, Response):
                     return media_version
-            invite, token = create_guest_invite(project=project, membership=membership, actor=request.user, **data)
+            invite, token = create_guest_invite(
+                project=project, membership=membership, actor=request.user,
+                shared_media_version_id=media_version.id if media_version is not None else None, **data,
+            )
     except GuestAccessError as exc:
         return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     data = _invite_data(invite)
-    if media_version is not None:
-        data['media_version_id'] = str(media_version.id)
     data.update({'token': token, 'warning': 'The token is returned only once. Store and share it securely.'})
     return Response(data, status=status.HTTP_201_CREATED)
 
@@ -234,6 +266,7 @@ def project_guest_access_detail(request, workspace_id, project_id, access_id):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@throttle_classes([GuestExchangeThrottle])
 def guest_exchange(request):
     serializer = GuestExchangeSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -244,6 +277,8 @@ def guest_exchange(request):
     return Response({
         'project_id': str(access.guest_invite.project_id),
         'guest_session_id': str(access.guest_session_id), 'access_key': access_key,
+        # A link shared for one file opens on that file's cut (short links carry no ?cut=).
+        'media_version_id': str(access.guest_invite.shared_media_version_id) if access.guest_invite.shared_media_version_id else None,
         'warning': 'The access key is returned only once. Send it as X-Guest-Access-Key.',
     }, status=status.HTTP_201_CREATED)
 
@@ -255,7 +290,10 @@ def guest_review(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     access = _guest_access(request, project, 'media.read')
     from app.services.preview_state import file_preview_status
-    media = list(MediaVersion.objects.filter(project=project, status='ACTIVE').select_related('original_file').order_by('sequence_number', 'created_at'))
+    media_qs = MediaVersion.objects.filter(project=project, status='ACTIVE').select_related('original_file')
+    if _scoped_media_id(access) is not None:
+        media_qs = media_qs.filter(id=_scoped_media_id(access))
+    media = list(media_qs.order_by('sequence_number', 'created_at'))
     granted = set(GuestReviewAccessPermission.objects.filter(guest_review_access=access).values_list('permission_key', flat=True))
     latest = decisions_for(media)
     return Response({
@@ -265,6 +303,10 @@ def guest_review(request, project_id):
             # Decisions also need the cut to be watchable, hence media.read (checked above).
             'can_decide': GUEST_DECISION_PERMISSION in granted,
             'can_comment': 'review.comment.create' in granted,
+            # The page only asks for notes and drawings the link may read (no 403 banner).
+            'can_read_comments': 'review.comment.read' in granted,
+            'can_read_annotations': 'annotation.read' in granted,
+            'scoped_to_file': _scoped_media_id(access) is not None,
             'expires_at': access.guest_invite.expires_at,
         },
         'media_versions': [
@@ -366,6 +408,7 @@ def guest_media_stream(request, project_id, media_version_id):
         GuestReviewAccessPermission.objects.filter(guest_review_access=access, permission_key='media.read').exists()
     ):
         raise PermissionDenied('Guest access is invalid or expired.')
+    _ensure_in_scope(access, media.id)
     variant = media_poster_variant(media) if kind == 'poster' else _playable_variant(media)
     if variant is None or not default_storage.exists(variant.object_key):
         raise Http404('No playable file is available for this cut yet.')
@@ -624,7 +667,7 @@ def guest_attachment_download(request, project_id, content_id):
     permission = 'media.download' if request.method in ('GET', 'HEAD') else 'review.attachment.delete'
     access = _guest_access(request, project, permission)
     content = get_object_or_404(
-        ReviewCommentContent.objects.select_related('file'), id=content_id,
+        _scoped_contents(access), id=content_id,
         review_comment__media_version__project=project, file__isnull=False,
         file__deleted_at__isnull=True, deleted_at__isnull=True,
         review_comment__in=client_visible_comments(ReviewComment.objects.all()),
@@ -652,9 +695,9 @@ def guest_attachment_download(request, project_id, content_id):
 @permission_classes([AllowAny])
 def guest_attachment_preview(request, project_id, content_id, variant_id):
     project = get_object_or_404(Project, id=project_id)
-    _guest_access(request, project, 'media.read')
+    access = _guest_access(request, project, 'media.read')
     content = get_object_or_404(
-        ReviewCommentContent.objects.select_related('file'), id=content_id,
+        _scoped_contents(access), id=content_id,
         review_comment__media_version__project=project, file__status=FileStatus.READY,
         file__deleted_at__isnull=True, deleted_at__isnull=True,
         review_comment__in=client_visible_comments(ReviewComment.objects.all()),

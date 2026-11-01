@@ -492,3 +492,28 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
 /* Touch screens have no hover: keep the button visible. */
 @media (hover: none) { .pb-row-more { opacity: .8; width: 32px; height: 32px; } }
 .pb-client-head .pb-row-more { order: 3; }
+
+/* ---- Desktop: the projects page is exactly one viewport tall ---------------------------
+   The rail and the canvas both fill the window at any height, so nothing ends early and
+   leaves a bare gap below; "Archived projects" stays pinned to the rail's foot; the canvas
+   scrolls its own content (Files, Activity…), and on the Tasks tab the board takes the
+   remaining height so its columns stretch and its scrollbar sits right under them. */
+@media (min-width: 1024px) {
+  .pb-layout { height: 100dvh; min-height: 0; overflow: hidden; }
+  .pb-rail { position: relative; top: auto; height: 100%; }
+  .pb-canvas { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow-y: auto; padding-bottom: 16px; box-sizing: border-box; }
+  .pb-canvas > * { flex: none; }
+  .pb-canvas > .tb-root { flex: 1 1 auto; min-height: 280px; }
+  .pb-canvas > .tb-root > .tb-board { flex: 1 1 0; min-height: 200px; height: auto; align-items: stretch; padding-bottom: 4px; }
+  .pb-canvas > .tb-root > .tb-board > .tb-column { height: auto; min-height: 0; max-height: none; }
+}
+
+/* Project title: always one line, truncate with ellipsis at every width. */
+.pb-title > h1 { display: block; flex: 1 1 auto; min-width: 48px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; -webkit-line-clamp: unset; line-clamp: none; }
+.pb-title > :not(h1) { flex-shrink: 0; }
+
+/* Tablet (rail stacked): stretch columns to the board so the scrollbar sits right under them. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .pb-canvas > .tb-root > .tb-board { align-items: stretch; }
+  .pb-canvas > .tb-root > .tb-board > .tb-column { height: auto; min-height: 0; max-height: none; }
+}

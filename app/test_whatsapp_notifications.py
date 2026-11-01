@@ -203,7 +203,10 @@ class TriggerTests(ApprovalBase, TestCase):
         # The emailed link is a real guest link that may approve.
         link = events.get(payload__channel='EMAIL').payload['link']
         self.assertIn(link, email.body)
-        token = link.split('token=')[1].split('&')[0]
+        # A short /r/<code> link; the long token never goes into the mail.
+        self.assertNotIn('token=', link)
+        token = link.rstrip('/').rsplit('/', 1)[1]
+        self.assertEqual(len(token), 8)
         self.client.force_authenticate(user=None)
         exchange = self.client.post(reverse('api-guest-exchange'), {'token': token, 'name': 'Cleo Client', 'email': 'cleo@northlight.test'}, format='json')
         self.assertEqual(exchange.status_code, 201, exchange.content)

@@ -16,7 +16,8 @@ import type { DecisionKind, ReviewDecision } from "./review-decisions";
  */
 export type GuestResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
-export type GuestSession = { token: string; projectId: string; guestSessionId: string; accessKey: string; name: string };
+/** `cut`: the review version a single-file link opens on (short links carry no `?cut=`). */
+export type GuestSession = { token: string; projectId: string; guestSessionId: string; accessKey: string; name: string; cut?: string | null };
 export type GuestMediaVersion = {
   id: string; title: string; version_number: number;
   /** Open notes the client can see on this cut; the approve dialog warns with it. */
@@ -26,7 +27,14 @@ export type GuestMediaVersion = {
   /** The review proxy's state: READY, PENDING, PROCESSING, RETRYING, FAILED… Absent on older backends. */
   preview_status?: string | null;
 };
-export type GuestViewer = { name: string; can_decide: boolean; can_comment: boolean; expires_at: string | null };
+/** `can_read_*`: whether the link may list notes and drawings; absent on older APIs (treated as allowed). */
+export type GuestViewer = {
+  name: string; can_decide: boolean; can_comment: boolean; expires_at: string | null;
+  can_read_comments?: boolean; can_read_annotations?: boolean; scoped_to_file?: boolean;
+};
+
+/** A 403 for a permission the link simply lacks: not worth an error banner. */
+export const isMissingGuestPermission = (error: string) => /does not grant that permission/i.test(error);
 export type GuestReview = {
   project: { id: string; name: string; description: string | null };
   viewer?: GuestViewer;
@@ -133,7 +141,7 @@ const jsonInit = (method: string, payload: unknown): RequestInit => ({
  * link, and each gets a distinct guest session. The key is returned exactly once, so the
  * caller must persist it before navigating.
  */
-export async function exchangeGuestInvite(token: string, name: string, email: string): Promise<GuestResult<{ project_id: string; guest_session_id: string; access_key: string }>> {
+export async function exchangeGuestInvite(token: string, name: string, email: string): Promise<GuestResult<{ project_id: string; guest_session_id: string; access_key: string; media_version_id?: string | null }>> {
   let response: Response;
   try {
     response = await fetch("/api/guest-access/exchange/", {

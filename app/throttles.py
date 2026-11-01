@@ -68,3 +68,8 @@ class UploadLinkThrottle(AnonRateThrottle):
 
 class SupportTicketThrottle(UserRateThrottle):
     scope = 'support_ticket'
+
+
+class GuestExchangeThrottle(AnonRateThrottle):
+    """Redeeming a review link (long token or /r/<code>): caps guessing short codes per IP."""
+    scope = 'guest_exchange'

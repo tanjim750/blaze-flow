@@ -36,12 +36,16 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
   // The newest reveal wins: a fresh "Create link" or a "New link" on an existing row.
   const state = replaced && replaced.token && replaced !== created ? replaced : created;
   const [copied, setCopied] = useState(false);
-  const known = useKnownLinks(projectId, state.inviteId ?? null, state.token);
+  const remembered = useKnownLinks(projectId, state.inviteId ?? null, state.token);
+  // Every link with a short code can be copied again from the list, not only the newest.
+  const known: Record<string, string> = { ...remembered };
+  for (const invite of invites) if (invite.short_url) known[invite.id] = invite.short_url;
   const [revokeError, setRevokeError] = useState("");
   const [revoking, startRevoke] = useTransition();
   // The action only produces a token in the browser, so the guarded origin stays safe
   // during the server render while still making the copied link absolute.
-  const shareUrl = state.token ? `${typeof window === "undefined" ? "" : window.location.origin}/guest-review?token=${state.token}` : "";
+  // The short link is shown and copied; the long ?token= form is only an older-backend fallback.
+  const shareUrl = state.shortUrl ?? (state.token ? `${typeof window === "undefined" ? "" : window.location.origin}/guest-review?token=${state.token}` : "");
 
   // "Copied" is feedback for one click, not a state: it reverts after 2 s, so copying the
   // link a second time (or a new link) still visibly confirms.
