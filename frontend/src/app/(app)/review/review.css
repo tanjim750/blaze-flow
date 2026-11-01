@@ -1347,3 +1347,29 @@
   --border: #2c2c36; background: #0b0c10; color: #eceaf2; color-scheme: dark;
 }
 :root.light .rvp-stage .rvp-retry:hover { color: #fff; }
+
+/* Phone player bar: one compact row of transport controls (prev, play, next, time, volume,
+ * speed, fullscreen) plus a separate sideways-scrolling annotation row whose last swatch is
+ * never clipped. Overrides the shell's 44px tap-target floor inside the transport only;
+ * desktop (>600px) is untouched. */
+@media (max-width: 600px) {
+  .studio-main .rvp-transport :is(button, .ui-select-trigger):not(#rvp-tap-floor) { min-height: 0; min-width: 0; } /* :not(#…) outranks the shell's 44px floor */
+  .rvp-transport { column-gap: 4px; }
+  .rvp-transport > .rvp-group { gap: 0; flex: none; }
+  .rvp-transport > .rvp-group > button, .rvp-transport > .rvp-fullscreen { width: 32px; height: 32px; }
+  .rvp-transport > .rvp-group > .rvp-play { width: 36px; height: 36px; }
+  .rvp-transport > .rvp-clock { flex: none; white-space: nowrap; }
+  .rvp-select { flex: none; }
+  .rvp-select > svg { display: none; }
+  .rvp-transport .rvp-select .ui-select-trigger:not(#rvp-tap-floor) {
+    display: inline-flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 2px; white-space: nowrap;
+    width: auto; min-width: max-content; height: 28px; min-height: 0; padding: 0 6px 0 8px;
+    border: 1px solid var(--rv-line); border-radius: 7px; background: var(--t-bg-151922); color: var(--text); font-size: 11px;
+  }
+  .rvp-transport .rvp-select .ui-select-trigger svg { width: 12px; height: 12px; }
+  .rvp-transport > .rvp-tools { padding: 2px 8px; scroll-padding-inline: 8px; max-width: 100%; box-sizing: border-box;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); }
+  .rvp-transport > .rvp-tools button { width: 36px; height: 32px; }
+  .rvp-transport > .rvp-tools .rvp-palette button { width: 30px; }
+  .rvp-transport > .rvp-tools > :last-child { margin-right: 8px; }
+}
