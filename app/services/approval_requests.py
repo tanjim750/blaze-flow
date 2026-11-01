@@ -13,7 +13,6 @@ so approving goes through the existing ``guest_decision`` -> ``record_decision``
 import logging
 import uuid
 from datetime import datetime, timezone as dt_timezone
-from urllib.parse import urlencode
 
 from django.conf import settings
 from django.db import transaction
@@ -216,8 +215,8 @@ def request_client_approval(*, media_version, entry, stage, actor=None):
                 permissions=GUEST_APPROVAL_PERMISSIONS, expires_in_hours=expiry_hours, actor=actor,
                 shared_media_version_id=media_version.id,
             )
-            query = urlencode({'token': token, 'media': str(media_version.id)})
-            link, link_kind, expires_at = _absolute(f'/guest-review?{query}'), 'guest', invite.expires_at
+            # The short link opens the same file-scoped cut; the long token stays out of the mail.
+            link, link_kind, expires_at = f'{settings.SHORT_LINK_BASE_URL}/{invite.short_code}', 'guest', invite.expires_at
         notification, was_created = Notification.objects.get_or_create(
             recipient_user=user, kind=NotificationKind.CLIENT_APPROVAL_REQUESTED,
             entity_type='media_stage_entry', entity_id=str(entry.id),
@@ -347,6 +346,10 @@ def deliver_approval_whatsapp(*, notification, link):
         )
     context = _message_context(notification)
     base = f'{settings.APP_BASE_URL}/'
+    short_base = f'{settings.SHORT_LINK_BASE_URL}/'
+    if not link.startswith(base) and link.startswith(short_base):
+        # A short link on its own domain: the app serves the same code at /r/<code>.
+        link = f"{base}r/{link[len(short_base):]}"
     provider = get_provider()
     try:
         message_id = provider.send_template(

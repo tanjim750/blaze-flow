@@ -26,6 +26,7 @@ import {
   editGuestComment, exchangeGuestInvite, getGuestPlayback, listGuestAnnotations, listGuestComments, loadGuestReview,
   guestEmailProblem, readGuestSession, REMEMBER_DAYS, setGuestReaction, uploadGuestAttachment, writeGuestSession,
   type GuestMediaVersion, type GuestPlayback, type GuestReview, type GuestSession,
+  isMissingGuestPermission,
 } from "@/lib/guest-client";
 
 const REACTIONS = ["👍", "🎉", "👀"];
@@ -83,26 +84,31 @@ export function GuestReviewer({ token, cut = null }: { token: string; cut?: stri
     void reload(false).finally(() => setLoading(false));
   }, [session, reload]);
 
+  // Wait for the review so we know what the link may read: a view-only link without
+  // note access must not ask for notes (that 403 used to show as a pink banner).
+  const canReadComments = review ? review.viewer?.can_read_comments !== false : null;
+  const canReadAnnotations = review ? review.viewer?.can_read_annotations !== false : null;
   const refresh = useCallback(async () => {
-    if (!session || !versionId) return;
+    if (!session || !versionId || !canReadComments) return;
     const result = await listGuestComments(session.projectId, versionId, session.accessKey);
     if (result.ok) setNotes(nestNotes(result.data));
+    else if (isMissingGuestPermission(result.error)) setNotes([]);
     else setError(result.error);
-  }, [session, versionId]);
+  }, [session, versionId, canReadComments]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
   // B4: drawings are part of the notes, so a guest sees them on every link, view-only included.
   const [drawings, setDrawings] = useState<{ versionId: string; items: DrawnAnnotation[] } | null>(null);
   useEffect(() => {
-    if (!session || !versionId) return;
+    if (!session || !versionId || !canReadAnnotations) return;
     let live = true;
     void listGuestAnnotations(session.projectId, versionId, session.accessKey).then((result) => {
       if (!live || !result.ok) return;
       setDrawings({ versionId, items: result.data.map((item) => ({ id: item.id, elements: item.elements, startMs: item.start_time_ms, endMs: item.end_time_ms, noteId: item.review_comment_id })) });
     });
     return () => { live = false; };
-  }, [session, versionId, notes]);
+  }, [session, versionId, notes, canReadAnnotations]);
   const annotations = drawings && drawings.versionId === versionId ? drawings.items : NO_ANNOTATIONS;
 
   // The player source is a signed URL for this guest and this cut, fetched per cut.

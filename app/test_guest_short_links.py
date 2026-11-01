@@ -124,6 +124,51 @@ class ShortLinkApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(review.status_code, 200)
         self.assertFalse(review.json()['viewer']['can_comment'])
 
+    def upload(self, name):
+        self.client.force_authenticate(self.owner)
+        return self.client.post(
+            reverse('api-media-versions', args=[self.workspace.id, self.project_id]),
+            {'file': SimpleUploadedFile(name, b'\x89PNG\r\n\x1a\nx', content_type='image/png'), 'title': name},
+            format='multipart',
+        ).json()['id']
+
+    def guest(self, permissions, shared=None):
+        self.client.force_authenticate(self.owner)
+        data = self.create(permissions=permissions)
+        if shared:
+            GuestInvite.objects.filter(id=data['id']).update(shared_media_version_id=shared)
+        key = self.exchange(data['short_code']).json()['access_key']
+        return {'HTTP_X_GUEST_ACCESS_KEY': key}
+
+    def test_file_scoped_link_sees_only_its_file(self):
+        shared, other = self.upload('a.png'), self.upload('b.png')
+        headers = self.guest(['media.read', 'review.comment.read', 'annotation.read'], shared=shared)
+        review = self.client.get(reverse('api-guest-review', args=[self.project_id]), **headers).json()
+        self.assertEqual([item['id'] for item in review['media_versions']], [shared])
+        self.assertTrue(review['viewer']['scoped_to_file'])
+        for name in ('api-guest-comments', 'api-guest-annotations', 'api-guest-playback'):
+            blocked = self.client.get(reverse(name, args=[self.project_id, other]), **headers)
+            self.assertEqual(blocked.status_code, 404, name)
+        self.assertEqual(self.client.get(reverse('api-guest-comments', args=[self.project_id, shared]), **headers).status_code, 200)
+
+    def test_project_link_still_sees_the_whole_project(self):
+        first, second = self.upload('a.png'), self.upload('b.png')
+        headers = self.guest(['media.read', 'review.comment.read'])
+        review = self.client.get(reverse('api-guest-review', args=[self.project_id]), **headers).json()
+        self.assertEqual({item['id'] for item in review['media_versions']}, {first, second})
+        self.assertFalse(review['viewer']['scoped_to_file'])
+        self.assertEqual(self.client.get(reverse('api-guest-comments', args=[self.project_id, second]), **headers).status_code, 200)
+
+    def test_viewer_says_what_the_link_may_read(self):
+        self.upload('a.png')
+        headers = self.guest(['media.read'])
+        viewer = self.client.get(reverse('api-guest-review', args=[self.project_id]), **headers).json()['viewer']
+        self.assertFalse(viewer['can_read_comments'])
+        self.assertFalse(viewer['can_read_annotations'])
+        headers = self.guest(['media.read', 'review.comment.read', 'annotation.read'])
+        viewer = self.client.get(reverse('api-guest-review', args=[self.project_id]), **headers).json()['viewer']
+        self.assertTrue(viewer['can_read_comments'] and viewer['can_read_annotations'])
+
 
 class ExchangeThrottleTests(TestCase):
     def setUp(self):

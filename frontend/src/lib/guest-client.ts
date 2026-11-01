@@ -25,7 +25,14 @@ export type GuestMediaVersion = {
   /** The newest client decision on exactly this cut, if any (`mine` when it was this guest's). */
   decision?: ReviewDecision | null;
 };
-export type GuestViewer = { name: string; can_decide: boolean; can_comment: boolean; expires_at: string | null };
+/** `can_read_*`: whether the link may list notes and drawings; absent on older APIs (treated as allowed). */
+export type GuestViewer = {
+  name: string; can_decide: boolean; can_comment: boolean; expires_at: string | null;
+  can_read_comments?: boolean; can_read_annotations?: boolean; scoped_to_file?: boolean;
+};
+
+/** A 403 for a permission the link simply lacks: not worth an error banner. */
+export const isMissingGuestPermission = (error: string) => /does not grant that permission/i.test(error);
 export type GuestReview = {
   project: { id: string; name: string; description: string | null };
   viewer?: GuestViewer;
