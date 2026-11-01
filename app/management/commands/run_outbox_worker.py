@@ -5,6 +5,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import close_old_connections
 
 from app.services import process_outbox_events
+from app.services.file_processing import HQ_PREVIEW_TOPIC
 
 
 class Command(BaseCommand):
@@ -24,8 +25,14 @@ class Command(BaseCommand):
             if not options['once']:
                 close_old_connections()
             # AI Visual QA runs belong to `run_ai_qa_worker` (see AI_QA_DEDICATED_WORKER).
-            exclude = 'ai_visual_qa.' if settings.AI_QA_DEDICATED_WORKER else None
-            result = process_outbox_events(limit=options['batch_size'], exclude_topic_prefix=exclude)
+            exclude = ('ai_visual_qa.',) if settings.AI_QA_DEDICATED_WORKER else ()
+            result = process_outbox_events(
+                limit=options['batch_size'], exclude_topic_prefix=(*exclude, HQ_PREVIEW_TOPIC),
+            )
+            if not result['claimed']:
+                # Optional HQ proxies are low priority: one at a time, only when nothing else
+                # is waiting, so review proxies and emails never queue behind a 1080p encode.
+                result = process_outbox_events(limit=1, topic_prefix=HQ_PREVIEW_TOPIC)
             if any(result.values()):
                 self.stdout.write(str(result))
             if options['once']:

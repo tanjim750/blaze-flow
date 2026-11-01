@@ -319,11 +319,15 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
         media_id = uploaded.json()['id']
         file_id = uploaded.json()['file']['id']
         process_outbox_events()
+        # The 720p proxy is playable before the separate HQ job has run.
+        sd = FileVariant.objects.get(file_id=file_id, metadata__variant_type='VIDEO_PROXY')
+        self.assertFalse(FileVariant.objects.filter(file_id=file_id, metadata__variant_type='VIDEO_PROXY_HQ').exists())
+        self.assertTrue(OutboxEvent.objects.filter(topic='file.preview-hq.requested', aggregate_id=str(file_id)).exists())
         process_outbox_events()
 
-        sd = FileVariant.objects.get(file_id=file_id, metadata__variant_type='VIDEO_PROXY')
         hq = FileVariant.objects.get(file_id=file_id, metadata__variant_type='VIDEO_PROXY_HQ')
         self.assertEqual((sd.metadata['max_height'], hq.metadata['max_height']), (720, 1080))
+        self.assertEqual(hq.metadata['preset'], 'veryfast')
         self.assertNotEqual(sd.object_key, hq.object_key)
 
         preview_url = reverse('api-media-version-preview', args=[self.workspace.id, self.project.id, media_id])
@@ -333,6 +337,32 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(high['Content-Length'], str(hq.size_bytes))
         detail = self.client.get(reverse('api-media-version-detail', args=[self.workspace.id, self.project.id, media_id]))
         self.assertEqual(detail.json()['preview_qualities'], ['hq', 'sd'])
+
+    def test_a_failed_hq_proxy_does_not_touch_the_review_proxy(self):
+        from unittest import mock
+        from app.models import OutboxEventStatus
+        from app.services import file_processing
+        uploaded = self.upload(name='big.mp4', content=_make_test_clip(size='1920x1080'), content_type='video/mp4')
+        file_id = uploaded.json()['file']['id']
+        process_outbox_events()
+        with mock.patch.object(file_processing, '_video_proxy_hq', side_effect=file_processing.VideoProxyFailed('timed out')):
+            process_outbox_events()
+        self.assertTrue(FileVariant.objects.filter(file_id=file_id, metadata__variant_type='VIDEO_PROXY').exists())
+        hq_job = OutboxEvent.objects.get(topic='file.preview-hq.requested', aggregate_id=str(file_id))
+        self.assertEqual(hq_job.status, OutboxEventStatus.DEAD_LETTER)
+        preview_job = OutboxEvent.objects.get(topic='file.preview.requested', aggregate_id=str(file_id))
+        self.assertEqual(preview_job.status, OutboxEventStatus.PUBLISHED)
+
+    def test_long_cuts_skip_the_hq_proxy(self):
+        uploaded = self.upload(name='big.mp4', content=_make_test_clip(size='1920x1080'), content_type='video/mp4')
+        file_id = uploaded.json()['file']['id']
+        File.objects.filter(id=file_id).update(metadata={'duration_ms': 301_000})
+        with override_settings(VIDEO_PROXY_HQ_MAX_SECONDS=300):
+            process_outbox_events()
+            process_outbox_events()
+            process_outbox_events()
+        self.assertTrue(FileVariant.objects.filter(file_id=file_id, metadata__variant_type='VIDEO_PROXY').exists())
+        self.assertFalse(OutboxEvent.objects.filter(topic='file.preview-hq.requested', aggregate_id=str(file_id)).exists())
 
     def test_preview_requires_project_membership_and_404s_before_processing(self):
         uploaded = self.upload(name='clip.mp4', content=_make_test_clip(), content_type='video/mp4')
@@ -415,7 +445,6 @@ class MediaVersionApiTests(WorkspaceAccessSetupMixin, TestCase):
 
 class VideoProxyThreadArgsTests(TestCase):
     def test_threads_follow_the_setting_and_zero_means_auto(self):
-        from django.test import override_settings
         from .services.file_processing import video_proxy_thread_args
         with override_settings(VIDEO_PROXY_THREADS=2):
             self.assertEqual(video_proxy_thread_args(), ['-threads', '2'])

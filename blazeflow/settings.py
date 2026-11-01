@@ -233,6 +233,11 @@ VIDEO_PROXY_HQ_MAX_WIDTH = int(os.environ.get('VIDEO_PROXY_HQ_MAX_WIDTH', '1920'
 VIDEO_PROXY_HQ_MAX_HEIGHT = int(os.environ.get('VIDEO_PROXY_HQ_MAX_HEIGHT', '1080'))
 VIDEO_PROXY_HQ_CRF = int(os.environ.get('VIDEO_PROXY_HQ_CRF', '20'))
 VIDEO_PROXY_HQ_MAXRATE = os.environ.get('VIDEO_PROXY_HQ_MAXRATE', '10M')
+# HQ has its own preset so a slow VIDEO_PROXY_PRESET never makes the optional encode crawl.
+VIDEO_PROXY_HQ_PRESET = os.environ.get('VIDEO_PROXY_HQ_PRESET', 'veryfast')
+# Skip HQ for cuts longer than this (seconds; 0 = no limit). A 12-minute 1080p encode on
+# 2 CPUs took ~30 minutes and jammed the queue.
+VIDEO_PROXY_HQ_MAX_SECONDS = int(os.environ.get('VIDEO_PROXY_HQ_MAX_SECONDS', '300'))
 VIDEO_PROXY_AUDIO_BITRATE = os.environ.get('VIDEO_PROXY_AUDIO_BITRATE', '128k')
 VIDEO_PROXY_MAX_INPUT_BYTES = int(os.environ.get('VIDEO_PROXY_MAX_INPUT_BYTES', str(MAX_MEDIA_UPLOAD_BYTES)))
 # The output cap and the encode timeout both scale with the cut's runtime (see
