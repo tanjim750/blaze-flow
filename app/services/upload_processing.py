@@ -33,7 +33,11 @@ def processing_state(file: File):
     if event is None and not variants:
         # Nothing queued: either previews are off here or this type gets none.
         return {'stage': 'ready', 'label': 'Ready', 'ready': True}
-    if (event is not None and event.status == 'DEAD_LETTER') or (wanted and all(status == FileStatus.FAILED for status in wanted)):
+    failed = (event is not None and event.status == 'DEAD_LETTER') or (wanted and all(status == FileStatus.FAILED for status in wanted))
+    if kind == 'proxy' and (failed or (event is not None and event.status == 'PUBLISHED' and not wanted)):
+        # Done without a proxy (dead-lettered, or an older run that left a review card).
+        return {'stage': 'ready', 'label': 'Proxy failed', 'ready': True}
+    if failed:
         return {'stage': 'ready', 'label': 'Ready (no preview)', 'ready': True}
     if event is not None and event.status == 'PUBLISHED' and not wanted:
         return {'stage': 'ready', 'label': 'Ready', 'ready': True}

@@ -51,7 +51,10 @@ def process_outbox_events(
         try:
             event_dispatcher(DomainEvent(name=event.topic, payload=event.payload))
         except Exception as exc:
-            is_dead_letter = event.attempts >= max_attempts
+            # A job type may allow fewer attempts than the default (a failed video proxy
+            # encode is expensive and rarely succeeds on the same input next time).
+            allowed = min(max_attempts, getattr(exc, 'max_attempts', None) or max_attempts)
+            is_dead_letter = event.attempts >= allowed
             failed += 0 if is_dead_letter else 1
             dead_lettered += 1 if is_dead_letter else 0
             retry_delay = min(

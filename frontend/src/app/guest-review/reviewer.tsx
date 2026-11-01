@@ -19,6 +19,7 @@ import { RichBrief } from "@/components/brief/rich-brief";
 import { briefIsEmpty, briefToPlainText } from "@/lib/rich-brief";
 import { rangeLabel } from "@/lib/annotation-window";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
+import { proxyNotice } from "@/app/(app)/review/player-state";
 import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } from "@/app/(app)/review/player";
 import { KrewsysLogo } from "@/components/brand/krewsys-logo";
 import {
@@ -228,7 +229,12 @@ export function GuestReviewer({ token, cut = null }: { token: string; cut?: stri
               {!loading && review && review.media_versions.length === 0 && (
                 <small className="gr-empty-hint">Nothing has been uploaded to {review.project.name} for review yet. Ask the person who sent this link to upload the file, then reload this page.</small>
               )}
-              {playback?.error && playback.versionId === versionId && <small>{playback.error}</small>}
+              {(() => {
+                // A failed proxy is said plainly, not left as "still being prepared".
+                const notice = !loading && version && !(versionId && pendingPlayback) ? proxyNotice(version.preview_status) : null;
+                return notice && <small className={`gr-proxy is-${notice.tone}`} role="status">{notice.title.replace(" — re-render", "")}. {notice.detail}</small>;
+              })()}
+              {playback?.error && playback.versionId === versionId && !proxyNotice(version?.preview_status) && <small>{playback.error}</small>}
             </div>
           )}
         </section>

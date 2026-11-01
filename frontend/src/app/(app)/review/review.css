@@ -145,6 +145,13 @@
 }
 .rvp-retry:hover { background: var(--primary); border-color: var(--primary); }
 .rvp-retry:focus-visible { outline: 2px solid var(--primary-2); outline-offset: 2px; }
+/* The review proxy is still being made, or failed: said plainly, with the way forward. */
+.rvp-proxy.is-failed > svg { color: var(--danger, #e5484d); }
+.rvp-proxy-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.rvp-proxy .rvp-retry:disabled { opacity: .6; cursor: progress; }
+.rvp-retry.is-ghost { background: transparent; }
+.rvp-spin { animation: rvp-spin 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .rvp-spin { animation-duration: 2.4s; } }
 /* Waiting on data after a seek or a stall. Pointer-transparent so a click still toggles play. */
 .rvp-buffering {
   position: absolute; inset: 0; z-index: 3;
@@ -1373,3 +1380,7 @@
   .rvp-transport > .rvp-tools .rvp-palette button { width: 30px; }
   .rvp-transport > .rvp-tools > :last-child { margin-right: 8px; }
 }
+
+/* The proxy's own state, beside the workflow stage, so a "Queued" stage is never read as the render. */
+.rv-proxy-chip { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 550; white-space: nowrap; border: 1px solid var(--rv-line); color: var(--muted); }
+.rv-proxy-chip.is-failed { color: var(--danger, #e5484d); border-color: color-mix(in srgb, var(--danger, #e5484d) 45%, transparent); background: color-mix(in srgb, var(--danger, #e5484d) 10%, transparent); }

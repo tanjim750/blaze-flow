@@ -27,8 +27,8 @@ def prime_media_rows(medias):
         ).select_related('workflow_stage', 'changed_by_user', 'changed_by_guest_session')
     }
     events = {}
-    for event in OutboxEvent.objects.filter(topic='file.preview.requested', aggregate_id__in=[str(f) for f in file_ids]).order_by('-pk'):
-        events[event.aggregate_id] = event  # mirrors `.first()` on the default ordering below
+    for event in OutboxEvent.objects.filter(topic='file.preview.requested', aggregate_id__in=[str(f) for f in file_ids]).order_by('created_at'):
+        events[event.aggregate_id] = event  # the newest wins, like `latest_preview_event`
     for media in medias:
         media._variants = variants.get(media.original_file_id, [])
         media._open_entry = entries.get(media.id)
@@ -147,24 +147,20 @@ class MediaVersionSerializer(serializers.ModelSerializer):
         qualities = []
         if HQ_PROXY_VARIANT_TYPE in types:
             qualities.append('hq')
-        if types & set(PREVIEW_VARIANT_TYPES):
+        playable = {'VIDEO_PROXY'} if (media.original_file.mime_type or '').startswith('video/') else set(PREVIEW_VARIANT_TYPES)
+        if types & playable:
             qualities.append('sd')
         return qualities
 
     def get_preview_status(self, media):
+        from app.services.preview_state import latest_preview_event, preview_status
         primed = getattr(media, '_variants', None)
         if primed is not None:
-            variant = next((v.status for v in primed if _variant_type(v) in PREVIEW_VARIANT_TYPES), None)
+            variants = [(_variant_type(v), v.status) for v in primed]
         else:
-            variant = FileVariant.objects.filter(file=media.original_file, deleted_at__isnull=True, metadata__variant_type__in=PREVIEW_VARIANT_TYPES).order_by('-created_at').values_list('status', flat=True).first()
-        if variant:
-            return variant
-        event = media._preview_event if hasattr(media, '_preview_event') else OutboxEvent.objects.filter(topic='file.preview.requested', aggregate_id=str(media.original_file_id)).first()
-        if not event:
-            return 'PENDING'
-        if event.payload.get('cancelled'):
-            return 'CANCELLED'
-        return {'DEAD_LETTER': 'FAILED', 'FAILED': 'FAILED', 'PROCESSING': 'PROCESSING'}.get(event.status, 'PENDING')
+            variants = FileVariant.objects.filter(file=media.original_file, deleted_at__isnull=True).values_list('metadata__variant_type', 'status')
+        event = media._preview_event if hasattr(media, '_preview_event') else latest_preview_event(media.original_file_id)
+        return preview_status(media.original_file, variants, event)
 
 
 def media_stage_entries(media):

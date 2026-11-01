@@ -23,6 +23,8 @@ export type GuestMediaVersion = {
   open_notes?: number;
   /** The newest client decision on exactly this cut, if any (`mine` when it was this guest's). */
   decision?: ReviewDecision | null;
+  /** The review proxy's state: READY, PENDING, PROCESSING, RETRYING, FAILED… Absent on older backends. */
+  preview_status?: string | null;
 };
 export type GuestViewer = { name: string; can_decide: boolean; can_comment: boolean; expires_at: string | null };
 export type GuestReview = {

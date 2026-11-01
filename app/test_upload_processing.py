@@ -49,7 +49,7 @@ class UploadProcessingTests(WorkspaceAccessSetupMixin, TestCase):
                                            deduplication_key=f'tray-test:{self.file.id}')
         self.assertEqual(processing_state(self.file), {'stage': 'proxy', 'label': 'Making proxy', 'ready': False})
         OutboxEvent.objects.filter(id=event.id).update(status='DEAD_LETTER')
-        self.assertEqual(processing_state(self.file)['label'], 'Ready (no preview)')
+        self.assertEqual(processing_state(self.file)['label'], 'Proxy failed')  # a dead-lettered video proxy is surfaced as failed
         File.objects.filter(id=self.file.id).update(status=FileStatus.FAILED)
         self.file.refresh_from_db()
         self.assertEqual(processing_state(self.file)['stage'], 'failed')

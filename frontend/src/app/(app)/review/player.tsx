@@ -20,6 +20,7 @@ import { playerShouldIgnoreKey } from "./player-keys";
 import {
   BUFFERING_DELAY_MS, bufferedSpans, canSeekTo, clampSeekMs, describePlaybackError,
   positionFromPointer, sameSpans, seekLanded, type BufferedSpan,
+  proxyNotice,
 } from "./player-state";
 import { Select } from "@/components/ui/select";
 
@@ -57,6 +58,12 @@ const SPEEDS = [0.25, 0.5, 1, 1.5, 2];
 const DEFAULT_FPS = 25;
 
 type Props = {
+  /** The cut's `preview_status`. Anything not READY replaces the proxy with a notice. */
+  proxyStatus?: string | null;
+  /** Re-queues the proxy render; absent where the viewer can't (guests). */
+  onRerender?: (() => void) | null;
+  /** True while a re-render request is in flight. */
+  rerendering?: boolean;
   handle: RefObject<PlayerHandle | null>;
   /**
    * How the file is shown. Video (and audio, through the same element) gets the full
@@ -140,7 +147,7 @@ function DocumentViewer({ sources, title, surface, downloadHref }: Props & { sur
   );
 }
 
-function MediaPlayer({ handle, sources, title, notes, annotations, pending, pendingWindow = null, canDraw, onTime, onMeta, onDraw, onEditAnnotation, onDeleteAnnotation, onFocusNote, surface, mark = null, onMark, loop = null, onStopLoop, highlight = null, aiMarkers = [], onAiMarker }: Props & { surface: "video" | "audio" | "image" }) {
+function MediaPlayer({ handle, sources, title, notes, annotations, pending, pendingWindow = null, canDraw, onTime, onMeta, onDraw, onEditAnnotation, onDeleteAnnotation, onFocusNote, surface, mark = null, onMark, loop = null, onStopLoop, highlight = null, aiMarkers = [], onAiMarker, proxyStatus = null, onRerender = null, rerendering = false }: Props & { surface: "video" | "audio" | "image" }) {
   const still = surface === "image";
   const image = useRef<HTMLImageElement>(null);
   const [imageFailed, setImageFailed] = useState(false);
@@ -510,7 +517,11 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
   // The playhead shows a drag or a seek in flight; the clock only ever shows the real time.
   const headMs = dragMs ?? seekTarget ?? positionMs;
   const progress = durationMs ? Math.min(100, (headMs / durationMs) * 100) : 0;
-  const problem = failed ? describePlaybackError(errorCode) : null;
+  // Only the proxy sources depend on the render; the original file plays regardless.
+  const onProxy = Boolean(source && (source.id === "proxy" || source.id === "hq"));
+  const notice = surface === "video" && onProxy ? proxyNotice(proxyStatus, Boolean(onRerender)) : null;
+  const original = sources.find((item) => item.id === "original") ?? null;
+  const problem = failed && !notice ? describePlaybackError(errorCode) : null;
   /*
    * Each drawing is shown for its own window rather than "near the playhead": a held one for
    * its whole span while the cut plays, fading out over the last half second, and a
@@ -583,7 +594,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
         ) : source ? (
           <video
             ref={video}
-            src={source.src}
+            src={notice ? undefined : source.src}
             playsInline
             className={failed ? "is-failed" : undefined}
             onClick={toggle}
@@ -594,6 +605,25 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
           <div className="rvp-empty">
             <Film size={28} />
             <p>This cut has no preview available yet.</p>
+          </div>
+        )}
+        {notice && (
+          <div className={`rvp-empty rvp-error rvp-proxy is-${notice.tone}`} role={notice.tone === "failed" ? "alert" : "status"} aria-live="polite">
+            {notice.tone === "working" ? <Loader2 size={28} className="rvp-spin" aria-hidden="true" /> : <Film size={28} />}
+            <strong>{notice.title}</strong>
+            <p>{notice.detail}</p>
+            <div className="rvp-proxy-actions">
+              {notice.tone === "failed" && onRerender && (
+                <button type="button" className="rvp-retry" onClick={onRerender} disabled={rerendering}>
+                  {rerendering ? <Loader2 size={14} className="rvp-spin" /> : <RotateCw size={14} />} {rerendering ? "Queuing…" : "Re-render"}
+                </button>
+              )}
+              {original && (
+                <button type="button" className="rvp-retry is-ghost" onClick={() => setSourceId(original.id)}>
+                  <Play size={14} /> Play original file
+                </button>
+              )}
+            </div>
           </div>
         )}
         {/* The element stays mounted when it fails, so Retry can reload it in place. */}
@@ -610,7 +640,7 @@ function MediaPlayer({ handle, sources, title, notes, annotations, pending, pend
           </div>
         )}
         {/* R13: until the media's metadata arrives there is no duration; say it is loading. */}
-        {(buffering || (!durationMs && Boolean(source) && !still)) && !failed && (
+        {(buffering || (!durationMs && Boolean(source) && !still)) && !failed && !notice && (
           <div className="rvp-buffering" role="status" aria-live="polite">
             <Loader2 size={28} aria-hidden="true" />
             <span className="sr-only">Loading…</span>
