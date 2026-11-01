@@ -35,7 +35,9 @@ def process_outbox_events(
         if topic_prefix:
             claimable = claimable.filter(topic__startswith=topic_prefix)
         if exclude_topic_prefix:
-            claimable = claimable.exclude(topic__startswith=exclude_topic_prefix)
+            prefixes = (exclude_topic_prefix,) if isinstance(exclude_topic_prefix, str) else exclude_topic_prefix
+            for prefix in prefixes:
+                claimable = claimable.exclude(topic__startswith=prefix)
         events = list(claimable.order_by('created_at')[:limit])
         for event in events:
             event.status = OutboxEventStatus.PROCESSING

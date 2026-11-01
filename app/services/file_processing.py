@@ -36,6 +36,9 @@ SCAN_TOPIC = 'file.security-scan.requested'
 logger = logging.getLogger(__name__)
 
 PREVIEW_TOPIC = 'file.preview.requested'
+# The optional 1080p proxy is its own low-priority job (see `run_outbox_worker`), so a slow
+# or failed HQ encode never holds up or fails the 720p review proxy.
+HQ_PREVIEW_TOPIC = 'file.preview-hq.requested'
 # The playable/openable preview: exactly one of these per file, and the thing the review
 # player and `preview_status` mean when they say "the preview".
 PREVIEW_VARIANT_TYPES = (
@@ -611,7 +614,8 @@ def _stderr_tail(stderr, limit=2000):
     return text.strip()[-limit:]
 
 
-def _encode_proxy(file, *, max_width, max_height, crf, variant_type, maxrate=None):
+def _encode_proxy(file, *, max_width, max_height, crf, variant_type, maxrate=None, preset=None):
+    preset = preset or settings.VIDEO_PROXY_PRESET
     executable = shutil.which(settings.FFMPEG_COMMAND)
     if not executable:
         raise VideoProxyFailed('Video proxy encoder is unavailable.')
@@ -636,7 +640,7 @@ def _encode_proxy(file, *, max_width, max_height, crf, variant_type, maxrate=Non
         threads = video_proxy_thread_args()
         command = [
             executable, '-v', 'error', '-y', '-i', str(source),
-            '-vf', scale, '-c:v', 'libx264', '-preset', settings.VIDEO_PROXY_PRESET,
+            '-vf', scale, '-c:v', 'libx264', '-preset', preset,
             '-crf', str(crf), *rate, *threads, '-pix_fmt', 'yuv420p', '-profile:v', 'high',
             '-force_key_frames', f'expr:gte(t,n_forced*{settings.VIDEO_PROXY_KEYFRAME_SECONDS})',
             '-movflags', '+faststart', '-c:a', 'aac', '-b:a', settings.VIDEO_PROXY_AUDIO_BITRATE,
@@ -682,7 +686,7 @@ def _encode_proxy(file, *, max_width, max_height, crf, variant_type, maxrate=Non
         directory = None  # owned by `produced` now; `_store_variant` cleans it up
         return produced, 'video/mp4', 'mp4', variant_type, {
             'max_width': max_width, 'max_height': max_height, 'crf': crf,
-            'preset': settings.VIDEO_PROXY_PRESET, **({'maxrate': maxrate} if maxrate else {}),
+            'preset': preset, **({'maxrate': maxrate} if maxrate else {}),
         }
     finally:
         if directory is not None:
@@ -706,6 +710,7 @@ def _video_proxy_hq(file):
     return _encode_proxy(
         file, max_width=settings.VIDEO_PROXY_HQ_MAX_WIDTH, max_height=settings.VIDEO_PROXY_HQ_MAX_HEIGHT,
         crf=settings.VIDEO_PROXY_HQ_CRF, variant_type=HQ_PROXY_VARIANT_TYPE, maxrate=settings.VIDEO_PROXY_HQ_MAXRATE,
+        preset=settings.VIDEO_PROXY_HQ_PRESET,
     )
 
 
@@ -731,6 +736,11 @@ def _video_size(file):
 
 def wants_hq_proxy(file):
     if not (settings.VIDEO_PROXY_HQ_ENABLED and (file.mime_type or '').startswith('video/')):
+        return False
+    # On a small server a 1080p encode of a long cut takes longer than the cut itself and
+    # starves the review proxies queued behind it; over the limit the player offers 720p.
+    limit = settings.VIDEO_PROXY_HQ_MAX_SECONDS
+    if limit > 0 and (file_duration_seconds(file) or 0) > limit:
         return False
     size = _video_size(file)
     if not size:
@@ -928,13 +938,14 @@ def generate_preview(*, file_id):
         retire_fallback_cards(file)
     else:
         preview = _store_variant(file, _preview_content, types=PREVIEW_VARIANT_TYPES)
-    # The 1080p proxy comes after the 720p one, so a cut is playable as soon as possible,
-    # and is best effort: without it the player simply offers 720p.
-    try:
-        if wants_hq_proxy(file):
-            _store_variant(file, _video_proxy_hq, types=(HQ_PROXY_VARIANT_TYPE,))
-    except Exception:
-        logger.warning('HQ proxy generation failed for file %s', file.id, exc_info=True)
+    # The 1080p proxy is a separate, low-priority job queued only once the 720p one exists,
+    # so the cut is playable first and an HQ timeout cannot fail or block this job.
+    if file.mime_type.startswith('video/'):
+        try:
+            if wants_hq_proxy(file):
+                _write_file_event(file_id=file.id, topic=HQ_PREVIEW_TOPIC)
+        except Exception:
+            logger.warning('Could not queue the HQ proxy for file %s', file.id, exc_info=True)
     return preview
 
 
@@ -957,6 +968,26 @@ def retire_fallback_cards(file):
 
 def handle_security_scan_event(event):
     return process_security_scan(file_id=event.payload['file_id'])
+
+
+class HQProxyFailed(VideoProxyFailed):
+    """An optional HQ encode failed: one attempt, then dead-letter. The 720p proxy is unaffected."""
+
+    max_attempts = 1
+
+
+def generate_hq_preview(*, file_id):
+    file = _load_job_file(file_id, status=FileStatus.READY)
+    if file is None or not wants_hq_proxy(file):
+        return None
+    try:
+        return _store_variant(file, _video_proxy_hq, types=(HQ_PROXY_VARIANT_TYPE,))
+    except VideoProxyFailed as exc:
+        raise HQProxyFailed(str(exc)) from exc
+
+
+def handle_hq_preview_event(event):
+    return generate_hq_preview(file_id=event.payload['file_id'])
 
 
 def handle_preview_event(event):
