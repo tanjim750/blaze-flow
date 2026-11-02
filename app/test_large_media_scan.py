@@ -12,7 +12,7 @@ from django.urls import reverse
 from .models import File, FileSecurityScan, OutboxEvent
 from .services import file_processing
 from .services.file_processing import (
-    BLOCKED_TOO_LARGE, PREVIEW_TOPIC, SKIPPED_LARGE_MEDIA, _sniff_video_container, process_security_scan,
+    BLOCKED_TOO_LARGE, NOT_SCANNED_TOO_LARGE, PREVIEW_TOPIC, SKIPPED_LARGE_MEDIA, _sniff_video_container, process_security_scan,
 )
 from .test_access_projects import WorkspaceAccessSetupMixin
 
@@ -130,3 +130,28 @@ class LargeMediaScanTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(SCANNED, [content])
         self.assertEqual(scan.status, 'CLEAN')
         self.assertNotIn('scan_status', scan.result)
+
+
+    def test_oversized_verified_archive_is_accepted_as_not_scanned(self):
+        import io, zipfile
+        from .services.upload_processing import processing_state
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as archive:
+            archive.writestr('a.bin', b'x' * 4096)
+        content = buffer.getvalue()
+        file = self.upload_media('still.png', PNG, 'image/png')
+        from django.core.files.storage import default_storage
+        with default_storage.open(file.object_key, 'wb') as out:
+            out.write(content)
+        File.objects.filter(id=file.id).update(mime_type='application/zip', original_name='drive.zip', size_bytes=len(content))
+        with override_settings(CLAMAV_MAX_STREAM_BYTES=1024):
+            with self.assertLogs('app.services.file_processing', level='WARNING') as logs:
+                scan = process_security_scan(file_id=file.id)
+        self.assertEqual(SCANNED, [])
+        self.assertEqual(scan.status, 'CLEAN')
+        self.assertEqual(scan.result['scan_status'], NOT_SCANNED_TOO_LARGE)
+        self.assertTrue(scan.result['skipped'])
+        file.refresh_from_db()
+        self.assertEqual(file.status, 'READY')
+        self.assertIn('skipped (too large)', logs.output[0])
+        self.assertEqual(processing_state(file)['label'], 'Ready · not scanned (too large)')

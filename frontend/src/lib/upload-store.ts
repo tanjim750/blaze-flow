@@ -10,7 +10,7 @@
 export type UploadStatus = "queued" | "uploading" | "processing" | "ready" | "failed" | "cancelled";
 export type UploadSource = "files" | "project" | "portal" | "public" | "chat" | "review";
 export type Processing = { stage: string; label: string; ready: boolean };
-export type UploadResult = { ok: true; data: unknown } | { ok: false; status: number; error: string };
+export type UploadResult = { ok: true; data: unknown } | { ok: false; status: number; error: string; retryable?: boolean };
 
 export type UploadItem = {
   id: string;
@@ -26,6 +26,8 @@ export type UploadItem = {
   startedAt: number | null;
   finishedAt: number | null;
   error: string | null;
+  /** False when the server refused deterministically (Retry would fail the same way). */
+  retryable?: boolean;
   /** Scan / preview / proxy, once the bytes have landed. */
   processing: Processing | null;
   /** Link to the result once it is ready (set from the server's answer). */
@@ -203,7 +205,7 @@ async function send(id: string) {
   current.controller = null;
   if (current.item.status === "cancelled") { settle(current, { ok: false, status: 0, error: "Cancelled." }); pump(); return; }
   if (!result.ok) {
-    patch(id, { status: "failed", error: result.error, finishedAt: now() });
+    patch(id, { status: "failed", error: result.error, finishedAt: now(), retryable: result.retryable !== false });
     settle(current, result);
     pump();
     return;
@@ -274,7 +276,7 @@ export function cancelUpload(id: string) {
 export function retryUpload(id: string) {
   const entry = entries.get(id);
   if (!entry || (entry.item.status !== "failed" && entry.item.status !== "cancelled")) return;
-  patch(id, { status: "queued", error: null, processing: null, finishedAt: null });
+  patch(id, { status: "queued", error: null, processing: null, finishedAt: null, retryable: true });
   pump();
 }
 

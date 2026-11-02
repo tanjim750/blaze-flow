@@ -179,6 +179,7 @@ def _load_job_file(file_id, **filters):
 
 SKIPPED_LARGE_MEDIA = 'skipped_large_media'
 BLOCKED_TOO_LARGE = 'too_large_to_scan'
+NOT_SCANNED_TOO_LARGE = 'not_scanned_too_large'
 # ffprobe `format_name` values we accept as real video containers. Image, audio-only and
 # "raw" demuxers are deliberately absent, so a renamed PNG/PDF/ZIP never qualifies.
 _VIDEO_FORMAT_NAMES = {
@@ -315,7 +316,13 @@ def process_security_scan(*, file_id):
 
 
 def _handle_over_limit(*, file_id, file, scanner):
-    """Too big for the scanner: verified video skips the scan, anything else is blocked."""
+    """Too big for the scanner (ClamAV's StreamMaxLength / CLAMAV_MAX_STREAM_BYTES).
+
+    Nothing is refused for its size alone: only workspace storage limits apply. A verified
+    video skips the scan as before; a file stored as video that is not a verified video is
+    still blocked (type mismatch); any other file, whose type was verified by signature at
+    upload (a ZIP by its central directory), is accepted and marked "not scanned (too large)".
+    """
     limit = settings.CLAMAV_MAX_STREAM_BYTES
     evidence = verified_large_video(file)
     now = timezone.now()
@@ -339,7 +346,8 @@ def _handle_over_limit(*, file_id, file, scanner):
                 'Security scan skipped for large verified video file=%s size=%s limit=%s container=%s',
                 file.id, file.size_bytes, limit, evidence['container'],
             )
-        else:
+        elif (file.mime_type or '').startswith('video/'):
+            # Says it is a video but the bytes/ffprobe disagree: a mismatch, so still blocked.
             scan.status = FileSecurityScanStatus.FAILED
             scan.result = {
                 'clean': False, 'scan_status': BLOCKED_TOO_LARGE,
@@ -351,8 +359,22 @@ def _handle_over_limit(*, file_id, file, scanner):
             }
             file.status = FileStatus.FAILED
             logger.warning(
-                'Security scan blocked oversized non-video file=%s size=%s limit=%s',
+                'Security scan blocked oversized unverified video file=%s size=%s limit=%s',
                 file.id, file.size_bytes, limit,
+            )
+        else:
+            # Type already verified by signature at upload (archives by their central directory).
+            scan.status = FileSecurityScanStatus.CLEAN
+            scan.result = {
+                'clean': True, 'skipped': True, 'scan_status': NOT_SCANNED_TOO_LARGE,
+                'reason': f'Not scanned (too large): {file.size_bytes} bytes is over the {limit}-byte malware-scan limit.',
+                'size_bytes': file.size_bytes,
+            }
+            file.status = FileStatus.READY
+            enqueue_file_event(file=file, topic=PREVIEW_TOPIC)
+            logger.warning(
+                'Security scan skipped (too large) file=%s size=%s limit=%s mime=%s',
+                file.id, file.size_bytes, limit, file.mime_type,
             )
         scan.save(update_fields=['engine', 'status', 'result', 'scanned_at', 'updated_at'])
         file.updated_at = now

@@ -112,7 +112,7 @@ export function UploadTray() {
                   <small>{size(item.size)}{item.destination ? ` · ${item.destination}` : ""}</small>
                 </div>
                 <div className="ut-actions">
-                  {item.status === "failed" && <button type="button" onClick={() => retryUpload(item.id)} aria-label={`Retry ${item.name}`} title="Retry"><RotateCcw /></button>}
+                  {item.status === "failed" && item.retryable !== false && <button type="button" onClick={() => retryUpload(item.id)} aria-label={`Retry ${item.name}`} title="Retry"><RotateCcw /></button>}
                   {item.status === "ready" && item.href && <Link href={item.href} aria-label={`Open ${item.name}`} title="Open"><ExternalLink /></Link>}
                   {isActive(item)
                     ? <button type="button" onClick={() => cancelUpload(item.id)} aria-label={`Cancel ${item.name}`} title="Cancel"><X /></button>
@@ -127,7 +127,7 @@ export function UploadTray() {
                 {item.status === "ready" && <CheckCircle2 aria-hidden="true" />}
                 {item.status === "failed" && <AlertTriangle aria-hidden="true" />}
                 <span>{statusLine(item)}</span>
-                {item.status === "failed" && <button type="button" className="ut-retry" onClick={() => retryUpload(item.id)}>Retry</button>}
+                {item.status === "failed" && item.retryable !== false && <button type="button" className="ut-retry" onClick={() => retryUpload(item.id)}>Retry</button>}
                 {item.status === "ready" && item.href && <Link className="ut-open" href={item.href}>Open</Link>}
               </p>
             </li>
