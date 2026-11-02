@@ -43,6 +43,7 @@ class ParseRangeTests(SimpleTestCase):
             parse_range('bytes=-1', 0)
 
 
+@override_settings(FILE_DOWNLOAD_REDIRECT_ENABLED=False)
 class R2StreamingTests(SimpleTestCase):
     """The R2 path must never use django-storages' whole-object temporary file."""
 
@@ -94,6 +95,92 @@ class R2StreamingTests(SimpleTestCase):
             Bucket='private-assets', Key='previews/cut.mp4',
         )
         self.storage.open.assert_not_called()
+
+
+class R2PresignedRedirectTests(SimpleTestCase):
+    """With R2, file views must 302 to a presigned GET instead of tying up a gunicorn worker."""
+
+    def setUp(self):
+        self.requests = RequestFactory()
+        self.client = Mock()
+        self.client.generate_presigned_url.return_value = 'https://r2.example/private-assets/k?X-Amz-Signature=abc'
+        self.client.get_object.side_effect = AssertionError('Redirected downloads must not stream through Django.')
+        self.storage = SimpleNamespace(
+            bucket_name='private-assets',
+            connection=SimpleNamespace(meta=SimpleNamespace(client=self.client)),
+            open=Mock(side_effect=AssertionError('must not open')),
+            size=Mock(side_effect=AssertionError('must not HEAD')),
+        )
+
+    def response(self, method='get', range_header=None, **kwargs):
+        headers = {'HTTP_RANGE': range_header} if range_header else {}
+        request = getattr(self.requests, method)('/download/', **headers)
+        return ranged_file_response(request, 'assets/big.mov', storage=self.storage, object_size=10, **kwargs)
+
+    @override_settings(FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS=900)
+    def test_download_redirects_with_attachment_disposition_and_short_expiry(self):
+        response = self.response(content_type='video/quicktime', filename='Final cut.mov', as_attachment=True)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], 'https://r2.example/private-assets/k?X-Amz-Signature=abc')
+        self.assertEqual(response['Cache-Control'], 'private, no-store')
+        self.assertFalse(response.streaming)
+        args, kwargs = self.client.generate_presigned_url.call_args
+        self.assertEqual(args, ('get_object',))
+        self.assertEqual(kwargs['ExpiresIn'], 900)
+        params = kwargs['Params']
+        self.assertEqual(params['Bucket'], 'private-assets')
+        self.assertEqual(params['Key'], 'assets/big.mov')
+        self.assertEqual(params['ResponseContentType'], 'video/quicktime')
+        self.assertEqual(params['ResponseContentDisposition'], 'attachment; filename="Final cut.mov"')
+
+    def test_range_request_for_playback_redirects_too_and_r2_serves_the_206(self):
+        response = self.response(range_header='bytes=1000-', content_type='video/mp4')
+
+        self.assertEqual(response.status_code, 302)
+        params = self.client.generate_presigned_url.call_args.kwargs['Params']
+        self.assertNotIn('Range', params)  # the browser re-sends Range to R2 after the redirect
+        self.assertNotIn('ResponseContentDisposition', params)
+        self.storage.open.assert_not_called()
+
+    def test_inline_preview_keeps_inline_disposition_with_filename(self):
+        self.response(content_type='application/pdf', filename='brief.pdf')
+        params = self.client.generate_presigned_url.call_args.kwargs['Params']
+        self.assertEqual(params['ResponseContentDisposition'], 'inline; filename="brief.pdf"')
+
+    def test_head_also_redirects(self):
+        self.assertEqual(self.response(method='head', content_type='video/mp4').status_code, 302)
+
+    @override_settings(FILE_DOWNLOAD_REDIRECT_ENABLED=False)
+    def test_kill_switch_falls_back_to_streaming(self):
+        self.client.get_object.side_effect = None
+        self.client.get_object.return_value = {'Body': io.BytesIO(PAYLOAD[:10])}
+        response = self.response(content_type='video/mp4')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.streaming)
+
+    def test_local_storage_never_redirects(self):
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory)
+        storage = FileSystemStorage(location=directory)
+        storage.save('a.bin', ContentFile(b'hello'))
+        request = self.requests.get('/download/')
+        response = ranged_file_response(request, 'a.bin', content_type='application/octet-stream', storage=storage)
+        self.assertEqual(response.status_code, 200)
+
+
+class GunicornConfigTests(SimpleTestCase):
+    def test_production_web_uses_threaded_workers_with_a_timeout(self):
+        import runpy
+        from pathlib import Path
+        from django.conf import settings as django_settings
+        with patch.dict('os.environ', {}, clear=False) as env:
+            for key in [k for k in env if k.startswith('GUNICORN_')]:
+                env.pop(key)
+            config = runpy.run_path(str(Path(django_settings.BASE_DIR) / 'deploy' / 'gunicorn.conf.py'))
+        self.assertEqual(config['worker_class'], 'gthread')
+        self.assertGreaterEqual(config['workers'] * config['threads'], 24)
+        self.assertGreater(config['timeout'], 0)
 
 
 class RangedMediaEndpointTests(WorkspaceAccessSetupMixin, TestCase):

@@ -85,7 +85,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${WEB_MEMORY_LIMIT:-1g}
+          memory: ${WEB_MEMORY_LIMIT:-2g}
 
   # Durable outbox: notifications, emails, previews and FFmpeg video proxies.
   outbox-worker:
