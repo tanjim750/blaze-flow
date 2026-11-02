@@ -98,3 +98,38 @@ describe("UploadTray layout and wording", () => {
 function getUploadsSample() {
   return { id: "s", name: "s.mp4", size: 100, source: "files" as const, destination: null, status: "queued" as const, loaded: 0, speed: 0, startedAt: null, finishedAt: null, error: null, processing: null, href: null, attempts: 0, transport: null, parts: null };
 }
+
+describe("UploadTray after a reload", () => {
+  it("warns before closing the tab while uploads are only queued", () => {
+    render(<UploadTray />);
+    act(() => { for (const name of ["a", "b", "c", "d"]) startUpload({ url: "/u", file: new File(["abc"], `${name}.mp4`), source: "files" }); });
+    expect(getUploads()[3].status).toBe("queued");
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("shows uploads left by the last page as paused with a Resume that takes the same file", () => {
+    act(() => { startUpload({ url: "/u", file: new File(["abc"], "hero.mov", { lastModified: 42 }), source: "files", destination: "Spring · Files" }); });
+    __test.reload();
+    render(<UploadTray />);
+    expect(screen.getByText("Paused · pick file to resume")).toBeInTheDocument();
+    expect(screen.getByText("1 upload paused")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+    const input = screen.getByTestId("upload-resume-input") as HTMLInputElement;
+    act(() => { fireEvent.change(input, { target: { files: [new File(["abcd"], "hero.mov", { lastModified: 42 })] } }); });
+    expect(screen.getByRole("alert")).toHaveTextContent("not the same file");
+    expect(getUploads()[0].status).toBe("paused");
+    act(() => { fireEvent.change(input, { target: { files: [new File(["abc"], "hero.mov", { lastModified: 42 })] } }); });
+    expect(getUploads()[0].status).toBe("uploading");
+  });
+
+  it("resumes a paused upload from a dropped file", async () => {
+    act(() => { startUpload({ url: "/u", file: new File(["abc"], "drop.mov", { lastModified: 7 }), source: "files" }); });
+    __test.reload();
+    render(<UploadTray />);
+    const dropped = new File(["abc"], "drop.mov", { lastModified: 7 });
+    await act(async () => { fireEvent.drop(screen.getByTestId("upload-tray"), { dataTransfer: { files: [dropped], items: [] } }); });
+    expect(getUploads()[0].status).toBe("uploading");
+  });
+});

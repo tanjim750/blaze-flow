@@ -78,3 +78,7 @@
 .ut-list { container-type: inline-size; }
 /* Narrow headers keep the title readable: "Clear finished" becomes an icon button. */
 @media (max-width: 420px) { .ut-clear span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .ut-clear { width: 36px; justify-content: center; padding: 0; } }
+
+/* Paused after a reload: waiting for the same file to be picked again. */
+.ut-notice { flex: none; margin: 0; padding: 8px 14px; font-size: 12px; line-height: 1.4; color: var(--ut-muted, inherit); opacity: .85; overflow-wrap: anywhere; }
+.ut-row.is-paused .ut-bar i { opacity: .45; }

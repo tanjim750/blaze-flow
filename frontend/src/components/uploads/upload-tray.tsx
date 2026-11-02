@@ -2,14 +2,15 @@
 
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Loader2, RotateCcw, Trash2, UploadCloud, X } from "@/components/icons";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import {
-  cancelUpload, clearFinished, dismissUpload, etaSeconds, formatBytes, formatEta, formatRate, isActive, percent, retryUpload, trayCounts, trayTotals,
+  cancelUpload, clearFinished, restoreParked, resumeFromFiles, dismissUpload, etaSeconds, formatBytes, formatEta, formatRate, isActive, percent, retryUpload, trayCounts, trayTotals,
   type UploadItem,
 } from "@/lib/upload-store";
 import { useUploads } from "@/lib/use-uploads";
 import { registerTransport } from "@/lib/upload-store";
 import { r2Transport } from "@/lib/r2-upload-transport";
+import { stagedFromDrop } from "@/lib/folder-upload";
 import "./upload-tray.css";
 
 const size = formatBytes;
@@ -30,6 +31,10 @@ export function queuedLine(item: Pick<UploadItem, "loaded">, ahead = 0) {
 /** The status line as separate pieces so narrow trays can wrap them or drop the less useful ones. */
 export function statusStats(item: UploadItem, ahead = 0): Stat[] {
   switch (item.status) {
+    case "paused": return ([
+      { text: item.expired ? "Paused · pick file to start again" : "Paused · pick file to resume" },
+      item.parts && item.parts.done > 0 && !item.expired ? { text: `${item.parts.done}/${item.parts.total} parts sent`, kind: "parts" } : null,
+    ] as (Stat | null)[]).filter((stat): stat is Stat => stat !== null);
     case "queued": return [{ text: queuedLine(item, ahead) }];
     case "uploading": {
       const eta = etaSeconds(item);
@@ -59,6 +64,23 @@ export function UploadTray() {
 
   // Direct-to-R2 for Files uploads; it falls back to the form POST when the server has it off.
   useEffect(() => registerTransport(r2Transport), []);
+  // Uploads the last page left unfinished come back as "Paused" until their file is picked again.
+  useEffect(() => { restoreParked(); }, []);
+  const picker = useRef<HTMLInputElement>(null);
+  const [resumeFor, setResumeFor] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const resumeWith = (files: File[], onlyId?: string | null) => {
+    if (!files.length) return;
+    const { resumed, unmatched } = resumeFromFiles(files, onlyId ?? undefined);
+    setNotice(resumed ? null : unmatched.length ? "That is not the same file (name, size and date must match)." : null);
+  };
+  const openPicker = (id: string) => { setResumeFor(id); picker.current?.click(); };
+  const onDrop = async (event: DragEvent<HTMLElement>) => {
+    if (!counts.paused) return;
+    event.preventDefault();
+    const staged = await stagedFromDrop(event.dataTransfer);
+    resumeWith(staged.map((entry) => entry.file));
+  };
 
   // Closing the tab mid-upload loses it: ask first.
   useEffect(() => {
@@ -70,7 +92,7 @@ export function UploadTray() {
 
   // Everything landed and nothing needs attention: get out of the way (it used to sit over
   // primary actions such as "Send comment" until "Clear finished" was clicked).
-  const allDone = items.length > 0 && !busy && counts.processing === 0 && counts.failed === 0;
+  const allDone = items.length > 0 && !busy && counts.processing === 0 && counts.failed === 0 && counts.paused === 0;
   useEffect(() => {
     if (!allDone) return;
     const timer = window.setTimeout(clearFinished, AUTO_DISMISS_MS);
@@ -80,7 +102,7 @@ export function UploadTray() {
   if (!items.length) return null;
   const title = busy
     ? `Uploading ${counts.active} ${counts.active === 1 ? "file" : "files"}`
-    : counts.processing ? `Processing ${counts.processing}` : counts.failed ? `${counts.failed} upload${counts.failed === 1 ? "" : "s"} failed` : "Uploads complete";
+    : counts.paused ? `${counts.paused} upload${counts.paused === 1 ? "" : "s"} paused` : counts.processing ? `Processing ${counts.processing}` : counts.failed ? `${counts.failed} upload${counts.failed === 1 ? "" : "s"} failed` : "Uploads complete";
   const totals = trayTotals(items);
   const overall = totals.percent;
   // Position in the queue: how many waiting uploads will start before each one.
@@ -88,7 +110,10 @@ export function UploadTray() {
   items.filter((item) => item.status === "queued").forEach((item, index) => ahead.set(item.id, index));
 
   return (
-    <section className={`ut ${collapsed ? "is-collapsed" : ""}`} aria-label="Uploads" data-testid="upload-tray">
+    <section className={`ut ${collapsed ? "is-collapsed" : ""}`} aria-label="Uploads" data-testid="upload-tray"
+      onDragOver={(event) => { if (counts.paused) event.preventDefault(); }} onDrop={(event) => { void onDrop(event); }}>
+      <input ref={picker} type="file" multiple hidden data-testid="upload-resume-input"
+        onChange={(event) => { resumeWith(Array.from(event.target.files ?? []), resumeFor); event.target.value = ""; setResumeFor(null); }} />
       <header className="ut-head">
         <button type="button" className="ut-toggle" onClick={() => setCollapsed(!collapsed)} aria-expanded={!collapsed} aria-controls="ut-list">
           <span className="ut-icon" aria-hidden="true">
@@ -117,6 +142,8 @@ export function UploadTray() {
           <small>{[totals.speed > 0 ? formatRate(totals.speed) : "Starting…", totals.eta !== null ? formatEta(totals.eta) : null].filter(Boolean).join(" · ")}</small>
         </div>
       )}
+      {!collapsed && notice && <p className="ut-notice" role="alert">{notice}</p>}
+      {!collapsed && counts.paused > 0 && !notice && <p className="ut-notice">Pick or drop the same files here to continue.</p>}
       {!collapsed && (
         <ul className="ut-list" id="ut-list">
           {items.map((item) => (
@@ -128,6 +155,7 @@ export function UploadTray() {
                   <small title={item.destination ?? undefined}>{size(item.size)}{item.destination ? ` · ${item.destination}` : ""}</small>
                 </div>
                 <div className="ut-actions">
+                  {item.status === "paused" && <button type="button" onClick={() => openPicker(item.id)} aria-label={`Resume ${item.name}`} title="Resume"><RotateCcw /></button>}
                   {item.status === "failed" && item.retryable !== false && <button type="button" onClick={() => retryUpload(item.id)} aria-label={`Retry ${item.name}`} title="Retry"><RotateCcw /></button>}
                   {item.status === "ready" && item.href && <Link href={item.href} aria-label={`Open ${item.name}`} title="Open"><ExternalLink /></Link>}
                   {isActive(item)
@@ -146,6 +174,7 @@ export function UploadTray() {
                   ? <span className="ut-error">{item.error ?? "Failed"}</span>
                   : <span className="ut-stats">{statusStats(item, ahead.get(item.id)).map((stat) => <span key={stat.text} className={stat.kind ? `ut-stat is-${stat.kind}` : "ut-stat"}>{stat.text}</span>)}</span>}
                 {item.status === "failed" && item.retryable !== false && <button type="button" className="ut-retry" onClick={() => retryUpload(item.id)}>Retry</button>}
+                {item.status === "paused" && <button type="button" className="ut-retry" onClick={() => openPicker(item.id)}>Resume</button>}
                 {item.status === "ready" && item.href && <Link className="ut-open" href={item.href}>Open</Link>}
               </p>
             </li>

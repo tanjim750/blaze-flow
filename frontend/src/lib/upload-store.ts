@@ -7,7 +7,7 @@
  * with a fake transport.
  */
 
-export type UploadStatus = "queued" | "uploading" | "processing" | "ready" | "failed" | "cancelled";
+export type UploadStatus = "paused" | "queued" | "uploading" | "processing" | "ready" | "failed" | "cancelled";
 export type UploadSource = "files" | "project" | "portal" | "public" | "chat" | "review";
 export type Processing = { stage: string; label: string; ready: boolean };
 export type UploadResult = { ok: true; data: unknown } | { ok: false; status: number; error: string; retryable?: boolean };
@@ -37,6 +37,12 @@ export type UploadItem = {
   transport: string | null;
   /** Part progress for multipart transports. */
   parts: { done: number; total: number } | null;
+  /** The picked file's lastModified, so a reload can match the same file again. */
+  lastModified?: number;
+  /** Restored after a page reload: waiting for the user to pick the same file again. */
+  pausedSince?: number | null;
+  /** Paused for longer than the server keeps an upload open: resuming starts it again. */
+  expired?: boolean;
 };
 
 export type UploadRequest = {
@@ -133,7 +139,116 @@ let counter = 0;
 
 function emit() {
   snapshot = order.map((id) => entries.get(id)!.item);
+  persist();
   listeners.forEach((listener) => listener());
+}
+
+// -- surviving a reload ---------------------------------------------------------------------
+// The browser forgets File objects on reload, so unfinished uploads are parked in
+// localStorage as metadata only. After a reload the tray shows them "Paused"; picking (or
+// dropping) the same file — matched by name, size and lastModified — continues it. The
+// direct-to-R2 transport keeps its own record of the finished parts for that file, so a
+// multipart upload carries on from where it stopped instead of starting over.
+export const PARK_KEY = "bf.upload-tray.v1";
+/** The server keeps a direct upload open for 24h; after that a resume starts clean. */
+export const PARK_TTL_MS = 24 * 3600_000;
+export type ParkedUpload = {
+  id: string; name: string; size: number; lastModified: number; type: string;
+  url: string; fields: Record<string, string>; source: UploadSource; destination: string | null;
+  direct?: { workspaceId: string }; uploadId: string | null; parts: { done: number; total: number } | null;
+  /** When it was first queued (the 24h clock). */
+  at: number;
+};
+const parkedAt = new Map<string, number>();
+let lastParked = "";
+
+function storage(): Storage | null {
+  try { return typeof localStorage === "undefined" ? null : localStorage; } catch { return null; }
+}
+
+function persist() {
+  const store = storage();
+  if (!store) return;
+  const parked: ParkedUpload[] = [];
+  for (const id of order) {
+    const entry = entries.get(id)!;
+    const { item, request } = entry;
+    if (!(isActive(item) || item.status === "paused")) continue;
+    if (!parkedAt.has(id)) parkedAt.set(id, now());
+    const resume = entry.resume as { id?: unknown } | null | undefined;
+    parked.push({
+      id, name: item.name, size: item.size, lastModified: item.lastModified ?? 0, type: request.file?.type ?? "",
+      url: request.url, fields: request.fields ?? {}, source: item.source, destination: item.destination, direct: request.direct,
+      uploadId: resume && typeof resume.id === "string" ? resume.id : null, parts: item.parts, at: parkedAt.get(id)!,
+    });
+  }
+  const text = parked.length ? JSON.stringify(parked) : "";
+  if (text === lastParked) return;
+  lastParked = text;
+  try { if (text) store.setItem(PARK_KEY, text); else store.removeItem(PARK_KEY); } catch { /* full or private mode */ }
+}
+
+export function readParked(): ParkedUpload[] {
+  try {
+    const value = JSON.parse(storage()?.getItem(PARK_KEY) ?? "[]");
+    return Array.isArray(value) ? value.filter((row) => row && typeof row.id === "string" && typeof row.name === "string") : [];
+  } catch { return []; }
+}
+
+/** Put the uploads the last page left unfinished back in the tray as "paused". Idempotent. */
+export function restoreParked() {
+  const rows = readParked().filter((row) => !entries.has(row.id));
+  if (!rows.length) return 0;
+  for (const row of rows) {
+    parkedAt.set(row.id, row.at);
+    const workspaceId = row.direct?.workspaceId ?? null;
+    const request: UploadRequest = {
+      url: row.url, file: null as unknown as File, fields: row.fields, source: row.source, destination: row.destination, direct: row.direct,
+      // The page that started it (and its callbacks) is gone; enough to follow processing.
+      describe: (data) => ({ workspaceId, fileId: (data as { file?: { id?: string } } | null)?.file?.id ?? null }),
+    };
+    const item: UploadItem = {
+      id: row.id, name: row.name, size: row.size, source: row.source, destination: row.destination, status: "paused",
+      loaded: 0, speed: 0, startedAt: null, finishedAt: null, error: null, processing: null, href: null, attempts: 0,
+      transport: null, parts: row.parts, lastModified: row.lastModified, pausedSince: now(), expired: now() - row.at > PARK_TTL_MS,
+    };
+    entries.set(row.id, { item, request, controller: null, waiters: [], lastTick: null, resume: undefined });
+    order = [...order, row.id];
+  }
+  emit();
+  return rows.length;
+}
+
+export const sameFile = (item: Pick<UploadItem, "name" | "size" | "lastModified">, file: File) =>
+  file.name === item.name && file.size === item.size && (item.lastModified ?? 0) === file.lastModified;
+
+/** Continue one paused upload with the file the user picked. False when it is not the same file. */
+export function resumeParked(id: string, file: File) {
+  const entry = entries.get(id);
+  if (!entry || entry.item.status !== "paused" || !sameFile(entry.item, file)) return false;
+  const expired = now() - (parkedAt.get(id) ?? now()) > PARK_TTL_MS;
+  entry.request = { ...entry.request, file };
+  // undefined: the transport looks up the parts it saved for this file. null: start clean.
+  entry.resume = expired ? null : undefined;
+  if (expired) parkedAt.set(id, now());
+  patch(id, { status: "queued", pausedSince: null, expired: false, parts: expired ? null : entry.item.parts });
+  pump();
+  return true;
+}
+
+/** Match picked or dropped files to paused uploads; returns how many were resumed and the rest. */
+export function resumeFromFiles(files: File[], onlyId?: string) {
+  let resumed = 0;
+  const unmatched: File[] = [];
+  for (const file of files) {
+    const target = order.find((id) => {
+      const item = entries.get(id)!.item;
+      return item.status === "paused" && (!onlyId || id === onlyId) && sameFile(item, file);
+    });
+    if (target && resumeParked(target, file)) resumed += 1;
+    else unmatched.push(file);
+  }
+  return { resumed, unmatched };
 }
 
 function patch(id: string, change: Partial<UploadItem>) {
@@ -157,7 +272,7 @@ export function startUpload(request: UploadRequest): { id: string; done: Promise
   counter += 1;
   const id = `up-${now().toString(36)}-${counter}`;
   const item: UploadItem = {
-    id, name: request.file.name, size: request.file.size, source: request.source, destination: request.destination ?? null,
+    id, name: request.file.name, size: request.file.size, lastModified: request.file.lastModified, source: request.source, destination: request.destination ?? null,
     status: "queued", loaded: 0, speed: 0, startedAt: null, finishedAt: null, error: null, processing: null, href: null, attempts: 0,
     transport: null, parts: null,
   };
@@ -172,7 +287,7 @@ export function startUpload(request: UploadRequest): { id: string; done: Promise
 
 function pump() {
   const running = order.filter((id) => entries.get(id)?.item.status === "uploading").length;
-  const waiting = order.filter((id) => entries.get(id)?.item.status === "queued");
+  const waiting = order.filter((id) => entries.get(id)?.item.status === "queued" && entries.get(id)?.request.file);
   for (const id of waiting.slice(0, Math.max(0, CONCURRENCY - running))) void send(id);
 }
 
@@ -191,7 +306,7 @@ async function send(id: string) {
       {
         url: entry.request.url, file: entry.request.file, fields: entry.request.fields ?? {}, source: entry.request.source, direct: entry.request.direct,
         resume: entry.resume,
-        saveResume: (state) => { const current = entries.get(id); if (current) current.resume = state; },
+        saveResume: (state) => { const current = entries.get(id); if (current) { current.resume = state; persist(); } },
         reportParts: (parts) => patch(id, { parts }),
       },
       (loaded) => onProgress(id, loaded),
@@ -284,6 +399,7 @@ export function dismissUpload(id: string) {
   const entry = entries.get(id);
   if (!entry || isActive(entry.item)) return;
   entries.delete(id);
+  parkedAt.delete(id);
   order = order.filter((item) => item !== id);
   emit();
 }
@@ -343,6 +459,7 @@ export function trayCounts(items: UploadItem[]) {
   return {
     active: items.filter(isActive).length,
     processing: items.filter((item) => item.status === "processing").length,
+    paused: items.filter((item) => item.status === "paused").length,
     failed: items.filter((item) => item.status === "failed").length,
     finished: items.filter((item) => item.status === "ready" || item.status === "cancelled" || item.status === "failed").length,
   };
@@ -405,6 +522,9 @@ export const __test = {
     fallback = typeof next === "function" ? { id: "test", supports: () => true, send: (job, progress, signal) => next(job, progress, signal) } : next;
   },
   setProcessing(next: ProcessingFetcher) { fetchProcessing = next; },
+  /** Simulate a page reload: forget everything in memory, keep what was parked in storage. */
+  reload() { entries.clear(); parkedAt.clear(); order = []; snapshot = []; lastParked = storage()?.getItem(PARK_KEY) ?? ""; },
+  resumeStateOf(id: string) { return entries.get(id)?.resume; },
   setClock(next: () => number) { now = next; },
-  reset() { entries.clear(); landedListeners.clear(); order = []; snapshot = []; counter = 0; fallback = xhr; transports = []; fetchProcessing = defaultFetchProcessing; now = () => Date.now(); },
+  reset() { entries.clear(); parkedAt.clear(); lastParked = ""; try { storage()?.removeItem(PARK_KEY); } catch { /* */ } landedListeners.clear(); order = []; snapshot = []; counter = 0; fallback = xhr; transports = []; fetchProcessing = defaultFetchProcessing; now = () => Date.now(); },
 };
