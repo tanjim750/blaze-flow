@@ -911,3 +911,11 @@
 /* Light theme: native controls (checkboxes, selects, scrollbars) follow the light skin. */
 html.light .fx { color-scheme: light; }
 html.light .al-form :is(input, select) { color-scheme: light; }
+
+/* Click-to-open + drag-to-select (marquee). */
+.fx-content { position: relative; }
+.fx-item { cursor: pointer; }
+.fx-marquee { position: absolute; z-index: 5; pointer-events: none; border: 1px solid var(--bf-primary, #7c3aed); border-radius: 2px; background: color-mix(in srgb, var(--bf-primary, #7c3aed) 16%, transparent); }
+.fx-content.is-marquee, body.fx-marquee-dragging { user-select: none; -webkit-user-select: none; }
+.fx-content.is-marquee .fx-item { pointer-events: none; }
+.fx-check:focus-within { opacity: 1; outline: 2px solid var(--ring, var(--bf-primary, #7c3aed)); outline-offset: 2px; }
