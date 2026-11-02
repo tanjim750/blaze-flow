@@ -20,8 +20,9 @@ the complete object to a temporary file, which makes otherwise-correct byte rang
 """
 import re
 
+from django.conf import settings
 from django.core.files.storage import default_storage
-from django.http import FileResponse, HttpResponse, StreamingHttpResponse
+from django.http import FileResponse, HttpResponse, HttpResponseRedirect, StreamingHttpResponse
 from django.utils.http import content_disposition_header
 
 CHUNK_SIZE = 64 * 1024
@@ -152,11 +153,65 @@ def _common_headers(response, *, etag, filename, as_attachment, cache_control):
         response['Cache-Control'] = cache_control
 
 
+def _s3_client_and_bucket(storage):
+    connection = getattr(storage, 'connection', None)
+    client = getattr(getattr(connection, 'meta', None), 'client', None)
+    bucket_name = getattr(storage, 'bucket_name', None)
+    if not bucket_name or not callable(getattr(client, 'generate_presigned_url', None)):
+        return None, None
+    return client, bucket_name
+
+
+def presigned_redirect_response(
+    storage, object_key, *, content_type, filename=None, as_attachment=False,
+):
+    """A 302 to a short-lived presigned GET on the bucket, or ``None`` for non-S3 storage.
+
+    Streaming large files through Django ties up a gunicorn worker/thread for the whole
+    transfer: a handful of slow 200 MB+ range downloads exhausted every worker and took the
+    site (and /api/health/) down. After the caller's permission checks, we hand the browser
+    a signed R2 URL instead. R2 answers ``Range``/``206`` itself, so video seeking works
+    unchanged. ``Content-Type`` and ``Content-Disposition`` are pinned through the signed
+    ``response-*`` overrides so an attachment stays an attachment and a stored type is never
+    re-sniffed into something the browser would run.
+    """
+    if not getattr(settings, 'FILE_DOWNLOAD_REDIRECT_ENABLED', True):
+        return None
+    client, bucket_name = _s3_client_and_bucket(storage)
+    if client is None:
+        return None
+    params = {
+        'Bucket': bucket_name,
+        'Key': object_key,
+        'ResponseContentType': content_type or 'application/octet-stream',
+        'ResponseCacheControl': 'private, no-store',
+    }
+    disposition = content_disposition_header(as_attachment, filename or '')
+    if disposition:
+        params['ResponseContentDisposition'] = disposition
+    url = client.generate_presigned_url(
+        'get_object', Params=params,
+        ExpiresIn=int(getattr(settings, 'FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS', 3600)),
+    )
+    response = HttpResponseRedirect(url)
+    # The signed URL is per-request and expires; never let a proxy or the browser reuse it.
+    response['Cache-Control'] = 'private, no-store'
+    response['Referrer-Policy'] = 'no-referrer'
+    return response
+
+
 def ranged_file_response(
     request, object_key, *, content_type, filename=None, as_attachment=False,
     checksum=None, storage=None, object_size=None, cache_control=None,
 ):
     storage = storage or default_storage
+    if request.method in ('GET', 'HEAD'):
+        redirect = presigned_redirect_response(
+            storage, object_key, content_type=content_type, filename=filename,
+            as_attachment=as_attachment,
+        )
+        if redirect is not None:
+            return redirect
     # Every File/FileVariant row already records this. Supplying it avoids an extra R2
     # HEAD request after the caller has checked that the private object still exists.
     size = object_size if object_size is not None else storage.size(object_key)
