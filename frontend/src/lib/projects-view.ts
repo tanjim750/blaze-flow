@@ -11,9 +11,13 @@ export type CampaignNode = {
   project?: Project | null;
   /** Why the brief could not be loaded, when it could not. */
   briefError?: string | null;
+  /** `Project.updated_at`; the All clients grid shows it as "Updated …". */
+  updatedAt?: string | null;
+  /** Latest cut's poster URL, loaded for the All clients grid only. */
+  poster?: string | null;
 };
 export type FolderNode = { id: string; name: string; parentId: string | null };
-export type ClientNode = { id: string; name: string; initial: string; assetCount: number; campaigns: CampaignNode[] };
+export type ClientNode = { id: string; name: string; initial: string; assetCount: number; campaigns: CampaignNode[]; updatedAt?: string | null };
 export type ProjectsView = {
   workspaceId: string | null;
   workspaceName: string;
@@ -35,8 +39,8 @@ function buildFolders(folders: ProjectFolder[]): FolderNode[] {
 /**
  * Loads the Projects page from the Django API.
  *
- * Client → campaign grouping comes from `Project.client_team_id`. Unassigned projects stay
- * reachable in a synthetic group.
+ * Client → campaign grouping comes from `Project.client_team_id`. Projects with no client stay
+ * reachable in a synthetic "No client" group.
  */
 /** Demo fallback that still honours the ?client / ?campaign selection, so the tree stays navigable. */
 function demoView(params: { clientId?: string; campaignId?: string }, notice: string): ProjectsView {
@@ -48,7 +52,28 @@ function demoView(params: { clientId?: string; campaignId?: string }, notice: st
   return { ...DEMO_VIEW, selectedClient: client, selectedCampaign: campaign, notice };
 }
 
-export async function loadProjectsView(params: { clientId?: string; campaignId?: string }): Promise<ProjectsView> {
+/** The synthetic group for projects with no client team. */
+import { NO_CLIENT_ID, NO_CLIENT_LABEL } from "./no-client";
+export { NO_CLIENT_ID, NO_CLIENT_LABEL };
+
+const latest = (dates: (string | null | undefined)[]) => dates.filter(Boolean).sort().at(-1) ?? null;
+
+/**
+ * Covers for the All clients grid: the newest poster of up to four projects per client
+ * (the collage shows at most four). One media-versions call per project, so only on ?view=all.
+ */
+async function loadPosters(workspaceId: string, clients: ClientNode[], clientId?: string) {
+  const targets = clients.filter((client) => !clientId || client.id === clientId)
+    .flatMap((client) => (clientId ? client.campaigns : client.campaigns.slice(0, 4)));
+  await Promise.all(targets.map(async (campaign) => {
+    const media = await listMediaVersions(workspaceId, campaign.id);
+    if (!media.ok) return;
+    const withPoster = media.data.filter((cut) => cut.poster?.url).sort((a, b) => b.created_at.localeCompare(a.created_at));
+    campaign.poster = withPoster[0]?.poster?.url ?? null;
+  }));
+}
+
+export async function loadProjectsView(params: { clientId?: string; campaignId?: string; all?: boolean }): Promise<ProjectsView> {
   const workspaces = await listWorkspaces();
   if (!workspaces.ok) return demoView(params, describe(workspaces.error.status, workspaces.error.detail));
   const workspace = await selectWorkspace(workspaces.data);
@@ -59,21 +84,25 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
   if (!projects.ok) return demoView(params, describe(projects.error.status, projects.error.detail));
 
   const claimed = new Set<string>();
-  const clients: ClientNode[] = teams.data.map((team) => {
+  // Archived clients (and their projects) leave the tree; the API still lists them.
+  for (const team of teams.data) {
+    if (team.status === "ARCHIVED") projects.data.filter((project) => project.client_team_id === team.id).forEach((project) => claimed.add(project.id));
+  }
+  const clients: ClientNode[] = teams.data.filter((team) => team.status !== "ARCHIVED").map((team) => {
     const campaigns = projects.data
       .filter((project) => project.client_team_id === team.id)
       .map((project) => {
         claimed.add(project.id);
-        return { id: project.id, name: project.name, status: project.status, assetCount: 0, folders: [] as FolderNode[] };
+        return { id: project.id, name: project.name, status: project.status, updatedAt: project.updated_at, assetCount: 0, folders: [] as FolderNode[] };
       });
-    return { id: team.id, name: team.name, initial: team.name.charAt(0).toUpperCase(), assetCount: 0, campaigns };
+    return { id: team.id, name: team.name, initial: team.name.charAt(0).toUpperCase(), assetCount: 0, campaigns, updatedAt: latest(campaigns.map((campaign) => campaign.updatedAt)) };
   });
 
   const orphans = projects.data.filter((project) => !claimed.has(project.id));
   if (orphans.length) {
     clients.push({
-      id: "unassigned", name: "Unassigned", initial: "?", assetCount: 0,
-      campaigns: orphans.map((project) => ({ id: project.id, name: project.name, status: project.status, assetCount: 0, folders: [] })),
+      id: NO_CLIENT_ID, name: NO_CLIENT_LABEL, initial: "?", assetCount: 0, updatedAt: latest(orphans.map((project) => project.updated_at)),
+      campaigns: orphans.map((project) => ({ id: project.id, name: project.name, status: project.status, updatedAt: project.updated_at, assetCount: 0, folders: [] })),
     });
   }
 
@@ -96,6 +125,7 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
     selectedCampaign.project = detail.ok ? detail.data : null;
     selectedCampaign.briefError = detail.ok ? null : detail.error.detail;
   }
+  if (params.all) await loadPosters(workspace.id, clients, params.clientId);
   if (selectedClient) {
     selectedClient.assetCount = selectedClient.campaigns.reduce((total, campaign) => total + campaign.assetCount, 0);
   }

@@ -442,7 +442,7 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
   const campaigns = client.campaigns;
   const access = view.access ?? FULL_TREE_ACCESS;
   const [renamingClient, setRenamingClient] = useState(false);
-  // "Unassigned" is a synthetic group, not a client team, so it has nothing to rename.
+  // "No client" is a synthetic group, not a client team, so it has nothing to rename.
   const canRenameClient = access.renameClient && client.id !== "unassigned" && Boolean(view.workspaceId);
 
   return (
@@ -572,7 +572,7 @@ function RowMenu({ label, onRename, onDelete, move, details, className = "pb-row
           ))}
           {!move.clients.length && <M.Item disabled>No clients yet</M.Item>}
           <M.Separator />
-          <M.Item disabled={!move.current} onSelect={() => move.onMove(null)}>No client (unassigned)</M.Item>
+          <M.Item disabled={!move.current} onSelect={() => move.onMove(null)}>No client</M.Item>
         </M.SubContent>
       </M.Sub>}
       {onDelete && <M.Item variant="destructive" onSelect={() => { if (confirm(`Delete ${label}?`)) onDelete(); }}>
@@ -743,7 +743,7 @@ function ProjectMoreActions({ view, campaignId }: { view: ProjectsView; campaign
           ))}
           {!clients.length && <DropdownMenuItem disabled>No clients yet. Create one in Clients</DropdownMenuItem>}
           <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={!current} onSelect={() => move(null)}>No client (unassigned)</DropdownMenuItem>
+          <DropdownMenuItem disabled={!current} onSelect={() => move(null)}>No client</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {error && <span className="pb-inline-error" role="alert">{error}</span>}

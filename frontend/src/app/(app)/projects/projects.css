@@ -542,8 +542,6 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
 .ap{padding:24px;min-width:0}
 .ap-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px}
 .ap-head h1{margin:0;font-size:22px}.ap-head p{margin:4px 0 0;color:var(--muted);font-size:13px}
-.ap-bell{position:relative;display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--border);border-radius:10px;background:transparent;color:inherit;cursor:pointer}
-.ap-dot{position:absolute;top:7px;right:8px;width:7px;height:7px;border-radius:50%;background:#eb5757}
 .ap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px}
 .ap-card{position:relative;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface,transparent)}
 .ap-cover{display:grid;place-items:center;aspect-ratio:16/9;color:rgba(255,255,255,.85);font-size:34px;font-weight:700;text-decoration:none}
@@ -588,3 +586,14 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
   .pb-client-head:not(:hover, :focus-within) .pb-client-details { opacity: 0; }
 }
 @media (pointer: coarse) { .pb-client-details { min-width: 32px; height: 32px; } .pb-client-head:not(:hover, :focus-within) .pb-client-details { width: 32px; } }
+/* All clients: real poster covers, empty state, confirm dialog. */
+.ap-solid.has-poster, .ap-collage i.has-poster { padding: 0; overflow: hidden; background: var(--t-bg-0a0a0a, #111); }
+.ap-solid.has-poster img, .ap-collage i.has-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ap-empty { color: var(--muted-foreground); font-size: 13px; padding: 24px 0; }
+.ap-card[aria-busy] { opacity: .7; }
+.ap-confirm { max-width: 420px; display: grid; gap: 10px; }
+.ap-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.ap-btn { height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: inherit; font-weight: 600; cursor: pointer; }
+.ap-btn.is-primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground, #fff); }
+.ap-btn.is-danger { background: var(--destructive, #e5484d); border-color: var(--destructive, #e5484d); color: #fff; }
+.ap-btn:disabled { opacity: .6; cursor: default; }

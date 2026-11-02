@@ -20,7 +20,7 @@ const view = (access?: ProjectsView["access"]): ProjectsView => ({
   workspaceId: "ws", workspaceName: "W", notice: null, access,
   clients: [
     { id: "c1", name: "Evan", initial: "E", assetCount: 0, campaigns: [{ id: "p1", name: "november", assetCount: 0, folders: [] }] },
-    { id: "unassigned", name: "Unassigned", initial: "?", assetCount: 0, campaigns: [] },
+    { id: "unassigned", name: "No client", initial: "?", assetCount: 0, campaigns: [] },
   ],
   selectedClient: null, selectedCampaign: null,
 });
@@ -30,6 +30,15 @@ beforeEach(() => Object.values(actions).forEach((fn) => fn.mockClear()));
 afterEach(() => cleanup());
 
 describe("ClientRail", () => {
+  it("puts an All clients row, styled like Files' All files, first in the tree", () => {
+    rail(view());
+    const row = screen.getByRole("treeitem", { name: /All clients/ });
+    expect(row).toHaveAttribute("href", "/projects?view=all");
+    expect(row).toHaveClass("fx-tree-row");
+    expect(row).not.toHaveClass("is-selected");
+    expect(row).toHaveTextContent("2");
+  });
+
   it("has no filter box, and pins Archived projects after the tree", () => {
     const { container } = rail(view());
     expect(screen.queryByRole("searchbox")).toBeNull();
@@ -40,10 +49,10 @@ describe("ClientRail", () => {
     expect(foot).toHaveTextContent("Archived projects");
   });
 
-  it("offers a '…' actions button on clients but not on Unassigned", () => {
+  it("offers a '…' actions button on clients but not on No client", () => {
     rail(view());
     expect(screen.getByRole("button", { name: "Actions for Evan" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Actions for Unassigned" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Actions for No client" })).toBeNull();
   });
 
   it("double-clicking a client starts an inline rename that saves on Enter", async () => {
