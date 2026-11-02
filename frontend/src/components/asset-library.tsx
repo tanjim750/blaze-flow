@@ -23,6 +23,7 @@ import { Check, ChevronDown, ChevronRight, Plus, Clapperboard, Copy, Download, E
 import type { ProjectFile } from "@/lib/api";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
+import { stagedFromDrop, stagedFromInput, ensureFolders, type StagedFile } from "@/lib/folder-upload";
 import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, syncedTasksMessage, updateAssetFile, updateAssetFolder, uploadAssetFileTracked, type SyncedTasks } from "@/lib/asset-api-client";
 import { toast } from "sonner";
 import { copyText, MoreLabel, SelectionBar } from "@/components/frame/frame-ui";
@@ -193,7 +194,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const write = useAssetWrite(() => router.refresh(), setWriteError);
   const stored = useAssetLibrary();
   const [folderId, setFolderIdRaw] = useState<string | null>(initial.folder); const [query, setQuery] = useState(initial.q); const [searchEverywhere, setSearchEverywhere] = useState(initial.all);
-  const [dialog, setDialog] = useState<"folder" | "upload" | null>(null); const [dropped, setDropped] = useState<File[]>([]);
+  const [dialog, setDialog] = useState<"folder" | "upload" | null>(null); const [dropped, setDropped] = useState<StagedFile[]>([]); const folderPicker = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<LibraryFile | null>(null);
   const [clientFilter, setClientFilter] = useState(initial.client); const [projectFilter, setProjectFilter] = useState(initial.project); const [kindFilter, setKindFilter] = useState<LibraryKind | "">(initial.kind as LibraryKind | ""); const [stageFilter, setStageFilter] = useState(initial.stage); const [fromClient, setFromClient] = useState(false); const [sort, setSort] = useState<SortKey>((initial.sort || "newest") as SortKey);
   const [mode, setMode] = useStoredChoice<ViewMode>("bf.files.view", "grid", VIEW_MODES);
@@ -506,6 +507,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
 
   // Page-level shortcuts: N new folder, U upload, / search, ] details panel.
   useDoParam("upload", () => setDialog("upload"));
+  useDoParam("upload-folder", () => folderPicker.current?.click());
   useEffect(() => { const shortcuts = (event: KeyboardEvent) => { const target = event.target; if ((target instanceof Element && target.matches("input, select, textarea, [contenteditable=true]")) || event.metaKey || event.ctrlKey || event.altKey) return; if (target instanceof Element && target.closest("[role=dialog], [role=menu]")) return; const key = event.key.toLowerCase(); if (key === "u") { event.preventDefault(); setDialog("upload"); } if (key === "n") { event.preventDefault(); setDialog("folder"); } if (key === "/") { event.preventDefault(); searchRef.current?.focus(); } if (key === "]") { event.preventDefault(); document.dispatchEvent(new CustomEvent("bf-files-toggle-inspector")); } }; window.addEventListener("keydown", shortcuts); return () => window.removeEventListener("keydown", shortcuts); }, []);
   const toggleRef = useRef(toggleInspector);
   useEffect(() => { toggleRef.current = toggleInspector; });
@@ -516,7 +518,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const osDragProps = {
     onDragOver: (event: DragEvent) => { if (!isOsDrag(event)) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; if (!osDrag) setOsDrag(true); },
     onDragLeave: (event: DragEvent) => { if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) setOsDrag(false); },
-    onDrop: (event: DragEvent) => { if (!isOsDrag(event)) return; event.preventDefault(); setOsDrag(false); const list = [...event.dataTransfer.files]; if (list.length) { setDropped(list); setDialog("upload"); } },
+    onDrop: (event: DragEvent) => { if (!isOsDrag(event)) return; event.preventDefault(); setOsDrag(false); void stagedFromDrop(event.dataTransfer).then((list) => { if (list.length) { setDropped(list); setDialog("upload"); } }); },
   };
 
   /* ---------------------------------------------------------------- render helpers */
@@ -758,6 +760,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
               {(close) => <>
                 <button type="button" role="menuitem" onClick={() => { close(); setDialog("folder"); }}><FolderPlus aria-hidden="true" />New folder<kbd>N</kbd></button>
                 <button type="button" role="menuitem" onClick={() => { close(); setDialog("upload"); }}><Upload aria-hidden="true" />Upload files<kbd>U</kbd></button>
+                <button type="button" role="menuitem" onClick={() => { close(); folderPicker.current?.click(); }}><FolderOpen aria-hidden="true" />Upload folder</button>
               </>}
             </ToolbarMenu>
           </div>
@@ -828,7 +831,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
             : <div className={`fx-dropzone${osDrag ? " is-over" : ""}`} data-testid="files-dropzone">
                 <CloudUploadArt />
                 <p>{current ? "This folder is empty. Drag files and folders here." : "Drag files and folders to begin."}</p>
-                <button type="button" className="fx-btn is-primary is-sm" onClick={() => setDialog("upload")}>Upload</button>
+                <div className="fx-dropzone-actions"><button type="button" className="fx-btn is-primary is-sm" onClick={() => setDialog("upload")}>Upload</button><button type="button" className="fx-btn is-ghost is-sm" onClick={() => folderPicker.current?.click()}><FolderOpen aria-hidden="true" />Upload folder</button></div>
               </div>)}
         </div>
         {osDrag && itemTotal > 0 && <div className="fx-os-drop" aria-hidden="true"><Upload /><strong>Upload to {current?.name ?? rootLabel}</strong><span>Release to stage these files</span></div>}
@@ -839,6 +842,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
       <p className="fx-sr-only" role="status" aria-live="polite">{announcement}</p>
 
       {dialog === "folder" && <FolderDialog view={view} folders={folders} defaultProjectId={projectId} defaultClientId={clientId} parentFolderId={folderId} close={() => setDialog(null)} />}
+      <FolderInput inputRef={folderPicker} onPick={(list) => { if (list.length) { setDropped(list); setDialog("upload"); } }} />
       {dialog === "upload" && <UploadDialog view={view} folders={folders} defaultProjectId={projectId} defaultClientId={clientId} currentFolderId={folderId} initialFiles={dropped} close={() => { setDialog(null); setDropped([]); }} />}
       {preview && <PreviewDialog file={preview} close={() => setPreview(null)} />}
       {moveIds && <BulkAssignmentDialog view={view} folders={folders} selected={moveIds} close={() => setMoveIds(null)} done={() => { setMoveIds(null); setSelection({ selected: new Set(), anchor: null }); }} />}
@@ -1210,12 +1214,12 @@ function FolderDialog({ view, folders, defaultProjectId, defaultClientId, parent
         onSaved: (saved) => updateLibrary((state) => ({ ...state, folders: state.folders.map((item) => item.id === draft.id ? { ...draft, id: saved.id, createdAt: saved.created_at } : item) })) });
     } else { updateLibrary(add); }
     close(); }; return <Modal title="Create folder" close={close}><form onSubmit={submit} className="al-form"><label>Folder name<input name="name" required autoFocus placeholder="Footage" /></label><RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={selectedProject} setProject={setSelectedProject} /><label>Inside folder<Select name="parent" aria-label="Inside folder" value={parentFolderId ?? ""} disabled options={[{ value: "", label: "Root Files area" }, ...folders.map((folder) => ({ value: folder.id, label: folder.name }))]} /></label><button>Create folder</button></form></Modal>; }
-function UploadDialog({ view, folders, defaultProjectId, defaultClientId, currentFolderId, initialFiles = [], close }: { view?: FilesView; folders: LibraryFolder[]; defaultProjectId: string | null; defaultClientId: string | null; currentFolderId: string | null; initialFiles?: File[]; close: () => void }) {
+function UploadDialog({ view, folders, defaultProjectId, defaultClientId, currentFolderId, initialFiles = [], close }: { view?: FilesView; folders: LibraryFolder[]; defaultProjectId: string | null; defaultClientId: string | null; currentFolderId: string | null; initialFiles?: StagedFile[]; close: () => void }) {
   const write = useAssetWrite();
-  const [client, setClient] = useState(realClientId(view, defaultClientId)); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const [uploads, setUploads] = useState<File[]>(() => initialFiles.filter((file) => file.size > 0)); const [stageId, setStageId] = useState(""); const [dragging, setDragging] = useState(false); const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle"); const [progress] = useState(0); const [failure, setFailure] = useState<string | null>(null); const cancelled = useRef(false);
+  const [client, setClient] = useState(realClientId(view, defaultClientId)); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const [uploads, setUploads] = useState<StagedFile[]>(() => initialFiles.filter((item) => item.file.size > 0)); const [stageId, setStageId] = useState(""); const [dragging, setDragging] = useState(false); const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle"); const [progress] = useState(0); const [failure, setFailure] = useState<string | null>(null); const cancelled = useRef(false);
   const projects = (view?.groups ?? []).filter((group) => !client || group.clientId === client); const availableFolders = folders.filter((folder) => !selectedProject || folder.projectId === selectedProject);
-  const busy = status === "uploading"; const totalSize = uploads.reduce((sum, file) => sum + file.size, 0); const done = Math.min(uploads.length, Math.round((progress / 100) * uploads.length));
-  const stage = (items: FileList | null) => setUploads((staged) => { const next = [...staged]; Array.from(items ?? []).filter((file) => file.size > 0).forEach((file) => { if (!next.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified)) next.push(file); }); return next; });
+  const busy = status === "uploading"; const totalSize = uploads.reduce((sum, item) => sum + item.file.size, 0); const folderInput = useRef<HTMLInputElement>(null); const hasFolders = uploads.some((item) => item.dir); const done = Math.min(uploads.length, Math.round((progress / 100) * uploads.length));
+  const stage = (items: StagedFile[]) => setUploads((staged) => { const next = [...staged]; items.filter((item) => item.file.size > 0).forEach((item) => { if (!next.some((other) => other.dir === item.dir && other.file.name === item.file.name && other.file.size === item.file.size && other.file.lastModified === item.file.lastModified)) next.push(item); }); return next; });
   const removeAt = (index: number) => setUploads((staged) => staged.filter((_, position) => position !== index));
   /**
    * Uploads one file at a time, and does not close until they have all landed.
@@ -1243,9 +1247,20 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
     const data = new FormData(event.currentTarget), project = String(data.get("project") || selectedProject || "") || null, folder = String(data.get("folder") || currentFolderId || "") || null, projectRow = view?.groups.find((item) => item.projectId === project);
     const destination = [projectRow?.projectName ?? null, "Files"].filter(Boolean).join(" · ");
     try {
-      for (const file of uploads) {
+      // Folder uploads: recreate the dropped folder tree under the destination first
+      // (reusing a same-named folder at the same level), then send each file into its folder.
+      const clientId = (projectRow?.clientId ?? client) || null;
+      const folderIds = await ensureFolders(uploads, folder, folders, async (name, parentId) => {
+        const draft: LibraryFolder = { id: newId("folder"), name, clientId, projectId: project, parentFolderId: parentId, createdAt: new Date().toISOString(), createdBy: "You" };
+        if (!view?.workspaceId) { updateLibrary((state) => ({ ...state, folders: [...state.folders, draft] })); return draft; }
+        const saved = await createAssetFolder(view.workspaceId, { name, client_team_id: clientId, project_id: project, parent_folder_id: parentId });
+        updateLibrary((state) => ({ ...state, folders: [...state.folders, { ...draft, id: saved.id, createdAt: saved.created_at }] }));
+        return saved;
+      }, project);
+      for (const { file, dir } of uploads) {
+        const fileFolder = folderIds.get(dir) ?? folder;
         const preview = file.type.startsWith("image/") && file.size <= 1_000_000 ? await dataUrl(file) : null;
-        const draft = { id: newId("file"), fileId: null, name: file.name, kind: kindFor(file), mimeType: file.type || "application/octet-stream", size: file.size, durationMs: null, status: "PENDING" as const, versioning: { assetId: null, assetName: file.name, versionNumber: 1, versionCount: 1, isLatest: true }, url: URL.createObjectURL(file), preview, uploadedBy: "You", uploadedAt: new Date().toISOString(), folderId: folder, clientId: (projectRow?.clientId ?? client) || null, projectId: project, stageId: stageId || null } satisfies LibraryFile;
+        const draft = { id: newId("file"), fileId: null, name: file.name, kind: kindFor(file), mimeType: file.type || "application/octet-stream", size: file.size, durationMs: null, status: "PENDING" as const, versioning: { assetId: null, assetName: file.name, versionNumber: 1, versionCount: 1, isLatest: true }, url: URL.createObjectURL(file), preview, uploadedBy: "You", uploadedAt: new Date().toISOString(), folderId: fileFolder, clientId: (projectRow?.clientId ?? client) || null, projectId: project, stageId: stageId || null } satisfies LibraryFile;
         const landed = (saved: ProjectFile) => ({ ...draft, id: saved.id, fileId: saved.file.id, uploadedAt: saved.created_at, url: null, preview: null });
 
         if (!view?.workspaceId) {
@@ -1255,11 +1270,11 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
         const relationships = { client_team_id: draft.clientId, project_id: draft.projectId, folder_id: draft.folderId, task_stage_id: draft.stageId };
         void write({
           ids: [draft.id],
-          describe: `Uploading ${file.name}`,
+          describe: `Uploading ${dir ? `${dir}/` : ""}${file.name}`,
           optimistic: (state) => ({ ...state, files: [...state.files, draft] }),
           rollback: (state) => ({ ...state, files: state.files.filter((item) => item.id !== draft.id) }),
           // Landing on a retry from the tray: the optimistic row was rolled back, so add it again.
-          send: () => uploadAssetFileTracked(view.workspaceId!, file, relationships, destination, (saved) => updateLibrary((state) => ({ ...state, files: [...state.files.filter((item) => item.id !== saved.id), landed(saved)] }))),
+          send: () => uploadAssetFileTracked(view.workspaceId!, file, relationships, dir ? `${destination} / ${dir.split("/").join(" / ")}` : destination, (saved) => updateLibrary((state) => ({ ...state, files: [...state.files.filter((item) => item.id !== saved.id), landed(saved)] }))),
           onSaved: (saved) => updateLibrary((state) => ({ ...state, files: state.files.map((item) => item.id === draft.id ? landed(saved) : item) })),
         }).then((error) => { if (error) URL.revokeObjectURL(draft.url!); });
       }
@@ -1271,19 +1286,22 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
   };
   return <Modal title="Upload files" subtitle="Stage your media, then choose where it lives." icon={<Upload />} wide close={close}>
     <form onSubmit={submit} className="al-form al-upload-form">
-      <label className={`al-drop ${dragging ? "dragging" : ""} ${busy ? "busy" : ""}`} onDragEnter={(event) => { event.preventDefault(); setDragging(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); stage(event.dataTransfer.files); }}>
+      <label className={`al-drop ${dragging ? "dragging" : ""} ${busy ? "busy" : ""}`} onDragEnter={(event) => { event.preventDefault(); setDragging(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); void stagedFromDrop(event.dataTransfer).then(stage); }}>
         <span className="al-drop-orb"><Upload /></span>
-        <strong>{dragging ? "Release to stage these files" : "Drop files here or browse"}</strong>
+        <strong>{dragging ? "Release to stage these files" : "Drop files or folders here, or browse"}</strong>
         <em>Video, audio, images, documents, source files, or anything else</em>
         <span className="al-drop-cta">Browse files</span>
-        <input name="files" type="file" multiple disabled={busy} onChange={(event) => { stage(event.target.files); if (event.target.value) event.target.value = ""; }} />
+        <input name="files" type="file" multiple disabled={busy} onChange={(event) => { stage(stagedFromInput(event.target.files)); if (event.target.value) event.target.value = ""; }} />
       </label>
+      <button type="button" className="al-folder-pick" disabled={busy} onClick={() => folderInput.current?.click()}><FolderOpen aria-hidden="true" />Upload folder</button>
+      <FolderInput inputRef={folderInput} onPick={stage} />
       {uploads.length > 0 && <div className="al-upload-list">
         <header><strong>{uploads.length} file{uploads.length === 1 ? "" : "s"} ready</strong><span>{formatSize(totalSize)}</span><button type="button" onClick={() => setUploads([])} disabled={busy}>Clear all</button></header>
-        <ul>{uploads.map((file, index) => <li key={`${file.name}-${file.size}-${file.lastModified}`}><span className={`al-upload-chip ${kindFor(file)}`}><KindIcon kind={kindFor(file)} /></span><span className="al-upload-meta"><strong>{file.name}</strong><small>{formatSize(file.size)} · {file.name.includes(".") ? file.name.split(".").pop()?.toUpperCase() : kindFor(file)}</small></span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeAt(index)} disabled={busy}><X /></button></li>)}</ul>
+        <ul>{uploads.map(({ file, dir }, index) => <li key={`${dir}/${file.name}-${file.size}-${file.lastModified}`}><span className={`al-upload-chip ${kindFor(file)}`}><KindIcon kind={kindFor(file)} /></span><span className="al-upload-meta"><strong>{file.name}</strong><small>{dir && <span className="al-upload-path" title={dir}>{dir} · </span>}{formatSize(file.size)} · {file.name.includes(".") ? file.name.split(".").pop()?.toUpperCase() : kindFor(file)}</small></span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeAt(index)} disabled={busy}><X /></button></li>)}</ul>
       </div>}
       <fieldset className="al-destination" disabled={busy}>
         <legend>Destination</legend>
+        {hasFolders && <p className="al-folder-note">Folders are recreated inside the folder you pick below, with every subfolder.</p>}
         <RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={selectedProject} setProject={setSelectedProject} />
         <div className="al-relations"><label>Folder (optional)<Select name="folder" aria-label="Folder" defaultValue={currentFolderId ?? ""} options={[{ value: "", label: "Root Files area" }, ...availableFolders.map((folder) => ({ value: folder.id, label: folder.name }))]} /></label><label>Stage<Select name="stage" aria-label="Stage" value={stageId} onValueChange={setStageId} options={[{ value: "", label: "No stage" }, ...(view?.stages ?? []).map((item) => ({ value: item.id, label: item.name }))]} /></label></div>
       </fieldset>
@@ -1295,6 +1313,11 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
       </footer>
     </form>
   </Modal>;
+}
+/** Hidden `<input webkitdirectory>`: Chrome and Safari open a folder picker and give each file its relative path. */
+function FolderInput({ inputRef, onPick }: { inputRef: React.RefObject<HTMLInputElement | null>; onPick: (items: StagedFile[]) => void }) {
+  return <input ref={(element) => { inputRef.current = element; if (element) { element.setAttribute("webkitdirectory", ""); element.setAttribute("directory", ""); } }} type="file" multiple hidden data-testid="folder-input" aria-label="Upload folder"
+    onChange={(event) => { onPick(stagedFromInput(event.target.files)); event.target.value = ""; }} />;
 }
 function RelationFields({ view, projects, client, setClient, selectedProject, setProject }: { view?: FilesView; projects: FilesView["groups"]; client: string; setClient: (id: string) => void; selectedProject: string; setProject: (id: string) => void }) { return <div className="al-relations"><label>Client (optional)<Select aria-label="Client" value={client} onValueChange={(next) => { setClient(next); setProject(""); }} options={[{ value: "", label: "No client" }, ...(view?.clients ?? []).map((item) => ({ value: item.id, label: item.name }))]} /></label><label>Project (optional)<Select name="project" aria-label="Project" value={selectedProject} onValueChange={setProject} options={[{ value: "", label: "No project" }, ...projects.map((item) => ({ value: item.projectId, label: item.projectName }))]} /></label></div>; }
 function Modal({ title, subtitle, icon, wide = false, close, children }: { title: string; subtitle?: string; icon?: React.ReactNode; wide?: boolean; close: () => void; children: React.ReactNode }) {

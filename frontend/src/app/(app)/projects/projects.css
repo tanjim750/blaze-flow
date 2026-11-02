@@ -517,6 +517,9 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
   .pb-canvas > .tb-root > .tb-board { align-items: stretch; }
   .pb-canvas > .tb-root > .tb-board > .tb-column { height: auto; min-height: 0; max-height: none; }
 }
+/* Folder upload sits beside Upload; icon-only on phones so the title row still fits. */
+.pb-folder-upload { display: inline-flex; align-items: center; gap: 7px; }
+@media (max-width: 640px) { .pb-folder-upload span { display: none; } }
 
 /* UI critic R3 #4: the client name gets the rail's width back. The Details pill is just its
    arrow (the link keeps its aria-label) and only spells out "Details" on hover/focus. */

@@ -34,7 +34,9 @@ def create_project_folder(*, project, created_by_membership, name, parent_folder
     if project is not None and client_team is None:
         client_team = project.client_team
     if ProjectFolder.objects.filter(
-        workspace=workspace, parent_folder=parent_folder, name=name, deleted_at__isnull=True,
+        # Same scope as the DB constraints: names are unique per project and parent, so two
+        # projects can each have a root "Footage" folder.
+        workspace=workspace, project=project, parent_folder=parent_folder, name=name, deleted_at__isnull=True,
     ).exists():
         raise ProjectFileError('A folder with this name already exists in this location.')
     now = timezone.now()
@@ -59,7 +61,7 @@ def create_project_folder(*, project, created_by_membership, name, parent_folder
 
 def rename_project_folder(*, folder, name):
     if ProjectFolder.objects.filter(
-        workspace=folder.workspace, parent_folder=folder.parent_folder, name=name,
+        workspace=folder.workspace, project=folder.project, parent_folder=folder.parent_folder, name=name,
         deleted_at__isnull=True,
     ).exclude(id=folder.id).exists():
         raise ProjectFileError('A folder with this name already exists in this location.')
