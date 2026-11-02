@@ -24,8 +24,9 @@ import type { ProjectFile } from "@/lib/api";
 import type { FilesView } from "@/lib/files-view";
 import { applyLibraryStage, demoLibrary, isProcessing, markPending, replaceLibrary, snapshotLibrary, assignFolderTree, assignLibraryEntities, deleteLibraryEntities, descendantFolderIds, kindFor, newId, stageFileIds, updateLibrary, useAssetLibrary, type LibraryFile, type LibraryFolder, type LibraryKind, type LibraryState } from "@/lib/asset-library";
 import { stagedFromDrop, stagedFromInput, ensureFolders, type StagedFile } from "@/lib/folder-upload";
-import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, duplicateAssetFile, syncedTasksMessage, updateAssetFile, updateAssetFolder, uploadAssetFileTracked, type SyncedTasks } from "@/lib/asset-api-client";
+import { addAssetFileVersion, createAssetFolder, deleteAssetFile, deleteAssetFolder, downloadAssetFolder, duplicateAssetFile, folderZipSummary, syncedTasksMessage, updateAssetFile, updateAssetFolder, uploadAssetFileTracked, type SyncedTasks } from "@/lib/asset-api-client";
 import { toast } from "sonner";
+import { formatBytes, percent } from "@/lib/folder-zip";
 import { copyText, MoreLabel, SelectionBar } from "@/components/frame/frame-ui";
 import { ShareModal } from "@/components/frame/share-modal";
 import { ShareArrow } from "@/components/frame/icons";
@@ -269,6 +270,9 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const present = new Set(order);
   const selection = pruneSelection(rawSelection, present);
   const selected = selection.selected;
+  // The toolbar's "Download folder" targets one selected folder, else the folder you're in.
+  const selectedFolder = selected.size === 1 ? folders.find((item) => selected.has(item.id)) ?? null : null;
+  const toolbarFolder = selectedFolder ?? current;
   const selectedFiles = files.filter((item) => selected.has(item.id));
   const selectedFolders = folders.filter((item) => selected.has(item.id));
 
@@ -419,6 +423,25 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
     const blob = new Blob([folderFiles.map((file) => `${file.name}\t${file.mimeType}\t${file.size}`).join("\n")], { type: "text/plain" });
     const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `${folder.name}-manifest.txt`; link.click(); URL.revokeObjectURL(link.href);
   };
+  // Built in the browser from signed storage URLs, with a progress toast you can cancel.
+  const downloadFolder = view?.workspaceId ? (folder: LibraryFolder) => {
+    const controller = new AbortController();
+    const cancel = { label: "Cancel", onClick: () => controller.abort() };
+    let id: string | number | undefined; let shown = -1;
+    downloadAssetFolder(view.workspaceId!, folder, {
+      signal: controller.signal,
+      onManifest: () => { id = toast.loading(`Preparing “${folder.name}.zip”…`, { id, description: "Gathering files and subfolders", action: cancel, duration: Infinity }); },
+      onProgress: (progress) => {
+        const pct = percent(progress);
+        if (pct === shown && progress.current) return; shown = pct;
+        id = toast.loading(`Downloading “${folder.name}.zip” · ${pct}%`, { id, description: `${formatBytes(progress.doneBytes)} of ${formatBytes(progress.totalBytes)} · file ${Math.min(progress.filesDone + 1, progress.fileCount)} of ${progress.fileCount}. Keep this tab open.`, action: cancel, duration: Infinity });
+      },
+    })
+      .then((result) => { if (result) toast.success(`Downloaded “${result.manifest.name}”`, { id, description: folderZipSummary(result.manifest, result.skipped.length), action: undefined, duration: 6000 }); })
+      .catch((error: Error) => error.name === "AbortError"
+        ? toast("Folder download cancelled", { id, description: undefined, action: undefined, duration: 4000 })
+        : toast.error("Couldn’t download folder", { id, description: error.message, action: undefined, duration: 10000 }));
+  } : undefined;
   const setStage = (file: LibraryFile, stageId: string | null) => {
     const apply = (state: LibraryState) => ({ ...state, files: upsert(state.files, { ...file, stageId }) });
     if (view?.workspaceId) write({ ids: [file.id], optimistic: apply, describe: `Moving ${file.name}`, send: () => updateAssetFile(view.workspaceId!, file.id, { task_stage_id: stageId }).then((result) => { announceSynced(result, view?.stages?.find((item) => item.id === stageId)?.name); return result; }) });
@@ -577,7 +600,8 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
         returnFocus={() => itemRefs.current.get(entity.id)?.focus()}
         onOpen={() => openEntity(entity)} onShare={isFile && canShareItems ? () => shareEntity(entity as LibraryFile) : undefined} onDetails={() => showDetails(entity)} onRename={() => setRenaming({ id: entity.id, where: "item" })}
         onDuplicate={isFile ? () => duplicate(entity) : undefined} onDownload={isFile ? () => download(entity) : undefined}
-        onDownloadManifest={!isFile ? () => downloadManifest(entity) : undefined} onDelete={() => removeEntities([entity])} />,
+        onDownloadManifest={!isFile ? () => downloadManifest(entity) : undefined}
+        onDownloadFolder={!isFile && downloadFolder ? () => downloadFolder(entity as LibraryFolder) : undefined} onDelete={() => removeEntities([entity])} />,
       onPointerSelect: (event) => onPointerSelect(event, entity),
       onToggle: () => toggleSelected(entity.id),
       onOpen: () => openEntity(entity),
@@ -755,6 +779,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
               </ToolbarMenu>
             </div>
             <button type="button" className={`fx-icon-btn fx-details-toggle${inspectorVisible ? " is-on" : ""}`} onClick={toggleInspector} aria-pressed={inspectorVisible} aria-label="Details" title="Details panel (])"><PanelRight aria-hidden="true" /></button>
+            {downloadFolder && toolbarFolder && <button type="button" className="fx-icon-btn fx-download-folder" aria-label={`Download folder ${toolbarFolder.name}`} title={`Download “${toolbarFolder.name}” as zip`} onClick={() => downloadFolder(toolbarFolder)}><Download aria-hidden="true" /></button>}
             {!compact && <button type="button" className="fx-icon-btn fx-share-btn" aria-label="Share" title="Share" onClick={() => setShareOpen(true)}><ShareArrow /></button>}
             <ToolbarMenu label="New" className={`fx-new${compact ? "" : " is-primary"}`} trigger={<><Plus aria-hidden="true" /><span>New</span></>}>
               {(close) => <>
@@ -1062,11 +1087,11 @@ function FilterField({ label, value, placeholder, options, onChange, clearable =
  * The ⋯ menu on a tile or row. Controlled, so right-click and Shift+F10 open the same menu
  * from the item itself; closing it hands focus back to the item, not to the hidden trigger.
  */
-function ItemMenu({ entity, folders, view, open, onOpenChange, returnFocus, onOpen, onShare, onDetails, onRename, onDuplicate, onDownload, onDownloadManifest, onDelete }: {
+function ItemMenu({ entity, folders, view, open, onOpenChange, returnFocus, onOpen, onShare, onDetails, onRename, onDuplicate, onDownload, onDownloadManifest, onDownloadFolder, onDelete }: {
   entity: LibraryFile | LibraryFolder; folders: LibraryFolder[]; view?: FilesView;
   open: boolean; onOpenChange: (open: boolean) => void; returnFocus: () => void;
   onOpen: () => void; onDetails: () => void; onRename: () => void; onShare?: () => void;
-  onDuplicate?: () => void; onDownload?: () => void; onDownloadManifest?: () => void; onDelete: () => void;
+  onDuplicate?: () => void; onDownload?: () => void; onDownloadManifest?: () => void; onDownloadFolder?: () => void; onDelete: () => void;
 }) {
   const isFile = "kind" in entity;
   const review = isFile ? reviewHref(entity as LibraryFile) : null;
@@ -1084,6 +1109,7 @@ function ItemMenu({ entity, folders, view, open, onOpenChange, returnFocus, onOp
         {isFile && <StageMenu file={entity as LibraryFile} view={view} />}
         {isFile && view?.workspaceId && onDuplicate && <DropdownMenuItem onSelect={onDuplicate}><Copy />Duplicate</DropdownMenuItem>}
         {isFile && (entity as LibraryFile).url && onDownload && <DropdownMenuItem onSelect={onDownload}><Download />Download</DropdownMenuItem>}
+        {!isFile && onDownloadFolder && <DropdownMenuItem onSelect={onDownloadFolder}><Download />Download folder</DropdownMenuItem>}
         {!isFile && onDownloadManifest && <DropdownMenuItem onSelect={onDownloadManifest}><Download />Download manifest</DropdownMenuItem>}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={onDelete}><Trash2 />Delete</DropdownMenuItem>

@@ -136,3 +136,24 @@
 .gr-readonly-note{margin:0;padding:12px;border-top:1px solid var(--border);color:var(--muted);font-size:12px;line-height:1.45}
 
 .gr-project strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Download folders (zip) — a popover in the top bar so it never shifts the review grid. */
+.gr-folders { position: relative; }
+.gr-folders-trigger { display: flex; align-items: center; gap: 5px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--foreground, inherit); cursor: pointer; white-space: nowrap; }
+.gr-folders-trigger:focus-visible, .gr-folders-panel button:focus-visible { outline: 2px solid var(--bf-ring); outline-offset: 2px; }
+.gr-folders-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: min(360px, calc(100vw - 24px)); max-height: min(60vh, 420px); overflow: auto; padding: 10px; border: 1px solid var(--bf-border); border-radius: var(--bf-radius-lg); background: var(--bf-card); color: var(--bf-fg, inherit); box-shadow: 0 12px 32px rgb(0 0 0 / 0.28); }
+.gr-folders-hint { margin: 2px 4px 8px; color: var(--muted); font-size: 11px; }
+.gr-folders-panel ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.gr-folders-panel li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 8px; }
+.gr-folders-panel li:hover { background: var(--surface-2); }
+.gr-folders-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.gr-folders-name small { display: block; color: var(--muted); font-size: 11px; }
+.gr-folders-panel li button { display: flex; align-items: center; gap: 5px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: inherit; font-size: 12px; cursor: pointer; }
+.gr-folders-panel li button:disabled { opacity: 0.6; cursor: progress; }
+.gr-folders-status { margin: 8px 4px 2px; color: var(--muted); font-size: 11px; min-height: 1em; }
+.gr-folders-status:empty { display: none; }
+.gr-folders-cancel { margin: 4px; padding: 4px 8px; border: 1px solid var(--line, currentColor); border-radius: 6px; background: transparent; color: inherit; font-size: 11px; cursor: pointer; }
+@media (max-width: 520px) {
+  .gr-folders-trigger span { display: none; }
+  .gr-folders-panel { position: fixed; left: 12px; right: 12px; top: 56px; width: auto; }
+}

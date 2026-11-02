@@ -1,3 +1,4 @@
+import { downloadFolderZip, formatBytes, type FolderZipManifest, type FolderZipProgress } from "./folder-zip";
 import type { MediaVersion, ProjectFile, ProjectFolder } from "./api";
 import { reviewHref } from "./open-in-review";
 import { startUpload } from "./upload-store";
@@ -64,3 +65,20 @@ export const retryMediaRender = (workspaceId: string, projectId: string, mediaVe
 /** The project's review versions, for polling a proxy that is being made. */
 export const fetchMediaVersions = (workspaceId: string, projectId: string) =>
   call<MediaVersion[]>(`/workspaces/${workspaceId}/projects/${projectId}/media-versions/`, { method: "GET" });
+
+export type { FolderZipManifest } from "./folder-zip";
+/**
+ * Downloads a whole folder (subfolders included) as one zip, built in this browser: the server
+ * only checks access and returns signed storage URLs, so no bytes pass through the web servers.
+ * Resolves null if the user closed the save dialog.
+ */
+export function downloadAssetFolder(workspaceId: string, folder: { id: string; name: string }, options: { onProgress?: (p: FolderZipProgress) => void; onManifest?: (m: FolderZipManifest) => void; signal?: AbortSignal } = {}) {
+  return downloadFolderZip({
+    folderName: folder.name, ...options,
+    loadManifest: (retry) => call<FolderZipManifest>(`/workspaces/${workspaceId}/asset-folders/${folder.id}/download/${retry ? "?retry=1" : ""}`, { method: "GET" }),
+  });
+}
+export function folderZipSummary(manifest: Pick<FolderZipManifest, "file_count" | "total_bytes">, skipped: number): string {
+  const files = `${manifest.file_count} file${manifest.file_count === 1 ? "" : "s"}`;
+  return `${files}, ${formatBytes(manifest.total_bytes)}${skipped ? ` · ${skipped} skipped (see _download-notes.txt)` : ""}`;
+}
