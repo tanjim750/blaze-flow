@@ -394,7 +394,7 @@ export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNa
       </button>
       </div>
       <div className="pb-rail-top">
-        <Link href="/projects?view=all" className={`pb-all-projects${allView ? " is-active" : ""}`}><LayoutGrid size={15} />All Projects</Link>
+        <Link href="/projects?view=all" className={`pb-all-projects${allView ? " is-active" : ""}`}><LayoutGrid size={15} />All clients</Link>
         <div className="pb-rail-head">
           <h2><Building2 size={16} />Clients</h2>
           <button type="button" className="pb-new-button" data-mobile-primary="New" onClick={() => setCreating(!creating)} aria-expanded={creating}>

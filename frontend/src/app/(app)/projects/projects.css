@@ -557,3 +557,12 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
 .ap-more:hover,.ap-more[data-state=open]{background:var(--hover,rgba(127,127,127,.15))}
 .ap-danger{color:#eb5757}
 @media (max-width:520px){.ap{padding:16px}.ap-grid{grid-template-columns:1fr;gap:12px}.ap-cover{aspect-ratio:21/9;font-size:24px}}
+.ap-cover{padding:0;overflow:hidden}
+.ap-solid{display:grid;place-items:center;width:100%;height:100%}
+.ap-collage{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:2px;width:100%;height:100%}
+.ap-collage i{display:grid;place-items:center;font-style:normal;font-size:20px}
+.ap-collage i:only-child,.ap-collage i:nth-child(1):nth-last-child(2),.ap-collage i:nth-child(2):nth-last-child(1){grid-row:span 2}
+.ap-collage i:nth-child(3):last-child{grid-column:span 2}
+.ap-crumbs{display:flex;align-items:center;gap:4px;margin-bottom:6px;font-size:13px;color:var(--muted)}
+.ap-crumbs a{color:inherit;text-decoration:none}.ap-crumbs a:hover{text-decoration:underline}
+.ap-crumbs span{color:var(--text,inherit);font-weight:600}
