@@ -6,13 +6,13 @@ const get = (h: { key: string; value: string }[], k: string) => h.find((x) => x.
 describe("securityHeaders", () => {
   it("sends the hardening headers in production", () => {
     const h = securityHeaders({ NODE_ENV: "production" });
-    expect(get(h, "X-Frame-Options")).toBe("DENY");
+    expect(get(h, "X-Frame-Options")).toBe("SAMEORIGIN");
     expect(get(h, "X-Content-Type-Options")).toBe("nosniff");
     expect(get(h, "Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(get(h, "Permissions-Policy")).toContain("camera=()");
     expect(get(h, "Strict-Transport-Security")).toBe("max-age=31536000; includeSubDomains");
     const csp = get(h, "Content-Security-Policy")!;
-    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("frame-ancestors 'self'");
     expect(csp).toContain("object-src 'none'");
     expect(csp).not.toContain("unsafe-eval");
   });

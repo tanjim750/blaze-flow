@@ -16,6 +16,8 @@
  * - Fonts come from next/font, which self-hosts them, so font-src 'self' data: is enough.
  * - Sentry runs server-side only (sentry-sdk in Django); the browser loads no Sentry
  *   script. Add its ingest origin with CSP_EXTRA_CONNECT_SRC if a browser SDK is added.
+ * - The review player shows PDFs in an iframe (same-origin file URL that may 302 to R2), so
+ *   frame-ancestors/X-Frame-Options are same-origin rather than none, and frame-src allows https:.
  * - Payments (Stripe, PayPal, ...) are full-page redirects to hosted checkouts, not
  *   embedded Stripe.js, so no frame or script origin is needed. If Stripe.js is embedded
  *   later, add js.stripe.com to script-src/frame-src.
@@ -28,7 +30,7 @@ export function buildCsp(opts: { dev?: boolean; extraConnect?: string[] } = {}):
     "default-src": ["'self'"],
     "base-uri": ["'self'"],
     "object-src": ["'none'"],
-    "frame-ancestors": ["'none'"],
+    "frame-ancestors": ["'self'"],
     "form-action": ["'self'", "https:"],
     "script-src": ["'self'", "'unsafe-inline'", "https://accounts.google.com", ...(opts.dev ? ["'unsafe-eval'"] : [])],
     "style-src": ["'self'", "'unsafe-inline'", "https://accounts.google.com"],
@@ -36,7 +38,7 @@ export function buildCsp(opts: { dev?: boolean; extraConnect?: string[] } = {}):
     "media-src": ["'self'", "blob:", "https:"],
     "font-src": ["'self'", "data:"],
     "connect-src": ["'self'", "https://*.r2.cloudflarestorage.com", "https://accounts.google.com", ...(opts.dev ? ["ws:", "wss:"] : []), ...extra],
-    "frame-src": ["'self'", "https://accounts.google.com"],
+    "frame-src": ["'self'", "https:"],
     "worker-src": ["'self'", "blob:"],
     "manifest-src": ["'self'"],
   };
@@ -50,7 +52,7 @@ export function securityHeaders(env: Record<string, string | undefined> = proces
   const extraConnect = (env.CSP_EXTRA_CONNECT_SRC ?? "").split(/[\s,]+/);
   const headers: HeaderPair[] = [
     { key: "Content-Security-Policy", value: buildCsp({ dev, extraConnect }) },
-    { key: "X-Frame-Options", value: "DENY" },
+    { key: "X-Frame-Options", value: "SAMEORIGIN" },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()" },
