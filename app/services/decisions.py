@@ -103,8 +103,6 @@ def record_decision(*, media_version, decision, message=None, start_time_ms=None
     message = (message or '').strip()
     if len(message) > MESSAGE_MAX_LENGTH:
         raise ReviewDecisionError(f'Keep the message under {MESSAGE_MAX_LENGTH} characters.')
-    if decision == ReviewDecisionKind.CHANGES_REQUESTED and not message:
-        raise ReviewDecisionError('Tell the team what to change.')
 
     previous = latest_decision(media)
     if decision == ReviewDecisionKind.APPROVED and previous and previous.decision == ReviewDecisionKind.APPROVED:
@@ -135,8 +133,8 @@ def record_decision(*, media_version, decision, message=None, start_time_ms=None
     now = timezone.now()
 
     comment = None
-    if decision == ReviewDecisionKind.CHANGES_REQUESTED:
-        # Always client-visible: the client wrote it, so the client must be able to read it.
+    if decision == ReviewDecisionKind.CHANGES_REQUESTED and message:
+        # The note is optional; when given it is always client-visible: the client wrote it, so the client must be able to read it.
         if guest_session is not None:
             comment = create_guest_review_comment(
                 media_version=media, guest_session=guest_session, text=message,

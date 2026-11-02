@@ -261,10 +261,18 @@ class GuestDecisionFlowTests(DecisionBase, TestCase):
             self.assertEqual(note.payload['actor_name'], 'Rachel Kim')
             self.assertEqual(note.payload['version_number'], 2)
 
-    def test_request_changes_needs_a_message_which_becomes_a_client_note(self):
+    def test_request_changes_note_is_optional(self):
         _, headers = self.guest_link()
-        self.assertEqual(self.decide(headers, self.v2, 'changes_requested').status_code, 400)
-        self.assertEqual(self.decide(headers, self.v2, 'changes_requested', message='   ').status_code, 400)
+        response = self.decide(headers, self.v2, 'changes_requested')
+        self.assertEqual(response.status_code, 201, response.content)
+        record = ReviewDecision.objects.get()
+        self.assertIsNone(record.review_comment_id)
+        self.assertIsNone(record.message)
+        self.assertEqual(self.stage_slug(self.v2), 'revision')
+        self.assertEqual(Notification.objects.filter(kind='MEDIA_CHANGES_REQUESTED').count(), 2)
+
+    def test_request_changes_message_becomes_a_client_note(self):
+        _, headers = self.guest_link()
         self.assertEqual(self.decide(headers, self.v2, 'changes_requested', message='x' * 2001).status_code, 400)
         response = self.decide(headers, self.v2, 'changes_requested', message='Swap the end card for the spring one', start_time_ms=12000)
         self.assertEqual(response.status_code, 201, response.content)
@@ -459,7 +467,7 @@ class ClientMemberReviewTests(DecisionBase, TestCase):
         data = self.team_decisions(client, self.v2)
         self.assertTrue(data['viewer']['can_decide'])
         url = reverse('api-media-version-decisions', args=[self.workspace.id, self.project_id, self.v2['id']])
-        self.assertEqual(self.client.post(url, {'decision': 'changes_requested'}, format='json').status_code, 400)
+        self.assertEqual(self.client.post(url, {'decision': 'changes_requested', 'message': 'x' * 2001}, format='json').status_code, 400)
         response = self.client.post(url, {'decision': 'approved'}, format='json')
         self.assertEqual(response.status_code, 201, response.content)
         record = ReviewDecision.objects.get()
@@ -579,3 +587,32 @@ class ReviewOutcomeSyncTests(DecisionBase, TestCase):
         self.assertEqual(task.task_stage.kind, TaskStageKind.REVISIONS)
         for row in ProjectFile.objects.filter(file=media.original_file):
             self.assertEqual(TaskStage.objects.get(id=row.task_stage_id).kind, TaskStageKind.REVISIONS)
+
+
+class GuestAnnotateWithCommentLinkTests(DecisionBase, TestCase):
+    """A link that may comment may also draw on its notes; a view-only link may not."""
+
+    def draw(self, headers, **extra):
+        self.client.force_authenticate(user=None)
+        return self.client.post(
+            reverse('api-guest-annotations', args=[self.project_id, self.v2['id']]),
+            {'elements': [{'element_type': 'ARROW', 'geometry': {'start': {'x': 0.1, 'y': 0.1}, 'end': {'x': 0.5, 'y': 0.5}}}], **extra},
+            format='json', **headers,
+        )
+
+    def test_comment_link_can_annotate_and_attach_to_its_note(self):
+        _, headers = self.guest_link(permissions=GUEST_COMMENT)
+        self.assertTrue(self.guest_review(headers)[1]['can_annotate'])
+        note = self.client.post(reverse('api-guest-comments', args=[self.project_id, self.v2['id']]),
+                                {'text': 'Logo here', 'start_time_ms': 4000}, format='json', **headers)
+        self.assertEqual(note.status_code, 201, note.content)
+        drawn = self.draw(headers, review_comment_id=note.json()['id'], start_time_ms=4000)
+        self.assertEqual(drawn.status_code, 201, drawn.content)
+        self.assertEqual(drawn.json()['review_comment_id'], note.json()['id'])
+        gone = self.client.delete(reverse('api-guest-annotation-detail', args=[self.project_id, self.v2['id'], drawn.json()['id']]), **headers)
+        self.assertEqual(gone.status_code, 204)
+
+    def test_view_only_link_cannot_annotate(self):
+        _, headers = self.guest_link(permissions=['media.read', 'review.comment.read', 'annotation.read'])
+        self.assertFalse(self.guest_review(headers)[1]['can_annotate'])
+        self.assertEqual(self.draw(headers).status_code, 403)

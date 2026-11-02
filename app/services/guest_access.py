@@ -139,6 +139,20 @@ def record_guest_view(*, access, media_version):
     )
 
 
+# A link that may leave notes may also draw on them: a drawing is part of a note, so
+# "View and comment" links get the same tools as internal review (own drawings only).
+IMPLIED_BY = {
+    'annotation.create': 'review.comment.create',
+    'annotation.edit': 'review.comment.create',
+    'annotation.delete': 'review.comment.create',
+}
+
+
+def granted_permissions(access):
+    keys = set(GuestReviewAccessPermission.objects.filter(guest_review_access=access).values_list('permission_key', flat=True))
+    return keys | {key for key, base in IMPLIED_BY.items() if base in keys}
+
+
 def authenticate_guest_access(*, project, access_key, permission):
     now = timezone.now()
     access = GuestReviewAccess.objects.select_related(
@@ -150,9 +164,7 @@ def authenticate_guest_access(*, project, access_key, permission):
     ).first()
     if access is None or (access.guest_invite.expires_at and access.guest_invite.expires_at <= now):
         raise GuestAccessError('Guest access is invalid or expired.')
-    if not GuestReviewAccessPermission.objects.filter(
-        guest_review_access=access, permission_key=permission,
-    ).exists():
+    if permission not in granted_permissions(access):
         raise GuestAccessError('This guest link does not grant that permission.')
     GuestReviewAccess.objects.filter(id=access.id).update(last_accessed_at=now, updated_at=now)
     GuestSession.objects.filter(id=access.guest_session_id).update(last_seen_at=now, updated_at=now)

@@ -246,7 +246,7 @@ export async function clientDecisionAction(
   }
   const result = await createMediaDecision(workspaceId, projectId, versionId, {
     decision,
-    ...(decision === "changes_requested" ? { message: message.trim(), ...startTimeField(startMs) } : {}),
+    ...(decision === "changes_requested" ? { ...(message.trim() ? { message: message.trim() } : {}), ...startTimeField(startMs) } : {}),
     ...(confirmOverride ? { confirm_override: true } : {}),
   });
   if (!result.ok) return { error: result.error.detail };
