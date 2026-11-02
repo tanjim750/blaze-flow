@@ -57,6 +57,44 @@ describe("UploadTray summary", () => {
     act(() => { startUpload({ url: "/u", file: new File([new Uint8Array(4 * 1024 * 1024)], "cut.mp4"), source: "files" }); });
     act(() => { report!(1024 * 1024, 4 * 1024 * 1024); });
     expect(screen.getByTestId("upload-tray-summary")).toHaveTextContent("1.0 MB of 4.0 MB · 3.0 MB remaining");
-    expect(screen.getByText(/25% · 1.0 MB of 4.0 MB/)).toBeInTheDocument();
+    const stats = screen.getByTestId("upload-row").querySelectorAll(".ut-stat");
+    expect([...stats].map((stat) => stat.textContent).slice(0, 2)).toEqual(["25%", "1.0 MB of 4.0 MB"]);
   });
 });
+
+describe("UploadTray layout and wording", () => {
+  it("words queued items plainly with their place in the queue", async () => {
+    const { queuedLine } = await import("./upload-tray");
+    expect(queuedLine({ loaded: 0 })).toBe("Waiting to upload");
+    expect(queuedLine({ loaded: 145.8 * 1024 * 1024 }, 2)).toBe("Waiting to upload · 145.8 MB already sent · 2 ahead");
+  });
+
+  it("splits upload stats into pieces so narrow trays can drop the parts count", async () => {
+    const { statusStats } = await import("./upload-tray");
+    const stats = statusStats({ ...getUploadsSample(), status: "uploading", loaded: 50, size: 100, parts: { done: 3, total: 8 }, speed: 0 });
+    expect(stats.map((stat) => stat.kind)).toEqual([undefined, "size", "parts"]);
+    expect(stats[2].text).toBe("3/8 parts");
+  });
+
+  it("shows queue positions and keeps long errors whole with Retry and Remove", async () => {
+    __test.setTransport(() => new Promise(() => {}));
+    render(<UploadTray />);
+    act(() => { for (let i = 0; i < 5; i += 1) startUpload({ url: "/u", file: new File(["a"], `f${i}.mp4`), source: "files" }); });
+    const rows = screen.getAllByTestId("upload-row");
+    expect(rows[3]).toHaveTextContent("Waiting to upload");
+    expect(rows[4]).toHaveTextContent("Waiting to upload · 1 ahead");
+    cleanup(); __test.reset();
+    const long = "This file is larger than the 20 GB limit for your plan. Upgrade or split the archive into smaller parts.";
+    __test.setTransport(() => Promise.resolve({ ok: false, status: 502, error: long }));
+    render(<UploadTray />);
+    await act(async () => { startUpload({ url: "/u", file: new File(["a"], "x.zip"), source: "files" }); });
+    const error = screen.getByText(long);
+    expect(error).toHaveClass("ut-error");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove x.zip from the list" })).toBeInTheDocument();
+  });
+});
+
+function getUploadsSample() {
+  return { id: "s", name: "s.mp4", size: 100, source: "files" as const, destination: null, status: "queued" as const, loaded: 0, speed: 0, startedAt: null, finishedAt: null, error: null, processing: null, href: null, attempts: 0, transport: null, parts: null };
+}

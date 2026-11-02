@@ -261,7 +261,7 @@ class ProjectFileApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()['folder_id'], folder['id'])
 
-    def test_spoofed_file_is_rejected(self):
+    def test_spoofed_file_is_stored_as_a_generic_file(self):
         upload = SimpleUploadedFile('fake.png', b'not-really-a-png', content_type='image/png')
 
         response = self.client.post(
@@ -270,8 +270,8 @@ class ProjectFileApiTests(WorkspaceAccessSetupMixin, TestCase):
             format='multipart',
         )
 
-        self.assertEqual(response.status_code, 400)
-        self.assertFalse(ProjectFile.objects.exists())
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(ProjectFile.objects.get().file.mime_type, 'application/octet-stream')
 
     def test_deleted_file_is_not_found(self):
         created = self.client.post(

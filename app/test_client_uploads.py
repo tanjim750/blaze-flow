@@ -178,11 +178,11 @@ class PublicUploadTests(UploadLinkBase):
         self.assertEqual(wrong.status_code, 415)
         self.assertEqual(self.send(link['token'], pdf()).status_code, 201)
 
-    def test_signature_must_match(self):
+    def test_fake_video_is_kept_as_a_generic_file(self):
         link = self.make_link()
         response = self.send(link['token'], SimpleUploadedFile('fake.mp4', b'not a video at all', content_type='video/mp4'))
-        self.assertEqual(response.status_code, 400)
-        self.assertFalse(ProjectFile.objects.filter(project=self.project).exists())
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(ProjectFile.objects.get(project=self.project).file.mime_type, 'application/octet-stream')
 
     def test_name_and_email_required(self):
         link = self.make_link()

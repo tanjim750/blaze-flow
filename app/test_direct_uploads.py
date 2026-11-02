@@ -169,14 +169,22 @@ class DirectUploadTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(done.status_code, 201, done.content)
         self.assertEqual(self.s3.objects[upload.object_key], data)
 
-    def test_signature_mismatch_is_rejected_and_object_deleted(self):
+    def test_signature_mismatch_is_stored_as_a_generic_file(self):
         body = self.init('fake.png', len(MP4), 'image/png').json()
         upload = DirectUpload.objects.get(id=body['id'])
         self.s3.put(upload.object_key, MP4)
         response = self.client.post(self.url('api-direct-upload-complete', upload.id))
-        self.assertEqual(response.status_code, 400)
-        self.assertNotIn(upload.object_key, self.s3.objects)
-        self.assertFalse(File.objects.exists())
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(File.objects.get().mime_type, 'application/octet-stream')
+
+    def test_any_file_type_is_accepted(self):
+        data = b'#!/bin/sh\necho hi\n'
+        body = self.init('run.sh', len(data), 'application/x-sh').json()
+        upload = DirectUpload.objects.get(id=body['id'])
+        self.s3.put(upload.object_key, data)
+        response = self.client.post(self.url('api-direct-upload-complete', upload.id))
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(File.objects.get().mime_type, 'application/octet-stream')
 
     def test_size_mismatch_and_checksum_mismatch_are_rejected(self):
         body = self.init('p.png', len(PNG) + 1, 'image/png').json()
@@ -279,16 +287,15 @@ class DirectUploadArchiveTests(WorkspaceAccessSetupMixin, TestCase):
         mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         _, response = self.send('brief.docx', docx, mime)
         self.assertEqual(response.status_code, 201, response.content)
-        _, wrong = self.send('brief.zip', docx, 'application/zip')
-        self.assertEqual(wrong.status_code, 400)
+        _, as_zip = self.send('brief.zip', docx, 'application/zip')
+        self.assertEqual(as_zip.status_code, 201, as_zip.content)
+        self.assertEqual(File.objects.get(original_name='brief.zip').mime_type, mime)  # the bytes win
 
-    def test_deterministic_refusal_is_marked_not_retryable(self):
+    def test_unreadable_archive_is_kept_as_a_generic_file(self):
         broken = b'PK\x03\x04' + b'\x00' * 64  # zip signature, no central directory
         upload, response = self.send('broken.zip', broken, 'application/zip')
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()['code'], 'not_retryable')
-        upload.refresh_from_db()
-        self.assertEqual(upload.state, DirectUploadState.FAILED)
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(File.objects.get(original_name='broken.zip').mime_type, 'application/octet-stream')
 
     def test_transient_refusal_stays_retryable(self):
         data = make_zip({'a.txt': b'a'})

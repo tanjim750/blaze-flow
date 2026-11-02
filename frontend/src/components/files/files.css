@@ -908,3 +908,6 @@
 .al-upload-path { color: var(--foreground); overflow-wrap: anywhere; }
 .al-folder-note { margin: 0 0 8px; color: var(--muted-foreground); font-size: var(--text-xs); }
 @media (max-width: 480px) { .al-folder-pick { align-self: stretch; } }
+/* Light theme: native controls (checkboxes, selects, scrollbars) follow the light skin. */
+html.light .fx { color-scheme: light; }
+html.light .al-form :is(input, select) { color-scheme: light; }

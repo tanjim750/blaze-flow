@@ -180,6 +180,9 @@ def _load_job_file(file_id, **filters):
 SKIPPED_LARGE_MEDIA = 'skipped_large_media'
 BLOCKED_TOO_LARGE = 'too_large_to_scan'
 NOT_SCANNED_TOO_LARGE = 'not_scanned_too_large'
+# Verified videos (magic bytes + ffprobe) skip ClamAV at any size and go straight to the proxy.
+NOT_SCANNED_VIDEO = 'not_scanned_video'
+NOT_SCANNED_VIDEO_LABEL = 'Not scanned · video'
 # ffprobe `format_name` values we accept as real video containers. Image, audio-only and
 # "raw" demuxers are deliberately absent, so a renamed PNG/PDF/ZIP never qualifies.
 _VIDEO_FORMAT_NAMES = {
@@ -247,8 +250,8 @@ def _ffprobe_video_streams(file):
     return formats, len(videos)
 
 
-def verified_large_video(file):
-    """Evidence that an over-limit file really is a video, or None.
+def verified_video(file):
+    """Evidence that a file really is a video, or None.
 
     Both checks must pass: the leading bytes match a video container, and ffprobe finds a
     video stream in a video container format.
@@ -267,6 +270,10 @@ def verified_large_video(file):
     return {'container': container, 'format_name': ','.join(sorted(formats)), 'video_streams': video_streams}
 
 
+# Kept for callers/tests written before every verified video skipped the scan.
+verified_large_video = verified_video
+
+
 def _over_scan_limit(file):
     limit = getattr(settings, 'CLAMAV_MAX_STREAM_BYTES', None)
     size = file.size_bytes or 0
@@ -281,8 +288,12 @@ def process_security_scan(*, file_id):
     if scan.status in {FileSecurityScanStatus.CLEAN, FileSecurityScanStatus.INFECTED}:
         return scan
     scanner = scanner_backend()
+    # Only the bytes decide: the filename and the client's MIME claim are never trusted here.
+    evidence = verified_video(file)
+    if evidence:
+        return _skip_verified_video(file_id=file_id, scanner=scanner, evidence=evidence)
     if _over_scan_limit(file):
-        return _handle_over_limit(file_id=file_id, file=file, scanner=scanner)
+        return _handle_over_limit(file_id=file_id, file=file, scanner=scanner, evidence=False)
     try:
         with default_storage.open(file.object_key, 'rb') as stream:
             result = scanner.scan(stream)
@@ -315,7 +326,33 @@ def process_security_scan(*, file_id):
     return scan
 
 
-def _handle_over_limit(*, file_id, file, scanner):
+def _skip_verified_video(*, file_id, scanner, evidence):
+    """A verified video is not virus scanned: mark it clean-skipped and queue its proxy."""
+    now = timezone.now()
+    with transaction.atomic():
+        file = File.objects.select_for_update().get(id=file_id, deleted_at__isnull=True)
+        scan = FileSecurityScan.objects.select_for_update().get(file=file)
+        if scan.status in {FileSecurityScanStatus.CLEAN, FileSecurityScanStatus.INFECTED}:
+            return scan
+        scan.engine = scanner.name
+        scan.scanned_at = now
+        scan.status = FileSecurityScanStatus.CLEAN
+        scan.result = {
+            'clean': True, 'skipped': True, 'scan_status': NOT_SCANNED_VIDEO,
+            'label': NOT_SCANNED_VIDEO_LABEL,
+            'reason': 'Verified video (magic bytes and ffprobe); malware scan not needed.',
+            'size_bytes': file.size_bytes, **evidence,
+        }
+        file.status = FileStatus.READY
+        enqueue_file_event(file=file, topic=PREVIEW_TOPIC)
+        scan.save(update_fields=['engine', 'status', 'result', 'scanned_at', 'updated_at'])
+        file.updated_at = now
+        file.save(update_fields=['status', 'updated_at'])
+    logger.info('Security scan skipped for verified video file=%s container=%s', file_id, evidence['container'])
+    return scan
+
+
+def _handle_over_limit(*, file_id, file, scanner, evidence=None):
     """Too big for the scanner (ClamAV's StreamMaxLength / CLAMAV_MAX_STREAM_BYTES).
 
     Nothing is refused for its size alone: only workspace storage limits apply. A verified
@@ -324,7 +361,8 @@ def _handle_over_limit(*, file_id, file, scanner):
     upload (a ZIP by its central directory), is accepted and marked "not scanned (too large)".
     """
     limit = settings.CLAMAV_MAX_STREAM_BYTES
-    evidence = verified_large_video(file)
+    if evidence is None:
+        evidence = verified_video(file)
     now = timezone.now()
     with transaction.atomic():
         file = File.objects.select_for_update().get(id=file_id, deleted_at__isnull=True)

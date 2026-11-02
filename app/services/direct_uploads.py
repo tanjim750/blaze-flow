@@ -27,7 +27,7 @@ from django.utils import timezone
 from app.models import DirectUpload, DirectUploadMode, DirectUploadState, Workspace
 
 from .media import detect_media_type
-from .project_files import ProjectFileError, create_project_file_records
+from .project_files import ProjectFileError, create_project_file_records, resolve_stored_type
 from .review_assets import ZIP_ALIASES, ZIP_MIME_TYPE, detect_attachment_type, detect_zip_type
 from .subscriptions import enforce_workspace_storage_limit
 
@@ -269,11 +269,8 @@ def complete(upload):
             detected = _zip_type(client, bucket, upload.object_key, read_size)
         else:
             detected = detect_attachment_type(header) or detect_media_type(header)
-        declared = upload.declared_mime_type
-        if detected == ZIP_MIME_TYPE and declared == 'application/octet-stream':
-            declared = ZIP_MIME_TYPE  # some browsers send no type for .zip
-        if detected is None or declared != detected:
-            raise DirectUploadError('The file signature does not match a supported type.', retryable=False)
+        # Any file is accepted; a claim the bytes do not back up is stored as a generic download.
+        detected = resolve_stored_type(detected, upload.declared_mime_type)
         if upload.client_sha256 and upload.client_sha256 != checksum:
             raise DirectUploadError('The file changed in transit (checksum mismatch). Retry the upload.')
         project_file = create_project_file_records(

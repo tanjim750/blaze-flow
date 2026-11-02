@@ -16,21 +16,34 @@ const size = formatBytes;
 /** How long "Uploads complete" stays up before the tray dismisses itself. */
 export const AUTO_DISMISS_MS = 5000;
 
-function statusLine(item: UploadItem) {
+type Stat = { text: string; kind?: "parts" | "speed" | "eta" | "size" };
+
+/** Plain-language wording for a waiting item; `ahead` is how many queued uploads go first. */
+export function queuedLine(item: Pick<UploadItem, "loaded">, ahead = 0) {
+  return [
+    "Waiting to upload",
+    item.loaded > 0 ? `${size(item.loaded)} already sent` : null,
+    ahead > 0 ? `${ahead} ahead` : null,
+  ].filter(Boolean).join(" · ");
+}
+
+/** The status line as separate pieces so narrow trays can wrap them or drop the less useful ones. */
+export function statusStats(item: UploadItem, ahead = 0): Stat[] {
   switch (item.status) {
-    case "queued": return item.loaded > 0 ? `Queued · ${size(item.loaded)} of ${size(item.size)} kept` : "Queued";
+    case "queued": return [{ text: queuedLine(item, ahead) }];
     case "uploading": {
       const eta = etaSeconds(item);
-      return [
-        `${percent(item)}%`, `${size(item.loaded)} of ${size(item.size)}`,
-        item.parts && item.parts.total > 1 ? `${item.parts.done}/${item.parts.total} parts` : null,
-        item.speed > 0 ? formatRate(item.speed) : null, eta !== null ? formatEta(eta) : null,
-      ].filter(Boolean).join(" · ");
+      const stats: (Stat | null)[] = [
+        { text: `${percent(item)}%` }, { text: `${size(item.loaded)} of ${size(item.size)}`, kind: "size" },
+        item.parts && item.parts.total > 1 ? { text: `${item.parts.done}/${item.parts.total} parts`, kind: "parts" } : null,
+        item.speed > 0 ? { text: formatRate(item.speed), kind: "speed" } : null, eta !== null ? { text: formatEta(eta), kind: "eta" } : null,
+      ];
+      return stats.filter((stat): stat is Stat => stat !== null);
     }
-    case "processing": return `${item.processing?.label ?? "Processing"}…`;
-    case "ready": return item.processing?.label ?? "Done";
-    case "cancelled": return "Cancelled";
-    default: return item.error ?? "Failed";
+    case "processing": return [{ text: `${item.processing?.label ?? "Processing"}…` }];
+    case "ready": return [{ text: item.processing?.label ?? "Done" }];
+    case "cancelled": return [{ text: "Cancelled" }];
+    default: return [{ text: item.error ?? "Failed" }];
   }
 }
 
@@ -70,6 +83,9 @@ export function UploadTray() {
     : counts.processing ? `Processing ${counts.processing}` : counts.failed ? `${counts.failed} upload${counts.failed === 1 ? "" : "s"} failed` : "Uploads complete";
   const totals = trayTotals(items);
   const overall = totals.percent;
+  // Position in the queue: how many waiting uploads will start before each one.
+  const ahead = new Map<string, number>();
+  items.filter((item) => item.status === "queued").forEach((item, index) => ahead.set(item.id, index));
 
   return (
     <section className={`ut ${collapsed ? "is-collapsed" : ""}`} aria-label="Uploads" data-testid="upload-tray">
@@ -109,7 +125,7 @@ export function UploadTray() {
                 <UploadCloud className="ut-file" aria-hidden="true" />
                 <div className="ut-name">
                   <strong title={item.name}>{item.name}</strong>
-                  <small>{size(item.size)}{item.destination ? ` · ${item.destination}` : ""}</small>
+                  <small title={item.destination ?? undefined}>{size(item.size)}{item.destination ? ` · ${item.destination}` : ""}</small>
                 </div>
                 <div className="ut-actions">
                   {item.status === "failed" && item.retryable !== false && <button type="button" onClick={() => retryUpload(item.id)} aria-label={`Retry ${item.name}`} title="Retry"><RotateCcw /></button>}
@@ -126,7 +142,9 @@ export function UploadTray() {
                 {item.status === "processing" && <Loader2 className="ut-spin" aria-hidden="true" />}
                 {item.status === "ready" && <CheckCircle2 aria-hidden="true" />}
                 {item.status === "failed" && <AlertTriangle aria-hidden="true" />}
-                <span>{statusLine(item)}</span>
+                {item.status === "failed"
+                  ? <span className="ut-error">{item.error ?? "Failed"}</span>
+                  : <span className="ut-stats">{statusStats(item, ahead.get(item.id)).map((stat) => <span key={stat.text} className={stat.kind ? `ut-stat is-${stat.kind}` : "ut-stat"}>{stat.text}</span>)}</span>}
                 {item.status === "failed" && item.retryable !== false && <button type="button" className="ut-retry" onClick={() => retryUpload(item.id)}>Retry</button>}
                 {item.status === "ready" && item.href && <Link className="ut-open" href={item.href}>Open</Link>}
               </p>

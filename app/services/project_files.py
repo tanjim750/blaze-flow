@@ -309,6 +309,49 @@ def delete_project_folder(*, folder):
     return folder
 
 
+GENERIC_MIME_TYPE = 'application/octet-stream'
+
+
+def resolve_stored_type(detected, declared):
+    """The type a project file is stored (and later served) as. Any file is accepted.
+
+    The bytes decide: a recognised signature that agrees with the browser's claim keeps that
+    type; a claim the bytes do not back up (a "video" or "image" that is not one, HTML, an
+    executable, anything unrecognised) is stored as a generic download. A generic file is
+    never previewed, proxied or shown inline, and is still virus scanned.
+    """
+    declared = (declared or '').split(';', 1)[0].strip().lower()
+    if detected is None:
+        return GENERIC_MIME_TYPE
+    if declared == detected:
+        return detected
+    if detected.startswith('video/') and declared.startswith('video/'):
+        return detected  # e.g. a .mov whose ftyp brand reads as MP4: still a real video
+    if declared.startswith(('video/', 'image/')):
+        return GENERIC_MIME_TYPE  # claimed to be media and is not that media: plain download
+    return detected  # any other claim: the signature is the better evidence (a .docx sent as zip)
+
+
+# Types a download may carry as-is. Everything else (HTML, SVG, XML, scripts, executables,
+# legacy rows stored under a browser-supplied type) goes out as a generic binary, always as
+# an attachment, so a browser can never render or run it on this origin.
+_SAFE_DOWNLOAD_PREFIXES = ('video/', 'audio/')
+_SAFE_DOWNLOAD_TYPES = frozenset({
+    'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif',
+    'application/pdf', 'application/rtf', 'application/zip', GENERIC_MIME_TYPE,
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+})
+
+
+def safe_download_content_type(mime_type):
+    mime = (mime_type or '').split(';', 1)[0].strip().lower()
+    if mime in _SAFE_DOWNLOAD_TYPES or mime.startswith(_SAFE_DOWNLOAD_PREFIXES):
+        return mime
+    return GENERIC_MIME_TYPE
+
+
 def _validate_project_file(upload):
     if upload.size <= 0:
         raise ProjectFileError('The file is empty.')
@@ -325,11 +368,7 @@ def _validate_project_file(upload):
     declared = (getattr(upload, 'content_type', '') or '').lower()
     aliases = {'image/jpg': 'image/jpeg', 'audio/x-wav': 'audio/wav', 'text/rtf': 'application/rtf', **ZIP_ALIASES}
     declared = aliases.get(declared, declared)
-    if detected == ZIP_MIME_TYPE and declared in {'', 'application/octet-stream'}:
-        declared = ZIP_MIME_TYPE  # some browsers send no type for .zip
-    if detected is None or declared != detected:
-        raise ProjectFileError('The file signature does not match a supported type.')
-    return detected
+    return resolve_stored_type(detected, declared)
 
 
 def upload_project_file(*, project, upload, membership, folder=None, workspace=None, client_team=None, task_stage=None):
