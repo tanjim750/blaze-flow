@@ -539,8 +539,6 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
 }
 
 /* DESIGN PREVIEW: All Projects grid. */
-.pb-all-projects{display:flex;align-items:center;gap:8px;width:100%;margin:0 0 10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2,transparent);color:inherit;font-size:13px;font-weight:600;text-decoration:none}
-.pb-all-projects.is-active{border-color:var(--primary,#6d5efc);color:var(--primary,#6d5efc)}
 .ap{padding:24px;min-width:0}
 .ap-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px}
 .ap-head h1{margin:0;font-size:22px}.ap-head p{margin:4px 0 0;color:var(--muted);font-size:13px}
@@ -566,5 +564,8 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
 .ap-crumbs{display:flex;align-items:center;gap:4px;margin-bottom:6px;font-size:13px;color:var(--muted)}
 .ap-crumbs a{color:inherit;text-decoration:none}.ap-crumbs a:hover{text-decoration:underline}
 .ap-crumbs span{color:var(--text,inherit);font-weight:600}
-/* Inline pill right after the Clients heading; NEW stays on the right. */
-.pb-rail-head .pb-all-projects{width:auto;margin:0 auto 0 8px;padding:3px 9px;border-radius:999px;font-size:11px;gap:4px;white-space:nowrap;flex:none}
+/* "All clients" reuses the Files "All files" row (fx-tree-row); this only adds the
+   active dot that files.css scopes to .fx, and keeps it a plain link. */
+.pb-all-clients{margin:0 0 6px;--text-2xs:var(--bf-text-2xs);--text-sm:var(--bf-text-sm);--radius-xs:var(--bf-radius-xs);--radius-sm:var(--bf-radius-sm);--duration-fast:var(--bf-duration-fast);--ease-out:var(--bf-ease-out);--font-mono:var(--bf-font-mono);--fx-colour:background-color var(--duration-fast) var(--ease-out),color var(--duration-fast) var(--ease-out);--ring:var(--frm-accent);--accent:var(--frm-hover);--foreground:var(--frm-text);--muted-foreground:var(--frm-muted);--subtle-foreground:var(--frm-muted);color:var(--foreground);font-size:var(--text-sm);line-height:20px}
+.pb-all-clients .fx-tree-row{position:relative;text-decoration:none}
+.pb-all-clients .fx-tree-row.is-selected::before{content:"";position:absolute;left:4px;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--frm-accent,var(--primary))}

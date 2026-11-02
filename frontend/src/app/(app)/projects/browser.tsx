@@ -5,7 +5,8 @@ import { DO_EVENT, useDoParam } from "@/lib/do-param";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AllProjects } from "./all-projects";
-import { LayoutGrid } from "@/components/icons";
+import { Library } from "@/components/icons";
+import "@/components/files/files.css";
 import {
   Activity, Archive, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
   FolderInput, FolderOpen, Gauge, MessagesSquare, Pencil, Plus, RotateCcw, Share2, Sparkles, Trash2, TriangleAlert, UploadCloud, Users, Wallet, X,
@@ -396,7 +397,6 @@ export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNa
       <div className="pb-rail-top">
         <div className="pb-rail-head">
           <h2><Building2 size={16} />Clients</h2>
-          <Link href="/projects?view=all" className={`pb-all-projects${allView ? " is-active" : ""}`}><LayoutGrid size={12} />All clients</Link>
           <button type="button" className="pb-new-button" data-mobile-primary="New" onClick={() => setCreating(!creating)} aria-expanded={creating}>
             <Plus size={13} />NEW
           </button>
@@ -411,6 +411,16 @@ export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNa
           />
         )}
 
+        {/* Same row as Files' "All files" (LibraryTree root row): fx-tree-* classes from files.css. */}
+        <div role="tree" aria-label="All clients" className="fx-tree-list pb-all-clients">
+          <Link href="/projects?view=all" role="treeitem" aria-level={1} aria-selected={allView} aria-current={allView ? "page" : undefined}
+            className={`fx-tree-row ${allView ? "is-selected" : ""}`} style={{ paddingLeft: 8 }}>
+            <span className="fx-disclosure" aria-hidden="true" />
+            <Library aria-hidden="true" />
+            <span className="fx-tree-label">All clients</span>
+            <span className="fx-count">{view.clients.length}</span>
+          </Link>
+        </div>
         <div className="pb-tree">
           {view.clients.map((client) => (
             <ClientBranch key={client.id} client={client} view={view} open={expanded.includes(client.id)} onToggle={() => toggle(client.id)} />
