@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { DO_EVENT, useDoParam } from "@/lib/do-param";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AllProjects } from "./all-projects";
+import { LayoutGrid } from "@/components/icons";
 import {
   Activity, Archive, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
   FolderInput, FolderOpen, Gauge, MessagesSquare, Pencil, Plus, RotateCcw, Share2, Sparkles, Trash2, TriangleAlert, UploadCloud, Users, Wallet, X,
@@ -178,6 +180,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
   const [uploading, setUploading] = useState(false);
   const [railClosed, setRailClosed] = useState(false);
   // Phones: the client tree is a sheet over the page instead of a column beside it.
+  const allProjects = useSearchParams()?.get("view") === "all";
   const [sheetOpen, setSheetOpen] = useState(false);
   const campaignId = view.selectedCampaign?.id ?? null;
   const [unread, setUnread] = useState<{ project: string | null; count: number }>({ project: null, count: 0 });
@@ -208,6 +211,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
       {sheetOpen && <button type="button" className="pb-sheet-backdrop" aria-label="Close clients" onClick={() => setSheetOpen(false)} />}
       <ClientRail view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} onNavigate={() => setSheetOpen(false)} />
 
+      {allProjects ? <section className="pb-canvas"><AllProjects view={view} /></section> :
       <section className="pb-canvas">
         {view.notice && (
           <p className="pb-notice"><TriangleAlert size={14} /><span>{view.notice}</span></p>
@@ -285,7 +289,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
         ) : (
           <ComingSoon tab={tab} hasCampaign={Boolean(view.selectedCampaign)} briefFolder={view.selectedCampaign?.folders.find((folder) => /brief/i.test(folder.name))?.name ?? null} onOpenFiles={() => setTab("Files")} />
         )}
-      </section>
+      </section>}
       {uploading && view.workspaceId && view.selectedCampaign && (
         <UploadDialog workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} onClose={() => setUploading(false)} onUploaded={() => setUploading(false)} onLanded={() => router.refresh()} />
       )}
@@ -370,6 +374,7 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
 export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNavigate }: { view: ProjectsView; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void; onNavigate?: () => void }) {
   const [creating, setCreating] = useState(false);
   useDoParam("new", () => setCreating(true));
+  const allView = useSearchParams()?.get("view") === "all";
   const toggle = (id: string) => setExpanded(expanded.includes(id) ? expanded.filter((value) => value !== id) : [...expanded, id]);
 
   return (
@@ -389,6 +394,7 @@ export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNa
       </button>
       </div>
       <div className="pb-rail-top">
+        <Link href="/projects?view=all" className={`pb-all-projects${allView ? " is-active" : ""}`}><LayoutGrid size={15} />All Projects</Link>
         <div className="pb-rail-head">
           <h2><Building2 size={16} />Clients</h2>
           <button type="button" className="pb-new-button" data-mobile-primary="New" onClick={() => setCreating(!creating)} aria-expanded={creating}>

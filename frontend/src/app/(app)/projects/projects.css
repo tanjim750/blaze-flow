@@ -537,3 +537,23 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
     -webkit-mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 32px), transparent);
     mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 32px), transparent); }
 }
+
+/* DESIGN PREVIEW: All Projects grid. */
+.pb-all-projects{display:flex;align-items:center;gap:8px;width:100%;margin:0 0 10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2,transparent);color:inherit;font-size:13px;font-weight:600;text-decoration:none}
+.pb-all-projects.is-active{border-color:var(--primary,#6d5efc);color:var(--primary,#6d5efc)}
+.ap{padding:24px;min-width:0}
+.ap-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px}
+.ap-head h1{margin:0;font-size:22px}.ap-head p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.ap-bell{position:relative;display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--border);border-radius:10px;background:transparent;color:inherit;cursor:pointer}
+.ap-dot{position:absolute;top:7px;right:8px;width:7px;height:7px;border-radius:50%;background:#eb5757}
+.ap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px}
+.ap-card{position:relative;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface,transparent)}
+.ap-cover{display:grid;place-items:center;aspect-ratio:16/9;color:rgba(255,255,255,.85);font-size:34px;font-weight:700;text-decoration:none}
+.ap-meta{padding:10px 40px 12px 12px;min-width:0}
+.ap-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit;font-weight:600;font-size:14px;text-decoration:none}
+.ap-meta small{display:flex;align-items:center;gap:5px;margin-top:4px;color:var(--muted);font-size:12px}
+.ap-meta input{width:100%;padding:4px 6px;border:1px solid var(--primary,#6d5efc);border-radius:6px;background:transparent;color:inherit;font:inherit;font-weight:600;font-size:14px}
+.ap-more{position:absolute;right:6px;bottom:14px;display:grid;place-items:center;width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer}
+.ap-more:hover,.ap-more[data-state=open]{background:var(--hover,rgba(127,127,127,.15))}
+.ap-danger{color:#eb5757}
+@media (max-width:520px){.ap{padding:16px}.ap-grid{grid-template-columns:1fr;gap:12px}.ap-cover{aspect-ratio:21/9;font-size:24px}}
