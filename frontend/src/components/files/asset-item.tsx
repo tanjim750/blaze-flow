@@ -166,14 +166,20 @@ export function FolderItem({ folder, itemCount, relation, common }: {
       </Shell>
     );
   }
+  // Up to three stills from inside: one fills the panel, two sit side by side (left wider),
+  // three are one large tile on the left and two stacked on the right.
+  const previews = (folder.previews ?? []).slice(0, 3);
   // Frame.io-style folder card: a tab on the top left, a lighter rounded preview panel with a
   // centred folder glyph, then the name, "N Items" and the menu button underneath.
   return (
     <Shell id={folder.id} common={common} kind="folder" label={label}>
       <span className="fx-fcard-tab" aria-hidden="true" />
       <Check checked={common.selected} name={folder.name} onToggle={common.onToggle} focusable={common.focusable} />
-      <span className="fx-frame is-folder is-fcard">
-        <span className="fx-fcard-icon" aria-hidden="true"><FolderGlyph /></span>
+      <span className={`fx-frame is-folder is-fcard${previews.length ? ` has-collage n${previews.length}` : ""}`}>
+        {previews.length
+          ? previews.map((src, index) => <span key={src} className={`fx-collage-tile t${index}`} aria-hidden="true">{/* eslint-disable-next-line @next/next/no-img-element -- auth-proxied same-origin posters, as on file cards */}
+<img src={src} alt="" loading="lazy" draggable={false} /></span>)
+          : <span className="fx-fcard-icon" aria-hidden="true"><FolderGlyph /></span>}
       </span>
       <span className="fx-caption">
         <span className="fx-name-line is-folder-name">{name}</span>

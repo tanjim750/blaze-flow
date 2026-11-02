@@ -104,6 +104,7 @@ from .serializers import (
     WorkspaceUpdateSerializer,
 )
 from .services.project_files import safe_download_content_type
+from .services.folder_previews import folder_preview_map
 from .services.passwords import (
     PasswordError, change_password, confirm_password_reset, request_password_reset,
 )
@@ -1277,7 +1278,13 @@ def asset_folder_list_create(request, workspace_id):
             ProjectFolder.objects.filter(workspace=workspace, deleted_at__isnull=True),
             request=request, workspace=workspace, permission_key=PROJECT_FILE_READ,
         ).order_by('name')
-        return Response(ProjectFolderSerializer(folders, many=True).data)
+        folders = list(folders)
+        readable_files = _accessible_assets(
+            ProjectFile.objects.filter(workspace=workspace),
+            request=request, workspace=workspace, permission_key=PROJECT_FILE_READ,
+        )
+        previews = folder_preview_map(folders, readable_files)
+        return Response(ProjectFolderSerializer(folders, many=True, context={'folder_previews': previews}).data)
     _require_workspace_permission(request, workspace, PROJECT_FILE_CREATE)
     serializer = AssetFolderWriteSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -1560,8 +1567,9 @@ def project_folder_list_create(request, workspace_id, project_id):
     project = get_object_or_404(Project, id=project_id, workspace=workspace)
     if request.method == 'GET':
         _require_project_permission(request, project, PROJECT_FILE_READ, 'You do not have permission to read project files.')
-        folders = ProjectFolder.objects.filter(project=project, deleted_at__isnull=True).order_by('name')
-        return Response(ProjectFolderSerializer(folders, many=True).data)
+        folders = list(ProjectFolder.objects.filter(project=project, deleted_at__isnull=True).order_by('name'))
+        previews = folder_preview_map(folders, ProjectFile.objects.filter(project=project))
+        return Response(ProjectFolderSerializer(folders, many=True, context={'folder_previews': previews}).data)
 
     _require_project_permission(request, project, PROJECT_FILE_CREATE, 'You do not have permission to create project folders.')
     serializer = ProjectFolderCreateSerializer(data=request.data)
