@@ -569,3 +569,22 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
 .pb-all-clients{margin:0 0 6px;--text-2xs:var(--bf-text-2xs);--text-sm:var(--bf-text-sm);--radius-xs:var(--bf-radius-xs);--radius-sm:var(--bf-radius-sm);--duration-fast:var(--bf-duration-fast);--ease-out:var(--bf-ease-out);--font-mono:var(--bf-font-mono);--fx-colour:background-color var(--duration-fast) var(--ease-out),color var(--duration-fast) var(--ease-out);--ring:var(--frm-accent);--accent:var(--frm-hover);--foreground:var(--frm-text);--muted-foreground:var(--frm-muted);--subtle-foreground:var(--frm-muted);color:var(--foreground);font-size:var(--text-sm);line-height:20px}
 .pb-all-clients .fx-tree-row{position:relative;text-decoration:none}
 .pb-all-clients .fx-tree-row.is-selected::before{content:"";position:absolute;left:4px;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--frm-accent,var(--primary))}
+
+/* Clients rail row actions: the ↗ Details link was a 22px pill with a 3px hover ring flush
+   against the scrolling .pb-tree edge, so the ring/shadow clipped and the pill squashed at
+   narrow rails. Now: a fixed 28px tap target (14px icon) that never shrinks, the name truncates,
+   and the tree keeps a gutter so nothing touches the edge or the scrollbar. Like Files tree row
+   actions, it shows on hover/focus with a fine pointer and always on touch. */
+.pb-tree { padding-right: 8px; scrollbar-gutter: stable; }
+.pb-client-head { min-width: 0; padding: 4px 4px 4px 6px; }
+.pb-client-details {
+  flex: none; min-width: 28px; height: 28px; padding: 0 7px; justify-content: center; gap: 3px;
+  align-self: center; white-space: nowrap; box-shadow: inset 0 1px 0 var(--t-shadow-ffffff17);
+}
+.pb-client-details svg { width: 14px; height: 14px; flex: none; }
+.pb-client-details:hover { box-shadow: inset 0 1px 0 var(--t-shadow-ffffff24), 0 0 0 2px var(--t-shadow-8b6cff1c); }
+.pb-client-head:not(:hover, :focus-within) .pb-client-details { padding: 0; width: 28px; }
+@media (hover: hover) and (pointer: fine) {
+  .pb-client-head:not(:hover, :focus-within) .pb-client-details { opacity: 0; }
+}
+@media (pointer: coarse) { .pb-client-details { min-width: 32px; height: 32px; } .pb-client-head:not(:hover, :focus-within) .pb-client-details { width: 32px; } }

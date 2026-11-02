@@ -464,7 +464,7 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
         </button>
         <Link className="pb-client-details" href={`/clients?client=${client.id}`} aria-label={`Details for ${client.name}`}>
           <span>Details</span>
-          <ArrowUpRight size={11} strokeWidth={2.5} />
+          <ArrowUpRight size={14} strokeWidth={2.25} aria-hidden="true" />
           <LinkPending />
         </Link>
       </RowMenu>
