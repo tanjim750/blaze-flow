@@ -106,12 +106,12 @@ export function rememberHold(choice: HoldChoice) {
   try { window.localStorage.setItem(STORE_KEY, JSON.stringify(choice)); } catch { /* storage blocked */ }
 }
 
-/** Parses "7", "7.5", "0:07" or "00:07.5" as milliseconds; null when it is not a time. */
+/** Parses "7", "7.5", "0:07", "00:07.5" or "1:02:03" as milliseconds; null when it is not a time. */
 export function parseTime(value: string): number | null {
   const text = value.trim();
   if (!text) return null;
   const parts = text.split(":");
-  if (parts.length > 2 || parts.some((part) => !/^\d+(\.\d+)?$/.test(part))) return null;
-  const seconds = parts.length === 2 ? Number(parts[0]) * 60 + Number(parts[1]) : Number(parts[0]);
+  if (parts.length > 3 || parts.some((part) => !/^\d+(\.\d+)?$/.test(part))) return null;
+  const seconds = parts.reduce((sum, part) => sum * 60 + Number(part), 0);
   return Number.isFinite(seconds) ? Math.round(seconds * 1000) : null;
 }

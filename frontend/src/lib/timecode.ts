@@ -7,8 +7,10 @@
  */
 const pad = (value: number) => String(value).padStart(2, "0");
 
-/** Milliseconds → `mm:ss`, the format the comment feed and the scrubber both use. */
+/** Milliseconds → `mm:ss` (or `h:mm:ss` from one hour), the format the comment feed and the scrubber both use. */
 export function timecode(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
+  const total = Math.max(0, Math.floor((Number.isFinite(ms) ? ms : 0) / 1000));
+  const hours = Math.floor(total / 3600);
+  const clock = `${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
+  return hours ? `${hours}:${clock}` : clock;
 }
