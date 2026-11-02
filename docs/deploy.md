@@ -330,8 +330,12 @@ bytes through gunicorn. R2 handles `Range`/`206`, so the player still seeks. The
 pins `Content-Type` and `Content-Disposition` (attachment for downloads).
 
 - `FILE_DOWNLOAD_REDIRECT_ENABLED` (default `true`) — set `false` to fall back to streaming.
-- `FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS` (default `3600`, 60–604800) — must outlast a
-  playback session, because `<video>` keeps sending Range requests to the redirected URL.
+- `FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS` (default `900`, 60–604800) — lifetime of signed
+  URLs for downloads (`attachment`). R2 checks the signature when the GET starts, so a long
+  download keeps going after expiry; a short lifetime limits what a leaked URL is worth.
+- `FILE_STREAM_REDIRECT_EXPIRE_SECONDS` (default `3600`, 60–604800) — lifetime for inline
+  playback/previews. Must outlast a review session, because `<video>` keeps sending Range
+  requests to the redirected URL on every seek.
 
 Plain `<video>`, `<img>`, `<iframe>` and `<a download>` do not need CORS. JavaScript `fetch`
 of a file (e.g. the guest attachment download, which sends `X-Guest-Access-Key`) follows the

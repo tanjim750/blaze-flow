@@ -494,13 +494,18 @@ DIRECT_UPLOAD_URL_EXPIRE_SECONDS = int(os.environ.get('DIRECT_UPLOAD_URL_EXPIRE_
 DIRECT_UPLOAD_TTL_SECONDS = int(os.environ.get('DIRECT_UPLOAD_TTL_SECONDS', str(24 * 3600)))
 
 # Private file downloads/playback: after the permission check, 302 to a presigned bucket
-# GET instead of streaming bytes through gunicorn (only with STORAGE_DRIVER=s3). The expiry
-# must outlast a playback session: a <video> keeps issuing Range requests to the redirected
-# URL while the user seeks.
+# GET instead of streaming bytes through gunicorn (only with STORAGE_DRIVER=s3).
+# Two lifetimes, because a leaked signed URL works for anyone until it expires:
+# - downloads (Content-Disposition: attachment) only need the URL long enough to *start*
+#   the GET (R2 checks the signature once per request, so a long download keeps going), so 15 min;
+# - inline playback/previews keep the redirected URL: <video> sends a new Range request to
+#   it on every seek, so it must outlast a review session (1 h).
 FILE_DOWNLOAD_REDIRECT_ENABLED = os.environ.get('FILE_DOWNLOAD_REDIRECT_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
-FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS = int(os.environ.get('FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS', '3600'))
-if not 60 <= FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS <= 604800:
-    raise ImproperlyConfigured('FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS must be between 60 and 604800.')
+FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS = int(os.environ.get('FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS', '900'))
+FILE_STREAM_REDIRECT_EXPIRE_SECONDS = int(os.environ.get('FILE_STREAM_REDIRECT_EXPIRE_SECONDS', '3600'))
+for _name in ('FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS', 'FILE_STREAM_REDIRECT_EXPIRE_SECONDS'):
+    if not 60 <= globals()[_name] <= 604800:
+        raise ImproperlyConfigured(f'{_name} must be between 60 and 604800.')
 
 if STORAGE_DRIVER == 's3' and AWS_QUERYSTRING_EXPIRE < 1:
     raise ImproperlyConfigured('AWS_QUERYSTRING_EXPIRE must be at least 1 second.')
