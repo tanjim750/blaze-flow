@@ -287,6 +287,7 @@ def guest_exchange(request):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def guest_review(request, project_id):
+    from .folder_download_views import guest_can_download_folders, guest_folder_list
     project = get_object_or_404(Project, id=project_id)
     access = _guest_access(request, project, 'media.read')
     from app.services.preview_state import file_preview_status
@@ -307,6 +308,8 @@ def guest_review(request, project_id):
             'can_read_comments': 'review.comment.read' in granted,
             'can_read_annotations': 'annotation.read' in granted,
             'scoped_to_file': _scoped_media_id(access) is not None,
+            # Project-wide links that allow downloads may take whole folders as a zip.
+            'can_download_folders': guest_can_download_folders(access),
             'expires_at': access.guest_invite.expires_at,
         },
         'media_versions': [
@@ -322,6 +325,7 @@ def guest_review(request, project_id):
             }
             for item in media
         ],
+        'folders': guest_folder_list(project, access),
     })
 
 

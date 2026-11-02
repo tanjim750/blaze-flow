@@ -340,6 +340,9 @@ if SUBSCRIPTION_PRO_PERIOD_DAYS < 1:
     raise ImproperlyConfigured('SUBSCRIPTION_PRO_PERIOD_DAYS must be at least 1.')
 
 STORAGE_DRIVER = os.environ.get('STORAGE_DRIVER', 'local').lower()
+# 'Download folder' zips are built in the browser from signed storage URLs (never streamed
+# through the web workers). How long those URLs live; the browser re-asks if they expire.
+FOLDER_ZIP_URL_EXPIRE_SECONDS = int(os.environ.get('FOLDER_ZIP_URL_EXPIRE_SECONDS', str(6 * 3600)))
 if STORAGE_DRIVER not in {'local', 's3'}:
     raise ImproperlyConfigured('STORAGE_DRIVER must be local or s3.')
 STORAGE_PROVIDER = 's3-compatible' if STORAGE_DRIVER == 's3' else 'django-default'

@@ -118,6 +118,7 @@ from .whatsapp_views import (
     client_team_member_whatsapp, my_client_whatsapp, notification_deliveries, whatsapp_webhook,
     workspace_whatsapp_settings,
 )
+from .folder_download_views import asset_folder_download, guest_folder_download_link
 from .guest_views import (
     guest_annotation_detail, guest_annotation_revisions, guest_annotations,
     guest_attachment_download, guest_attachment_preview,
@@ -203,6 +204,7 @@ urlpatterns = [
     path('guest/reviews/<uuid:project_id>/media-versions/<uuid:media_version_id>/annotations/<uuid:annotation_id>/revisions/', guest_annotation_revisions, name='api-guest-annotation-revisions'),
     path('guest/reviews/<uuid:project_id>/media-versions/<uuid:media_version_id>/comments/<uuid:comment_id>/attachments/', guest_attachment_upload, name='api-guest-attachment-upload'),
     path('guest/reviews/<uuid:project_id>/attachments/<uuid:content_id>/', guest_attachment_download, name='api-guest-attachment'),
+    path('guest/reviews/<uuid:project_id>/folders/<uuid:folder_id>/download-link/', guest_folder_download_link, name='api-guest-folder-download-link'),
     path('guest/reviews/<uuid:project_id>/attachments/<uuid:content_id>/previews/<uuid:variant_id>/', guest_attachment_preview, name='api-guest-attachment-preview'),
     path('workspaces/', workspace_list_create, name='api-workspaces'),
     path('workspaces/<uuid:workspace_id>/', workspace_detail, name='api-workspace-detail'),
@@ -246,6 +248,7 @@ urlpatterns = [
     path('workspaces/<uuid:workspace_id>/task-stages/<uuid:stage_id>/', task_stage_detail, name='api-task-stage-detail'),
     path('workspaces/<uuid:workspace_id>/asset-folders/', asset_folder_list_create, name='api-asset-folders'),
     path('workspaces/<uuid:workspace_id>/asset-folders/<uuid:folder_id>/', asset_folder_detail, name='api-asset-folder-detail'),
+    path('workspaces/<uuid:workspace_id>/asset-folders/<uuid:folder_id>/download/', asset_folder_download, name='api-asset-folder-download'),
     path('workspaces/<uuid:workspace_id>/permissions/', workspace_permissions, name='api-workspace-permissions'),
     path('workspaces/<uuid:workspace_id>/asset-files/', asset_file_list_create, name='api-asset-files'),
     path('workspaces/<uuid:workspace_id>/uploads/', direct_upload_views.direct_upload_initialize, name='api-direct-upload-initialize'),

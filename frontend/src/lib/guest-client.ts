@@ -1,3 +1,4 @@
+import { downloadFolderZip, type FolderZipManifest, type FolderZipProgress } from "./folder-zip";
 import { describeErrorBody } from "./errors";
 import type { Annotation, ReviewComment } from "./api";
 import type { DecisionKind, ReviewDecision } from "./review-decisions";
@@ -31,7 +32,11 @@ export type GuestMediaVersion = {
 export type GuestViewer = {
   name: string; can_decide: boolean; can_comment: boolean; expires_at: string | null;
   can_read_comments?: boolean; can_read_annotations?: boolean; scoped_to_file?: boolean;
+  /** Whether this link may download whole folders as a zip (needs media.download, project-wide). */
+  can_download_folders?: boolean;
 };
+/** A folder the guest may download; `path` is "Parent / Child". */
+export type GuestFolder = { id: string; name: string; path: string; file_count: number };
 
 /** A 403 for a permission the link simply lacks: not worth an error banner. */
 export const isMissingGuestPermission = (error: string) => /does not grant that permission/i.test(error);
@@ -39,6 +44,7 @@ export type GuestReview = {
   project: { id: string; name: string; description: string | null };
   viewer?: GuestViewer;
   media_versions: GuestMediaVersion[];
+  folders?: GuestFolder[];
 };
 /** A short-lived signed source for the guest player (a `<video>` cannot send headers). */
 export type GuestPlayback = {
@@ -236,3 +242,18 @@ export const createGuestDecision = (
   projectId: string, versionId: string, key: string,
   payload: { decision: DecisionKind; message?: string; start_time_ms?: number; confirm_override?: boolean },
 ) => guestRequest<ReviewDecision>(`/guest/reviews/${projectId}/media-versions/${versionId}/decision/`, key, jsonInit("POST", payload));
+
+/**
+ * A shared folder as one zip, built in this browser from signed storage URLs (the server never
+ * streams the zip). The access key goes in a header on the manifest request only.
+ */
+export async function downloadGuestFolder(projectId: string, folder: { id: string; name: string }, key: string, options: { onProgress?: (p: FolderZipProgress) => void; signal?: AbortSignal } = {}) {
+  return downloadFolderZip({
+    folderName: folder.name, ...options,
+    loadManifest: async (retry) => {
+      const result = await guestRequest<FolderZipManifest>(`/guest/reviews/${projectId}/folders/${folder.id}/download-link/${retry ? "?retry=1" : ""}`, key, { method: "POST" });
+      if (!result.ok) throw new Error(result.error);
+      return result.data;
+    },
+  });
+}

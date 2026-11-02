@@ -20,6 +20,7 @@ import { briefIsEmpty, briefToPlainText } from "@/lib/rich-brief";
 import { rangeLabel } from "@/lib/annotation-window";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import { proxyNotice } from "@/app/(app)/review/player-state";
+import { GuestFolders } from "./guest-folders";
 import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } from "@/app/(app)/review/player";
 import { KrewsysLogo } from "@/components/brand/krewsys-logo";
 import {
@@ -162,6 +163,9 @@ export function GuestReviewer({ token, cut = null }: { token: string; cut?: stri
           )}
         </div>
         <div className="gr-who">
+          {review?.viewer?.can_download_folders && review.folders && review.folders.length > 0 && (
+            <GuestFolders projectId={session.projectId} accessKey={session.accessKey} folders={review.folders} />
+          )}
           <span>{session.name}</span>
           <button
             type="button"
