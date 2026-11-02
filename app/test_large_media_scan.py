@@ -12,7 +12,7 @@ from django.urls import reverse
 from .models import File, FileSecurityScan, OutboxEvent
 from .services import file_processing
 from .services.file_processing import (
-    BLOCKED_TOO_LARGE, NOT_SCANNED_TOO_LARGE, PREVIEW_TOPIC, SKIPPED_LARGE_MEDIA, _sniff_video_container, process_security_scan,
+    BLOCKED_TOO_LARGE, NOT_SCANNED_TOO_LARGE, NOT_SCANNED_VIDEO, PREVIEW_TOPIC, _sniff_video_container, process_security_scan,
 )
 from .test_access_projects import WorkspaceAccessSetupMixin
 
@@ -81,22 +81,53 @@ class LargeMediaScanTests(WorkspaceAccessSetupMixin, TestCase):
         OutboxEvent.objects.filter(aggregate_id=str(file.id), topic=PREVIEW_TOPIC).delete()
         return file
 
-    @unittest.skipUnless(HAS_FFMPEG, 'ffmpeg/ffprobe required')
-    def test_oversized_verified_video_skips_scan_and_continues_to_processing(self):
-        content = _tiny_mp4()
-        file = self.upload_media('clip.mp4', content, 'video/mp4')
-        with override_settings(CLAMAV_MAX_STREAM_BYTES=len(content) - 1):
-            with self.assertLogs('app.services.file_processing', level='WARNING') as logs:
-                scan = process_security_scan(file_id=file.id)
+    def assert_skipped_as_video(self, file, scan):
         self.assertEqual(SCANNED, [])
         self.assertEqual(scan.status, 'CLEAN')
-        self.assertEqual(scan.result['scan_status'], SKIPPED_LARGE_MEDIA)
+        self.assertEqual(scan.result['scan_status'], NOT_SCANNED_VIDEO)
+        self.assertEqual(scan.result['label'], 'Not scanned · video')
         self.assertTrue(scan.result['skipped'])
         self.assertGreaterEqual(scan.result['video_streams'], 1)
         file.refresh_from_db()
         self.assertEqual(file.status, 'READY')
         self.assertTrue(OutboxEvent.objects.filter(aggregate_id=str(file.id), topic=PREVIEW_TOPIC).exists())
-        self.assertIn('skipped for large verified video', logs.output[0])
+
+    @unittest.skipUnless(HAS_FFMPEG, 'ffmpeg/ffprobe required')
+    def test_oversized_verified_video_skips_scan_and_continues_to_processing(self):
+        content = _tiny_mp4()
+        file = self.upload_media('clip.mp4', content, 'video/mp4')
+        with override_settings(CLAMAV_MAX_STREAM_BYTES=len(content) - 1):
+            with self.assertLogs('app.services.file_processing', level='INFO') as logs:
+                scan = process_security_scan(file_id=file.id)
+        self.assert_skipped_as_video(file, scan)
+        self.assertIn('skipped for verified video', logs.output[0])
+
+    @unittest.skipUnless(HAS_FFMPEG, 'ffmpeg/ffprobe required')
+    def test_small_verified_video_skips_scan_too(self):
+        content = _tiny_mp4()
+        file = self.upload_media('small-clip.mp4', content, 'video/mp4')
+        with override_settings(CLAMAV_MAX_STREAM_BYTES=1024 * 1024 * 1024):
+            scan = process_security_scan(file_id=file.id)
+        self.assert_skipped_as_video(file, scan)
+
+    def test_small_file_with_video_mime_but_non_video_bytes_is_still_scanned(self):
+        file = self.upload_media('fake.png', PNG, 'image/png')
+        File.objects.filter(id=file.id).update(mime_type='video/mp4', original_name='fake.mp4')
+        with override_settings(CLAMAV_MAX_STREAM_BYTES=1024 * 1024):
+            scan = process_security_scan(file_id=file.id)
+        self.assertEqual(SCANNED, [PNG])
+        self.assertEqual(scan.status, 'CLEAN')
+        self.assertNotIn('scan_status', scan.result)
+
+    @unittest.skipUnless(HAS_FFMPEG, 'ffmpeg/ffprobe required')
+    def test_video_magic_that_ffprobe_rejects_is_still_scanned(self):
+        content = _tiny_mp4()
+        file = self.upload_media('odd.mp4', content, 'video/mp4')
+        with override_settings(CLAMAV_MAX_STREAM_BYTES=1024 * 1024 * 1024), \
+                patch.object(file_processing, '_ffprobe_video_streams', return_value=({'mov', 'mp4'}, 0)):
+            scan = process_security_scan(file_id=file.id)
+        self.assertEqual(SCANNED, [content])
+        self.assertEqual(scan.status, 'CLEAN')
 
     @unittest.skipUnless(HAS_FFMPEG, 'ffmpeg/ffprobe required')
     def test_video_magic_without_a_video_stream_is_blocked(self):
