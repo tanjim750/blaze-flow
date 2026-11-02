@@ -1,3 +1,4 @@
+import hashlib
 import ipaddress
 
 from django.conf import settings
@@ -73,3 +74,30 @@ class SupportTicketThrottle(UserRateThrottle):
 class GuestExchangeThrottle(AnonRateThrottle):
     """Redeeming a review link (long token or /r/<code>): caps guessing short codes per IP."""
     scope = 'guest_exchange'
+
+
+class EmailScopedThrottle(_AnonRateThrottle):
+    """Throttle by the email address in the request body rather than by client IP.
+
+    The key is a hash of the normalised email, so the cache never stores addresses. It applies
+    whether or not the account exists and the 429 looks identical either way, so it does not
+    reveal which emails are registered. Requests without an email are left to the IP throttle.
+    """
+
+    def get_cache_key(self, request, view):
+        try:
+            email = request.data.get('email')
+        except Exception:  # noqa: BLE001 - unparsable body: the serializer will reject it
+            return None
+        if not isinstance(email, str) or not email.strip():
+            return None
+        digest = hashlib.sha256(email.strip().lower().encode()).hexdigest()
+        return self.cache_format % {'scope': self.scope, 'ident': digest}
+
+
+class LoginEmailThrottle(EmailScopedThrottle):
+    scope = 'login_email'
+
+
+class PasswordResetEmailThrottle(EmailScopedThrottle):
+    scope = 'password_reset_email'
