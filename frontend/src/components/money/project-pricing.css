@@ -30,3 +30,12 @@
 
 .pp-field-error{display:block;margin-top:4px;color:var(--t-fg-ff9ba3);font-size:12px;line-height:1.4;font-weight:500}
 .pp-input:has(input[aria-invalid="true"]){border-color:var(--t-line-ff9ba3)}
+
+/* UI critic R3 #12: the Invoice button stays a one-line pill; on phones the sum keeps
+   "+ tasks = total" together on one row under the fee. */
+.pp-card header { flex-wrap: wrap; }
+.pp-shell .money-button { flex: none; white-space: nowrap; }
+@media (max-width: 600px) {
+  .pp-sum { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); column-gap: 10px; }
+  .pp-sum > label { grid-column: 1 / -1; }
+}
