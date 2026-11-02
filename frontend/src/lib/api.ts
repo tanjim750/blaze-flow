@@ -30,6 +30,8 @@ export type Workspace = {
   plan?: WorkspacePlan;
   /** Plan-gated features this workspace has ("ai_qa", "team_members", "editor_payouts"). Absent means all. */
   plan_features?: PlanFeature[];
+  /** Sidebar order for everyone in the workspace (set by the owner). Absent on older backends. */
+  nav_order?: string[];
 };
 export type WorkspacePlan = "FREE" | "SOLO" | "PRO";
 export type PlanFeature = "ai_qa" | "team_members" | "editor_payouts";
@@ -252,6 +254,13 @@ export const getWorkspacePermissions = (workspaceId: string, projectId?: string 
   request<import("./permissions").PermissionsAnswer>(`/workspaces/${workspaceId}/permissions/${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ""}`);
 export const createWorkspace = (payload: { name: string; slug?: string; timezone: string }) =>
   request<Workspace & { membership_id: string }>("/workspaces/", jsonBody(payload));
+export type NavOrderSetting = { order: string[]; default: string[]; is_default: boolean; can_edit: boolean };
+export const getNavOrder = (workspaceId: string) => request<NavOrderSetting>(`/workspaces/${workspaceId}/nav-order/`);
+/** `null` resets to the default order. Only the workspace's primary owner may save. */
+export const saveNavOrder = (workspaceId: string, order: string[] | null) =>
+  request<NavOrderSetting>(`/workspaces/${workspaceId}/nav-order/`, {
+    ...jsonBody(order ? { order } : { reset: true }), method: "PUT",
+  });
 export const getWorkspaceProfile = (workspaceId: string) =>
   request<WorkspaceProfile>(`/workspaces/${workspaceId}/profile/`);
 export const updateWorkspaceProfile = (workspaceId: string, payload: Partial<Omit<WorkspaceProfile, "updated_at">>) =>

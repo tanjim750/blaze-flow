@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { guardRoute } from "@/lib/route-guard";
-import { Banknote, Wallet, Bell, BookA, Building2, CircleUserRound, Coins, FileText, MessageCircle, Palette, ShieldCheck } from "@/components/icons";
+import { PanelLeft, Banknote, Wallet, Bell, BookA, Building2, CircleUserRound, Coins, FileText, MessageCircle, Palette, ShieldCheck } from "@/components/icons";
 import { getGlossary, getInvoiceSettings, getRates, getStripeStatus } from "@/lib/studio-settings-server";
 import { GlossaryForm, InvoiceSettingsForm, RatesForm } from "@/components/settings/studio-settings";
 import { CountrySettingsForm, CurrencySettingsForm, PaymentGatewaysCard } from "@/components/settings/billing-currency";
 import { PaymentsReadOnlyNote } from "@/components/settings/payment-setup-notes";
 import { PayoutDetailsForm } from "@/components/money/payout-details";
-import { getBranding, getNotificationPreferences, getNotificationSettings, getWhatsAppSettings, getWorkspaceProfile } from "@/lib/api";
+import { getNavOrder, getBranding, getNotificationPreferences, getNotificationSettings, getWhatsAppSettings, getWorkspaceProfile } from "@/lib/api";
 import { BrandingForm } from "@/components/portal/branding-form";
 import "@/components/portal/portal.css";
 import { loadSession } from "@/lib/session";
@@ -16,6 +16,7 @@ import "./settings.css";
 import { ThemeSwitch } from "@/components/theme/theme-switch";
 import { loadWorkspaceContext } from "@/lib/workspace";
 import { roleFor } from "@/lib/dashboard-role";
+import { NavOrderForm } from "@/components/settings/nav-order";
 
 export default async function SettingsPage() {
   await guardRoute("/settings");
@@ -30,9 +31,9 @@ export default async function SettingsPage() {
   const workspace = workspaceContext.ok ? workspaceContext.data.selected : null;
   // Editors get their own account here; the studio's profile and branding are the owners'.
   const studio = Boolean(workspace && roleFor(workspace) === "owner");
-  const [loadedProfile, loadedBranding, loadedWhatsApp] = workspace && studio
-    ? await Promise.all([getWorkspaceProfile(workspace.id), getBranding(workspace.id), getWhatsAppSettings(workspace.id)])
-    : [null, null, null];
+  const [loadedProfile, loadedBranding, loadedWhatsApp, loadedNav] = workspace && studio
+    ? await Promise.all([getWorkspaceProfile(workspace.id), getBranding(workspace.id), getWhatsAppSettings(workspace.id), getNavOrder(workspace.id)])
+    : [null, null, null, null];
   const [loadedNotifications, loadedSettings] = await Promise.all([
     getNotificationPreferences(),
     workspace ? getNotificationSettings(workspace.id) : Promise.resolve(null),
@@ -65,6 +66,10 @@ export default async function SettingsPage() {
       <div className="settings-title"><Palette /><div><h2>Appearance</h2><p>Choose how Krewsys looks on this device.</p></div></div>
       <div className="theme-row"><p>System follows your device&rsquo;s light or dark setting.</p><ThemeSwitch label="Theme" /></div>
     </section>
+    {workspace && loadedNav?.ok && <section className="settings-card" id="sidebar">
+      <div className="settings-title"><PanelLeft /><div><h2>Sidebar order</h2><p>The order of the main menu for everyone in {workspace.name}, on desktop and mobile. The first item is where people land after signing in.</p></div></div>
+      <NavOrderForm initial={loadedNav.data.order} canEdit={loadedNav.data.can_edit} />
+    </section>}
     <section className="settings-card" id="notifications">
       <div className="settings-title"><Bell /><div><h2>Notifications</h2><p>Choose what shows up in your bell, and when Krewsys should also send email.</p></div></div>
       {workspace && loadedSettings?.ok

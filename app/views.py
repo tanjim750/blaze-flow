@@ -2906,3 +2906,30 @@ def workspace_retention_policy(request, workspace_id):
     )
     return Response(workspace_retention_policy_data(workspace=workspace))
 
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def workspace_nav_order(request, workspace_id):
+    """The workspace's sidebar order. Anyone in the workspace reads it; only the primary owner sets it."""
+    from .serializers.workspaces import NavOrderSerializer
+    from .services.nav_order import NAV_KEYS, effective_nav_order
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    _require_workspace_permission(request, workspace, WORKSPACE_READ)
+    is_owner = WorkspaceMembership.objects.filter(
+        workspace=workspace, user=request.user, principal_type=WorkspacePrincipalType.USER,
+        status=WorkspaceMembershipStatus.ACTIVE, is_primary_owner=True,
+    ).exists()
+    if request.method == 'PUT':
+        if not is_owner:
+            raise PermissionDenied('Only the workspace owner can change the sidebar order.')
+        serializer = NavOrderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order = [] if serializer.validated_data.get('reset') else serializer.validated_data['order']
+        # Store nothing for the default, so a later change to the default reaches this workspace.
+        workspace.nav_order = [] if list(order) == list(NAV_KEYS) else order
+        workspace.updated_at = timezone.now()
+        workspace.save(update_fields=['nav_order', 'updated_at'])
+    return Response({'order': effective_nav_order(workspace.nav_order), 'default': list(NAV_KEYS), 'is_default': not workspace.nav_order,
+        'can_edit': is_owner,
+    })

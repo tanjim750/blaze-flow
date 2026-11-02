@@ -8,7 +8,7 @@ import { CommandPalette, openQuickSearch } from "@/components/command-palette";
 import { LinkPending } from "@/components/nav-progress";
 import { usePathname, useSearchParams } from "next/navigation";
 import { PageTransition } from "@/components/page-transition";
-import { BadgeCheck, Inbox, ReceiptText, CheckCircle2, Clients, ChevronLeft, CircleHelp, FolderOpen, House, LogOut, Mail, Menu, MessagesSquare, Search, Settings, SquareKanban, Users, Wallet, X } from "@/components/icons";
+import { BarChart3, BadgeCheck, Inbox, ReceiptText, CheckCircle2, Clients, ChevronLeft, CircleHelp, FolderOpen, House, LogOut, Mail, Menu, MessagesSquare, Search, Settings, SquareKanban, Users, Wallet, X } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { signOutAction, switchWorkspaceAction } from "@/app/actions";
 import type { ShellUser } from "@/lib/user";
@@ -30,7 +30,7 @@ type OperationsHealth = { status: "healthy" | "warning" | "critical"; alerts: { 
 
 /** Lucide icons for the role nav (see `lib/role-nav.ts` for who sees which link). */
 const ICONS: Record<NavIcon, typeof House> = {
-  home: House, projects: SquareKanban, chat: MessagesSquare, tasks: CheckCircle2, files: FolderOpen,
+  home: House, analytics: BarChart3, projects: SquareKanban, chat: MessagesSquare, tasks: CheckCircle2, files: FolderOpen,
   clients: Clients, team: Users, money: Wallet,
   settings: Settings, help: CircleHelp, approvals: BadgeCheck, requests: Inbox,
   invoices: ReceiptText, upload: Upload, pay: Wallet,
@@ -158,7 +158,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
           {open ? <X size={20} /> : <Menu size={20} />}
         </button>
         <KrewsysMark size={26} className="studio-mobilebar-mark" title="Krewsys" />
-        <h1 className="studio-mobilebar-title">{mobileTitle(pathname)}</h1>
+        <h1 className="studio-mobilebar-title">{pathname === "/" ? (nav.primary.find((link) => link.href === "/")?.label ?? mobileTitle(pathname)) : mobileTitle(pathname)}</h1>
         <div className="studio-mobilebar-actions">
           {primary && <button type="button" className="studio-mobilebar-btn is-primary" onClick={runPrimary} aria-label={primary}>{/upload/i.test(primary) ? <Upload size={18} /> : <Plus size={18} />}</button>}
           <button type="button" className="studio-mobilebar-btn" onClick={openQuickSearch} aria-label="Search"><Search size={19} /></button>

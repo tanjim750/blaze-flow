@@ -4,13 +4,41 @@ from django.utils.text import slugify
 from rest_framework import serializers
 
 from app.models import Workspace, WorkspaceProfile
+from app.services.nav_order import NAV_KEYS, effective_nav_order
 
 
 class WorkspaceSerializer(serializers.ModelSerializer):
+    # Always the full, valid order (stored order first, then any keys added since).
+    nav_order = serializers.SerializerMethodField()
+
     class Meta:
         model = Workspace
-        fields = ('id', 'name', 'slug', 'timezone', 'status', 'deletion_scheduled_at', 'created_at')
+        fields = ('id', 'name', 'slug', 'timezone', 'status', 'deletion_scheduled_at', 'created_at', 'nav_order')
         read_only_fields = fields
+
+    def get_nav_order(self, workspace):
+        return effective_nav_order(workspace.nav_order)
+
+
+class NavOrderSerializer(serializers.Serializer):
+    """PUT body: the whole order, or ``reset`` for the default."""
+    order = serializers.ListField(child=serializers.CharField(max_length=40), required=False, max_length=len(NAV_KEYS))
+    reset = serializers.BooleanField(required=False, default=False)
+
+    def validate_order(self, value):
+        unknown = [key for key in value if key not in NAV_KEYS]
+        if unknown:
+            raise serializers.ValidationError(f'Unknown sidebar item: {", ".join(unknown)}.')
+        if len(set(value)) != len(value):
+            raise serializers.ValidationError('Each sidebar item may appear only once.')
+        if set(value) != set(NAV_KEYS):
+            raise serializers.ValidationError('Send every sidebar item: ' + ', '.join(NAV_KEYS) + '.')
+        return value
+
+    def validate(self, attrs):
+        if not attrs.get('reset') and 'order' not in attrs:
+            raise serializers.ValidationError('Send an order, or reset: true.')
+        return attrs
 
 
 class WorkspaceCreateSerializer(serializers.Serializer):
