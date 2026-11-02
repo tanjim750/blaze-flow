@@ -21,7 +21,7 @@ from .file_processing import SCAN_TOPIC, enqueue_file_event
 from .auto_version import ensure_review_version, move_review_versions, sync_review_version_number
 from .notifications import notify_library_version_added
 from .media import _storage_backend, detect_media_type, sha256_upload
-from .review_assets import detect_attachment_type
+from .review_assets import ZIP_ALIASES, ZIP_MIME_TYPE, detect_attachment_type, detect_zip_type
 from .subscriptions import enforce_workspace_storage_limit
 
 
@@ -320,9 +320,14 @@ def _validate_project_file(upload):
     header = upload.read(32)
     upload.seek(0)
     detected = detect_attachment_type(header, upload) or detect_media_type(header)
+    if detected is None and header.startswith(b'PK\x03\x04'):
+        detected = detect_zip_type(upload)  # a plain .zip archive (project files only)
     declared = (getattr(upload, 'content_type', '') or '').lower()
-    aliases = {'image/jpg': 'image/jpeg', 'audio/x-wav': 'audio/wav', 'text/rtf': 'application/rtf'}
-    if detected is None or aliases.get(declared, declared) != detected:
+    aliases = {'image/jpg': 'image/jpeg', 'audio/x-wav': 'audio/wav', 'text/rtf': 'application/rtf', **ZIP_ALIASES}
+    declared = aliases.get(declared, declared)
+    if detected == ZIP_MIME_TYPE and declared in {'', 'application/octet-stream'}:
+        declared = ZIP_MIME_TYPE  # some browsers send no type for .zip
+    if detected is None or declared != detected:
         raise ProjectFileError('The file signature does not match a supported type.')
     return detected
 

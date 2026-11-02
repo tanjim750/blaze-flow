@@ -10,7 +10,8 @@ PREVIEWED = ('image/', 'video/', 'audio/', 'application/pdf')
 
 
 def processing_state(file: File):
-    scan = FileSecurityScan.objects.filter(file_id=file.id).values_list('status', flat=True).first()
+    row = FileSecurityScan.objects.filter(file_id=file.id).values_list('status', 'result').first()
+    scan, result = row if row else (None, None)
     if scan == FileSecurityScanStatus.INFECTED:
         return {'stage': 'failed', 'label': 'Failed the security scan', 'ready': False}
     if file.status == FileStatus.FAILED:
@@ -19,6 +20,8 @@ def processing_state(file: File):
         return {'stage': 'scanning', 'label': 'Scanning', 'ready': False}
     mime = file.mime_type or ''
     if not mime.startswith(PREVIEWED):
+        if (result or {}).get('scan_status') == 'not_scanned_too_large':
+            return {'stage': 'ready', 'label': 'Ready · not scanned (too large)', 'ready': True}
         return {'stage': 'ready', 'label': 'Ready', 'ready': True}
     kind = 'proxy' if mime.startswith('video/') else 'preview'
     label = 'Making proxy' if kind == 'proxy' else 'Making preview'
