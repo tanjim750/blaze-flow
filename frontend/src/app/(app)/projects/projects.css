@@ -517,3 +517,20 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
   .pb-canvas > .tb-root > .tb-board { align-items: stretch; }
   .pb-canvas > .tb-root > .tb-board > .tb-column { height: auto; min-height: 0; max-height: none; }
 }
+
+/* UI critic R3 #4: the client name gets the rail's width back. The Details pill is just its
+   arrow (the link keeps its aria-label) and only spells out "Details" on hover/focus. */
+.pb-client-details > span:first-child { display: none; }
+.pb-client-head:is(:hover, :focus-within) .pb-client-details > span:first-child { display: inline; }
+/* UI critic R3 #5 (phones): drop the "Projects" crumb (it's the page title) so the client and
+   project fit; the title gets its own line above the status/client chips; the tab strip starts
+   at the gutter instead of snapping its first tab under the edge, and fades at the edges so it
+   reads as scrollable. */
+@media (max-width: 760px) {
+  .pb-crumbs li:first-child, .pb-crumbs li:nth-child(2) > svg:first-child { display: none; }
+  .pb-title { flex-wrap: wrap; row-gap: 6px; }
+  .pb-title > h1 { flex: 1 1 calc(100% - 56px); }
+  .pb-tabs { scroll-padding-inline: 14px;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 32px), transparent); }
+}
