@@ -64,7 +64,7 @@ the `outbox-worker`, one job at a time, and AI QA runs in `ai-qa-worker`. The va
 
 | service | CPU | memory | notes |
 |---|---|---|---|
-| web (gunicorn) | unlimited | 2g | `GUNICORN_WORKERS=3`, `GUNICORN_THREADS=4`; mostly waits on Postgres/R2 |
+| web (gunicorn) | unlimited | 2g | `GUNICORN_WORKERS=3`, `GUNICORN_THREADS=8`; mostly waits on Postgres/R2 |
 | outbox-worker | 2 | 4g | `VIDEO_PROXY_THREADS=2` so libx264 uses exactly the quota |
 | ai-qa-worker | 2 | 6g | OCR is CPU-bound; raise to 3–4 only if proxies are rarely queued |
 | frontend | unlimited | 768m | |
@@ -320,3 +320,28 @@ All services log to stdout (`DJANGO_LOG_LEVEL`, gunicorn access log), rotated by
 (10 MB × 5). `dc logs -f web outbox-worker ai-qa-worker`. A `DisallowedHost` error means
 `web` or your domain is missing from `DJANGO_ALLOWED_HOSTS`; a 403 CSRF failure means the
 origin is missing from `DJANGO_CSRF_TRUSTED_ORIGINS`.
+
+## File downloads and playback (presigned R2 redirects)
+
+With `STORAGE_DRIVER=s3`, every private file view (asset/project file and media-version
+downloads, previews/posters, review & guest media streams, guest/message attachments) runs
+its permission check and then answers `302` to a presigned R2 `GET` instead of streaming
+bytes through gunicorn. R2 handles `Range`/`206`, so the player still seeks. The signed URL
+pins `Content-Type` and `Content-Disposition` (attachment for downloads).
+
+- `FILE_DOWNLOAD_REDIRECT_ENABLED` (default `true`) — set `false` to fall back to streaming.
+- `FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS` (default `3600`, 60–604800) — must outlast a
+  playback session, because `<video>` keeps sending Range requests to the redirected URL.
+
+Plain `<video>`, `<img>`, `<iframe>` and `<a download>` do not need CORS. JavaScript `fetch`
+of a file (e.g. the guest attachment download, which sends `X-Guest-Access-Key`) follows the
+redirect cross-origin and **does** need a bucket CORS rule, for example:
+
+```json
+[{"AllowedOrigins": ["https://krewsys.com"], "AllowedMethods": ["GET", "HEAD"],
+  "AllowedHeaders": ["range", "x-guest-access-key", "authorization", "content-type"],
+  "ExposeHeaders": ["Content-Length", "Content-Range", "Content-Disposition", "Accept-Ranges", "ETag"],
+  "MaxAgeSeconds": 3600}]
+```
+
+Merge this with the existing direct-upload rule (PUT/POST) rather than replacing it.

@@ -5,6 +5,10 @@ import type { TransportJob } from "./upload-store";
 type Put = { url: string; size: number; xhr: FakeXhr };
 let puts: Put[] = [];
 let failPart: number | null = null;
+let failTimes = 1;
+let putStatus: number | null = null;
+let onPut: (() => void) | null = null;
+let refuseComplete: { status: number; body: unknown } | null = null;
 class FakeXhr {
   status = 0; url = ""; method = ""; headers: Record<string, string> = {};
   upload: { onprogress: ((event: { loaded: number }) => void) | null } = { onprogress: null };
@@ -15,9 +19,10 @@ class FakeXhr {
   abort() { this.onabort?.(); }
   send(body: Blob) {
     puts.push({ url: this.url, size: body.size, xhr: this });
+    onPut?.();
     queueMicrotask(() => {
       const part = Number(new URL(this.url).searchParams.get("part"));
-      if (failPart !== null && part === failPart) { failPart = null; this.onerror?.(); return; }
+      if (failPart !== null && part === failPart) { failTimes -= 1; if (failTimes <= 0) failPart = null; if (putStatus) { this.status = putStatus; this.onload?.(); } else this.onerror?.(); return; }
       this.upload.onprogress?.({ loaded: body.size }); this.status = 200; this.onload?.();
     });
   }
@@ -36,6 +41,7 @@ function fetchMock(input: string, init: RequestInit) {
   if (path.endsWith("/uploads/config/")) return json(200, { enabled: configEnabled });
   if (path.endsWith("/uploads/") && init.method === "POST") return json(initResponse.status, initResponse.body);
   if (path.endsWith("/parts/")) return json(200, { parts: (body as { part_numbers: number[] }).part_numbers.map((n) => ({ part_number: n, url: `https://r2.example/key?part=${n}` })) });
+  if (path.endsWith("/complete/") && refuseComplete) return json(refuseComplete.status, refuseComplete.body);
   if (path.endsWith("/complete/")) return completeFails ? json(completeFails, {}) : json(201, { id: "pf-1" });
   if (/\/uploads\/[^/]+\/$/.test(path) && (init.method ?? "GET") === "GET") return json(200, statusQueue.shift() ?? { state: "FINALIZING", project_file: null });
   if (init.method === "DELETE") return json(204, null);
@@ -49,11 +55,11 @@ const job = (file: File, resume: unknown = undefined): TransportJob & { saved: u
 const MB = 1024 * 1024;
 
 beforeEach(() => {
-  puts = []; calls.length = 0; configEnabled = true; failPart = null; completeFails = 0; statusQueue = []; __r2test.reset();
+  puts = []; calls.length = 0; configEnabled = true; failPart = null; failTimes = 1; putStatus = null; onPut = null; refuseComplete = null; completeFails = 0; statusQueue = []; __r2test.reset(); __r2test.setRetryDelays([0, 0, 0]);
   vi.stubGlobal("XMLHttpRequest", FakeXhr);
   vi.stubGlobal("fetch", vi.fn(fetchMock));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("r2 transport", () => {
   it("only claims requests marked direct", () => {
@@ -77,7 +83,7 @@ describe("r2 transport", () => {
   it("multipart: parallel parts, aggregate progress, resume after a failed part", async () => {
     initResponse = { status: 201, body: { id: "u2", mode: "multipart", part_size: 5 * MB, part_count: 3 } };
     const file = new File([new Uint8Array(11 * MB)], "cut.mp4", { type: "video/mp4" });
-    failPart = 2;
+    failPart = 2; failTimes = 4; // more drops than the per-part retries absorb
     const first = job(file);
     const failed = await r2Transport.send(first, () => {}, new AbortController().signal);
     expect(failed.ok).toBe(false);
@@ -91,6 +97,45 @@ describe("r2 transport", () => {
     expect(puts.length).toBe(3 - resume.completed.length);
     expect(progress.at(-1)).toBe(11 * MB);
     expect(calls.filter((c) => c.path.endsWith("/uploads/") && c.method === "POST")).toHaveLength(1);
+  });
+
+  it("retries a dropped or expired (403) part with a fresh URL instead of failing the file", async () => {
+    initResponse = { status: 201, body: { id: "u3", mode: "multipart", part_size: 5 * MB, part_count: 3 } };
+    const file = new File([new Uint8Array(11 * MB)], "big.zip", { type: "application/zip" });
+    failPart = 2; failTimes = 2; putStatus = 403;
+    const result = await r2Transport.send(job(file), () => {}, new AbortController().signal);
+    expect(result.ok).toBe(true);
+    // Initial batch plus one forced re-issue per failed attempt for part 2.
+    const partCalls = calls.filter((c) => c.path.endsWith("/parts/"));
+    expect(partCalls.length).toBe(3);
+    expect(partCalls.slice(1).every((c) => (c.body as { part_numbers: number[] }).part_numbers[0] === 2)).toBe(true);
+  });
+
+  it("concurrent parts share one URL request", async () => {
+    initResponse = { status: 201, body: { id: "u4", mode: "multipart", part_size: 5 * MB, part_count: 3 } };
+    const file = new File([new Uint8Array(11 * MB)], "c.mp4", { type: "video/mp4" });
+    const result = await r2Transport.send(job(file), () => {}, new AbortController().signal);
+    expect(result.ok).toBe(true);
+    expect(calls.filter((c) => c.path.endsWith("/parts/"))).toHaveLength(1);
+  });
+
+  it("re-requests part URLs once they are about to expire", async () => {
+    const realNow = Date.now;
+    let clock = realNow();
+    vi.spyOn(Date, "now").mockImplementation(() => clock);
+    initResponse = { status: 201, body: { id: "u5", mode: "multipart", part_size: 5 * MB, part_count: 5 } };
+    const file = new File([new Uint8Array(21 * MB)], "slow.mp4", { type: "video/mp4" });
+    onPut = () => { clock += 20 * 60_000; }; // each part takes longer than the URL lifetime
+    const result = await r2Transport.send(job(file), () => {}, new AbortController().signal);
+    expect(result.ok).toBe(true);
+    expect(calls.filter((c) => c.path.endsWith("/parts/")).length).toBeGreaterThan(1);
+  });
+
+  it("marks a deterministic refusal at /complete as not retryable", async () => {
+    initResponse = { status: 201, body: { id: "u6", mode: "single", url: "https://r2.example/key?part=0" } };
+    refuseComplete = { status: 400, body: { detail: "The file signature does not match.", code: "not_retryable" } };
+    const result = await r2Transport.send(job(new File(["abc"], "x.zip")), () => {}, new AbortController().signal);
+    expect(result).toMatchObject({ ok: false, retryable: false });
   });
 
   it("falls back to the form upload when the server has direct uploads off", async () => {

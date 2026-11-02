@@ -41,13 +41,18 @@ class PartsSerializer(serializers.Serializer):
 
 
 def _bad(exc):
-    return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    data = {'detail': str(exc)}
+    if getattr(exc, 'retryable', True) is False or isinstance(exc, ProjectFileError):
+        # Sending the same file again would be refused the same way; the tray offers no Retry.
+        data['code'] = 'not_retryable'
+    return Response(data, status=status.HTTP_400_BAD_REQUEST)
 
 
 def _describe(upload, extra):
     data = {
         'id': str(upload.id), 'mode': upload.mode.lower(), 'state': upload.state.lower(),
         'size': upload.expected_size, 'expires_at': upload.expires_at.isoformat(),
+        'url_expires_in': settings.DIRECT_UPLOAD_URL_EXPIRE_SECONDS,
     }
     if upload.mode == 'MULTIPART':
         data['part_size'] = upload.part_size
@@ -111,7 +116,10 @@ def direct_upload_parts(request, workspace_id, upload_id):
     serializer = PartsSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     try:
-        return Response({'parts': service.part_urls(upload, serializer.validated_data['part_numbers'])})
+        return Response({
+            'parts': service.part_urls(upload, serializer.validated_data['part_numbers']),
+            'expires_in': settings.DIRECT_UPLOAD_URL_EXPIRE_SECONDS,
+        })
     except service.DirectUploadError as exc:
         return _bad(exc)
 

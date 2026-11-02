@@ -103,6 +103,7 @@ from .serializers import (
     WorkspaceSerializer,
     WorkspaceUpdateSerializer,
 )
+from .services.project_files import safe_download_content_type
 from .services.passwords import (
     PasswordError, change_password, confirm_password_reset, request_password_reset,
 )
@@ -1411,7 +1412,7 @@ def asset_file_download(request, workspace_id, file_id):
     inline = _inline_allowed(request, item.file.mime_type)
     response = ranged_file_response(
         request, item.file.object_key, as_attachment=not inline,
-        filename=item.file.original_name, content_type=item.file.mime_type, checksum=item.file.checksum,
+        filename=item.file.original_name, content_type=safe_download_content_type(item.file.mime_type), checksum=item.file.checksum,
     )
     if inline:
         # The review page shows a PDF in a frame on the same origin; every other page and
@@ -1685,7 +1686,7 @@ def project_file_download(request, workspace_id, project_id, file_id):
         raise Http404('The stored file was not found.')
     return ranged_file_response(
         request, project_file.file.object_key, as_attachment=True,
-        filename=project_file.file.original_name, content_type=project_file.file.mime_type,
+        filename=project_file.file.original_name, content_type=safe_download_content_type(project_file.file.mime_type),
         checksum=project_file.file.checksum,
     )
 

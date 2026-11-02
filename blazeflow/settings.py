@@ -493,6 +493,15 @@ DIRECT_UPLOAD_PART_SIZE = int(os.environ.get('DIRECT_UPLOAD_PART_SIZE', str(16 *
 DIRECT_UPLOAD_URL_EXPIRE_SECONDS = int(os.environ.get('DIRECT_UPLOAD_URL_EXPIRE_SECONDS', '900'))
 DIRECT_UPLOAD_TTL_SECONDS = int(os.environ.get('DIRECT_UPLOAD_TTL_SECONDS', str(24 * 3600)))
 
+# Private file downloads/playback: after the permission check, 302 to a presigned bucket
+# GET instead of streaming bytes through gunicorn (only with STORAGE_DRIVER=s3). The expiry
+# must outlast a playback session: a <video> keeps issuing Range requests to the redirected
+# URL while the user seeks.
+FILE_DOWNLOAD_REDIRECT_ENABLED = os.environ.get('FILE_DOWNLOAD_REDIRECT_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
+FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS = int(os.environ.get('FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS', '3600'))
+if not 60 <= FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS <= 604800:
+    raise ImproperlyConfigured('FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS must be between 60 and 604800.')
+
 if STORAGE_DRIVER == 's3' and AWS_QUERYSTRING_EXPIRE < 1:
     raise ImproperlyConfigured('AWS_QUERYSTRING_EXPIRE must be at least 1 second.')
 

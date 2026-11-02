@@ -80,14 +80,37 @@ export function putBlob(url: string, body: Blob, headers: Record<string, string>
   });
 }
 
-export const COMPLETE_POLL_MS = 5000;
-export const COMPLETE_POLL_GIVE_UP_MS = 5 * 60_000;
-type SessionStatus = { state: string; error?: string; project_file: unknown | null };
 const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
   const timer = setTimeout(resolve, ms);
   signal.addEventListener("abort", () => { clearTimeout(timer); reject(new DOMException("Cancelled.", "AbortError")); }, { once: true });
 });
 
+/** How long to trust a part URL: the server's lifetime minus a safety margin for slow parts. */
+export function partUrlLifetimeMs(expiresIn: number | undefined) {
+  const seconds = typeof expiresIn === "number" && expiresIn > 0 ? expiresIn : 900;
+  return Math.max(30, seconds - Math.min(300, seconds / 3)) * 1000;
+}
+
+export const PART_RETRY_DELAYS_MS = [1000, 4000, 10000];
+let retryDelays = PART_RETRY_DELAYS_MS;
+/** A dropped connection, an expired/refused URL (403) or a storage 5xx on one part should not
+ * fail a multi-GB upload: retry that part a few times with a freshly issued URL. */
+export async function withPartRetries<T>(run: (attempt: number) => Promise<T>, signal: AbortSignal, delays = retryDelays): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await run(attempt);
+    } catch (error) {
+      const status = error instanceof HttpError ? error.status : -1;
+      const transient = status === 0 || status === 403 || status === 408 || status === 429 || status >= 500;
+      if (signal.aborted || attempt >= delays.length || !transient) throw error;
+      await sleep(delays[attempt], signal);
+    }
+  }
+}
+
+export const COMPLETE_POLL_MS = 5000;
+export const COMPLETE_POLL_GIVE_UP_MS = 5 * 60_000;
+type SessionStatus = { state: string; error?: string; project_file: unknown | null };
 /** Polls the upload session until the server says it finished (returns the file) or failed. */
 async function awaitCompletion(path: string, signal: AbortSignal, original: HttpError): Promise<unknown> {
   const started = Date.now();
@@ -135,21 +158,41 @@ async function directSend(job: TransportJob, onProgress: (loaded: number, total:
     if (current.mode === "single") {
       await putBlob(init!.url!, file, init!.headers ?? {}, (loaded) => onProgress(loaded, file.size), signal);
     } else {
-      const urls = new Map<number, string>();
+      // Presigned part URLs expire (DIRECT_UPLOAD_URL_EXPIRE_SECONDS, 15 min by default). A big
+      // file on a slow link takes far longer, so remember when each URL was issued, refresh it
+      // before it expires, and share one in-flight batch request instead of racing duplicates.
+      const urls = new Map<number, { url: string; expiresAt: number }>();
+      let batch: Promise<void> | null = null;
       const total = Math.ceil(file.size / current.partSize);
       job.reportParts({ done: current.completed.length, total });
-      const urlFor = async (partNumber: number) => {
-        if (!urls.has(partNumber)) {
-          const wanted: number[] = [];
-          for (let n = partNumber; n <= total && wanted.length < 20; n += 1) if (!urls.has(n) && !current.completed.some((p) => p.partNumber === n)) wanted.push(n);
-          const { parts } = await api<{ parts: { part_number: number; url: string }[] }>(`${base}/${current.id}/parts/`, { method: "POST", body: JSON.stringify({ part_numbers: wanted }), signal });
-          parts.forEach((part) => urls.set(part.part_number, part.url));
+      const fresh = (n: number) => { const hit = urls.get(n); return hit && hit.expiresAt > Date.now() ? hit.url : null; };
+      const fetchBatch = async (partNumber: number) => {
+        const wanted: number[] = [];
+        for (let n = partNumber; n <= total && wanted.length < 20; n += 1) if (!fresh(n) && !current.completed.some((p) => p.partNumber === n)) wanted.push(n);
+        if (!wanted.includes(partNumber)) wanted.unshift(partNumber);
+        const issued = Date.now();
+        const { parts, expires_in } = await api<{ parts: { part_number: number; url: string }[]; expires_in?: number }>(`${base}/${current.id}/parts/`, { method: "POST", body: JSON.stringify({ part_numbers: wanted }), signal });
+        const expiresAt = issued + partUrlLifetimeMs(expires_in);
+        parts.forEach((part) => urls.set(part.part_number, { url: part.url, expiresAt }));
+      };
+      const urlFor = async (partNumber: number, forceNew = false): Promise<string> => {
+        if (forceNew) urls.delete(partNumber);
+        for (let i = 0; i < 3; i += 1) {
+          const hit = fresh(partNumber);
+          if (hit) return hit;
+          if (!batch) batch = fetchBatch(partNumber).finally(() => { batch = null; });
+          await batch;
         }
-        return urls.get(partNumber)!;
+        const hit = fresh(partNumber);
+        if (!hit) throw new HttpError(0, "Could not get an upload address from the server.");
+        return hit;
       };
       const completed = await sendParts({
         size: file.size, partSize: current.partSize, concurrency: DEFAULT_PART_CONCURRENCY, completed: current.completed, signal,
-        sendPart: async (part, onLoaded, partSignal) => putBlob(await urlFor(part.partNumber), file.slice(part.start, part.end), {}, onLoaded, partSignal),
+        sendPart: (part, onLoaded, partSignal) => withPartRetries(
+          (attempt) => urlFor(part.partNumber, attempt > 0).then((url) => putBlob(url, file.slice(part.start, part.end), {}, onLoaded, partSignal)),
+          partSignal,
+        ),
         onProgress: (loaded) => onProgress(loaded, file.size),
         onPartDone: (part, done) => { remember({ ...current, completed: [...(resume?.completed ?? []), part] }); job.reportParts({ done, total }); },
       });
@@ -176,7 +219,8 @@ async function directSend(job: TransportJob, onProgress: (loaded: number, total:
       // Resumed from a previous page whose upload has since closed: start over once.
       if (saved && current.id === saved.id) return directSend({ ...job, resume: null }, onProgress, signal);
     }
-    return { ok: false, status: error instanceof HttpError ? error.status : 0, error: error instanceof Error ? error.message : uploadError(0, null) };
+    const retryable = !(error instanceof HttpError && error.code === "not_retryable");
+    return { ok: false, status: error instanceof HttpError ? error.status : 0, error: error instanceof Error ? error.message : uploadError(0, null), retryable };
   }
 }
 
@@ -187,4 +231,4 @@ export const r2Transport: UploadTransport = {
 };
 
 /** Test seam. */
-export const __r2test = { reset() { disabled.clear(); configs.clear(); try { localStorage.removeItem(STORAGE_KEY); } catch { /* */ } } };
+export const __r2test = { setRetryDelays(delays: number[]) { retryDelays = delays; }, reset() { retryDelays = PART_RETRY_DELAYS_MS; disabled.clear(); configs.clear(); try { localStorage.removeItem(STORAGE_KEY); } catch { /* */ } } };

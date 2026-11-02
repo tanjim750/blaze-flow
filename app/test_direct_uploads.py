@@ -1,5 +1,7 @@
 import hashlib
 import io
+import os
+import zipfile
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -16,11 +18,19 @@ MP4 = b'\x00\x00\x00\x18ftypmp42' + b'\x00' * 20
 PNG = b'\x89PNG\r\n\x1a\n' + b'\x00' * 24
 
 
+def make_zip(entries, compress=zipfile.ZIP_STORED):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', compress) as archive:
+        for name, data in entries.items():
+            archive.writestr(name, data)
+    return buffer.getvalue()
+
+
 class FakeS3:
     """Just enough of the boto3 S3 client for the direct-upload lifecycle."""
 
     def __init__(self):
-        self.objects, self.multipart, self.counter = {}, {}, 0
+        self.objects, self.multipart, self.counter, self.gets = {}, {}, 0, []
 
     def generate_presigned_url(self, method, Params, ExpiresIn):
         extra = f"&part={Params['PartNumber']}" if 'PartNumber' in Params else ''
@@ -54,7 +64,12 @@ class FakeS3:
         return {'ContentLength': len(self.objects[Key])}
 
     def get_object(self, Bucket, Key, Range=None):
-        return {'Body': io.BytesIO(self.objects[Key])}
+        data = self.objects[Key]
+        self.gets.append(Range)
+        if Range:
+            start, end = (int(x) for x in Range.removeprefix('bytes=').split('-'))
+            data = data[start:end + 1]
+        return {'Body': io.BytesIO(data)}
 
     def delete_object(self, Bucket, Key):
         self.objects.pop(Key, None)
@@ -154,14 +169,22 @@ class DirectUploadTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(done.status_code, 201, done.content)
         self.assertEqual(self.s3.objects[upload.object_key], data)
 
-    def test_signature_mismatch_is_rejected_and_object_deleted(self):
+    def test_signature_mismatch_is_stored_as_a_generic_file(self):
         body = self.init('fake.png', len(MP4), 'image/png').json()
         upload = DirectUpload.objects.get(id=body['id'])
         self.s3.put(upload.object_key, MP4)
         response = self.client.post(self.url('api-direct-upload-complete', upload.id))
-        self.assertEqual(response.status_code, 400)
-        self.assertNotIn(upload.object_key, self.s3.objects)
-        self.assertFalse(File.objects.exists())
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(File.objects.get().mime_type, 'application/octet-stream')
+
+    def test_any_file_type_is_accepted(self):
+        data = b'#!/bin/sh\necho hi\n'
+        body = self.init('run.sh', len(data), 'application/x-sh').json()
+        upload = DirectUpload.objects.get(id=body['id'])
+        self.s3.put(upload.object_key, data)
+        response = self.client.post(self.url('api-direct-upload-complete', upload.id))
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(File.objects.get().mime_type, 'application/octet-stream')
 
     def test_size_mismatch_and_checksum_mismatch_are_rejected(self):
         body = self.init('p.png', len(PNG) + 1, 'image/png').json()
@@ -206,3 +229,84 @@ class DirectUploadTests(WorkspaceAccessSetupMixin, TestCase):
             response = self.init('big.mp4', 11, 'video/mp4')
         self.assertEqual(response.status_code, 400)
         self.assertFalse(DirectUpload.objects.exists())
+
+
+@override_settings(
+    STORAGE_DRIVER='s3', DIRECT_UPLOADS_ENABLED=True, DIRECT_UPLOAD_SINGLE_PUT_MAX_BYTES=1024,
+    DIRECT_UPLOAD_PART_SIZE=5 * 1024 * 1024,
+)
+class DirectUploadArchiveTests(WorkspaceAccessSetupMixin, TestCase):
+    """Plain .zip archives of any size (only workspace storage limits apply)."""
+
+    def setUp(self):
+        super().setUp()
+        self.s3 = FakeS3()
+        patcher = patch.object(direct_uploads, '_client', return_value=(self.s3, 'bucket'))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.client.force_authenticate(self.owner)
+
+    def url(self, name, *args):
+        return reverse(name, args=[self.workspace.id, *args])
+
+    def send(self, name, data, content_type):
+        body = self.client.post(self.url('api-direct-upload-initialize'), {'name': name, 'size': len(data), 'content_type': content_type}, format='json')
+        self.assertEqual(body.status_code, 201, body.content)
+        upload = DirectUpload.objects.get(id=body.json()['id'])
+        if upload.multipart_upload_id:
+            part = upload.part_size
+            for index in range(0, len(data), part):
+                self.s3.upload_part(upload.multipart_upload_id, index // part + 1, data[index:index + part])
+        else:
+            self.s3.put(upload.object_key, data)
+        return upload, self.client.post(self.url('api-direct-upload-complete', upload.id))
+
+    def test_archive_over_the_old_200mb_spool_cap_is_accepted_without_spooling(self):
+        # Pretend the archive is huge: the old code spooled every ZIP and refused past 200 MB.
+        data = make_zip({'footage/a.bin': os.urandom(6 * 1024 * 1024), 'notes.txt': b'hello'})
+        with patch.object(direct_uploads, 'ZIP_RANGE_BUFFER', 64 * 1024):
+            upload, response = self.send('drive-download-20261102T000508Z-1-001.zip', data, 'application/zip')
+        self.assertEqual(response.status_code, 201, response.content)
+        item = ProjectFile.objects.get(id=response.json()['id'])
+        self.assertEqual(item.file.mime_type, 'application/zip')
+        self.assertEqual(item.file.checksum, hashlib.sha256(data).hexdigest())
+        # One full read for the checksum; the central directory came from small ranged reads.
+        self.assertEqual(self.s3.gets.count(None), 1)
+        ranged = [r for r in self.s3.gets if r]
+        self.assertTrue(ranged)
+        for value in ranged:
+            start, end = (int(x) for x in value.removeprefix('bytes=').split('-'))
+            self.assertLessEqual(end - start + 1, 64 * 1024)
+
+    def test_windows_zip_mime_alias_is_accepted(self):
+        _, response = self.send('a.zip', make_zip({'a.txt': b'a'}), 'application/x-zip-compressed')
+        self.assertEqual(response.status_code, 201, response.content)
+
+    def test_office_documents_are_still_told_apart(self):
+        docx = make_zip({'word/document.xml': b'<w/>', '[Content_Types].xml': b'<x/>'})
+        mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        _, response = self.send('brief.docx', docx, mime)
+        self.assertEqual(response.status_code, 201, response.content)
+        _, as_zip = self.send('brief.zip', docx, 'application/zip')
+        self.assertEqual(as_zip.status_code, 201, as_zip.content)
+        self.assertEqual(File.objects.get(original_name='brief.zip').mime_type, mime)  # the bytes win
+
+    def test_unreadable_archive_is_kept_as_a_generic_file(self):
+        broken = b'PK\x03\x04' + b'\x00' * 64  # zip signature, no central directory
+        upload, response = self.send('broken.zip', broken, 'application/zip')
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(File.objects.get(original_name='broken.zip').mime_type, 'application/octet-stream')
+
+    def test_transient_refusal_stays_retryable(self):
+        data = make_zip({'a.txt': b'a'})
+        body = self.client.post(self.url('api-direct-upload-initialize'), {'name': 'a.zip', 'size': len(data) + 1, 'content_type': 'application/zip'}, format='json').json()
+        self.s3.put(DirectUpload.objects.get(id=body['id']).object_key, data)
+        response = self.client.post(self.url('api-direct-upload-complete', body['id']))
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn('code', response.json())
+
+    def test_part_urls_report_their_lifetime(self):
+        body = self.client.post(self.url('api-direct-upload-initialize'), {'name': 'big.zip', 'size': 6 * 1024 * 1024, 'content_type': 'application/zip'}, format='json').json()
+        self.assertEqual(body['url_expires_in'], 900)
+        parts = self.client.post(self.url('api-direct-upload-parts', body['id']), {'part_numbers': [1]}, format='json').json()
+        self.assertEqual(parts['expires_in'], 900)

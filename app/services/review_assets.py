@@ -43,6 +43,33 @@ def _detect_ooxml_type(upload):
     return None
 
 
+ZIP_MIME_TYPE = 'application/zip'
+# What browsers and operating systems call a .zip; all are stored as application/zip.
+ZIP_ALIASES = {'application/x-zip-compressed': ZIP_MIME_TYPE, 'application/x-zip': ZIP_MIME_TYPE, 'multipart/x-zip': ZIP_MIME_TYPE}
+
+
+def detect_zip_type(upload):
+    """The type of a seekable ZIP stream: an OOXML document, a plain archive, or None.
+
+    Only the central directory is read (``zipfile`` seeks to the end), so the cost does not
+    grow with the archive's size and there is no size cap.
+    """
+    try:
+        with zipfile.ZipFile(upload) as archive:
+            names = set(archive.namelist())
+    except (zipfile.BadZipFile, zipfile.LargeZipFile, OSError, ValueError, EOFError):
+        return None
+    finally:
+        try:
+            upload.seek(0)
+        except Exception:
+            pass
+    for marker, mime_type in _OOXML_PART_MARKERS:
+        if marker in names:
+            return mime_type
+    return ZIP_MIME_TYPE
+
+
 def detect_attachment_type(header, upload=None):
     media_type = detect_media_type(header)
     if media_type and media_type.startswith('image/'):

@@ -15,7 +15,7 @@ Only enabled when ``STORAGE_DRIVER=s3`` and ``DIRECT_UPLOADS_ENABLED`` is true. 
 never sees credentials; every URL is scoped to one method, bucket and key and is short-lived.
 """
 import hashlib
-import tempfile
+import io
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -27,20 +27,67 @@ from django.utils import timezone
 from app.models import DirectUpload, DirectUploadMode, DirectUploadState, Workspace
 
 from .media import detect_media_type
-from .project_files import ProjectFileError, create_project_file_records
-from .review_assets import _detect_ooxml_type, detect_attachment_type
+from .project_files import ProjectFileError, create_project_file_records, resolve_stored_type
+from .review_assets import ZIP_ALIASES, ZIP_MIME_TYPE, detect_attachment_type, detect_zip_type
 from .subscriptions import enforce_workspace_storage_limit
 
 MIN_PART_SIZE = 5 * 1024 * 1024
 MAX_PARTS = 10_000
 MAX_PART_URLS_PER_REQUEST = 100
-ALIASES = {'image/jpg': 'image/jpeg', 'audio/x-wav': 'audio/wav', 'text/rtf': 'application/rtf'}
-# Office files are ZIPs; telling docx/xlsx/pptx apart needs the archive, so spool those.
-OOXML_SPOOL_LIMIT = 200 * 1024 * 1024
+ALIASES = {'image/jpg': 'image/jpeg', 'audio/x-wav': 'audio/wav', 'text/rtf': 'application/rtf', **ZIP_ALIASES}
+ZIP_RANGE_BUFFER = 1024 * 1024
 
 
 class DirectUploadError(Exception):
-    pass
+    """``retryable`` is False when sending the same bytes again would fail the same way."""
+
+    def __init__(self, message, retryable=True):
+        super().__init__(message)
+        self.retryable = retryable
+
+
+class _RangeReader(io.RawIOBase):
+    """A seekable, read-only view of one bucket object using ranged GETs.
+
+    Lets ``zipfile`` read just the central directory of an archive of any size, instead of
+    spooling the whole object to memory or disk.
+    """
+
+    def __init__(self, client, bucket, key, size):
+        self.client, self.bucket, self.key, self.size, self.pos = client, bucket, key, size, 0
+
+    def readable(self):
+        return True
+
+    def seekable(self):
+        return True
+
+    def tell(self):
+        return self.pos
+
+    def seek(self, offset, whence=io.SEEK_SET):
+        base = {io.SEEK_SET: 0, io.SEEK_CUR: self.pos, io.SEEK_END: self.size}[whence]
+        self.pos = max(0, base + offset)
+        return self.pos
+
+    def readinto(self, buffer):
+        if self.pos >= self.size or not len(buffer):
+            return 0
+        end = min(self.size, self.pos + len(buffer)) - 1
+        body = self.client.get_object(Bucket=self.bucket, Key=self.key, Range=f'bytes={self.pos}-{end}')['Body']
+        try:
+            data = body.read()
+        finally:
+            body.close()
+        data = data[:len(buffer)]
+        buffer[:len(data)] = data
+        self.pos += len(data)
+        return len(data)
+
+
+def _zip_type(client, bucket, key, size):
+    reader = io.BufferedReader(_RangeReader(client, bucket, key, size), buffer_size=ZIP_RANGE_BUFFER)
+    return detect_zip_type(reader)
 
 
 def direct_uploads_enabled():
@@ -173,24 +220,19 @@ def _fail(upload, message, state=DirectUploadState.FAILED):
 
 
 def _scan_object(client, bucket, key):
-    """One streaming read: SHA-256 of every byte plus the leading bytes for type detection."""
+    """One streaming read: SHA-256 of every byte plus the leading bytes for type detection.
+
+    Constant memory and no size cap; ZIP contents are inspected separately with ranged reads.
+    """
     body = client.get_object(Bucket=bucket, Key=key)['Body']
-    digest, header, size, spool = hashlib.sha256(), b'', 0, None
+    digest, header, size = hashlib.sha256(), b'', 0
     try:
         for chunk in iter(lambda: body.read(1024 * 1024), b''):
             if len(header) < 32:
                 header += chunk[:32 - len(header)]
-                if spool is None and header.startswith(b'PK\x03\x04'):
-                    spool = tempfile.SpooledTemporaryFile(max_size=16 * 1024 * 1024)
             digest.update(chunk)
             size += len(chunk)
-            if spool is not None:
-                if size > OOXML_SPOOL_LIMIT:
-                    raise DirectUploadError('This archive is too large to verify.')
-                spool.write(chunk)
-        if spool is not None:
-            spool.seek(0)
-        return digest.hexdigest(), header, size, spool
+        return digest.hexdigest(), header, size
     finally:
         body.close()
 
@@ -220,19 +262,15 @@ def complete(upload):
         head = client.head_object(Bucket=bucket, Key=upload.object_key)
         if int(head['ContentLength']) != upload.expected_size:
             raise DirectUploadError('The stored file is not the size that was announced.')
-        checksum, header, read_size, spool = _scan_object(client, bucket, upload.object_key)
+        checksum, header, read_size = _scan_object(client, bucket, upload.object_key)
         if read_size != upload.expected_size:
             raise DirectUploadError('The stored file is not the size that was announced.')
-        try:
-            if spool is not None:
-                detected = _detect_ooxml_type(spool)
-            else:
-                detected = detect_attachment_type(header) or detect_media_type(header)
-        finally:
-            if spool is not None:
-                spool.close()
-        if detected is None or upload.declared_mime_type != detected:
-            raise DirectUploadError('The file signature does not match a supported type.')
+        if header.startswith(b'PK\x03\x04'):
+            detected = _zip_type(client, bucket, upload.object_key, read_size)
+        else:
+            detected = detect_attachment_type(header) or detect_media_type(header)
+        # Any file is accepted; a claim the bytes do not back up is stored as a generic download.
+        detected = resolve_stored_type(detected, upload.declared_mime_type)
         if upload.client_sha256 and upload.client_sha256 != checksum:
             raise DirectUploadError('The file changed in transit (checksum mismatch). Retry the upload.')
         project_file = create_project_file_records(
