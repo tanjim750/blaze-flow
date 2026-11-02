@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useDoParam } from "@/lib/do-param";
+import { DO_EVENT, useDoParam } from "@/lib/do-param";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -233,6 +233,8 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
                 ? <ProjectActionsMenu projectId={view.selectedCampaign.id} name={view.selectedCampaign.name} status={view.selectedCampaign.project?.status ?? view.selectedCampaign.status ?? "DRAFT"} />
                 : <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions" disabled><Ellipsis size={15} /></button>}
               <ShareMenu campaignId={view.selectedCampaign?.id ?? null} onShareFiles={() => { setTab("Files"); window.setTimeout(() => window.dispatchEvent(new Event(FILES_SHARE_EVENT)), 0); }} />
+              <button className="pb-ghost-button pb-folder-upload" type="button" disabled={!view.workspaceId || !view.selectedCampaign} aria-label="Upload folder" title="Upload folder into this project's Files"
+                onClick={() => { const pick = () => window.dispatchEvent(new CustomEvent(DO_EVENT, { detail: "upload-folder" })); if (tab === "Files") pick(); else { setTab("Files"); window.setTimeout(pick, 0); } }}><FolderOpen size={15} /><span>Upload folder</span></button>
               <button className="pb-primary-button" type="button" disabled={!view.workspaceId || !view.selectedCampaign} onClick={() => setUploading(true)}><CloudUpload size={15} />Upload</button>
             </div>
           </div>

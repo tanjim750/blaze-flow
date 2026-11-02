@@ -500,6 +500,27 @@ class WorkspaceAssetApiTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertIsNone(upload.json()['folder_id'])
         self.assertIsNone(upload.json()['project_id'])
 
+    def test_folder_upload_tree_names_are_unique_per_project_not_workspace(self):
+        """Folder upload recreates e.g. Shoot/Day 1 in each project; root names only clash inside one project."""
+        url = reverse('api-asset-folders', args=[self.workspace.id])
+        other = self.client.post(reverse('api-projects', args=[self.workspace.id]), {'name': 'Other Promo'}, format='json').json()
+        first = self.client.post(url, {'name': 'Shoot', 'project_id': str(self.project.id)}, format='json')
+        second = self.client.post(url, {'name': 'Shoot', 'project_id': other['id']}, format='json')
+        clash = self.client.post(url, {'name': 'Shoot', 'project_id': str(self.project.id)}, format='json')
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+        self.assertEqual(clash.status_code, 400)
+
+        day = self.client.post(url, {'name': 'Day 1', 'project_id': str(self.project.id), 'parent_folder_id': first.json()['id']}, format='json')
+        self.assertEqual(day.status_code, 201)
+        upload = self.client.post(
+            reverse('api-asset-files', args=[self.workspace.id]),
+            {'file': SimpleUploadedFile('still.png', PNG_BYTES, content_type='image/png'), 'project_id': str(self.project.id), 'folder_id': day.json()['id']},
+            format='multipart',
+        )
+        self.assertEqual(upload.status_code, 201)
+        self.assertEqual(upload.json()['folder_id'], day.json()['id'])
+
     def test_project_view_returns_the_same_workspace_asset_records(self):
         folder = self.client.post(
             reverse('api-asset-folders', args=[self.workspace.id]),
