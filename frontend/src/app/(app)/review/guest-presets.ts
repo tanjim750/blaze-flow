@@ -20,10 +20,11 @@ export const GUEST_PRESETS = {
   },
   comment: {
     label: "View and comment",
-    description: "Can read, leave notes, and react.",
+    description: "Can read, leave notes and drawings, and react.",
     permissions: [
       "media.read", "review.comment.read", "review.comment.create",
-      "review.comment.edit", "review.reaction.create", "annotation.read",
+      "review.comment.edit", "review.reaction.create",
+      "annotation.read", "annotation.create", "annotation.edit", "annotation.delete",
     ],
   },
   review: {
@@ -59,4 +60,12 @@ export const allowsDecisions = (invite: { allow_decisions?: boolean; permissions
 /** Carries the one-time token back to the dialog, because the API never returns it again. */
 /** `mediaVersionId`: the shared file's review version, so the link opens on exactly that file (`&cut=`). */
 export type GuestInviteState = { error: string | null; token: string | null; inviteId?: string | null; mediaVersionId?: string | null; shortUrl?: string | null };
+/** Longest a guest link may live; the API enforces the same cap (app/services/guest_access.py). */
+export const GUEST_LINK_MAX_DAYS = 90;
+
+/** The date a link created now with this lifetime stops working, as YYYY-MM-DD. */
+export function guestLinkExpiryDate(days: number, now: number = Date.now()): string {
+  return new Date(now + days * 86_400_000).toISOString().slice(0, 10);
+}
+
 export const emptyGuestInviteState: GuestInviteState = { error: null, token: null, inviteId: null };

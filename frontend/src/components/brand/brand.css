@@ -26,8 +26,10 @@
 
 /* Placements */
 .studio-brand .studio-brand-icon { display: none; }
-.is-collapsed .studio-brand .studio-brand-full { display: none; }
-.is-collapsed .studio-brand .studio-brand-icon { display: inline-block; }
+@media (min-width: 901px) {
+  .is-collapsed .studio-brand .studio-brand-full { display: none; }
+  .is-collapsed .studio-brand .studio-brand-icon { display: inline-block; }
+}
 .studio-mobilebar-mark { margin-left: 2px; }
 .auth-brand .ks-logo, .onboarding-page > header .ks-logo, .gr-brand .ks-logo { display: block; }
 .pf-brand > .ks-mark { padding: 0; background: none; }

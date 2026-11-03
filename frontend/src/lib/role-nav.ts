@@ -11,13 +11,42 @@ import { isSolo } from "./plan";
  * layer in front of that, not a replacement for it.
  */
 export type NavIcon =
-  | "home" | "projects" | "chat" | "tasks" | "files" | "clients" | "team" | "money"
+  | "home" | "analytics" | "projects" | "chat" | "tasks" | "files" | "clients" | "team" | "money"
   | "settings" | "help" | "approvals" | "requests"
   | "invoices" | "upload" | "pay";
-export type NavLink = { href: string; label: string; icon: NavIcon };
+/** Stable ids for the reorderable sidebar items (backend services/nav_order.py NAV_KEYS). */
+export const NAV_KEYS = ["files", "projects", "tasks", "chat", "clients", "team", "money", "analytics"] as const;
+export type NavKey = (typeof NAV_KEYS)[number];
+export const DEFAULT_NAV_ORDER: NavKey[] = [...NAV_KEYS];
+/** Names shown in the Settings reorder list. */
+export const NAV_KEY_LABELS: Record<NavKey, string> = {
+  files: "Files", projects: "Projects", tasks: "Tasks", chat: "Chat", clients: "Clients",
+  team: "Team & Roles", money: "Money", analytics: "Analytics",
+};
+
+export type NavLink = { href: string; label: string; icon: NavIcon; key?: NavKey };
 export type RoleNav = { role: DashboardRole; primary: NavLink[]; secondary: NavLink[] };
 
-type Access = Pick<Workspace, "dashboard_role" | "my_membership_id" | "billing"> & Partial<Pick<Workspace, "plan" | "plan_features">>;
+type Access = Pick<Workspace, "dashboard_role" | "my_membership_id" | "billing"> & Partial<Pick<Workspace, "plan" | "plan_features" | "nav_order">>;
+
+/** A full, valid order: known keys from `stored` first (no repeats), then the rest in default order. */
+export function effectiveNavOrder(stored: readonly string[] | null | undefined): NavKey[] {
+  const seen: NavKey[] = [];
+  for (const key of stored ?? []) if ((NAV_KEYS as readonly string[]).includes(key) && !seen.includes(key as NavKey)) seen.push(key as NavKey);
+  return [...seen, ...NAV_KEYS.filter((key) => !seen.includes(key))];
+}
+
+/** Sorts links that have a key by the workspace order; links without a key keep their place at the end. */
+export function sortNav(links: NavLink[], stored: readonly string[] | null | undefined): NavLink[] {
+  const order = effectiveNavOrder(stored);
+  const rank = (link: NavLink) => (link.key ? order.indexOf(link.key) : order.length);
+  return links.map((link, index) => ({ link, index })).sort((a, b) => rank(a.link) - rank(b.link) || a.index - b.index).map(({ link }) => link);
+}
+
+/** Where to land after signing in: the first sidebar item (Files by default). */
+export function landingFor(workspace: Access | null | undefined): string {
+  return navFor(workspace).primary[0]?.href ?? "/";
+}
 
 export function navFor(workspace: Access | null | undefined): RoleNav {
   const role: DashboardRole = workspace ? roleFor(workspace) : "editor";
@@ -41,16 +70,17 @@ export function navFor(workspace: Access | null | undefined): RoleNav {
     const mine = workspace?.my_membership_id ? `/tasks?assignee=${workspace.my_membership_id}` : "/tasks";
     return {
       role,
-      primary: [
-        { href: "/", label: "My work", icon: "home" },
-        { href: mine, label: "My tasks", icon: "tasks" },
-        { href: "/projects", label: "Projects", icon: "projects" },
-        { href: "/chat", label: "Chat", icon: "chat" },
-        { href: "/files", label: "Files", icon: "files" },
-        ...(billing?.rates_view ? [{ href: "/#earnings", label: "My pay", icon: "pay" as const }] : []),
+      // Same workspace order as everyone else; "My work" is the editor's view of "/" (Analytics).
+      primary: sortNav([
+        { href: "/", label: "My work", icon: "home", key: "analytics" },
+        { href: mine, label: "My tasks", icon: "tasks", key: "tasks" },
+        { href: "/projects", label: "Projects", icon: "projects", key: "projects" },
+        { href: "/chat", label: "Chat", icon: "chat", key: "chat" },
+        { href: "/files", label: "Files", icon: "files", key: "files" },
         // An editor whose role does include billing (rare, but a role can grant it) keeps Money.
-        ...(billing?.view ? [{ href: "/money", label: "Money", icon: "money" as const }] : []),
-      ],
+        ...(billing?.view ? [{ href: "/money", label: "Money", icon: "money" as const, key: "money" as const }] : []),
+        ...(billing?.rates_view ? [{ href: "/#earnings", label: "My pay", icon: "pay" as const }] : []),
+      ], workspace?.nav_order),
       secondary: [
         { href: "/settings", label: "My profile", icon: "settings" },
         { href: "/help", label: "Help", icon: "help" },
@@ -61,15 +91,15 @@ export function navFor(workspace: Access | null | undefined): RoleNav {
     // Solo is one person: no Team & Roles (the page itself shows the upgrade prompt if opened).
     return {
       role,
-      primary: [
-        { href: "/", label: "Home", icon: "home" },
-        { href: "/projects", label: "Projects", icon: "projects" },
-        { href: "/tasks", label: "Tasks", icon: "tasks" },
-        { href: "/clients", label: "Clients", icon: "clients" },
-        { href: "/files", label: "Files", icon: "files" },
-        { href: "/chat", label: "Messages", icon: "chat" },
-        ...(billing?.view ? [{ href: "/money", label: "Invoices", icon: "money" as const }] : []),
-      ],
+      primary: sortNav([
+        { href: "/", label: "Analytics", icon: "analytics", key: "analytics" },
+        { href: "/projects", label: "Projects", icon: "projects", key: "projects" },
+        { href: "/tasks", label: "Tasks", icon: "tasks", key: "tasks" },
+        { href: "/clients", label: "Clients", icon: "clients", key: "clients" },
+        { href: "/files", label: "Files", icon: "files", key: "files" },
+        { href: "/chat", label: "Messages", icon: "chat", key: "chat" },
+        ...(billing?.view ? [{ href: "/money", label: "Invoices", icon: "money" as const, key: "money" as const }] : []),
+      ], workspace?.nav_order),
       secondary: [
         { href: "/settings/plan", label: "Plan", icon: "pay" },
         { href: "/settings", label: "Settings", icon: "settings" },
@@ -79,16 +109,17 @@ export function navFor(workspace: Access | null | undefined): RoleNav {
   }
   return {
     role,
-    primary: [
-      { href: "/", label: "Home", icon: "home" },
-      { href: "/projects", label: "Projects", icon: "projects" },
-      { href: "/chat", label: "Chat", icon: "chat" },
-      { href: "/tasks", label: "Tasks", icon: "tasks" },
-      { href: "/files", label: "Files", icon: "files" },
-      { href: "/clients", label: "Clients", icon: "clients" },
-      { href: "/team", label: "Team & Roles", icon: "team" },
-      ...(billing?.view ? [{ href: "/money", label: "Money", icon: "money" as const }] : []),
-    ],
+    // Role hiding first (Money needs billing.view), then the workspace order.
+    primary: sortNav([
+      { href: "/", label: "Analytics", icon: "analytics", key: "analytics" },
+      { href: "/projects", label: "Projects", icon: "projects", key: "projects" },
+      { href: "/chat", label: "Chat", icon: "chat", key: "chat" },
+      { href: "/tasks", label: "Tasks", icon: "tasks", key: "tasks" },
+      { href: "/files", label: "Files", icon: "files", key: "files" },
+      { href: "/clients", label: "Clients", icon: "clients", key: "clients" },
+      { href: "/team", label: "Team & Roles", icon: "team", key: "team" },
+      ...(billing?.view ? [{ href: "/money", label: "Money", icon: "money" as const, key: "money" as const }] : []),
+    ], workspace?.nav_order),
     secondary: [
       { href: "/settings", label: "Settings", icon: "settings" },
       { href: "/help", label: "Help", icon: "help" },

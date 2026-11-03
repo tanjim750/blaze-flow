@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { changePassword, getCurrentUser, updateWhatsAppSettings, requestEmailVerification, updateNotificationPreferences, updateNotificationSettings, updateWorkspaceProfile } from "@/lib/api";
+import { changePassword, getCurrentUser, saveNavOrder, updateWhatsAppSettings, requestEmailVerification, updateNotificationPreferences, updateNotificationSettings, updateWorkspaceProfile } from "@/lib/api";
 import type { NotificationSettings, WhatsAppSettings } from "@/lib/api";
 import { loadWorkspaceContext } from "@/lib/workspace";
 
@@ -77,4 +77,16 @@ export async function saveWhatsAppSettingsAction(change: { enabled?: boolean; li
   if (!result.ok) return { ok: false, error: result.error.detail };
   revalidatePath("/settings");
   return { ok: true, settings: result.data };
+}
+
+/** Save the workspace sidebar order (null = reset to default). Every page re-renders so the sidebar updates. */
+export async function saveNavOrderAction(order: string[] | null): Promise<SettingsState & { order?: string[] }> {
+  const context = await loadWorkspaceContext();
+  if (!context.ok) return fail(context.error.detail);
+  const workspace = context.data.selected;
+  if (!workspace) return fail("No workspace is selected.");
+  const saved = await saveNavOrder(workspace.id, order);
+  if (!saved.ok) return fail(saved.error.detail);
+  revalidatePath("/", "layout");
+  return { ...success(order ? "Sidebar order saved for everyone in this workspace." : "Sidebar reset to the default order."), order: saved.data.order };
 }

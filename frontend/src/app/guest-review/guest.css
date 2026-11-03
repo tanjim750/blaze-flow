@@ -27,7 +27,7 @@
 .gr-error{display:flex;align-items:center;gap:8px;margin:0;padding:11px 22px;background:var(--t-bg-3a1c24);border-bottom:1px solid var(--t-line-6b2a38);color:var(--t-fg-ffc2cc);font-size:12px}
 
 .gr-body{display:grid;grid-template-columns:minmax(0,1fr) 400px;min-height:0}
-.gr-viewer{display:grid;grid-template-rows:auto minmax(0,1fr);background:var(--t-bg-12151d);min-width:0;min-height:0}
+.gr-viewer{display:grid;grid-template-rows:auto minmax(0,1fr);grid-template-columns:minmax(0,1fr);background:var(--t-bg-12151d);min-width:0;min-height:0}
 .gr-versions{display:flex;gap:6px}
 .gr-versions button{display:flex;align-items:center;gap:4px;padding:6px 12px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--muted);font:600 11px var(--font-geist-mono);cursor:pointer}
 .gr-versions button.selected{background:var(--t-bg-292143);border-color:var(--t-line-55418f);color:var(--t-fg-ffffff)}
@@ -79,7 +79,7 @@
 .gr-composer button:disabled{opacity:.5;cursor:not-allowed}
 
 @media(max-width:900px){
-  .gr-body{grid-template-columns:1fr}
+  .gr-body{grid-template-columns:minmax(0,1fr)}
   .gr-viewer{min-height:44vh}
   .gr-notes{border-left:0;border-top:1px solid var(--border)}
   .gr-topbar{flex-wrap:wrap;gap:10px}
@@ -156,4 +156,16 @@
 @media (max-width: 520px) {
   .gr-folders-trigger span { display: none; }
   .gr-folders-panel { position: fixed; left: 12px; right: 12px; top: 56px; width: auto; }
+}
+
+/* A drawing waiting to be posted with the next note. */
+.gr-composer:has(.gr-drawing-chip){flex-wrap:wrap}
+.gr-drawing-chip { flex-basis: 100%; display: flex; align-items: center; gap: 8px; margin: 0 0 6px; padding: 4px 8px; border-radius: 6px; font-size: 12px; background: color-mix(in srgb, var(--accent, #6d5efc) 14%, transparent); color: inherit; }
+.gr-drawing-chip button { margin-left: auto; white-space: nowrap; background: none; border: 0; color: inherit; text-decoration: underline; cursor: pointer; font-size: 12px; }
+
+/* Phones: the decision buttons share one full-width row under the status line. */
+@media (max-width: 520px) {
+  .gr-decision { margin-left: 0; width: 100%; min-width: 0; }
+  .gr-decision-state { flex-basis: 100%; margin: 0; min-width: 0; white-space: normal; }
+  .gr-decide { flex: 1 1 0; justify-content: center; min-width: 0; }
 }

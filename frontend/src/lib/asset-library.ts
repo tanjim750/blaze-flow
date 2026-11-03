@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 export type LibraryKind = "video" | "audio" | "image" | "document" | "source" | "other";
 /** The workspace stage a file sits in, or null for "no stage yet". */
 export type LibraryStage = { id: string; name: string; color: string };
-export type LibraryFolder = { id: string; name: string; clientId: string | null; projectId: string | null; parentFolderId: string | null; createdAt: string; createdBy: string };
+export type LibraryFolder = { id: string; name: string; clientId: string | null; projectId: string | null; parentFolderId: string | null; createdAt: string; createdBy: string; /** Up to three poster URLs from inside, newest first (direct files before subfolders). */ previews?: string[] };
 /**
  * `id` is the asset-library row; `fileId` is the underlying `File` that holds the bytes.
  * They are different things and the distinction matters: `fileId` is what a media version

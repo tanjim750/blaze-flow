@@ -68,40 +68,37 @@ describe("Files panel interactions", () => {
     expect(screen.queryByText(/\d selected$/)).not.toBeInTheDocument();
   });
 
-  it("selects on a single click and opens in review on a double-click or Enter, once", () => {
+  it("opens in review on a single click (or Enter); the checkbox and Cmd/Ctrl-click select", () => {
     replaceLibrary({ deletedIds: [], folders: [], files: [file("a", "alpha.mp4", { fileId: "file-a", preview: "/poster-a.jpg" }), file("p", "brief.pdf", { fileId: "file-p", kind: "document", mimeType: "application/pdf" })] });
     const opened: string[] = [];
     const listener = (event: Event) => opened.push((event as CustomEvent<{ href: string }>).detail.href);
     window.addEventListener("blazeflow:open-review", listener);
     render(<AssetLibrary view={view} />);
-    // A single click only selects, and the details panel shows the file.
+    // A plain click opens the video, without selecting it.
     fireEvent.click(row(/^alpha\.mp4/));
-    expect(opened).toEqual([]);
-    expect(selectedNames()).toEqual(["alpha.mp4"]);
-    // Selecting does not open the details panel; it stays closed until the toolbar toggle.
-    expect(screen.queryByRole("complementary", { name: "Video" })).not.toBeInTheDocument();
-    // A double-click (two clicks, then dblclick) opens exactly once.
-    fireEvent.click(row(/^alpha\.mp4/));
-    fireEvent.doubleClick(row(/^alpha\.mp4/));
+    expect(selectedNames()).toEqual([]);
     // PDFs (and images) open in review too, from the keyboard.
     fireEvent.keyDown(row(/^brief\.pdf/), { key: "Enter" });
-    // The hover chip is still a one-click way in.
-    fireEvent.click(within(row(/^alpha\.mp4/)).getByRole("button", { name: "Open in review: alpha.mp4" }));
+    // The checkbox only selects; Cmd/Ctrl-click adds to the selection.
+    fireEvent.click(within(row(/^alpha\.mp4/)).getByRole("checkbox", { name: "Select alpha.mp4" }));
+    expect(selectedNames()).toEqual(["alpha.mp4"]);
+    fireEvent.click(row(/^brief\.pdf/), { metaKey: true });
+    expect(selectedNames()).toEqual(["alpha.mp4", "brief.pdf"]);
     window.removeEventListener("blazeflow:open-review", listener);
-    expect(opened).toEqual(["/review?media=file-a", "/review?media=file-p", "/review?media=file-a"]);
+    expect(opened).toEqual(["/review?media=file-a", "/review?media=file-p"]);
   });
 
-  it("selects a folder on a single click and opens it on a double-click", () => {
+  it("opens a folder on a single click; its checkbox selects it", () => {
     render(<AssetLibrary view={view} />);
-    fireEvent.click(row(/^Selects, folder/));
+    fireEvent.click(within(row(/^Selects, folder/)).getByRole("checkbox", { name: "Select Selects" }));
     expect(selectedNames()).toEqual(["Selects"]);
     expect(screen.getByRole("row", { name: /^alpha\.mp4/ })).toBeInTheDocument();
-    fireEvent.doubleClick(row(/^Selects, folder/));
+    fireEvent.click(row(/^Selects, folder/));
     expect(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByRole("button", { name: "Selects" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("row", { name: /^delta\.mp4/ })).toBeInTheDocument();
   });
 
-  it("opens on a tap, because touch has no hover chip or double-click", () => {
+  it("opens on a tap", () => {
     replaceLibrary({ deletedIds: [], folders: [], files: [file("a", "alpha.mp4", { fileId: "file-a", preview: "/poster-a.jpg" })] });
     const opened: string[] = [];
     const listener = (event: Event) => opened.push((event as CustomEvent<{ href: string }>).detail.href);
@@ -204,7 +201,7 @@ describe("Files panel interactions", () => {
 
   it("offers Clear search and Search all folders when nothing matches", () => {
     render(<AssetLibrary view={view} />);
-    fireEvent.change(screen.getByPlaceholderText("Search this location"), { target: { value: "delta" } });
+    fireEvent.change(screen.getByPlaceholderText(/^Search (here…|everything)$/), { target: { value: "delta" } });
     expect(screen.getByText("No files match “delta”")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Search all folders" }));
     expect(screen.getByRole("row", { name: /^delta\.mp4/ })).toBeInTheDocument();

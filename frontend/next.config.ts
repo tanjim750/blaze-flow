@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { securityHeaders } from "./src/lib/security-headers";
 
 const API_ORIGIN = process.env.BLAZEFLOW_API_URL ?? "http://127.0.0.1:8000";
 
@@ -14,6 +15,12 @@ const nextConfig: NextConfig = {
    * production Dockerfile). `next dev` / `next start` are unaffected.
    */
   output: "standalone",
+  /** Do not advertise the framework (`x-powered-by: Next.js`). */
+  poweredByHeader: false,
+  /** Security headers on every response; see src/lib/security-headers.ts for the CSP rationale. */
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders() }];
+  },
   allowedDevOrigins: DEV_ORIGINS,
   /**
    * Django owns trailing slashes (`APPEND_SLASH`) and every one of its API routes ends in

@@ -19,7 +19,8 @@ import { PlatformViewBanner } from "@/components/platform/view-banner";
  *
  * The sidebar's collapsed state is a cookie rather than `localStorage` so it can be read
  * here, on the server: restoring it after hydration instead would paint a full-width rail
- * and then snap it shut on every load.
+ * and then snap it shut on every load. Collapsed is the default: only an explicit "0"
+ * (the user expanded it) opens the rail wide.
  */
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const [session, context, jar] = await Promise.all([loadSession(), loadWorkspaceContext(), cookies()]);
@@ -30,7 +31,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         user={session.user && toShellUser(session.user)}
         workspaces={context.ok ? context.data.workspaces : []}
         selectedWorkspaceId={context.ok ? context.data.selected?.id : null}
-        railCollapsed={jar.get("blazeflow_rail")?.value === "1"}
+        railCollapsed={jar.get("blazeflow_rail")?.value !== "0"}
         degraded={!session.user || !context.ok}
         notice={viewed && <PlatformViewBanner workspaceId={viewed.id} name={viewed.name} />}
       >

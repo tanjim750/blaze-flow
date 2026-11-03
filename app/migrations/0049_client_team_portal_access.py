@@ -10,7 +10,9 @@ def forwards(apps, schema_editor):
     team_ids = ClientTeamMember.objects.filter(
         status=ClientTeamMemberStatus.ACTIVE,
     ).values_list('client_team_id', flat=True)
-    for team in ClientTeam.objects.filter(id__in=team_ids, status=ClientTeamStatus.ACTIVE).select_related('workspace'):
+    # No select_related('workspace'): this uses the live models, so joining workspaces would
+    # select columns added by later migrations (e.g. 0064 nav_order) and fail on a fresh DB.
+    for team in ClientTeam.objects.filter(id__in=team_ids, status=ClientTeamStatus.ACTIVE):
         ensure_client_team_workspace_access(team)
 
 

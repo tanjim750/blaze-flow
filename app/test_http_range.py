@@ -134,6 +134,12 @@ class R2PresignedRedirectTests(SimpleTestCase):
         self.assertEqual(params['ResponseContentType'], 'video/quicktime')
         self.assertEqual(params['ResponseContentDisposition'], 'attachment; filename="Final cut.mov"')
 
+    def test_default_expiry_is_short_for_downloads_and_longer_for_playback(self):
+        self.response(content_type='video/quicktime', filename='a.mov', as_attachment=True)
+        self.assertEqual(self.client.generate_presigned_url.call_args.kwargs['ExpiresIn'], 900)
+        self.response(range_header='bytes=0-', content_type='video/mp4')
+        self.assertEqual(self.client.generate_presigned_url.call_args.kwargs['ExpiresIn'], 3600)
+
     def test_range_request_for_playback_redirects_too_and_r2_serves_the_206(self):
         response = self.response(range_header='bytes=1000-', content_type='video/mp4')
 

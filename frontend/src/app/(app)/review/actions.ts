@@ -5,7 +5,7 @@ import { createAnnotation, createGuestInvite, createMediaDecision, createReviewC
 import { changeMessageProblem, type DecisionKind } from "@/lib/review-decisions";
 import type { AnnotationElement, CommentVisibility, GuestPermission } from "@/lib/api";
 import { endTimeField, startTimeField } from "@/lib/review-timing";
-import { GUEST_PRESETS, invitePermissions, type GuestInviteState, type GuestPreset } from "./guest-presets";
+import { GUEST_LINK_MAX_DAYS, GUEST_PRESETS, invitePermissions, type GuestInviteState, type GuestPreset } from "./guest-presets";
 
 export type ActionState = { error: string | null };
 const ok: ActionState = { error: null };
@@ -179,8 +179,8 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
     return { error: "This review is showing demo content, so links cannot be created.", token: null };
   }
   if (!(preset in GUEST_PRESETS)) return { error: "Choose what the link should allow.", token: null };
-  if (!Number.isFinite(days) || days < 1 || days > 365) {
-    return { error: "Choose an expiry between 1 and 365 days.", token: null };
+  if (!Number.isFinite(days) || days < 1 || days > GUEST_LINK_MAX_DAYS) {
+    return { error: `Choose an expiry between 1 and ${GUEST_LINK_MAX_DAYS} days.`, token: null };
   }
 
   const created = await createGuestInvite(workspaceId, projectId, {
@@ -203,7 +203,7 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
 export async function replaceGuestInviteAction(workspaceId: string, projectId: string, invite: { id: string; label: string; permissions: GuestPermission[]; expires_at: string }): Promise<GuestInviteState> {
   const hours = Math.max(1, Math.round((new Date(invite.expires_at).getTime() - Date.now()) / 3_600_000));
   const created = await createGuestInvite(workspaceId, projectId, {
-    ...(invite.label ? { label: invite.label } : {}), permissions: invite.permissions, expires_in_hours: Math.min(hours, 365 * 24),
+    ...(invite.label ? { label: invite.label } : {}), permissions: invite.permissions, expires_in_hours: Math.min(hours, GUEST_LINK_MAX_DAYS * 24),
   });
   if (!created.ok) return { error: created.error.detail, token: null };
   const revoked = await revokeGuestInvite(workspaceId, projectId, invite.id);
@@ -246,7 +246,7 @@ export async function clientDecisionAction(
   }
   const result = await createMediaDecision(workspaceId, projectId, versionId, {
     decision,
-    ...(decision === "changes_requested" ? { message: message.trim(), ...startTimeField(startMs) } : {}),
+    ...(decision === "changes_requested" ? { ...(message.trim() ? { message: message.trim() } : {}), ...startTimeField(startMs) } : {}),
     ...(confirmOverride ? { confirm_override: true } : {}),
   });
   if (!result.ok) return { error: result.error.detail };

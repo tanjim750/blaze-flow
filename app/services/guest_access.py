@@ -58,6 +58,11 @@ def is_short_code(value):
     return len(value) == SHORT_CODE_LENGTH and all(ch in SHORT_CODE_ALPHABET for ch in value)
 
 
+# A guest link is a bearer credential: cap how long a leaked one stays usable.
+GUEST_LINK_MAX_DAYS = 90
+GUEST_LINK_MAX_HOURS = GUEST_LINK_MAX_DAYS * 24
+
+
 @transaction.atomic
 def create_guest_invite(*, project, membership, permissions, label='', expires_in_hours=168, actor=None, shared_media_version_id=None):
     requested = set(permissions)
@@ -68,7 +73,7 @@ def create_guest_invite(*, project, membership, permissions, label='', expires_i
     invite = GuestInvite.objects.create(
         id=uuid.uuid4(), project=project, label=label or '', token_hash=_hash(token),
         short_code=generate_short_code(), shared_media_version_id=shared_media_version_id,
-        expires_at=now + timedelta(hours=expires_in_hours),
+        expires_at=now + timedelta(hours=min(int(expires_in_hours), GUEST_LINK_MAX_HOURS)),
         created_by_workspace_membership=membership, created_at=now, updated_at=now,
     )
     GuestInvitePermission.objects.bulk_create([
@@ -139,6 +144,20 @@ def record_guest_view(*, access, media_version):
     )
 
 
+# A link that may leave notes may also draw on them: a drawing is part of a note, so
+# "View and comment" links get the same tools as internal review (own drawings only).
+IMPLIED_BY = {
+    'annotation.create': 'review.comment.create',
+    'annotation.edit': 'review.comment.create',
+    'annotation.delete': 'review.comment.create',
+}
+
+
+def granted_permissions(access):
+    keys = set(GuestReviewAccessPermission.objects.filter(guest_review_access=access).values_list('permission_key', flat=True))
+    return keys | {key for key, base in IMPLIED_BY.items() if base in keys}
+
+
 def authenticate_guest_access(*, project, access_key, permission):
     now = timezone.now()
     access = GuestReviewAccess.objects.select_related(
@@ -150,9 +169,7 @@ def authenticate_guest_access(*, project, access_key, permission):
     ).first()
     if access is None or (access.guest_invite.expires_at and access.guest_invite.expires_at <= now):
         raise GuestAccessError('Guest access is invalid or expired.')
-    if not GuestReviewAccessPermission.objects.filter(
-        guest_review_access=access, permission_key=permission,
-    ).exists():
+    if permission not in granted_permissions(access):
         raise GuestAccessError('This guest link does not grant that permission.')
     GuestReviewAccess.objects.filter(id=access.id).update(last_accessed_at=now, updated_at=now)
     GuestSession.objects.filter(id=access.guest_session_id).update(last_seen_at=now, updated_at=now)

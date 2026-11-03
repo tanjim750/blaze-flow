@@ -40,7 +40,7 @@ from .services.comments import (
 )
 from .services.guest_access import (
     GUEST_ALLOWED_PERMISSIONS, GUEST_DECISION_PERMISSION, GuestAccessError, authenticate_guest_access,
-    create_guest_invite, exchange_guest_invite, revoke_guest_invite,
+    GUEST_LINK_MAX_HOURS, create_guest_invite, exchange_guest_invite, revoke_guest_invite,
     record_guest_view, revoke_guest_review_access, rotate_guest_access_key, set_invite_allow_decisions,
 )
 from .services.decisions import (
@@ -62,7 +62,7 @@ class GuestInviteCreateSerializer(serializers.Serializer):
         child=serializers.ChoiceField(choices=sorted(GUEST_ALLOWED_PERMISSIONS)),
         allow_empty=False,
     )
-    expires_in_hours = serializers.IntegerField(min_value=1, max_value=24 * 365, default=168)
+    expires_in_hours = serializers.IntegerField(min_value=1, max_value=GUEST_LINK_MAX_HOURS, default=168)
     # Sharing one file: the link opens that file's review version (``&cut=``). Every
     # reviewable project upload already has one (auto-versioning), so no publish step.
     asset_file_id = serializers.UUIDField(required=False)
@@ -295,7 +295,8 @@ def guest_review(request, project_id):
     if _scoped_media_id(access) is not None:
         media_qs = media_qs.filter(id=_scoped_media_id(access))
     media = list(media_qs.order_by('sequence_number', 'created_at'))
-    granted = set(GuestReviewAccessPermission.objects.filter(guest_review_access=access).values_list('permission_key', flat=True))
+    from app.services.guest_access import granted_permissions
+    granted = granted_permissions(access)
     latest = decisions_for(media)
     return Response({
         'project': {'id': str(project.id), 'name': project.name, 'description': project.description},
@@ -307,6 +308,7 @@ def guest_review(request, project_id):
             # The page only asks for notes and drawings the link may read (no 403 banner).
             'can_read_comments': 'review.comment.read' in granted,
             'can_read_annotations': 'annotation.read' in granted,
+            'can_annotate': 'annotation.create' in granted,
             'scoped_to_file': _scoped_media_id(access) is not None,
             # Project-wide links that allow downloads may take whole folders as a zip.
             'can_download_folders': guest_can_download_folders(access),
