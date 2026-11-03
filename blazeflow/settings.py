@@ -532,17 +532,25 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
     ],
+    # Deny by default: every endpoint must be signed in unless it opts out with an explicit
+    # AllowAny (health, auth, guest/share links, public upload links, webhooks). The old
+    # IsAuthenticatedOrReadOnly let any new view without permission_classes serve GETs anonymously.
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+        'rest_framework.permissions.IsAuthenticated',
     ],
+    # JSON only in production; the browsable HTML API (forms, endpoint discovery) is a dev aid.
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer',
+        *(['rest_framework.renderers.BrowsableAPIRenderer'] if DEBUG else []),
     ],
     'DEFAULT_THROTTLE_RATES': {
         'registration': os.environ.get('REGISTRATION_THROTTLE_RATE', '5/hour'),
         'login': os.environ.get('LOGIN_THROTTLE_RATE', '20/hour'),
         'password_reset': os.environ.get('PASSWORD_RESET_THROTTLE_RATE', '5/hour'),
+        # Per target account (normalised email), on top of the per-IP limits above, so a
+        # botnet spreading guesses over many IPs still can't hammer one account.
+        'login_email': os.environ.get('LOGIN_EMAIL_THROTTLE_RATE', '10/hour'),
+        'password_reset_email': os.environ.get('PASSWORD_RESET_EMAIL_THROTTLE_RATE', '3/hour'),
         'email_verification': os.environ.get('EMAIL_VERIFICATION_THROTTLE_RATE', '5/hour'),
         'invite_preview': os.environ.get('INVITE_PREVIEW_THROTTLE_RATE', '60/hour'),
         'guest_exchange': os.environ.get('GUEST_EXCHANGE_THROTTLE_RATE', '60/hour'),
