@@ -104,6 +104,7 @@ from .serializers import (
     WorkspaceUpdateSerializer,
 )
 from .services.project_files import safe_download_content_type
+from .services.folder_previews import folder_preview_map
 from .services.passwords import (
     PasswordError, change_password, confirm_password_reset, request_password_reset,
 )
@@ -117,7 +118,8 @@ from .services.retention import (
     update_workspace_retention_policy, workspace_retention_policy_data,
 )
 from .throttles import (
-    EmailVerificationThrottle, InvitePreviewThrottle, LoginThrottle, PasswordResetThrottle, RegistrationThrottle,
+    EmailVerificationThrottle, InvitePreviewThrottle, LoginEmailThrottle, LoginThrottle, PasswordResetEmailThrottle,
+    PasswordResetThrottle, RegistrationThrottle,
 )
 from .models import (
     SubscriptionPlan,
@@ -306,6 +308,8 @@ from .services import (
 
 
 @api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def health_check(request):
     # Side-effect free: uptime probes hit this every few seconds, so it must not dispatch
     # events or write rows. See health_live / health_ready for probe-specific checks.
@@ -378,7 +382,7 @@ def invite_preview_view(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@throttle_classes([LoginThrottle])
+@throttle_classes([LoginThrottle, LoginEmailThrottle])
 def login_user(request):
     serializer = LoginSerializer(data=request.data, context={'request': request})
     serializer.is_valid(raise_exception=True)
@@ -412,7 +416,7 @@ def google_login(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@throttle_classes([PasswordResetThrottle])
+@throttle_classes([PasswordResetThrottle, PasswordResetEmailThrottle])
 def password_reset_request(request):
     serializer = PasswordResetRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -1277,7 +1281,13 @@ def asset_folder_list_create(request, workspace_id):
             ProjectFolder.objects.filter(workspace=workspace, deleted_at__isnull=True),
             request=request, workspace=workspace, permission_key=PROJECT_FILE_READ,
         ).order_by('name')
-        return Response(ProjectFolderSerializer(folders, many=True).data)
+        folders = list(folders)
+        readable_files = _accessible_assets(
+            ProjectFile.objects.filter(workspace=workspace),
+            request=request, workspace=workspace, permission_key=PROJECT_FILE_READ,
+        )
+        previews = folder_preview_map(folders, readable_files)
+        return Response(ProjectFolderSerializer(folders, many=True, context={'folder_previews': previews}).data)
     _require_workspace_permission(request, workspace, PROJECT_FILE_CREATE)
     serializer = AssetFolderWriteSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -1560,8 +1570,9 @@ def project_folder_list_create(request, workspace_id, project_id):
     project = get_object_or_404(Project, id=project_id, workspace=workspace)
     if request.method == 'GET':
         _require_project_permission(request, project, PROJECT_FILE_READ, 'You do not have permission to read project files.')
-        folders = ProjectFolder.objects.filter(project=project, deleted_at__isnull=True).order_by('name')
-        return Response(ProjectFolderSerializer(folders, many=True).data)
+        folders = list(ProjectFolder.objects.filter(project=project, deleted_at__isnull=True).order_by('name'))
+        previews = folder_preview_map(folders, ProjectFile.objects.filter(project=project))
+        return Response(ProjectFolderSerializer(folders, many=True, context={'folder_previews': previews}).data)
 
     _require_project_permission(request, project, PROJECT_FILE_CREATE, 'You do not have permission to create project folders.')
     serializer = ProjectFolderCreateSerializer(data=request.data)
@@ -2906,3 +2917,30 @@ def workspace_retention_policy(request, workspace_id):
     )
     return Response(workspace_retention_policy_data(workspace=workspace))
 
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def workspace_nav_order(request, workspace_id):
+    """The workspace's sidebar order. Anyone in the workspace reads it; only the primary owner sets it."""
+    from .serializers.workspaces import NavOrderSerializer
+    from .services.nav_order import NAV_KEYS, effective_nav_order
+    workspace = get_object_or_404(Workspace, id=workspace_id)
+    _require_workspace_permission(request, workspace, WORKSPACE_READ)
+    is_owner = WorkspaceMembership.objects.filter(
+        workspace=workspace, user=request.user, principal_type=WorkspacePrincipalType.USER,
+        status=WorkspaceMembershipStatus.ACTIVE, is_primary_owner=True,
+    ).exists()
+    if request.method == 'PUT':
+        if not is_owner:
+            raise PermissionDenied('Only the workspace owner can change the sidebar order.')
+        serializer = NavOrderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order = [] if serializer.validated_data.get('reset') else serializer.validated_data['order']
+        # Store nothing for the default, so a later change to the default reaches this workspace.
+        workspace.nav_order = [] if list(order) == list(NAV_KEYS) else order
+        workspace.updated_at = timezone.now()
+        workspace.save(update_fields=['nav_order', 'updated_at'])
+    return Response({'order': effective_nav_order(workspace.nav_order), 'default': list(NAV_KEYS), 'is_default': not workspace.nav_order,
+        'can_edit': is_owner,
+    })

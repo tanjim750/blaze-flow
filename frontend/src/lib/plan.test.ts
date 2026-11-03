@@ -29,7 +29,7 @@ describe("Solo sidebar", () => {
     const n = navFor(solo);
     const labels = [...n.primary, ...n.secondary].map((l) => l.label);
     expect(labels).not.toContain("Team & Roles");
-    for (const l of ["Home", "Projects", "Tasks", "Clients", "Invoices", "Plan", "Settings"]) expect(labels).toContain(l);
+    for (const l of ["Analytics", "Projects", "Tasks", "Clients", "Invoices", "Plan", "Settings"]) expect(labels).toContain(l);
     for (const link of [...n.primary, ...n.secondary]) expect(guardFor(solo, link.href.split(/[?#]/)[0])).toBeNull();
   });
 });

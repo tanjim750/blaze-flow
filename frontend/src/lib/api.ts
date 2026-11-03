@@ -30,6 +30,8 @@ export type Workspace = {
   plan?: WorkspacePlan;
   /** Plan-gated features this workspace has ("ai_qa", "team_members", "editor_payouts"). Absent means all. */
   plan_features?: PlanFeature[];
+  /** Sidebar order for everyone in the workspace (set by the owner). Absent on older backends. */
+  nav_order?: string[];
 };
 export type WorkspacePlan = "FREE" | "SOLO" | "PRO";
 export type PlanFeature = "ai_qa" | "team_members" | "editor_payouts";
@@ -60,7 +62,7 @@ export type Project = { id: string; workspace_id: string; client_team_id: string
   /** Whether the viewer may edit this project. Only the detail route fills it in; null elsewhere. */
   viewer_can_edit?: boolean | null;
 };
-export type ProjectFolder = { id: string; workspace_id: string; client_team_id: string | null; project_id: string | null; parent_folder_id: string | null; name: string; created_at: string };
+export type ProjectFolder = { id: string; workspace_id: string; client_team_id: string | null; project_id: string | null; parent_folder_id: string | null; name: string; created_at: string; preview_thumbnails?: string[] };
 export type MediaFile = { id: string; name: string; mime_type: string; size_bytes: number };
 export type ProjectFile = { id: string; workspace_id: string; client_team_id: string | null; project_id: string | null; folder_id: string | null; task_stage_id: string | null; file: MediaFile & { checksum_sha256: string; status: string; duration_ms: number | null }; added_by: { id: string; name: string; email: string } | null; poster: { width: number | null; height: number | null } | null; comment_count: number;
   /** Which cut of its asset this row is, counting from 1. */
@@ -252,6 +254,13 @@ export const getWorkspacePermissions = (workspaceId: string, projectId?: string 
   request<import("./permissions").PermissionsAnswer>(`/workspaces/${workspaceId}/permissions/${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ""}`);
 export const createWorkspace = (payload: { name: string; slug?: string; timezone: string }) =>
   request<Workspace & { membership_id: string }>("/workspaces/", jsonBody(payload));
+export type NavOrderSetting = { order: string[]; default: string[]; is_default: boolean; can_edit: boolean };
+export const getNavOrder = (workspaceId: string) => request<NavOrderSetting>(`/workspaces/${workspaceId}/nav-order/`);
+/** `null` resets to the default order. Only the workspace's primary owner may save. */
+export const saveNavOrder = (workspaceId: string, order: string[] | null) =>
+  request<NavOrderSetting>(`/workspaces/${workspaceId}/nav-order/`, {
+    ...jsonBody(order ? { order } : { reset: true }), method: "PUT",
+  });
 export const getWorkspaceProfile = (workspaceId: string) =>
   request<WorkspaceProfile>(`/workspaces/${workspaceId}/profile/`);
 export const updateWorkspaceProfile = (workspaceId: string, payload: Partial<Omit<WorkspaceProfile, "updated_at">>) =>

@@ -293,3 +293,26 @@
 
 .settings-plan-link { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--border); color: var(--primary); font-size: 13px; font-weight: 600; text-decoration: none; width: fit-content; }
 .settings-plan-link:hover { background: var(--hover); }
+/* Sidebar order (owner) */
+.nav-order-hint { margin: 0 0 12px; font-size: 12px; }
+.nav-order-hint kbd { padding: 1px 5px; border: 1px solid var(--shell-highest); border-radius: 4px; font-size: 11px; }
+.nav-order-list { margin: 0 0 14px; padding: 0; list-style: none; border: 1px solid var(--shell-highest); border-radius: 10px; background: var(--shell-low); max-width: 520px; }
+.nav-order-list li { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 6px 10px; border-bottom: 1px solid var(--shell-highest); }
+.nav-order-list li:last-child { border-bottom: 0; }
+.nav-order-list li.is-dragging { opacity: .55; background: var(--shell-container); }
+.nav-order-list strong { flex: 1; font-size: 13px; font-weight: 600; }
+.nav-order-pos { width: 18px; color: var(--shell-outline); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+.nav-order-first { color: var(--shell-outline); font-size: 11px; }
+.nav-order-handle, .nav-order-moves button { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--shell-variant); cursor: grab; }
+.nav-order-moves { display: inline-flex; gap: 2px; }
+.nav-order-moves button { cursor: pointer; }
+.nav-order-handle svg, .nav-order-moves svg { width: 16px; height: 16px; }
+.nav-order-handle:hover, .nav-order-moves button:hover:not(:disabled) { background: var(--shell-container); color: var(--shell-on); }
+.nav-order-handle:focus-visible, .nav-order-moves button:focus-visible, .nav-order-reset:focus-visible { outline: 2px solid var(--shell-primary); outline-offset: 1px; }
+.nav-order-moves button:disabled { opacity: .3; cursor: default; }
+.nav-order-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.nav-order-reset { display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px; border: 1px solid var(--shell-highest); border-radius: 8px; background: transparent; color: var(--shell-on); font-weight: 600; cursor: pointer; }
+.nav-order-reset svg { width: 15px; height: 15px; }
+.nav-order-reset:disabled { opacity: .5; cursor: default; }
+@media (max-width: 420px) { .nav-order-first { display: none; } }
+.nav-order-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

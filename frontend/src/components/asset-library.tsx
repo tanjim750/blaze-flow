@@ -45,8 +45,11 @@ import { parseFilesQuery, writeFilesQuery } from "@/lib/files-url";
 import { FileItem, FolderItem, type ItemCommon } from "@/components/files/asset-item";
 import { AssetInspector, type InspectorActions } from "@/components/files/asset-inspector";
 import { LibraryTree } from "@/components/files/library-tree";
+import { useMarquee } from "@/components/files/use-marquee";
 import { PanelResizer, useStoredNumber } from "@/components/files/panel-resizer";
 import { KindIcon, Thumb } from "@/components/files/files-ui";
+import { openQuickSearch } from "@/components/command-palette";
+import { useRegisterPageSearch } from "@/lib/page-search";
 import "@/components/files/files.css";
 import { Select } from "@/components/ui/select";
 
@@ -171,16 +174,6 @@ function useViewportWidth() {
   }, []);
   return vw;
 }
-/**
- * Whether a click came from a finger. `pointerType` is on the click event itself in every
- * current browser; the media query covers the ones that still send a plain MouseEvent.
- */
-function isTouchClick(event: ReactMouseEvent): boolean {
-  const pointerType = (event.nativeEvent as PointerEvent).pointerType;
-  if (pointerType) return pointerType === "touch";
-  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
-}
-
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const MIN_MAIN = 480;
 const VIEW_MODES = ["grid", "list"] as const;
@@ -221,7 +214,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const viewportW = useViewportWidth();
 
   const stages = view?.stages ?? [];
-  const serverFolders: LibraryFolder[] = (view?.folders ?? []).map((folder) => ({ id: folder.id, name: folder.name, clientId: folder.client_team_id, projectId: folder.project_id, parentFolderId: folder.parent_folder_id, createdAt: folder.created_at, createdBy: "Workspace member" }));
+  const serverFolders: LibraryFolder[] = (view?.folders ?? []).map((folder) => ({ id: folder.id, name: folder.name, clientId: folder.client_team_id, projectId: folder.project_id, parentFolderId: folder.parent_folder_id, createdAt: folder.created_at, createdBy: "Workspace member", previews: (folder.preview_thumbnails ?? []).slice(0, 3) }));
   const serverFiles: LibraryFile[] = (view?.files ?? []).map((item) => ({ id: item.id, fileId: item.file.id, name: item.file.name, kind: mimeKind(item.file.mime_type, item.file.name), mimeType: item.file.mime_type, size: item.file.size_bytes, durationMs: item.file.duration_ms, status: item.file.status as LibraryFile["status"], versioning: {
     assetId: item.media_asset?.id ?? null,
     assetName: item.media_asset?.name ?? item.file.name,
@@ -506,27 +499,46 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
     if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") { event.preventDefault(); setMenuFor(id); }
   };
   /**
-   * Click behaviour — one rule for files and folders, in Files and in a project's Files tab:
+   * Click behaviour (Frame.io-style), one rule for files and folders, grid and list:
    *
-   * - Mouse, pen, keyboard: a single click selects the item and shows it in the details
-   *   panel (when the panel docks beside the grid; below that width it stays one click away
-   *   in the toolbar and the ⋯ menu, so a sheet never covers the grid mid-double-click).
-   *   Double-click or Enter opens: a file in review, a folder in place. That is the
-   *   Finder / Figma file-browser convention, and it means folders behave like files rather
-   *   than being the one thing a single click opens. The hover "Open" chip on a tile and the
-   *   panel's "Open in review" button stay as one-click ways in.
-   * - Touch: a tap opens, because a phone or tablet has no hover chip and no double-click.
-   *   Selecting there is the checkbox or a long press (which opens the actions menu).
-   *
-   * Cmd/Ctrl-click toggles and Shift-click extends the selection, as before. The folder tree
-   * and the breadcrumbs are navigation, so a single click there still opens.
+   * - A plain click (mouse, pen, touch) anywhere on an item except its checkbox opens it:
+   *   a video/reviewable file in review, any other file in its viewer, a folder in place.
+   * - The top-left checkbox toggles selection only. Once anything is selected the checkboxes
+   *   stay visible on every item.
+   * - Cmd/Ctrl-click toggles and Shift-click extends the selection; Esc clears it.
+   * - Dragging from empty space draws a selection rectangle (see `useMarquee`); dragging
+   *   that starts on an item keeps the drag-to-move behaviour.
    */
   const onPointerSelect = (event: ReactMouseEvent, entity: LibraryFile | LibraryFolder) => {
-    if ((event.target as HTMLElement).closest("input, button, a, [role=menu]")) return;
+    if ((event.target as HTMLElement).closest("input, button, a, label, [role=menu]")) return;
+    if (renaming?.id === entity.id) return;
     const selectMode = event.shiftKey ? "range" : event.metaKey || event.ctrlKey ? "toggle" : "replace";
-    if (selectMode === "replace" && !renaming && isTouchClick(event)) { setFocusedId(entity.id); openEntity(entity); return; }
+    if (selectMode === "replace") { setFocusedId(entity.id); openEntity(entity); return; }
     select(entity.id, selectMode);
   };
+  // Esc clears the selection from anywhere on the page (not just a focused item).
+  const hasSelection = selected.size > 0;
+  useEffect(() => {
+    if (!hasSelection) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      const target = event.target;
+      if (target instanceof Element && (target.matches("input:not([type=checkbox]), select, textarea, [contenteditable=true]") || target.closest("[role=dialog], [role=menu]"))) return;
+      setSelection({ selected: new Set(), anchor: null });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hasSelection]);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const marquee = useMarquee({
+    itemRefs, containerRef: contentRef, order, selected,
+    onChange: (ids, base) => setSelection((state) => {
+      const next = new Set(base);
+      ids.forEach((id) => next.add(id));
+      return { selected: next, anchor: ids[0] ?? state.anchor };
+    }),
+    onClear: () => setSelection({ selected: new Set(), anchor: null }),
+  });
 
   // Page-level shortcuts: N new folder, U upload, / search, ] details panel.
   useDoParam("upload", () => setDialog("upload"));
@@ -713,16 +725,30 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
     </aside>
   );
 
+  // The app's one search bar (the shell hides its own entry while this is mounted). Inside a
+  // folder or project it scopes to that location by default; the chip widens it to everywhere.
+  // ⌘K / the kbd button opens the app-wide palette, carrying over what was typed.
+  const scopeName = current?.name ?? (projectId ? (projectName || "this project") : null);
   const searchControls = <>
-          <button type="button" className="fx-icon-btn fx-search-toggle" aria-label="Search files" aria-expanded={searchOpen} onClick={() => { setSearchOpen(true); window.setTimeout(() => searchRef.current?.focus(), 0); }}><Search aria-hidden="true" /></button>
-          <label className={`fx-search${searchOpen ? " is-open" : ""}`}>
+          <button type="button" className="fx-icon-btn fx-search-toggle" aria-label="Search" aria-expanded={searchOpen} onClick={() => { setSearchOpen(true); window.setTimeout(() => searchRef.current?.focus(), 0); }}><Search aria-hidden="true" /></button>
+          <div className={`fx-search fx-usearch${searchOpen ? " is-open" : ""}${scopeName ? " has-scope" : ""}`} role="search">
             <Search aria-hidden="true" />
-            <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this location" aria-label={searchEverywhere ? "Search all folders" : "Search this location"}
+            {scopeName && <button type="button" className={`fx-scope-chip${searchEverywhere ? " is-all" : ""}`} aria-pressed={!searchEverywhere}
+              title={searchEverywhere ? `Searching everywhere. Click to search only ${scopeName}` : `Searching ${scopeName}. Click to search everywhere`}
+              onClick={() => { setSearchEverywhere(!searchEverywhere); searchRef.current?.focus(); }}>
+              {searchEverywhere ? "Everywhere" : <>In: <b>{scopeName}</b></>}
+            </button>}
+            <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)}
+              placeholder={scopeName && !searchEverywhere ? "Search here…" : "Search everything"}
+              aria-label={scopeName && !searchEverywhere ? `Search ${scopeName}` : "Search everything"} aria-keyshortcuts="Meta+K Control+K"
               onBlur={(event) => { if (!event.currentTarget.value && !event.currentTarget.parentElement?.contains(event.relatedTarget as Node)) setSearchOpen(false); }}
               onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (query) setQuery(""); else { setSearchOpen(false); event.currentTarget.blur(); } } }} />
-            {(query || searchOpen) && <button type="button" className="fx-icon-btn is-xs" onClick={() => { if (query) { setQuery(""); searchRef.current?.focus(); } else setSearchOpen(false); }} aria-label={query ? "Clear search text" : "Close search"}><X /></button>}
-          </label>
+            {query
+              ? <button type="button" className="fx-icon-btn is-xs" onClick={() => { setQuery(""); searchRef.current?.focus(); }} aria-label="Clear search text"><X /></button>
+              : <button type="button" className="fx-usearch-kbd" onClick={() => openQuickSearch(query)} aria-label="Search the whole app (⌘K)" title="Search the whole app"><kbd>⌘K</kbd></button>}
+          </div>
   </>;
+  useRegisterPageSearch(!compact);
   // Folder crumbs continuing the page breadcrumb: every ancestor is a link-like button; the open
   // folder is the current page and is plain text.
   const folderCrumbs = current ? crumbs.map((folder) => <li key={folder.id}><ChevronRight aria-hidden="true" />
@@ -810,7 +836,8 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
         <ShareModal key={shareFile?.id ?? "selection"} open={shareOpen} onOpenChange={setShareOpen} title={shareTitle} internalUrl={shareUrl}
           workspaceId={view?.workspaceId ?? null} projectId={shareProjectId} assetFileId={shareAssetFileId} canCreateLinks={!offline} />
 
-        <div className="fx-content">
+        <div className={`fx-content${marquee.active ? " is-marquee" : ""}`} ref={contentRef} onPointerDown={marquee.onPointerDown}>
+          {marquee.box && <div className="fx-marquee" data-testid="files-marquee" aria-hidden="true" style={marquee.box} />}
           {writeError && <p className="fx-notice" data-tone="danger" role="alert"><TriangleAlert />{writeError}<button type="button" className="fx-icon-btn is-xs" onClick={() => setWriteError(null)} aria-label="Dismiss error"><X /></button></p>}
           {recursiveSearch && <p className="fx-results-note">Showing matches from every folder in {projectName || "Files"}.</p>}
           {mode === "list" && sections.length > 0 && <div className="fx-list-head" role="group" aria-label="Sort list">

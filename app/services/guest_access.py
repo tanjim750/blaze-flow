@@ -58,6 +58,11 @@ def is_short_code(value):
     return len(value) == SHORT_CODE_LENGTH and all(ch in SHORT_CODE_ALPHABET for ch in value)
 
 
+# A guest link is a bearer credential: cap how long a leaked one stays usable.
+GUEST_LINK_MAX_DAYS = 90
+GUEST_LINK_MAX_HOURS = GUEST_LINK_MAX_DAYS * 24
+
+
 @transaction.atomic
 def create_guest_invite(*, project, membership, permissions, label='', expires_in_hours=168, actor=None, shared_media_version_id=None):
     requested = set(permissions)
@@ -68,7 +73,7 @@ def create_guest_invite(*, project, membership, permissions, label='', expires_i
     invite = GuestInvite.objects.create(
         id=uuid.uuid4(), project=project, label=label or '', token_hash=_hash(token),
         short_code=generate_short_code(), shared_media_version_id=shared_media_version_id,
-        expires_at=now + timedelta(hours=expires_in_hours),
+        expires_at=now + timedelta(hours=min(int(expires_in_hours), GUEST_LINK_MAX_HOURS)),
         created_by_workspace_membership=membership, created_at=now, updated_at=now,
     )
     GuestInvitePermission.objects.bulk_create([

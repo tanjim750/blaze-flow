@@ -38,6 +38,76 @@ beforeEach(() => {
 afterEach(() => { cleanup(); window.localStorage.clear(); replaceLibrary(empty); uploadAssetFile.mockReset(); deleteAssetFile.mockReset(); duplicateAssetFile.mockReset(); });
 
 describe("AssetLibrary", () => {
+
+  describe("click to open, checkbox / marquee to select", () => {
+    const file = (id: string, name: string) => ({ id, fileId: null, name, versioning: { assetId: null, assetName: name, versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video" as const, mimeType: "video/mp4", size: 10, durationMs: null, status: "READY" as const, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: null });
+    const seed = () => replaceLibrary({ deletedIds: [], folders: [{ id: "folder", name: "Footage", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-10", createdBy: "Ada" }], files: [file("a", "a.mp4"), file("b", "b.mp4")] });
+    // jsdom has no PointerEvent; a MouseEvent subclass carries clientX/button plus pointer fields.
+    beforeEach(() => {
+      if (typeof window.PointerEvent === "function" && "pointerType" in window.PointerEvent.prototype) return;
+      class PointerEventShim extends MouseEvent { pointerId: number; pointerType: string; constructor(type: string, init: PointerEventInit = {}) { super(type, init); this.pointerId = init.pointerId ?? 0; this.pointerType = init.pointerType ?? "mouse"; } }
+      Object.defineProperty(window, "PointerEvent", { configurable: true, writable: true, value: PointerEventShim });
+    });
+    const item = (container: HTMLElement, id: string) => container.querySelector<HTMLElement>(`.fx-item[data-id="${id}"]`)!;
+
+    it("a plain click opens a file instead of selecting it", () => {
+      seed();
+      const { container } = render(<AssetLibrary view={{ ...view, workspaceId: null }} />);
+      fireEvent.click(item(container, "a"));
+      expect(screen.queryByText("1 selected")).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "a.mp4" })).toBeInTheDocument();
+    });
+
+    it("a plain click on a folder opens it", () => {
+      seed();
+      const { container } = render(<AssetLibrary view={{ ...view, workspaceId: null }} />);
+      fireEvent.click(item(container, "folder"));
+      expect(within(screen.getByRole("navigation", { name: /breadcrumb/i })).getByRole("button", { name: "Footage" })).toHaveAttribute("aria-current", "page");
+    });
+
+    it("the checkbox and modifier clicks select; Esc clears", () => {
+      seed();
+      const { container } = render(<AssetLibrary view={{ ...view, workspaceId: null }} />);
+      fireEvent.click(screen.getByRole("checkbox", { name: "Select a.mp4" }));
+      expect(screen.getByText("1 selected")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(item(container, "b")).toHaveClass("show-checks");
+      fireEvent.click(item(container, "b"), { metaKey: true });
+      expect(screen.getByText("2 selected")).toBeInTheDocument();
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      expect(screen.queryByText("2 selected")).not.toBeInTheDocument();
+    });
+
+    it("dragging from empty space selects the items under the box", () => {
+      seed();
+      const { container } = render(<AssetLibrary view={{ ...view, workspaceId: null }} />);
+      const content = container.querySelector<HTMLElement>(".fx-content")!;
+      const rect = (left: number, top: number, w: number, h: number) => () => ({ left, top, right: left + w, bottom: top + h, width: w, height: h, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+      content.getBoundingClientRect = rect(0, 0, 1000, 800);
+      Object.defineProperty(content, "clientWidth", { configurable: true, value: 1000 });
+      Object.defineProperty(content, "clientHeight", { configurable: true, value: 800 });
+      item(container, "folder").getBoundingClientRect = rect(20, 20, 100, 100);
+      item(container, "a").getBoundingClientRect = rect(140, 20, 100, 100);
+      item(container, "b").getBoundingClientRect = rect(260, 20, 100, 100);
+      fireEvent.pointerDown(content, { button: 0, pointerId: 1, pointerType: "mouse", clientX: 130, clientY: 300 });
+      fireEvent.pointerMove(window, { pointerId: 1, clientX: 300, clientY: 60 });
+      expect(screen.getByTestId("files-marquee")).toBeInTheDocument();
+      fireEvent.pointerUp(window, { pointerId: 1, clientX: 300, clientY: 60 });
+      expect(screen.getByText("2 selected")).toBeInTheDocument();
+      expect(item(container, "a")).toHaveAttribute("aria-selected", "true");
+      expect(item(container, "folder")).toHaveAttribute("aria-selected", "false");
+      expect(screen.queryByTestId("files-marquee")).not.toBeInTheDocument();
+    });
+
+    it("touch never starts a marquee", () => {
+      seed();
+      const { container } = render(<AssetLibrary view={{ ...view, workspaceId: null }} />);
+      const content = container.querySelector<HTMLElement>(".fx-content")!;
+      fireEvent.pointerDown(content, { button: 0, pointerId: 2, pointerType: "touch", clientX: 10, clientY: 10 });
+      fireEvent.pointerMove(window, { pointerId: 2, clientX: 300, clientY: 300 });
+      expect(screen.queryByTestId("files-marquee")).not.toBeInTheDocument();
+    });
+  });
   it("creates one shared project folder and switches display density", () => {
     replaceLibrary(empty);
     const rendered = render(<AssetLibrary view={view} />);
@@ -75,7 +145,7 @@ describe("AssetLibrary", () => {
       files: [{ id: "hidden", fileId: null, name: "deep-take.mov", versioning: { assetId: null, assetName: "deep-take.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: "nested", clientId: null, projectId: null, stageId: null }],
     });
     const rendered = render(<AssetLibrary view={view} />);
-    fireEvent.change(screen.getByPlaceholderText("Search this location"), { target: { value: "deep-take" } });
+    fireEvent.change(screen.getByPlaceholderText(/^Search (here…|everything)$/), { target: { value: "deep-take" } });
     expect(screen.queryByText("deep-take.mov")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
     fireEvent.click(screen.getByRole("switch", { name: "Search all folders" }));
@@ -304,8 +374,8 @@ describe("AssetLibrary", () => {
     document.body.append(search, crumbs);
     const onFolderChange = vi.fn();
     render(<AssetLibrary view={view} headerSlots={{ search, crumbs }} onFolderChange={onFolderChange} initialQuery="folder=b" />);
-    expect(search.querySelector("input[placeholder='Search this location']")).not.toBeNull();
-    expect(screen.getAllByPlaceholderText("Search this location")).toHaveLength(1);
+    expect(search.querySelector(".fx-usearch input")).not.toBeNull();
+    expect(screen.getAllByPlaceholderText(/^Search (here…|everything)$/)).toHaveLength(1);
     expect(within(crumbs).getByText("Day 1")).toHaveAttribute("aria-current", "page");
     fireEvent.click(within(crumbs).getByRole("button", { name: "Footage" }));
     expect(onFolderChange).toHaveBeenLastCalledWith("a");
@@ -320,7 +390,7 @@ describe("AssetLibrary", () => {
       files: [{ id: "one", fileId: null, name: "hero-cut.mov", versioning: { assetId: null, assetName: "hero-cut.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: null }],
     });
     render(<AssetLibrary view={view} />);
-    fireEvent.change(screen.getByPlaceholderText("Search this location"), { target: { value: "zzz" } });
+    fireEvent.change(screen.getByPlaceholderText(/^Search (here…|everything)$/), { target: { value: "zzz" } });
     expect(screen.getByText("No files match “zzz”")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Upload files" })).not.toBeInTheDocument();
 
