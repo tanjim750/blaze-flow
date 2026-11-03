@@ -1401,7 +1401,7 @@ function upsert<T extends { id: string }>(items: T[], item: T): T[] { return ite
 function folderTrail(folder: LibraryFolder | null, folders: LibraryFolder[]): LibraryFolder[] { const result: LibraryFolder[] = []; let item = folder; while (item) { result.unshift(item); item = folders.find((candidate) => candidate.id === item!.parentFolderId) ?? null; } return result; }
 function mimeKind(mime: string, name: string): LibraryKind { return kindFor({ type: mime, name } as File); }
 function dataUrl(file: File) { return new Promise<string>((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => resolve(""); reader.readAsDataURL(file); }); }
-function relationLabel(entity: { clientId: string | null; projectId: string | null }, view?: FilesView) { const project = view?.groups.find((item) => item.projectId === entity.projectId); const client = view?.clients.find((item) => item.id === (entity.clientId ?? project?.clientId)); return [client?.name, project?.projectName].filter(Boolean).join(" / ") || "Unassigned"; }
+function relationLabel(entity: { clientId: string | null; projectId: string | null }, view?: FilesView) { const project = view?.groups.find((item) => item.projectId === entity.projectId); const client = view?.clients.find((item) => item.id === (entity.clientId ?? project?.clientId)); return [client?.name, project?.projectName].filter(Boolean).join(" / ") || "No client"; }
 
 /** Mirrors the server's naming so the optimistic row reads the same as the real one. */
 function copyName(name: string): string {

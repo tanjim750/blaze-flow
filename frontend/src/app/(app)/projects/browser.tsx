@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { DO_EVENT, useDoParam } from "@/lib/do-param";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AllProjects } from "./all-projects";
+import { Library } from "@/components/icons";
+import "@/components/files/files.css";
 import {
   Activity, Archive, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
   FolderInput, FolderOpen, Gauge, MessagesSquare, Pencil, Plus, RotateCcw, Share2, Sparkles, Trash2, TriangleAlert, UploadCloud, Users, Wallet, X,
@@ -178,6 +181,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
   const [uploading, setUploading] = useState(false);
   const [railClosed, setRailClosed] = useState(false);
   // Phones: the client tree is a sheet over the page instead of a column beside it.
+  const allProjects = useSearchParams()?.get("view") === "all";
   const [sheetOpen, setSheetOpen] = useState(false);
   const campaignId = view.selectedCampaign?.id ?? null;
   const [unread, setUnread] = useState<{ project: string | null; count: number }>({ project: null, count: 0 });
@@ -208,6 +212,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
       {sheetOpen && <button type="button" className="pb-sheet-backdrop" aria-label="Close clients" onClick={() => setSheetOpen(false)} />}
       <ClientRail view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} onNavigate={() => setSheetOpen(false)} />
 
+      {allProjects ? <section className="pb-canvas"><AllProjects view={view} /></section> :
       <section className="pb-canvas">
         {view.notice && (
           <p className="pb-notice"><TriangleAlert size={14} /><span>{view.notice}</span></p>
@@ -285,7 +290,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
         ) : (
           <ComingSoon tab={tab} hasCampaign={Boolean(view.selectedCampaign)} briefFolder={view.selectedCampaign?.folders.find((folder) => /brief/i.test(folder.name))?.name ?? null} onOpenFiles={() => setTab("Files")} />
         )}
-      </section>
+      </section>}
       {uploading && view.workspaceId && view.selectedCampaign && (
         <UploadDialog workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} onClose={() => setUploading(false)} onUploaded={() => setUploading(false)} onLanded={() => router.refresh()} />
       )}
@@ -370,6 +375,7 @@ function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded
 export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNavigate }: { view: ProjectsView; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void; onNavigate?: () => void }) {
   const [creating, setCreating] = useState(false);
   useDoParam("new", () => setCreating(true));
+  const allView = useSearchParams()?.get("view") === "all";
   const toggle = (id: string) => setExpanded(expanded.includes(id) ? expanded.filter((value) => value !== id) : [...expanded, id]);
 
   return (
@@ -405,6 +411,16 @@ export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNa
           />
         )}
 
+        {/* Same row as Files' "All files" (LibraryTree root row): fx-tree-* classes from files.css. */}
+        <div role="tree" aria-label="All clients" className="fx-tree-list pb-all-clients">
+          <Link href="/projects?view=all" role="treeitem" aria-level={1} aria-selected={allView} aria-current={allView ? "page" : undefined}
+            className={`fx-tree-row ${allView ? "is-selected" : ""}`} style={{ paddingLeft: 8 }}>
+            <span className="fx-disclosure" aria-hidden="true" />
+            <Library aria-hidden="true" />
+            <span className="fx-tree-label">All clients</span>
+            <span className="fx-count">{view.clients.length}</span>
+          </Link>
+        </div>
         <div className="pb-tree">
           {view.clients.map((client) => (
             <ClientBranch key={client.id} client={client} view={view} open={expanded.includes(client.id)} onToggle={() => toggle(client.id)} />
@@ -426,7 +442,7 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
   const campaigns = client.campaigns;
   const access = view.access ?? FULL_TREE_ACCESS;
   const [renamingClient, setRenamingClient] = useState(false);
-  // "Unassigned" is a synthetic group, not a client team, so it has nothing to rename.
+  // "No client" is a synthetic group, not a client team, so it has nothing to rename.
   const canRenameClient = access.renameClient && client.id !== "unassigned" && Boolean(view.workspaceId);
 
   return (
@@ -448,7 +464,7 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
         </button>
         <Link className="pb-client-details" href={`/clients?client=${client.id}`} aria-label={`Details for ${client.name}`}>
           <span>Details</span>
-          <ArrowUpRight size={11} strokeWidth={2.5} />
+          <ArrowUpRight size={14} strokeWidth={2.25} aria-hidden="true" />
           <LinkPending />
         </Link>
       </RowMenu>
@@ -556,7 +572,7 @@ function RowMenu({ label, onRename, onDelete, move, details, className = "pb-row
           ))}
           {!move.clients.length && <M.Item disabled>No clients yet</M.Item>}
           <M.Separator />
-          <M.Item disabled={!move.current} onSelect={() => move.onMove(null)}>No client (unassigned)</M.Item>
+          <M.Item disabled={!move.current} onSelect={() => move.onMove(null)}>No client</M.Item>
         </M.SubContent>
       </M.Sub>}
       {onDelete && <M.Item variant="destructive" onSelect={() => { if (confirm(`Delete ${label}?`)) onDelete(); }}>
@@ -727,7 +743,7 @@ function ProjectMoreActions({ view, campaignId }: { view: ProjectsView; campaign
           ))}
           {!clients.length && <DropdownMenuItem disabled>No clients yet. Create one in Clients</DropdownMenuItem>}
           <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={!current} onSelect={() => move(null)}>No client (unassigned)</DropdownMenuItem>
+          <DropdownMenuItem disabled={!current} onSelect={() => move(null)}>No client</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {error && <span className="pb-inline-error" role="alert">{error}</span>}

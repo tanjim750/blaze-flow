@@ -14,7 +14,7 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/project
   const campaignId = typeof params.campaign === "string" ? params.campaign : undefined;
   // Redirects to /sign-in when the API says we are unauthenticated.
   const session = await loadSession();
-  const [loaded, filesView, tasksView] = await Promise.all([loadProjectsView({ clientId, campaignId }), loadFilesView(), loadTasksView()]);
+  const [loaded, filesView, tasksView] = await Promise.all([loadProjectsView({ clientId, campaignId, all: params.view === "all" }), loadFilesView(), loadTasksView()]);
   const view = session.notice ? { ...loaded, notice: session.notice } : loaded;
   const tab = typeof params.tab === "string" ? params.tab : undefined;
 
