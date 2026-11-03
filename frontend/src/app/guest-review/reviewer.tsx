@@ -21,11 +21,12 @@ import { rangeLabel } from "@/lib/annotation-window";
 import { ConfirmDialog } from "@/components/tasks/task-dialogs";
 import { proxyNotice } from "@/app/(app)/review/player-state";
 import { GuestFolders } from "./guest-folders";
+import type { AnnotationElement } from "@/lib/api";
 import { Player, type DrawnAnnotation, type PlayerHandle, type PlayerSource } from "@/app/(app)/review/player";
 import { KrewsysLogo } from "@/components/brand/krewsys-logo";
 import {
   clearGuestSession, createGuestComment, createGuestDecision, deleteGuestComment, downloadGuestAttachment,
-  editGuestComment, exchangeGuestInvite, getGuestPlayback, listGuestAnnotations, listGuestComments, loadGuestReview,
+  editGuestComment, exchangeGuestInvite, getGuestPlayback, listGuestAnnotations, createGuestAnnotation, deleteGuestAnnotation, listGuestComments, loadGuestReview,
   guestEmailProblem, readGuestSession, REMEMBER_DAYS, setGuestReaction, uploadGuestAttachment, writeGuestSession,
   type GuestMediaVersion, type GuestPlayback, type GuestReview, type GuestSession,
   isMissingGuestPermission,
@@ -113,6 +114,21 @@ export function GuestReviewer({ token, cut = null }: { token: string; cut?: stri
   }, [session, versionId, notes, canReadAnnotations]);
   const annotations = drawings && drawings.versionId === versionId ? drawings.items : NO_ANNOTATIONS;
 
+  // A drawing waits here until the note it belongs to is posted (same as internal review).
+  const [pending, setPending] = useState<AnnotationElement[] | null>(null);
+  const [pendingAt, setPendingAt] = useState<number | null>(null);
+  const drawPending = useCallback((elements: AnnotationElement[] | null) => {
+    const next = elements && elements.length ? elements : null;
+    setPendingAt((at) => (next ? at ?? Math.round(player.current?.position() ?? 0) : null));
+    setPending(next);
+  }, []);
+  const removeDrawing = useCallback(async (id: string) => {
+    if (!session || !versionId) return;
+    const result = await deleteGuestAnnotation(session.projectId, versionId, session.accessKey, id);
+    if (!result.ok) setError(result.error);
+    else setDrawings((current) => current && { ...current, items: current.items.filter((item) => item.id !== id) });
+  }, [session, versionId]);
+
   // The player source is a signed URL for this guest and this cut, fetched per cut.
   useEffect(() => {
     if (!session || !versionId) return;
@@ -146,6 +162,8 @@ export function GuestReviewer({ token, cut = null }: { token: string; cut?: stri
   }
 
   const canComment = review?.viewer?.can_comment ?? true;
+  // Drawing rides on a note, so it needs both: tools hide on links with comments off.
+  const canAnnotate = canComment && Boolean(review?.viewer?.can_annotate);
   // A project can hold several cuts; name them when "V2" alone would be ambiguous.
   const manyTitles = new Set(review?.media_versions.map((item) => item.title)).size > 1;
   const pendingPlayback = !playback || playback.versionId !== versionId;
@@ -193,7 +211,7 @@ export function GuestReviewer({ token, cut = null }: { token: string; cut?: stri
                     role="tab"
                     aria-selected={item.id === versionId}
                     className={item.id === versionId ? "selected" : ""}
-                    onClick={() => { setVersionId(item.id); setNotes([]); setPositionMs(0); }}
+                    onClick={() => { setVersionId(item.id); setNotes([]); setPositionMs(0); drawPending(null); }}
                   >
                     {manyTitles && <span className="gr-version-title">{item.title}</span>}
                     V{item.version_number}
@@ -224,12 +242,13 @@ export function GuestReviewer({ token, cut = null }: { token: string; cut?: stri
                 title={version.title}
                 notes={notes}
                 annotations={annotations}
-                pending={null}
-                canDraw={false}
+                pending={pending}
+                pendingWindow={pending && pendingAt !== null ? { startMs: pendingAt, endMs: pendingAt } : null}
+                canDraw={canAnnotate}
                 onTime={setPositionMs}
                 onMeta={noop}
-                onDraw={noop}
-                onDeleteAnnotation={noop}
+                onDraw={drawPending}
+                onDeleteAnnotation={(id) => void removeDrawing(id)}
                 onFocusNote={noop}
               />
             </div>
@@ -280,9 +299,11 @@ export function GuestReviewer({ token, cut = null }: { token: string; cut?: stri
               session={session}
               versionId={versionId}
               parent={null}
-              positionMs={sources.length > 0 ? positionMs : null}
-              placeholder={sources.length > 0 ? `Note at ${timecode(positionMs)}…` : "Leave a note for the team…"}
-              onPosted={refresh}
+              positionMs={sources.length > 0 ? (pendingAt ?? positionMs) : null}
+              drawing={canAnnotate ? pending : null}
+              onClearDrawing={() => drawPending(null)}
+              placeholder={sources.length > 0 ? `Note at ${timecode(pendingAt ?? positionMs)}…` : "Leave a note for the team…"}
+              onPosted={async () => { drawPending(null); await refresh(); }}
               onError={setError}
             />
           )}
@@ -317,7 +338,7 @@ function DecisionBar({ session, version, canDecide, positionMs, onDecided, onErr
     // A reversal was shown its warning first (overrideWarning), so it goes out confirmed.
     const confirm = latest && latest.decision !== decision ? { confirm_override: true } : {};
     const result = await createGuestDecision(session.projectId, version.id, session.accessKey,
-      decision === "approved" ? { decision, ...confirm } : { decision, message: message.trim(), start_time_ms: Math.max(0, Math.round(positionMs)), ...confirm });
+      decision === "approved" ? { decision, ...confirm } : { decision, ...(message.trim() ? { message: message.trim() } : {}), start_time_ms: Math.max(0, Math.round(positionMs)), ...confirm });
     setBusy(false);
     if (!result.ok) {
       if (decision === "approved") setConfirming(false);
@@ -360,7 +381,7 @@ function DecisionBar({ session, version, canDecide, positionMs, onDecided, onErr
           }}
         >
           {overrideWarning(latest, "changes_requested") && <p className="rv-confirm-warn" role="alert"><TriangleAlert size={14} /><span>{overrideWarning(latest, "changes_requested")}</span></p>}
-          <label htmlFor="gr-request-text">What should change in {label}? <small>Pinned at {timecode(positionMs)}</small></label>
+          <label htmlFor="gr-request-text">What should change in {label}? <small>Optional · pinned at {timecode(positionMs)}</small></label>
           <textarea
             id="gr-request-text"
             value={message}
@@ -373,7 +394,7 @@ function DecisionBar({ session, version, canDecide, positionMs, onDecided, onErr
           {problem && <p className="gr-request-problem" role="alert">{problem}</p>}
           <div>
             <button type="button" onClick={() => { setRequesting(false); setProblem(""); }}>Cancel</button>
-            <button disabled={busy || !message.trim()}>{busy ? "Sending…" : "Send change request"}</button>
+            <button disabled={busy}>{busy ? "Sending…" : "Send change request"}</button>
           </div>
         </form>
       )}
@@ -607,8 +628,10 @@ function Note({ note, session, versionId, canComment, onSeek, onChanged, onError
   );
 }
 
-function Composer({ session, versionId, parent, positionMs, placeholder, onPosted, onError }: {
+function Composer({ session, versionId, parent, positionMs, placeholder, onPosted, onError, drawing = null, onClearDrawing }: {
   session: GuestSession; versionId: string; parent: string | null;
+  /** The drawing waiting on the player; posted with this note and attached to it. */
+  drawing?: AnnotationElement[] | null; onClearDrawing?: () => void;
   /** Where a new top-level note is pinned; null for replies and when nothing is playing. */
   positionMs: number | null; placeholder: string;
   onPosted: () => Promise<void>; onError: (message: string) => void;
@@ -626,8 +649,15 @@ function Composer({ session, versionId, parent, positionMs, placeholder, onPoste
       ...(parent ? { parent_comment_id: parent } : {}),
       ...(!parent && positionMs !== null ? { start_time_ms: Math.max(0, Math.round(positionMs)) } : {}),
     });
+    if (!result.ok) { setBusy(false); onError(result.error); return; }
+    if (drawing && drawing.length) {
+      const drawn = await createGuestAnnotation(session.projectId, versionId, session.accessKey, {
+        review_comment_id: result.data.id, start_time_ms: Math.max(0, Math.round(positionMs ?? 0)),
+        elements: drawing.map((element) => { const { id: _id, ...rest } = element; void _id; return rest; }),
+      });
+      if (!drawn.ok) { setBusy(false); onError(`Note posted, but the drawing was not saved: ${drawn.error}`); await onPosted(); return; }
+    }
     setBusy(false);
-    if (!result.ok) { onError(result.error); return; }
     onError("");
     setText("");
     await onPosted();
@@ -635,6 +665,12 @@ function Composer({ session, versionId, parent, positionMs, placeholder, onPoste
 
   return (
     <form className="gr-composer" onSubmit={submit}>
+      {drawing && drawing.length > 0 && (
+        <p className="gr-drawing-chip" data-testid="guest-pending-drawing">
+          Drawing attached · {drawing.length} {drawing.length === 1 ? "mark" : "marks"}
+          {onClearDrawing && <button type="button" onClick={onClearDrawing}>Clear drawing</button>}
+        </p>
+      )}
       <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder={placeholder} rows={parent ? 2 : 3} />
       <button disabled={busy || !text.trim()} aria-label="Post note"><Send size={14} /></button>
     </form>

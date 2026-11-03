@@ -66,7 +66,7 @@ describe("approve and request-changes rules", () => {
   });
 
   it("requires a short message for a change request", () => {
-    expect(changeMessageProblem("   ")).toBe("Tell the team what to change.");
+    expect(changeMessageProblem("   ")).toBeNull();
     expect(changeMessageProblem("x".repeat(2001))).toBe("Keep it under 2000 characters.");
     expect(changeMessageProblem("Trim the sting")).toBeNull();
   });

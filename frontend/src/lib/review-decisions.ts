@@ -96,10 +96,9 @@ export function openNotesWarning(count: number, versionLabel: string): string | 
   return `${count === 1 ? "1 note is" : `${count} notes are`} still open on ${versionLabel}. Approving won’t resolve ${count === 1 ? "it" : "them"}.`;
 }
 
-/** A change request must say what to change. Returns the problem, or null when it is fine. */
+/** A change request's note is optional, but bounded. Returns the problem, or null when it is fine. */
 export function changeMessageProblem(text: string): string | null {
   const body = text.trim();
-  if (!body) return "Tell the team what to change.";
   if (body.length > MESSAGE_MAX_LENGTH) return `Keep it under ${MESSAGE_MAX_LENGTH} characters.`;
   return null;
 }

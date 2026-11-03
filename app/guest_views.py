@@ -295,7 +295,8 @@ def guest_review(request, project_id):
     if _scoped_media_id(access) is not None:
         media_qs = media_qs.filter(id=_scoped_media_id(access))
     media = list(media_qs.order_by('sequence_number', 'created_at'))
-    granted = set(GuestReviewAccessPermission.objects.filter(guest_review_access=access).values_list('permission_key', flat=True))
+    from app.services.guest_access import granted_permissions
+    granted = granted_permissions(access)
     latest = decisions_for(media)
     return Response({
         'project': {'id': str(project.id), 'name': project.name, 'description': project.description},
@@ -307,6 +308,7 @@ def guest_review(request, project_id):
             # The page only asks for notes and drawings the link may read (no 403 banner).
             'can_read_comments': 'review.comment.read' in granted,
             'can_read_annotations': 'annotation.read' in granted,
+            'can_annotate': 'annotation.create' in granted,
             'scoped_to_file': _scoped_media_id(access) is not None,
             # Project-wide links that allow downloads may take whole folders as a zip.
             'can_download_folders': guest_can_download_folders(access),

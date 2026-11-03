@@ -1,6 +1,6 @@
 import { downloadFolderZip, type FolderZipManifest, type FolderZipProgress } from "./folder-zip";
 import { describeErrorBody } from "./errors";
-import type { Annotation, ReviewComment } from "./api";
+import type { Annotation, AnnotationElement, ReviewComment } from "./api";
 import type { DecisionKind, ReviewDecision } from "./review-decisions";
 
 /**
@@ -31,7 +31,7 @@ export type GuestMediaVersion = {
 /** `can_read_*`: whether the link may list notes and drawings; absent on older APIs (treated as allowed). */
 export type GuestViewer = {
   name: string; can_decide: boolean; can_comment: boolean; expires_at: string | null;
-  can_read_comments?: boolean; can_read_annotations?: boolean; scoped_to_file?: boolean;
+  can_read_comments?: boolean; can_read_annotations?: boolean; can_annotate?: boolean; scoped_to_file?: boolean;
   /** Whether this link may download whole folders as a zip (needs media.download, project-wide). */
   can_download_folders?: boolean;
 };
@@ -171,6 +171,14 @@ export const listGuestComments = (projectId: string, versionId: string, key: str
   guestRequest<ReviewComment[]>(`/guest/reviews/${projectId}/media-versions/${versionId}/comments/?limit=200`, key);
 
 /** The backend rejects timing on a reply, so a reply never sends `start_time_ms`. */
+export const createGuestAnnotation = (
+  projectId: string, versionId: string, key: string,
+  payload: { review_comment_id?: string; start_time_ms?: number; end_time_ms?: number; elements: Omit<AnnotationElement, "id">[] },
+) => guestRequest<Annotation>(`/guest/reviews/${projectId}/media-versions/${versionId}/annotations/`, key, jsonInit("POST", payload));
+
+export const deleteGuestAnnotation = (projectId: string, versionId: string, key: string, annotationId: string) =>
+  guestRequest<void>(`/guest/reviews/${projectId}/media-versions/${versionId}/annotations/${annotationId}/`, key, { method: "DELETE" });
+
 export const createGuestComment = (
   projectId: string, versionId: string, key: string,
   payload: { text: string; parent_comment_id?: string; start_time_ms?: number },

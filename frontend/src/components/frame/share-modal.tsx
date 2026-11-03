@@ -33,6 +33,8 @@ export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId
   const [access, setAccess] = useState<"private" | "public">("private");
   const [comments, setComments] = useState(true);
   const [downloads, setDownloads] = useState(false);
+  // Approve / Request changes ride on every new link unless the owner turns them off.
+  const [approvals, setApprovals] = useState(true);
   const [expires, setExpires] = useState(false);
   const [days, setDays] = useState(7);
   const [copied, setCopied] = useState(false);
@@ -69,10 +71,12 @@ export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId
             <input type="hidden" name="projectId" value={projectId ?? ""} />
             <input type="hidden" name="label" value={title} />
             <input type="hidden" name="preset" value={presetFor(comments, downloads)} />
+            <input type="hidden" name="allowDecisions" value={approvals ? "on" : "off"} />
             <input type="hidden" name="expiresInDays" value={expires ? days : GUEST_LINK_MAX_DAYS} />
             {assetFileId && <input type="hidden" name="assetFileId" value={assetFileId} />}
             <ul className="frm-share-opts">
               <li><span>Allow comments</span><Switch checked={comments || downloads} onCheckedChange={setComments} label="Allow comments" /></li>
+              <li><span>Allow approvals <small>Approve / Request changes</small></span><Switch checked={approvals} onCheckedChange={setApprovals} label="Allow approvals" /></li>
               <li><span>Allow downloads</span><Switch checked={downloads} onCheckedChange={setDownloads} label="Allow downloads" /></li>
               <li><span>Expires</span><span className="frm-share-exp">{expires && <Select aria-label="Expiry" value={String(days)} onValueChange={(next) => setDays(Number(next))} options={[1, 7, 30, 90].map((d) => ({ value: String(d), label: `${d} day${d === 1 ? "" : "s"}` }))} />}<Switch checked={expires} onCheckedChange={setExpires} label="Link expires" /></span></li>
               <li className="frm-share-expiry-note" data-testid="share-expiry"><small>{expires ? `Link stops working on ${guestLinkExpiryDate(days)}.` : `Links expire after ${GUEST_LINK_MAX_DAYS} days at most (${guestLinkExpiryDate(GUEST_LINK_MAX_DAYS)}).`}</small></li>

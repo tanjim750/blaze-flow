@@ -20,10 +20,11 @@ export const GUEST_PRESETS = {
   },
   comment: {
     label: "View and comment",
-    description: "Can read, leave notes, and react.",
+    description: "Can read, leave notes and drawings, and react.",
     permissions: [
       "media.read", "review.comment.read", "review.comment.create",
-      "review.comment.edit", "review.reaction.create", "annotation.read",
+      "review.comment.edit", "review.reaction.create",
+      "annotation.read", "annotation.create", "annotation.edit", "annotation.delete",
     ],
   },
   review: {
