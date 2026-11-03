@@ -11,9 +11,10 @@ import { useAppRouter } from "@/lib/app-router";
 import { runHere } from "@/lib/do-param";
 import { roleFor } from "@/lib/dashboard-role";
 import {
-  buildGroups, DEBOUNCE_MS, fetchQuickSearch, highlight, isPaletteShortcut, MIN_QUERY, OPEN_PALETTE_EVENT, pageRows,
+  buildGroups, DEBOUNCE_MS, highlight, isPaletteShortcut, MIN_QUERY, OPEN_PALETTE_EVENT, pageRows,
   quickActions, readRecents, rememberRecent, type PaletteRow, type SearchGroup, type SearchGroupKey,
 } from "@/lib/quick-search";
+import { runSearchSources } from "@/lib/search-sources";
 import "./command-palette.css";
 
 const GROUP_ICON: Record<SearchGroupKey, ReactNode> = {
@@ -23,8 +24,9 @@ const GROUP_ICON: Record<SearchGroupKey, ReactNode> = {
   people: <User aria-hidden="true" />,
 };
 
-/** Opens the palette from anywhere (the rail button, the mobile top bar). */
-export function openQuickSearch() { window.dispatchEvent(new CustomEvent(OPEN_PALETTE_EVENT)); }
+/** Opens the palette from anywhere (the rail button, the mobile top bar, the Files search bar),
+ * optionally pre-filled with what was already typed. */
+export function openQuickSearch(query?: string) { window.dispatchEvent(new CustomEvent(OPEN_PALETTE_EVENT, { detail: { query: query ?? "" } })); }
 
 /**
  * The app-wide ⌘K / Ctrl+K palette: recent items, quick actions and "go to" pages with no
@@ -48,7 +50,7 @@ export function CommandPalette({ workspace }: { workspace: Workspace | null }) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (isPaletteShortcut(event)) { event.preventDefault(); setOpen((value) => !value); } };
-    const onOpen = () => setOpen(true);
+    const onOpen = (event: Event) => { const seed = (event as CustomEvent<{ query?: string }>).detail?.query; if (seed) setQuery(seed); setOpen(true); };
     document.addEventListener("keydown", onKey);
     window.addEventListener(OPEN_PALETTE_EVENT, onOpen);
     return () => { document.removeEventListener("keydown", onKey); window.removeEventListener(OPEN_PALETTE_EVENT, onOpen); };
@@ -69,7 +71,7 @@ export function CommandPalette({ workspace }: { workspace: Workspace | null }) {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setLoading(true);
-      fetchQuickSearch(workspaceId, trimmed, controller.signal)
+      runSearchSources(workspaceId, trimmed, {}, controller.signal)
         .then((data) => { setServer({ query: trimmed, groups: data.groups }); setFailed(false); })
         .catch((error: unknown) => { if ((error as Error).name !== "AbortError") setFailed(true); })
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });

@@ -20,6 +20,7 @@ import { LiveMoney } from "@/components/money/live-money";
 import { fetchUnread, unreadLabel } from "@/lib/messages";
 import "@/components/messages/messages.css";
 import { mobileTitle } from "@/lib/mobile-title";
+import { usePageSearchPresent } from "@/lib/page-search";
 import { LifeBuoy, Plus, ShieldCheck, Upload } from "@/components/icons";
 import { REPORT_EVENT, ReportProblemDialog } from "@/components/report-problem";
 import { ShellReconnect } from "@/components/shell-reconnect";
@@ -149,6 +150,8 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
   const runPrimary = () => document.querySelector<HTMLElement>(".studio-main [data-mobile-primary]:not([disabled])")?.click();
   useEffect(() => { if (!open) return; const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [open]);
 
+  // One search bar per screen: when a page draws its own (the Files toolbar), the header entry steps aside.
+  const pageSearch = usePageSearchPresent();
   const shellClass = `studio-shell${collapsed ? " is-collapsed" : ""}`;
 
   return (
@@ -161,7 +164,7 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
         <h1 className="studio-mobilebar-title">{mobileTitle(pathname)}</h1>
         <div className="studio-mobilebar-actions">
           {primary && <button type="button" className="studio-mobilebar-btn is-primary" onClick={runPrimary} aria-label={primary}>{/upload/i.test(primary) ? <Upload size={18} /> : <Plus size={18} />}</button>}
-          <button type="button" className="studio-mobilebar-btn" onClick={openQuickSearch} aria-label="Search"><Search size={19} /></button>
+          {!pageSearch && <button type="button" className="studio-mobilebar-btn" onClick={() => openQuickSearch()} aria-label="Search"><Search size={19} /></button>}
           {narrow && <div className="studio-notifications"><NotificationBell workspaceId={selectedWorkspaceId} /></div>}
           {narrow && <AccountMenu user={user} />}
         </div>
@@ -187,11 +190,11 @@ export function AppShell({ children, user = null, workspaces = [], selectedWorks
           <WorkspacePicker workspaces={workspaces} selectedWorkspaceId={selectedWorkspaceId} pathname={pathname} degraded={degraded} />
 
           {/* Opens the ⌘K palette (everyone, clients included: it is scoped to what they can see). */}
-          <button type="button" className="studio-rail-search" onClick={openQuickSearch} aria-label="Search (⌘K)" aria-keyshortcuts="Meta+K Control+K">
+          {!pageSearch && <button type="button" className="studio-rail-search" onClick={() => openQuickSearch()} aria-label="Search (⌘K)" aria-keyshortcuts="Meta+K Control+K">
             <Search size={14} />
             <span>{nav.role === "client" ? "Search" : "Search everything"}</span>
             <kbd>⌘K</kbd>
-          </button>
+          </button>}
 
           <nav aria-label="Main navigation">
             {navLinks.map(({ href, label, icon: Icon }) => (

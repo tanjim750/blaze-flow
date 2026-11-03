@@ -145,7 +145,7 @@ describe("AssetLibrary", () => {
       files: [{ id: "hidden", fileId: null, name: "deep-take.mov", versioning: { assetId: null, assetName: "deep-take.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: "nested", clientId: null, projectId: null, stageId: null }],
     });
     const rendered = render(<AssetLibrary view={view} />);
-    fireEvent.change(screen.getByPlaceholderText("Search this location"), { target: { value: "deep-take" } });
+    fireEvent.change(screen.getByPlaceholderText(/^Search (here…|everything)$/), { target: { value: "deep-take" } });
     expect(screen.queryByText("deep-take.mov")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
     fireEvent.click(screen.getByRole("switch", { name: "Search all folders" }));
@@ -374,8 +374,8 @@ describe("AssetLibrary", () => {
     document.body.append(search, crumbs);
     const onFolderChange = vi.fn();
     render(<AssetLibrary view={view} headerSlots={{ search, crumbs }} onFolderChange={onFolderChange} initialQuery="folder=b" />);
-    expect(search.querySelector("input[placeholder='Search this location']")).not.toBeNull();
-    expect(screen.getAllByPlaceholderText("Search this location")).toHaveLength(1);
+    expect(search.querySelector(".fx-usearch input")).not.toBeNull();
+    expect(screen.getAllByPlaceholderText(/^Search (here…|everything)$/)).toHaveLength(1);
     expect(within(crumbs).getByText("Day 1")).toHaveAttribute("aria-current", "page");
     fireEvent.click(within(crumbs).getByRole("button", { name: "Footage" }));
     expect(onFolderChange).toHaveBeenLastCalledWith("a");
@@ -390,7 +390,7 @@ describe("AssetLibrary", () => {
       files: [{ id: "one", fileId: null, name: "hero-cut.mov", versioning: { assetId: null, assetName: "hero-cut.mov", versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video", mimeType: "video/quicktime", size: 10, durationMs: null, status: "READY", url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: null }],
     });
     render(<AssetLibrary view={view} />);
-    fireEvent.change(screen.getByPlaceholderText("Search this location"), { target: { value: "zzz" } });
+    fireEvent.change(screen.getByPlaceholderText(/^Search (here…|everything)$/), { target: { value: "zzz" } });
     expect(screen.getByText("No files match “zzz”")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Upload files" })).not.toBeInTheDocument();
 

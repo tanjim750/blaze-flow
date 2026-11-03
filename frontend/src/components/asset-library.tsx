@@ -48,6 +48,8 @@ import { LibraryTree } from "@/components/files/library-tree";
 import { useMarquee } from "@/components/files/use-marquee";
 import { PanelResizer, useStoredNumber } from "@/components/files/panel-resizer";
 import { KindIcon, Thumb } from "@/components/files/files-ui";
+import { openQuickSearch } from "@/components/command-palette";
+import { useRegisterPageSearch } from "@/lib/page-search";
 import "@/components/files/files.css";
 import { Select } from "@/components/ui/select";
 
@@ -723,16 +725,30 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
     </aside>
   );
 
+  // The app's one search bar (the shell hides its own entry while this is mounted). Inside a
+  // folder or project it scopes to that location by default; the chip widens it to everywhere.
+  // ⌘K / the kbd button opens the app-wide palette, carrying over what was typed.
+  const scopeName = current?.name ?? (projectId ? (projectName || "this project") : null);
   const searchControls = <>
-          <button type="button" className="fx-icon-btn fx-search-toggle" aria-label="Search files" aria-expanded={searchOpen} onClick={() => { setSearchOpen(true); window.setTimeout(() => searchRef.current?.focus(), 0); }}><Search aria-hidden="true" /></button>
-          <label className={`fx-search${searchOpen ? " is-open" : ""}`}>
+          <button type="button" className="fx-icon-btn fx-search-toggle" aria-label="Search" aria-expanded={searchOpen} onClick={() => { setSearchOpen(true); window.setTimeout(() => searchRef.current?.focus(), 0); }}><Search aria-hidden="true" /></button>
+          <div className={`fx-search fx-usearch${searchOpen ? " is-open" : ""}${scopeName ? " has-scope" : ""}`} role="search">
             <Search aria-hidden="true" />
-            <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this location" aria-label={searchEverywhere ? "Search all folders" : "Search this location"}
+            {scopeName && <button type="button" className={`fx-scope-chip${searchEverywhere ? " is-all" : ""}`} aria-pressed={!searchEverywhere}
+              title={searchEverywhere ? `Searching everywhere. Click to search only ${scopeName}` : `Searching ${scopeName}. Click to search everywhere`}
+              onClick={() => { setSearchEverywhere(!searchEverywhere); searchRef.current?.focus(); }}>
+              {searchEverywhere ? "Everywhere" : <>In: <b>{scopeName}</b></>}
+            </button>}
+            <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)}
+              placeholder={scopeName && !searchEverywhere ? "Search here…" : "Search everything"}
+              aria-label={scopeName && !searchEverywhere ? `Search ${scopeName}` : "Search everything"} aria-keyshortcuts="Meta+K Control+K"
               onBlur={(event) => { if (!event.currentTarget.value && !event.currentTarget.parentElement?.contains(event.relatedTarget as Node)) setSearchOpen(false); }}
               onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (query) setQuery(""); else { setSearchOpen(false); event.currentTarget.blur(); } } }} />
-            {(query || searchOpen) && <button type="button" className="fx-icon-btn is-xs" onClick={() => { if (query) { setQuery(""); searchRef.current?.focus(); } else setSearchOpen(false); }} aria-label={query ? "Clear search text" : "Close search"}><X /></button>}
-          </label>
+            {query
+              ? <button type="button" className="fx-icon-btn is-xs" onClick={() => { setQuery(""); searchRef.current?.focus(); }} aria-label="Clear search text"><X /></button>
+              : <button type="button" className="fx-usearch-kbd" onClick={() => openQuickSearch(query)} aria-label="Search the whole app (⌘K)" title="Search the whole app"><kbd>⌘K</kbd></button>}
+          </div>
   </>;
+  useRegisterPageSearch(!compact);
   // Folder crumbs continuing the page breadcrumb: every ancestor is a link-like button; the open
   // folder is the current page and is plain text.
   const folderCrumbs = current ? crumbs.map((folder) => <li key={folder.id}><ChevronRight aria-hidden="true" />
