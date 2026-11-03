@@ -60,7 +60,7 @@ export type Project = { id: string; workspace_id: string; client_team_id: string
   /** Whether the viewer may edit this project. Only the detail route fills it in; null elsewhere. */
   viewer_can_edit?: boolean | null;
 };
-export type ProjectFolder = { id: string; workspace_id: string; client_team_id: string | null; project_id: string | null; parent_folder_id: string | null; name: string; created_at: string };
+export type ProjectFolder = { id: string; workspace_id: string; client_team_id: string | null; project_id: string | null; parent_folder_id: string | null; name: string; created_at: string; preview_thumbnails?: string[] };
 export type MediaFile = { id: string; name: string; mime_type: string; size_bytes: number };
 export type ProjectFile = { id: string; workspace_id: string; client_team_id: string | null; project_id: string | null; folder_id: string | null; task_stage_id: string | null; file: MediaFile & { checksum_sha256: string; status: string; duration_ms: number | null }; added_by: { id: string; name: string; email: string } | null; poster: { width: number | null; height: number | null } | null; comment_count: number;
   /** Which cut of its asset this row is, counting from 1. */

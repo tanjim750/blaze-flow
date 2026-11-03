@@ -946,3 +946,12 @@ html.light .al-form :is(input, select) { color-scheme: light; }
   .fx .fx-toolbar-one .fx-toolbar-actions .fx-icon-btn.fx-details-toggle { display: none !important; }
   .fx .fx-toolbar-one .fx-view button { min-width: 34px !important; width: 34px !important; padding: 0; }
 }
+/* Folder collage: posters from inside the folder (see FolderItem). */
+.fx .fx-item.is-tile .fx-frame.is-folder.is-fcard.has-collage { display: grid; place-items: stretch; gap: 3px; padding: 0; background: var(--fcard-panel); }
+.fx .fx-frame.has-collage.n1 { grid-template-columns: 1fr; }
+.fx .fx-frame.has-collage.n2 { grid-template-columns: 2fr 1fr; }
+.fx .fx-frame.has-collage.n3 { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
+.fx .fx-frame.has-collage.n3 .t0 { grid-row: 1 / span 2; }
+.fx-collage-tile { position: relative; min-width: 0; min-height: 0; overflow: hidden; border-radius: 6px; background: var(--fcard); }
+.fx-collage-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.fx .fx-item.is-tile .fx-frame.is-folder.is-fcard:not(.has-collage) .fx-fcard-icon svg { width: 30px; height: 30px; }

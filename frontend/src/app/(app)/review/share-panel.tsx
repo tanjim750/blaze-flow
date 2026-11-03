@@ -5,7 +5,7 @@ import { Check, Copy, ExternalLink, Eye, Link2, RefreshCw, TriangleAlert, UserMi
 import type { GuestInvite } from "@/lib/api";
 import { guestLinkStatus } from "@/lib/activity";
 import { createGuestInviteAction, replaceGuestInviteAction, revokeGuestAccessAction, revokeGuestInviteAction, setGuestInviteDecisionsAction } from "./actions";
-import { allowsDecisions, emptyGuestInviteState, GUEST_PRESETS } from "./guest-presets";
+import { allowsDecisions, emptyGuestInviteState, GUEST_LINK_MAX_DAYS, GUEST_PRESETS, guestLinkExpiryDate } from "./guest-presets";
 import { Select } from "@/components/ui/select";
 
 /** Stable regardless of the viewer's locale, so the server and client markup agree. */
@@ -36,6 +36,7 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
   // The newest reveal wins: a fresh "Create link" or a "New link" on an existing row.
   const state = replaced && replaced.token && replaced !== created ? replaced : created;
   const [copied, setCopied] = useState(false);
+  const [expiryDays, setExpiryDays] = useState(7);
   const remembered = useKnownLinks(projectId, state.inviteId ?? null, state.token);
   // Every link with a short code can be copied again from the list, not only the newest.
   const known: Record<string, string> = { ...remembered };
@@ -88,7 +89,8 @@ export function SharePanel({ workspaceId, projectId, projectName, invites, canMa
             </label>
             <label>
               <span>Expires in (days)</span>
-              <input name="expiresInDays" type="number" min={1} max={365} defaultValue={7} required />
+              <input name="expiresInDays" type="number" min={1} max={GUEST_LINK_MAX_DAYS} value={expiryDays} onChange={(event) => setExpiryDays(Number(event.target.value))} required />
+              <small data-testid="share-expiry">{expiryDays >= 1 && expiryDays <= GUEST_LINK_MAX_DAYS ? `Stops working on ${guestLinkExpiryDate(expiryDays)}` : `1–${GUEST_LINK_MAX_DAYS} days`}</small>
             </label>
             <label className="rv-share-check">
               <input type="checkbox" name="allowDecisions" defaultChecked />

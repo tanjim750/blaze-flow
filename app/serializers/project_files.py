@@ -7,10 +7,21 @@ from app.services.file_processing import POSTER_VARIANT_TYPE
 
 
 class ProjectFolderSerializer(serializers.ModelSerializer):
+    preview_thumbnails = serializers.SerializerMethodField()
+
     class Meta:
         model = ProjectFolder
-        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'parent_folder_id', 'name', 'created_at')
+        fields = ('id', 'workspace_id', 'client_team_id', 'project_id', 'parent_folder_id', 'name', 'created_at', 'preview_thumbnails')
         read_only_fields = fields
+
+    def get_preview_thumbnails(self, folder):
+        """Up to three permission-checked poster URLs from inside the folder, newest first.
+
+        Lists pass ``folder_previews`` in the context (see ``folder_preview_map``), computed
+        in one query for the whole page; a single folder without it reports none.
+        """
+        previews = self.context.get('folder_previews') or {}
+        return previews.get(folder.id, [])
 
 
 class ProjectFolderCreateSerializer(serializers.Serializer):

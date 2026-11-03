@@ -494,13 +494,18 @@ DIRECT_UPLOAD_URL_EXPIRE_SECONDS = int(os.environ.get('DIRECT_UPLOAD_URL_EXPIRE_
 DIRECT_UPLOAD_TTL_SECONDS = int(os.environ.get('DIRECT_UPLOAD_TTL_SECONDS', str(24 * 3600)))
 
 # Private file downloads/playback: after the permission check, 302 to a presigned bucket
-# GET instead of streaming bytes through gunicorn (only with STORAGE_DRIVER=s3). The expiry
-# must outlast a playback session: a <video> keeps issuing Range requests to the redirected
-# URL while the user seeks.
+# GET instead of streaming bytes through gunicorn (only with STORAGE_DRIVER=s3).
+# Two lifetimes, because a leaked signed URL works for anyone until it expires:
+# - downloads (Content-Disposition: attachment) only need the URL long enough to *start*
+#   the GET (R2 checks the signature once per request, so a long download keeps going), so 15 min;
+# - inline playback/previews keep the redirected URL: <video> sends a new Range request to
+#   it on every seek, so it must outlast a review session (1 h).
 FILE_DOWNLOAD_REDIRECT_ENABLED = os.environ.get('FILE_DOWNLOAD_REDIRECT_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
-FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS = int(os.environ.get('FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS', '3600'))
-if not 60 <= FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS <= 604800:
-    raise ImproperlyConfigured('FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS must be between 60 and 604800.')
+FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS = int(os.environ.get('FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS', '900'))
+FILE_STREAM_REDIRECT_EXPIRE_SECONDS = int(os.environ.get('FILE_STREAM_REDIRECT_EXPIRE_SECONDS', '3600'))
+for _name in ('FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS', 'FILE_STREAM_REDIRECT_EXPIRE_SECONDS'):
+    if not 60 <= globals()[_name] <= 604800:
+        raise ImproperlyConfigured(f'{_name} must be between 60 and 604800.')
 
 if STORAGE_DRIVER == 's3' and AWS_QUERYSTRING_EXPIRE < 1:
     raise ImproperlyConfigured('AWS_QUERYSTRING_EXPIRE must be at least 1 second.')
@@ -527,17 +532,25 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
     ],
+    # Deny by default: every endpoint must be signed in unless it opts out with an explicit
+    # AllowAny (health, auth, guest/share links, public upload links, webhooks). The old
+    # IsAuthenticatedOrReadOnly let any new view without permission_classes serve GETs anonymously.
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+        'rest_framework.permissions.IsAuthenticated',
     ],
+    # JSON only in production; the browsable HTML API (forms, endpoint discovery) is a dev aid.
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer',
+        *(['rest_framework.renderers.BrowsableAPIRenderer'] if DEBUG else []),
     ],
     'DEFAULT_THROTTLE_RATES': {
         'registration': os.environ.get('REGISTRATION_THROTTLE_RATE', '5/hour'),
         'login': os.environ.get('LOGIN_THROTTLE_RATE', '20/hour'),
         'password_reset': os.environ.get('PASSWORD_RESET_THROTTLE_RATE', '5/hour'),
+        # Per target account (normalised email), on top of the per-IP limits above, so a
+        # botnet spreading guesses over many IPs still can't hammer one account.
+        'login_email': os.environ.get('LOGIN_EMAIL_THROTTLE_RATE', '10/hour'),
+        'password_reset_email': os.environ.get('PASSWORD_RESET_EMAIL_THROTTLE_RATE', '3/hour'),
         'email_verification': os.environ.get('EMAIL_VERIFICATION_THROTTLE_RATE', '5/hour'),
         'invite_preview': os.environ.get('INVITE_PREVIEW_THROTTLE_RATE', '60/hour'),
         'guest_exchange': os.environ.get('GUEST_EXCHANGE_THROTTLE_RATE', '60/hour'),

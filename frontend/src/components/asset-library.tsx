@@ -214,7 +214,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const viewportW = useViewportWidth();
 
   const stages = view?.stages ?? [];
-  const serverFolders: LibraryFolder[] = (view?.folders ?? []).map((folder) => ({ id: folder.id, name: folder.name, clientId: folder.client_team_id, projectId: folder.project_id, parentFolderId: folder.parent_folder_id, createdAt: folder.created_at, createdBy: "Workspace member" }));
+  const serverFolders: LibraryFolder[] = (view?.folders ?? []).map((folder) => ({ id: folder.id, name: folder.name, clientId: folder.client_team_id, projectId: folder.project_id, parentFolderId: folder.parent_folder_id, createdAt: folder.created_at, createdBy: "Workspace member", previews: (folder.preview_thumbnails ?? []).slice(0, 3) }));
   const serverFiles: LibraryFile[] = (view?.files ?? []).map((item) => ({ id: item.id, fileId: item.file.id, name: item.file.name, kind: mimeKind(item.file.mime_type, item.file.name), mimeType: item.file.mime_type, size: item.file.size_bytes, durationMs: item.file.duration_ms, status: item.file.status as LibraryFile["status"], versioning: {
     assetId: item.media_asset?.id ?? null,
     assetName: item.media_asset?.name ?? item.file.name,
