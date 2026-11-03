@@ -6,7 +6,7 @@ from threading import Barrier
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.db import close_old_connections, transaction
+from django.db import close_old_connections, connection, transaction
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -396,7 +396,10 @@ class StoragePlanLimitConcurrencyTests(WorkspaceAccessSetupMixin, TransactionTes
         except SubscriptionError:
             return False
         finally:
-            close_old_connections()
+            # Each worker thread opens its own connection. With persistent connections
+            # (CONN_MAX_AGE > 0) close_old_connections() keeps it open, and the leftover
+            # sessions then block dropping the test database at teardown.
+            connection.close()
 
     def test_concurrent_uploads_cannot_exceed_workspace_cap(self):
         barrier = Barrier(2)
