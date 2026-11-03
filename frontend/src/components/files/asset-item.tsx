@@ -5,14 +5,14 @@
  * so selection, focus, drag and the keyboard behave identically.
  *
  * The outer element is a focusable `role="row"` inside its section's `role="grid"`. Only the
- * focused item is in the tab order (roving tabindex, managed by the parent). A click selects
- * (and shows the details panel); a double-click opens — a file in review, a folder in place.
- * A tap on a touch screen opens. The checkbox, Cmd/Ctrl-click and Shift-click build a
+ * focused item (and its checkbox) is in the tab order (roving tabindex, managed by the parent).
+ * A click or tap anywhere but the checkbox opens it — a file in review / its viewer, a folder
+ * in place. The checkbox, Cmd/Ctrl-click, Shift-click and a drag from empty space build a
  * multi-selection. From the keyboard, Enter opens, Space selects and Shift+F10 opens the
  * actions menu. See `onPointerSelect` in asset-library.tsx for the full rule.
  */
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
-import { Clapperboard, Eye, FolderOpen, GitBranch, Layers, MessageSquareText, TriangleAlert } from "@/components/icons";
+import { GitBranch, Layers, MessageSquareText, TriangleAlert } from "@/components/icons";
 import type { LibraryFile, LibraryFolder } from "@/lib/asset-library";
 import { isProcessing } from "@/lib/asset-library";
 import { aspectLabel, formatSize, KIND_NAME, runtime, type Density, type ViewMode } from "@/lib/files-panel";
@@ -43,7 +43,7 @@ type Common = {
 function Shell({ id, common, kind, label, children }: { id: string; common: Common; kind: "file" | "folder"; label: string; children: ReactNode }) {
   const {
     mode, density, selected, focusable, showChecks, isDragSource, dropLabel, dropInert, register, draggable,
-    onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, onPointerSelect, onOpen, onKeyDown, onFocus, onContextMenu,
+    onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, onPointerSelect, onKeyDown, onFocus, onContextMenu,
   } = common;
   return (
     <div
@@ -62,7 +62,6 @@ function Shell({ id, common, kind, label, children }: { id: string; common: Comm
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       onClick={onPointerSelect}
-      onDoubleClick={(event) => { if ((event.target as HTMLElement).closest("input, button, [role=menu]")) return; onOpen(); }}
       onKeyDown={onKeyDown}
       onFocus={(event) => { if (event.target === event.currentTarget) onFocus(); }}
       onContextMenu={onContextMenu}
@@ -75,16 +74,16 @@ function Shell({ id, common, kind, label, children }: { id: string; common: Comm
   );
 }
 
-function Check({ checked, name, onToggle }: { checked: boolean; name: string; onToggle: () => void }) {
+function Check({ checked, name, onToggle, focusable }: { checked: boolean; name: string; onToggle: () => void; focusable: boolean }) {
   return (
-    <label className="fx-check" onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-      <input type="checkbox" tabIndex={-1} checked={checked} onChange={onToggle} aria-label={`Select ${name}`} />
+    <label className="fx-check" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+      <input type="checkbox" tabIndex={focusable ? 0 : -1} checked={checked} onChange={onToggle} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); onToggle(); } }} draggable={false} aria-label={`Select ${name}`} />
     </label>
   );
 }
 
-export function FileItem({ file, stage, relation, reviewable, common }: {
-  file: LibraryFile; stage: StageLike | null; relation: string | null; reviewable: boolean; common: Common;
+export function FileItem({ file, stage, relation, common }: {
+  file: LibraryFile; stage: StageLike | null; relation: string | null; /** Kept for callers; a click opens review when one exists. */ reviewable?: boolean; common: Common;
 }) {
   const working = isProcessing(file);
   const failed = file.status === "FAILED";
@@ -93,11 +92,6 @@ export function FileItem({ file, stage, relation, reviewable, common }: {
   const feedback = file.commentCount ?? 0;
   const status = working ? (file.status === "DUPLICATING" ? "Copying…" : file.status === "PENDING" ? "Checking file…" : "Generating preview…") : null;
   const label = [file.name, KIND_NAME[file.kind], formatSize(file.size), stage?.name, status].filter(Boolean).join(", ");
-  const openChip = !working && (
-    <button type="button" className="fx-open-chip" tabIndex={-1} onClick={(event) => { event.stopPropagation(); common.onOpen(); }} aria-label={`${reviewable ? "Open in review:" : "Preview"} ${file.name}`}>
-      {reviewable ? <Clapperboard /> : <Eye />}{reviewable ? "Open" : "Preview"}
-    </button>
-  );
   const frame = (
     <span className={`fx-frame ${versions.versionCount > 1 ? "is-stacked" : ""} ${working ? "is-working" : ""}`}>
       {common.mode === "grid"
@@ -105,7 +99,6 @@ export function FileItem({ file, stage, relation, reviewable, common }: {
         : <Thumb file={file} size="sm" />}
       {common.mode === "grid" && file.durationMs && !working ? <b className="fx-duration">{runtime(file.durationMs)}</b> : null}
       {common.mode === "grid" && working && <span className="fx-working" role="status"><em>{status}</em><i /></span>}
-      {common.mode === "grid" && openChip}
     </span>
   );
   const name = common.renaming ?? <FileName name={file.name} max={common.mode === "list" ? 48 : 160} className={common.mode === "grid" ? "fx-tile-name" : undefined} title={file.name} />;
@@ -113,7 +106,7 @@ export function FileItem({ file, stage, relation, reviewable, common }: {
   if (common.mode === "list") {
     return (
       <Shell id={file.id} common={common} kind="file" label={label}>
-        <Check checked={common.selected} name={file.name} onToggle={common.onToggle} />
+        <Check checked={common.selected} name={file.name} onToggle={common.onToggle} focusable={common.focusable} />
         <span className="fx-col-name">
           {frame}
           <span className="fx-name-stack">
@@ -132,7 +125,7 @@ export function FileItem({ file, stage, relation, reviewable, common }: {
   }
   return (
     <Shell id={file.id} common={common} kind="file" label={label}>
-      <Check checked={common.selected} name={file.name} onToggle={common.onToggle} />
+      <Check checked={common.selected} name={file.name} onToggle={common.onToggle} focusable={common.focusable} />
       {frame}
       <span className="fx-caption">
         <span className="fx-name-line"><KindIcon kind={file.kind} className="fx-kind" />{name}</span>
@@ -158,13 +151,10 @@ export function FolderItem({ folder, itemCount, relation, common }: {
   const tileMeta = `${itemCount} Item${itemCount === 1 ? "" : "s"}${relation ? ` · ${relation}` : ""}`;
   const meta = `${itemCount} item${itemCount === 1 ? "" : "s"}${relation ? ` · ${relation}` : ""}`;
   const name = common.renaming ?? <FileName name={folder.name} max={common.mode === "list" ? 48 : 30} />;
-  const openChip = (
-    <button type="button" className="fx-open-chip" tabIndex={-1} onClick={(event) => { event.stopPropagation(); common.onOpen(); }} aria-label={`Open ${folder.name}`}><FolderOpen />Open</button>
-  );
   if (common.mode === "list") {
     return (
       <Shell id={folder.id} common={common} kind="folder" label={label}>
-        <Check checked={common.selected} name={folder.name} onToggle={common.onToggle} />
+        <Check checked={common.selected} name={folder.name} onToggle={common.onToggle} focusable={common.focusable} />
         <span className="fx-col-name">
           <span className="fx-frame is-folder"><span className="fx-thumb is-glyph"><FolderGlyph /></span></span>
           <span className="fx-name-stack"><span className="fx-name-line">{name}</span><small>{meta}</small></span>
@@ -181,10 +171,9 @@ export function FolderItem({ folder, itemCount, relation, common }: {
   return (
     <Shell id={folder.id} common={common} kind="folder" label={label}>
       <span className="fx-fcard-tab" aria-hidden="true" />
-      <Check checked={common.selected} name={folder.name} onToggle={common.onToggle} />
+      <Check checked={common.selected} name={folder.name} onToggle={common.onToggle} focusable={common.focusable} />
       <span className="fx-frame is-folder is-fcard">
         <span className="fx-fcard-icon" aria-hidden="true"><FolderGlyph /></span>
-        {openChip}
       </span>
       <span className="fx-caption">
         <span className="fx-name-line is-folder-name">{name}</span>
