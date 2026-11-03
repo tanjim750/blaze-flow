@@ -11,7 +11,8 @@ import { FormAlert, SubmitButton, TextField } from "@/components/auth/text-field
 
 export function SignInForm({ next, signedOut = false, email = "" }: { next?: string; signedOut?: boolean; email?: string }) {
   const router = useAppRouter();
-  const destination = safeNext(next);
+  // Without a ?next=, land on the first sidebar item (/start resolves it for the workspace).
+  const destination = safeNext(next, "/start");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});

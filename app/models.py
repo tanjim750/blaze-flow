@@ -337,6 +337,9 @@ class Workspace(models.Model):
     status = models.CharField(max_length=30, choices=WorkspaceStatus.choices, default=WorkspaceStatus.ACTIVE)
     deletion_scheduled_at = models.DateTimeField(null=True, blank=True)
     task_workflow_settings = models.JSONField(default=dict, blank=True)
+    # Sidebar order chosen by the primary owner (keys from services/nav_order.NAV_KEYS).
+    # Empty means the default order. Role-based hiding still applies on top.
+    nav_order = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
