@@ -118,7 +118,8 @@ from .services.retention import (
     update_workspace_retention_policy, workspace_retention_policy_data,
 )
 from .throttles import (
-    EmailVerificationThrottle, InvitePreviewThrottle, LoginThrottle, PasswordResetThrottle, RegistrationThrottle,
+    EmailVerificationThrottle, InvitePreviewThrottle, LoginEmailThrottle, LoginThrottle, PasswordResetEmailThrottle,
+    PasswordResetThrottle, RegistrationThrottle,
 )
 from .models import (
     SubscriptionPlan,
@@ -307,6 +308,8 @@ from .services import (
 
 
 @api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def health_check(request):
     # Side-effect free: uptime probes hit this every few seconds, so it must not dispatch
     # events or write rows. See health_live / health_ready for probe-specific checks.
@@ -379,7 +382,7 @@ def invite_preview_view(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@throttle_classes([LoginThrottle])
+@throttle_classes([LoginThrottle, LoginEmailThrottle])
 def login_user(request):
     serializer = LoginSerializer(data=request.data, context={'request': request})
     serializer.is_valid(raise_exception=True)
@@ -413,7 +416,7 @@ def google_login(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@throttle_classes([PasswordResetThrottle])
+@throttle_classes([PasswordResetThrottle, PasswordResetEmailThrottle])
 def password_reset_request(request):
     serializer = PasswordResetRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)

@@ -40,7 +40,7 @@ from .services.comments import (
 )
 from .services.guest_access import (
     GUEST_ALLOWED_PERMISSIONS, GUEST_DECISION_PERMISSION, GuestAccessError, authenticate_guest_access,
-    create_guest_invite, exchange_guest_invite, revoke_guest_invite,
+    GUEST_LINK_MAX_HOURS, create_guest_invite, exchange_guest_invite, revoke_guest_invite,
     record_guest_view, revoke_guest_review_access, rotate_guest_access_key, set_invite_allow_decisions,
 )
 from .services.decisions import (
@@ -62,7 +62,7 @@ class GuestInviteCreateSerializer(serializers.Serializer):
         child=serializers.ChoiceField(choices=sorted(GUEST_ALLOWED_PERMISSIONS)),
         allow_empty=False,
     )
-    expires_in_hours = serializers.IntegerField(min_value=1, max_value=24 * 365, default=168)
+    expires_in_hours = serializers.IntegerField(min_value=1, max_value=GUEST_LINK_MAX_HOURS, default=168)
     # Sharing one file: the link opens that file's review version (``&cut=``). Every
     # reviewable project upload already has one (auto-versioning), so no publish step.
     asset_file_id = serializers.UUIDField(required=False)
