@@ -289,7 +289,10 @@ Manual only: `requeue_dead_letters` (after fixing a delivery problem) and
 ## 6. Client IPs and rate limiting
 
 Throttles key anonymous requests on the client IP. DRF takes it from `X-Forwarded-For`,
-counting back `THROTTLE_TRUSTED_PROXY_COUNT` proxies (Next is always one).
+counting back `THROTTLE_TRUSTED_PROXY_COUNT` entries from the right. Next's `/api` proxy adds
+no entry of its own; Caddy only keeps Cloudflare's entry because `deploy/Caddyfile` trusts
+Cloudflare's ranges. Cloudflare → Caddy → Next = 2, Caddy alone or Tunnel = 1. Full walkthrough
+and a verification test: [ops-production-hardening.md](ops-production-hardening.md#client-ip-for-rate-limiting).
 `THROTTLE_TRUST_CF_CONNECTING_IP=true` uses Cloudflare's `CF-Connecting-IP` header instead.
 Only enable it when the origin cannot be reached except through Cloudflare, otherwise anyone
 can forge the header and dodge the limits.
@@ -306,13 +309,13 @@ dc ps            # web should become "healthy"
 
 ## 8. Backups
 
+Nightly encrypted offsite backups with retention: `deploy/backup/pg-backup.sh`. Setup, cron
+line and the restore procedure are in [backup-restore.md](backup-restore.md). For a quick
+one-off copy before a risky change:
+
 ```sh
 dc exec -T db sh -c 'pg_dump -Fc -U "$POSTGRES_USER" "$POSTGRES_DB"' > blazeflow-$(date +%F).dump
 ```
-
-Run it nightly from the host crontab and copy it off the box (Storage Box or a separate R2
-bucket). Test a restore before beta:
-`dc exec -T db pg_restore -U blazeflow -d blazeflow --clean < file.dump`.
 
 ## 9. Logs and troubleshooting
 
