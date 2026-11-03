@@ -162,6 +162,13 @@ def _s3_client_and_bucket(storage):
     return client, bucket_name
 
 
+def redirect_expiry_seconds(as_attachment):
+    """Downloads only need to start before expiry; inline media keeps seeking on the same URL."""
+    if as_attachment:
+        return int(getattr(settings, 'FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS', 900))
+    return int(getattr(settings, 'FILE_STREAM_REDIRECT_EXPIRE_SECONDS', 3600))
+
+
 def presigned_redirect_response(
     storage, object_key, *, content_type, filename=None, as_attachment=False,
 ):
@@ -191,7 +198,7 @@ def presigned_redirect_response(
         params['ResponseContentDisposition'] = disposition
     url = client.generate_presigned_url(
         'get_object', Params=params,
-        ExpiresIn=int(getattr(settings, 'FILE_DOWNLOAD_REDIRECT_EXPIRE_SECONDS', 3600)),
+        ExpiresIn=redirect_expiry_seconds(as_attachment),
     )
     response = HttpResponseRedirect(url)
     # The signed URL is per-request and expires; never let a proxy or the browser reuse it.

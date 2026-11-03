@@ -911,3 +911,47 @@
 /* Light theme: native controls (checkboxes, selects, scrollbars) follow the light skin. */
 html.light .fx { color-scheme: light; }
 html.light .al-form :is(input, select) { color-scheme: light; }
+
+/* Click-to-open + drag-to-select (marquee). */
+.fx-content { position: relative; }
+.fx-item { cursor: pointer; }
+.fx-marquee { position: absolute; z-index: 5; pointer-events: none; border: 1px solid var(--bf-primary, #7c3aed); border-radius: 2px; background: color-mix(in srgb, var(--bf-primary, #7c3aed) 16%, transparent); }
+.fx-content.is-marquee, body.fx-marquee-dragging { user-select: none; -webkit-user-select: none; }
+.fx-content.is-marquee .fx-item { pointer-events: none; }
+.fx-check:focus-within { opacity: 1; outline: 2px solid var(--ring, var(--bf-primary, #7c3aed)); outline-offset: 2px; }
+
+/* Unified search bar (the app's one search; see asset-library searchControls). */
+.fx-usearch { gap: 0; }
+.fx-usearch.has-scope input { padding-left: 8px; }
+.fx-usearch.has-scope > svg { position: static; margin: 0 6px 0 10px; flex: none; }
+.fx-usearch.has-scope { border: 1px solid var(--border); border-radius: var(--radius-md); background: transparent; }
+.fx-usearch.has-scope:focus-within { outline: 2px solid var(--ring); outline-offset: -1px; border-color: transparent; }
+.fx-usearch.has-scope input, .fx-toolbar-one .fx-usearch.has-scope input { border: 0; outline: 0; background: transparent; padding-right: 40px; }
+.fx-scope-chip { flex: none; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; height: 22px; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--foreground); font: 500 11px/20px var(--font-sans); cursor: pointer; }
+.fx-scope-chip b { font-weight: 600; }
+.fx-scope-chip.is-all { border-color: var(--border); background: var(--muted, transparent); color: var(--muted-foreground); }
+.fx-scope-chip:focus-visible, .fx-usearch-kbd:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.fx-usearch-kbd { position: absolute; right: 6px; display: grid; place-items: center; height: 22px; padding: 0; border: 0; background: none; cursor: pointer; }
+.fx-usearch-kbd kbd { font: 500 10px/1 var(--font-sans); padding: 3px 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted-foreground); }
+.fx-toolbar-one .fx-usearch.has-scope { flex-basis: 300px; max-width: 300px; }
+.fx-toolbar-one .fx-usearch.has-scope:focus-within, .fx-toolbar-one .fx-usearch.has-scope:has(input:not(:placeholder-shown)) { flex-basis: 380px; max-width: 380px; }
+@media (max-width: 640px) { .fx-usearch-kbd { display: none; } .fx-scope-chip { max-width: 96px; } }
+.fx-search.fx-usearch.has-scope { background: var(--field); border-color: var(--input); min-height: 32px; }
+.fx-search.fx-usearch.has-scope:hover { border-color: var(--input-hover); }
+.fx-search.fx-usearch.has-scope input, .fx-search.fx-usearch.has-scope input:hover, .fx-search.fx-usearch.has-scope input:focus-visible { border: 0; outline: 0; background: transparent; padding-left: 6px; height: 30px; }
+/* Narrow phones inside a folder: the actions row overflowed over the search icon. Tighten it
+   and drop the details toggle there (the ] shortcut and item tap still open details). */
+@media (max-width: 420px) {
+  .fx .fx-toolbar-one .fx-toolbar-actions { gap: 2px; }
+  .fx .fx-toolbar-one .fx-toolbar-actions .fx-icon-btn.fx-details-toggle { display: none !important; }
+  .fx .fx-toolbar-one .fx-view button { min-width: 34px !important; width: 34px !important; padding: 0; }
+}
+/* Folder collage: posters from inside the folder (see FolderItem). */
+.fx .fx-item.is-tile .fx-frame.is-folder.is-fcard.has-collage { display: grid; place-items: stretch; gap: 3px; padding: 0; background: var(--fcard-panel); }
+.fx .fx-frame.has-collage.n1 { grid-template-columns: 1fr; }
+.fx .fx-frame.has-collage.n2 { grid-template-columns: 2fr 1fr; }
+.fx .fx-frame.has-collage.n3 { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
+.fx .fx-frame.has-collage.n3 .t0 { grid-row: 1 / span 2; }
+.fx-collage-tile { position: relative; min-width: 0; min-height: 0; overflow: hidden; border-radius: 6px; background: var(--fcard); }
+.fx-collage-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.fx .fx-item.is-tile .fx-frame.is-folder.is-fcard:not(.has-collage) .fx-fcard-icon svg { width: 30px; height: 30px; }
