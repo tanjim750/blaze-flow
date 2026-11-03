@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from app.models import PriorityLevel, Project, ProjectStatus
+from app.rich_text import sanitize_brief
 
 
 ASPECT_RATIOS = ('16:9', '9:16', '1:1', '4:5')
@@ -49,6 +50,13 @@ class ProjectSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ('id', 'workspace_id', 'created_at', 'updated_at')
 
+    def to_representation(self, instance):
+        # Project.save() sanitises on write, but rows written by bulk update(), raw SQL or before
+        # the sanitiser existed never went through it, so the brief is cleaned on the way out too.
+        data = super().to_representation(instance)
+        data['description'] = sanitize_brief(data.get('description'))
+        return data
+
     def get_deliverable_specs(self, project):
         return normalized_specs(project.deliverable_specs)
 
@@ -65,6 +73,11 @@ class ProjectCreateSerializer(serializers.Serializer):
     priority = serializers.ChoiceField(choices=PriorityLevel.choices, default=PriorityLevel.MEDIUM)
     start_at = serializers.DateTimeField(required=False, allow_null=True)
     due_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    def validate_description(self, value):
+        # Clean at the API boundary as well as in Project.save(), so the response to this very
+        # request and any non-model consumer of validated_data only ever see allow-listed HTML.
+        return sanitize_brief(value)
 
     def validate(self, attrs):
         start_at = attrs.get('start_at', getattr(self.instance, 'start_at', None))
