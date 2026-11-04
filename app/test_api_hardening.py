@@ -92,7 +92,7 @@ class HealthCheckTests(TestCase):
     def test_get_ok(self):
         response = self.client.get(reverse('api-health'))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['database'], 'ok')
+        self.assertEqual(response.json(), {'message': 'ok'})
 
     def test_head_ok_without_body(self):
         response = self.client.head(reverse('api-health'))

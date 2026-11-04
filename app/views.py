@@ -334,9 +334,9 @@ def health_check(request):
         response = HttpResponse(b'', status=status_code, content_type='application/json')
         response['Content-Length'] = '0'
         return response
-    body = {'message': 'ok'} if database == 'ok' else {'message': 'unavailable'}
-    body['database'] = database
-    return JsonResponse(body, status=status_code)
+    if database == 'ok':
+        return JsonResponse({'message': 'ok'})
+    return JsonResponse({'message': 'unavailable', 'database': database}, status=status_code)
 
 
 def health_live(request):
