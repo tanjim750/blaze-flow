@@ -86,3 +86,40 @@ class PerEmailThrottleTests(TestCase):
                                     REMOTE_ADDR=f'10.4.0.{i}').status_code for i in range(1, 4)]
         self.assertEqual(known, [202, 202, 429])
         self.assertEqual(unknown, known)
+
+
+class HealthCheckTests(TestCase):
+    def test_get_ok(self):
+        response = self.client.get(reverse('api-health'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['database'], 'ok')
+
+    def test_head_ok_without_body(self):
+        response = self.client.head(reverse('api-health'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'')
+
+    def test_post_is_405_without_body(self):
+        response = self.client.post(reverse('api-health'))
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.content, b'')
+
+    def test_db_in_recovery_is_503(self):
+        from unittest import mock
+        from django.db import connection
+        if connection.vendor != 'postgresql':
+            self.skipTest('postgres only')
+        real = connection.cursor
+
+        class Cur:
+            def __init__(self, c): self.c = c; self.last = None
+            def __enter__(self): self.c.__enter__(); return self
+            def __exit__(self, *a): return self.c.__exit__(*a)
+            def execute(self, sql, *a): self.last = sql; return self.c.execute(sql, *a)
+            def fetchone(self):
+                return (True,) if 'recovery' in (self.last or '') else self.c.fetchone()
+
+        with mock.patch.object(connection, 'cursor', lambda: Cur(real())):
+            response = self.client.get(reverse('api-health'))
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()['database'], 'recovery')
