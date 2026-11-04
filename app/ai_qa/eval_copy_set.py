@@ -34,6 +34,10 @@ POSTERS = [
     ('typo-legal-is-mismatch', SALE, [('SUMMER SALE', 'sans', 130, ''), ('Up to 50% off everything', 'text', 60, ''), ('Cold-brew coffee from £3.50', 'text', 50, ''),
                                       ('Terms and condtions apply. Offer ends 31 August 2027.', 'text', 30, '')], [(M, 'condtions')]),
     ('typo-two', LAUNCH, [('The Autum Collection', 'serif', 90, ''), ('Handmade in Londn since 1998', 'serif', 52, ''), ('Shop now at northlight.studio', 'text', 44, '')], [(T, 'autum'), (T, 'londn')]),
+    # Tight word spacing: OCR merges words ("Iwill"); the copy matches, so any finding is a false positive.
+    ('clean-tight-iwill', 'I will go there\nSee you at the weekend', [('I will go there', 'sans', 120, 'tight'), ('See you at the weekend', 'text', 60, 'tight')], []),
+    ('clean-tight-script', 'We are so happy to see you again', [('We are so happy', 'script', 100, 'tight'), ('to see you again', 'script', 70, 'tight')], []),
+    ('typo-tight', 'I will go there\nSee you at the weekend', [('I will go thier', 'sans', 120, 'tight'), ('See you at the weekend', 'text', 60, 'tight')], [(T, 'thier')]),
 ]
 
 # (id, seconds, approved, elements as eval_video_set, [(type, key)])

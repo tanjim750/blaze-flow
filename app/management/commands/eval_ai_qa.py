@@ -7,7 +7,8 @@ from django.core.management.base import BaseCommand
 
 from app.ai_qa.engines import get_engine
 from app.ai_qa.eval_set import CASES, GLOSSARY, render
-from app.ai_qa.spelling import check_line, normalize
+from app.ai_qa.pipeline import check_image
+from app.ai_qa.spelling import normalize
 
 
 class Command(BaseCommand):
@@ -30,7 +31,7 @@ class Command(BaseCommand):
                 width, height = image.size
             t0 = time.monotonic()
             ocr = engine.read(path, width=width, height=height, source_path=path)
-            findings = [c for line in ocr for c in check_line(line, glossary=GLOSSARY)]
+            findings = check_image(engine, path, ocr, glossary=GLOSSARY)
             truth = {normalize(t) for t in typos}
             scored = []
             for f in findings:

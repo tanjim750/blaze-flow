@@ -51,6 +51,11 @@ CASES = [
     ('typo-serif', [('The Winter Colection', 'serif', 90, ''), ('Handmade in London', 'serif', 60, '')], ['Colection']),
     ('typo-lowcontrast', [('Fresh bread dialy', 'text', 80, 'lowcontrast'), ('Baked every morning', 'text', 60, '')], ['dialy']),
     ('typo-event', [('LIVE MUSIC', 'display', 130, ''), ('Saturday 14 Novemebr', 'text', 60, '')], ['Novemebr']),
+    # Tight word spacing: the OCR tends to drop the space ("I will" -> "Iwill"). Clean.
+    ('clean-tight-iwill', [('I will go there', 'sans', 120, 'tight'), ('See you at the weekend', 'text', 60, 'tight')], []),
+    ('clean-tight-script', [('We are so happy', 'script', 100, 'tight'), ('to see you again', 'script', 70, 'tight')], []),
+    ('clean-tight-caps', [('ON SALE NOW', 'display', 120, 'tight'), ('A gift for you', 'text', 64, 'tight')], []),
+    ('typo-tight', [('I will go thier', 'sans', 120, 'tight'), ('See you at the weekend', 'text', 60, '')], ['thier']),
     ('typo-shrikhand', [('Delicous Treats', 'shrikhand', 100, ''), ('Made fresh today', 'text', 60, '')], ['Delicous']),
 ]
 
@@ -77,7 +82,13 @@ def render(case, path, width=1080, height=1350):
         fill = (255, 255, 255)
         layer = Image.new('RGBA', (width, size * 2), (0, 0, 0, 0))
         draw = ImageDraw.Draw(layer)
-        if effect == 'outline':
+        if effect == 'tight':
+            # Words set with a hairline gap (a fifth of a space), as tight display type often is.
+            x, gap = 60, draw.textlength(' ', font=font) * 0.2
+            for word in text.split(' '):
+                draw.text((x, 10), word, font=font, fill=fill)
+                x += draw.textlength(word, font=font) + gap
+        elif effect == 'outline':
             draw.text((60, 10), text, font=font, fill=(22, 28, 52), stroke_width=4, stroke_fill=(255, 210, 0))
         elif effect == 'lowcontrast':
             draw.text((60, 10), text, font=font, fill=(70, 80, 112))

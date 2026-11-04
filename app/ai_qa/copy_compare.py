@@ -133,18 +133,32 @@ class ApprovedText:
             self.legal.extend([is_legal] * len(words))
 
 
+_GLYPH = str.maketrans({'l': 'i', '1': 'i', '|': 'i', '0': 'o'})
+
+
 def respell(words, approved):
-    """Undo styling joins/splits against the approved copy: "COLDBREW" -> cold brew, "SUM MER" -> summer."""
+    """Undo joins/splits against the approved copy: "COLDBREW" -> cold brew, "SUM MER" -> summer.
+
+    Whitespace is not something the OCR reads reliably: tight type comes back as "Iwill go
+    there" (or "lwill", with I read as l). Where the approved copy has those words with a
+    space, the run-together reading is the same text, so it is respelt as the approved words.
+    """
     vocab = set(approved.words)
     joined = {}
-    for size in (2, 3):
+    for size in range(2, 9):
         for i in range(len(approved.words) - size + 1):
-            joined.setdefault(''.join(approved.words[i:i + size]), approved.words[i:i + size])
+            glued = ''.join(approved.words[i:i + size])
+            joined.setdefault(glued, approved.words[i:i + size])
+            joined.setdefault(glued.translate(_GLYPH), approved.words[i:i + size])
     out, i = [], 0
     while i < len(words):
         w = words[i]
-        if w not in vocab and w in joined:
-            out.extend(joined[w]); i += 1; continue
+        if w not in vocab and (w in joined or w.translate(_GLYPH) in joined):
+            out.extend(joined.get(w) or joined[w.translate(_GLYPH)]); i += 1; continue
+        if w not in vocab and len(w) >= 7:
+            peeled = _peel(w, vocab, joined)
+            if peeled:
+                out.extend(peeled); i += 1; continue
         for size in (3, 2):
             glued = ''.join(words[i:i + size])
             if len(words[i:i + size]) == size and glued in vocab and w not in vocab:
@@ -152,6 +166,23 @@ def respell(words, approved):
         else:
             out.append(w); i += 1
     return out
+
+
+def _peel(word, vocab, joined):
+    """"iwillgothier" -> [i, will, go, thier]: approved words run together around one other word."""
+    def known(part):
+        return part in vocab or part in joined or part.translate(_GLYPH) in joined
+
+    def expand(part):
+        return [part] if part in vocab else (joined.get(part) or joined[part.translate(_GLYPH)])
+
+    spans = sorted(((i, j) for i in range(len(word)) for j in range(i + 3, len(word) + 1)
+                    if (i, j) != (0, len(word))), key=lambda ij: (ij[1] - ij[0], ij[0]))
+    for i, j in spans:  # the smallest leftover word first
+        head, core, tail = word[:i], word[i:j], word[j:]
+        if (not head or known(head)) and (not tail or known(tail)) and not known(core):
+            return (expand(head) if head else []) + [core] + (expand(tail) if tail else [])
+    return None
 
 
 def _window(approved, unit_words, covered):
