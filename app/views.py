@@ -307,14 +307,36 @@ from .services import (
 )
 
 
-@api_view(['GET'])
-@authentication_classes([])
-@permission_classes([AllowAny])
 def health_check(request):
-    # Side-effect free: uptime probes hit this every few seconds, so it must not dispatch
-    # events or write rows. See health_live / health_ready for probe-specific checks.
-    serializer = MessageSerializer({'message': 'ok'})
-    return Response(serializer.data)
+    """Public health probe: SELECT 1 plus "not in recovery". Read-only, no session, no writes.
+
+    GET -> 200 {"message": "ok", ...} or 503 when the database is unreachable or in recovery.
+    HEAD -> same status with an empty body (Content-Length: 0) so proxies never see a body on HEAD.
+    Other methods -> 405 with an empty body.
+    """
+    if request.method not in ('GET', 'HEAD'):
+        response = HttpResponse(status=405)
+        response['Allow'] = 'GET, HEAD'
+        return response
+    database = 'ok'
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+            if connection.vendor == 'postgresql':
+                cursor.execute('SELECT pg_is_in_recovery()')
+                if cursor.fetchone()[0]:
+                    database = 'recovery'
+    except Exception:  # noqa: BLE001 - any DB failure means unhealthy
+        database = 'error'
+    status_code = 200 if database == 'ok' else 503
+    if request.method == 'HEAD':
+        response = HttpResponse(b'', status=status_code, content_type='application/json')
+        response['Content-Length'] = '0'
+        return response
+    if database == 'ok':
+        return JsonResponse({'message': 'ok'})
+    return JsonResponse({'message': 'unavailable', 'database': database}, status=status_code)
 
 
 def health_live(request):
