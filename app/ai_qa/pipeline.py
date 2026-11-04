@@ -173,8 +173,62 @@ def _run_image(review, engine, file, workdir, glossary):
     ])
     review.stage = 'checking'
     _progress(review, frames_done=1, lines=len(lines))
-    rows = [_row(review, cand, key=cand.dedupe_key) for line in lines for cand in check_line(line, glossary=glossary)]
+    rows = [_row(review, cand, key=cand.dedupe_key) for cand in check_image(engine, prepared, lines, glossary=glossary)]
     return rows, {'lines': len(lines), 'image_px': list(original_size), 'frames_ocr': 1}, copy_compare.image_units(lines)
+
+
+def check_image(engine, image_path, lines, *, glossary):
+    """Spelling candidates for a poster, each spelling finding re-read before it is reported.
+
+    The first read is of the whole poster at once. A word it flags is read again from a
+    close, upscaled crop of its line; if that second read shows the line spelt correctly,
+    the first was a reading slip (merged or broken words, a misread letter), not a typo.
+    """
+    found = []
+    for line in lines:
+        cands = check_line(line, glossary=glossary)
+        if cands and settings.AI_QA_VERIFY_FINDINGS and any(c.category == 'POSSIBLE_SPELLING_ERROR' for c in cands):
+            cands = _verify(engine, image_path, line, cands, glossary)
+        found.extend(cands)
+    return found
+
+
+def _verify(engine, image_path, line, cands, glossary):
+    from PIL import Image
+
+    from .spelling import normalize, tokens as word_tokens
+    try:
+        with Image.open(image_path) as image:
+            width, height = image.size
+            box = _line_box(line)
+            pad_x, pad_y = box['width'] * 0.08 + 0.01, box['height'] * 0.35 + 0.005
+            left, top = max(0, int((box['x'] - pad_x) * width)), max(0, int((box['y'] - pad_y) * height))
+            right = min(width, int((box['x'] + box['width'] + pad_x) * width))
+            bottom = min(height, int((box['y'] + box['height'] + pad_y) * height))
+            if right - left < 8 or bottom - top < 8:
+                return cands
+            crop = image.convert('RGB').crop((left, top, right, bottom))
+            scale = max(1.0, min(4.0, 96 / crop.height))
+            if scale > 1:
+                crop = crop.resize((int(crop.width * scale), int(crop.height * scale)), Image.LANCZOS)
+            path = Path(image_path).with_name('verify.png')
+            crop.save(path)
+        reread = engine.read(path, width=crop.width, height=crop.height, source_path=path)
+    except Exception:  # verification is best effort; the first read still stands
+        log.warning('AI QA verify read failed', exc_info=True)
+        return cands
+    if not reread:
+        return cands  # nothing read (or an engine that cannot re-read): keep the finding
+    second = [c for r in reread for c in check_line(r, glossary=glossary)]
+    second_words = {normalize(w) for r in reread for w, _, _ in word_tokens(r.text)}
+    kept = []
+    for cand in cands:
+        if cand.category != 'POSSIBLE_SPELLING_ERROR':
+            kept.append(cand)
+            continue
+        if normalize(cand.detected_text) in second_words or any(c.category == 'POSSIBLE_SPELLING_ERROR' for c in second):
+            kept.append(cand)  # confirmed by the close read
+    return kept
 
 
 def _line_box(line):
