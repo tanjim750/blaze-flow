@@ -15,7 +15,7 @@ import type { ProjectFile, Task, TaskAttachment } from "@/lib/api";
 import type { TasksView } from "@/lib/tasks-view";
 import { FULL_TASK_ACCESS, isReadOnlyTasks } from "@/lib/permissions";
 import Link from "next/link";
-import { updateAssetFile, uploadAssetFile } from "@/lib/asset-api-client";
+import { updateAssetFile, uploadAssetFileTracked } from "@/lib/asset-api-client";
 import { openUniversalReview } from "@/components/universal-review";
 import { reviewHref, taskOpenTarget, type LinkedCandidate } from "@/lib/open-in-review";
 import {
@@ -228,9 +228,11 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
   async function uploadAndAttach(task: Task, file: File): Promise<boolean> {
     if (!view.workspaceId) return false;
     try {
-      const uploaded = await uploadAssetFile(view.workspaceId, file, { client_team_id: clientOf(task), project_id: task.project_id, folder_id: null });
-      setFiles((current) => [...current, uploaded]);
-      return await attach(task, uploaded);
+      // Through the upload tray (direct to storage when enabled), like the Files page: the
+      // tray shows progress, a failure has a Retry, and a retried upload still links the task.
+      const landed = (saved: ProjectFile) => { setFiles((current) => [...current.filter((item) => item.id !== saved.id), saved]); return attach(task, saved); };
+      const uploaded = await uploadAssetFileTracked(view.workspaceId, file, { client_team_id: clientOf(task), project_id: task.project_id, folder_id: null }, task.title, (saved) => { void landed(saved); });
+      return await landed(uploaded);
     } catch (error) { toast.error(`Couldn't upload ${file.name}`, { description: errorText(error) }); return false; }
   }
   /** A file card on the board, or an attachment in the sheet (then with its task beside it). */

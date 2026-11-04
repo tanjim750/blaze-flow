@@ -576,6 +576,8 @@ AI_QA_MAX_CONCURRENT_PER_WORKSPACE = int(os.environ.get('AI_QA_MAX_CONCURRENT_PE
 AI_QA_DAILY_RUNS_PER_WORKSPACE = int(os.environ.get('AI_QA_DAILY_RUNS_PER_WORKSPACE', '50'))
 AI_QA_MAX_ATTEMPTS = int(os.environ.get('AI_QA_MAX_ATTEMPTS', '3'))
 AI_QA_MIN_OCR_CONFIDENCE = float(os.environ.get('AI_QA_MIN_OCR_CONFIDENCE', '0.6'))
+# Re-read each poster spelling finding from a close crop and drop it if the second read is clean.
+AI_QA_VERIFY_FINDINGS = os.environ.get('AI_QA_VERIFY_FINDINGS', 'true').lower() == 'true'
 AI_QA_REQUIRE_CLEAN_SCAN = os.environ.get('AI_QA_REQUIRE_CLEAN_SCAN', 'true').lower() == 'true'
 AI_QA_HUNSPELL_DIRS = [d for d in os.environ.get(
     'AI_QA_HUNSPELL_DIRS', '/usr/share/hunspell:/usr/share/myspell/dicts:/usr/share/myspell',

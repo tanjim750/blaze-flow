@@ -98,6 +98,105 @@ def _is_compound(word):
     )
 
 
+# Words of one or two letters that may stand alone. Longer parts must be dictionary words.
+SHORT_WORDS = frozenset(
+    'a i am an as at be by do go he hi if in is it me my no of oh ok on or so to up us we'.split()
+)
+
+
+# Corpus count a 3+ letter part needs in the SymSpell frequency list (~top 15k words).
+RUN_TOGETHER_MIN_COUNT = 20_000_000
+# Tight type can lose every space on a line: "Seeyouattheweekend".
+MAX_RUN_PARTS = 8
+# Joins that are themselves a recognised misspelling, so still flagged.
+JOINED_MISSPELLINGS = frozenset(
+    'alot aswell infact incase atleast eachother alright inspite nevermind abit everytime'.split()
+)
+
+
+@lru_cache(maxsize=50_000)
+def run_together(word):
+    """"Iwill" -> ['i', 'will']: dictionary words whose separating space the OCR did not read.
+
+    Tight display type often leaves a gap narrower than the OCR's space threshold, so it
+    returns "Iwill go there". That is a reading of the spacing, not a spelling mistake.
+    Returns the split (2+ parts, fewest parts first) or None.
+    """
+    lower = word.lower()
+    if not lower.isalpha() or len(lower) < 3:
+        return None
+
+    if lower in JOINED_MISSPELLINGS:
+        return None
+
+    def ok(part):
+        if len(part) <= 2:
+            return part in SHORT_WORDS
+        # Common, real words only: rare fragments ("sem" + "ster", "rec" + "i" + "eve")
+        # would otherwise wave genuine typos through.
+        return _symspell().words.get(part, 0) >= RUN_TOGETHER_MIN_COUNT and (
+            not _hunspell() or any(d.lookup(part) for d in _hunspell()))
+
+    @lru_cache(maxsize=None)
+    def split(rest, parts_left):
+        if ok(rest):
+            return [rest]
+        if parts_left <= 1:
+            return None
+        best = None
+        for i in range(1, len(rest)):
+            head = rest[:i]
+            if ok(head):
+                tail = split(rest[i:], parts_left - 1)
+                if tail and (best is None or len(tail) + 1 < len(best)):
+                    best = [head, *tail]
+        return best
+
+    parts = split(lower, MAX_RUN_PARTS)
+    return parts if parts and len(parts) >= 2 else None
+
+
+def peel_run(word):
+    """"Iwillgothier" -> ('Iwill go', 'thier', ''): known words run together around one unknown part.
+
+    Returns (before, core, after) with the unknown part as written, or None. Lets a real typo
+    inside a line the OCR read without spaces still be reported on its own word. Only used
+    when the whole token is not itself a near-miss of one word ("Recieve" stays "Recieve").
+    """
+    if not word.isalpha() or len(word) < 7:
+        return None
+    lower = word.lower()
+    suggestion, distance = _suggest(lower)
+    if suggestion and distance <= 2:
+        return None
+
+    def words_in(part):
+        """How many common words `part` is (0 if empty, None if it is not common words)."""
+        if not part:
+            return 0
+        if part in SHORT_WORDS or (len(part) > 2 and _symspell().words.get(part, 0) >= RUN_TOGETHER_MIN_COUNT):
+            return 1
+        split = run_together(part)
+        return len(split) if split else None
+
+    best = None
+    for i in range(len(lower)):
+        for j in range(i + 4, len(lower) + 1):
+            if (i, j) == (0, len(lower)):
+                continue
+            core = lower[i:j]
+            head, tail = words_in(lower[:i]), words_in(lower[j:])
+            # At least two words around it, so it looks like a line read without spaces
+            # (not a name with a word-like ending: "Zorbl" + "att").
+            if head is None or tail is None or head + tail < 2 or _known_exact(core):
+                continue
+            fix, dist = _suggest(core)
+            # Closest fix first; among equals the longer word ("thier", not "hier").
+            if fix and (best is None or (dist, -(j - i)) < best[0]):
+                best = ((dist, -(j - i)), i, j)
+    return (word[:best[1]], word[best[1]:best[2]], word[best[2]:]) if best else None
+
+
 @lru_cache(maxsize=50_000)
 def _known_exact(word):
     if word in _symspell().words:
@@ -244,6 +343,14 @@ def check_line(line, *, glossary=frozenset(), min_ocr=None):
         parts = [p for p in re.split(r"[-’']", word) if p]
         if all(is_known(p) for p in parts) or (len(parts) == 1 and _is_compound(word)):
             continue
+        if all(run_together(p) or is_known(p) for p in parts):
+            continue  # "Iwill": known words with the space not read, not a typo
+        peeled = len(parts) == 1 and peel_run(word)
+        if peeled:
+            before, core, _ = peeled  # report the unknown word, not the whole run-together line
+            start, end, word = start + len(before), start + len(before) + len(core), core
+            if _skip(word):
+                continue
         region = _word_box(line.polygon, start, end, len(line.text))
         ocr = float(line.confidence)
         common = dict(detected_text=word, context_text=line.text[:1000], ocr_confidence=round(ocr, 3), region=region)
