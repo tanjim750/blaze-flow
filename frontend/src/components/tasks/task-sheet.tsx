@@ -174,7 +174,8 @@ function SheetBody({ task, stage, stages, view, locked: approvedLock, canEdit = 
                     <input ref={uploadInput} type="file" hidden aria-label="Upload a file to link" onChange={async (event) => {
                       const chosen = event.target.files?.[0]; event.target.value = "";
                       if (!chosen) return;
-                      setUploading(true); await onUpload(chosen); setUploading(false);
+                      setUploading(true);
+                      try { await onUpload(chosen); } catch { /* the caller reports failures */ } finally { setUploading(false); }
                     }} />
                   </>}
                 </div>}
