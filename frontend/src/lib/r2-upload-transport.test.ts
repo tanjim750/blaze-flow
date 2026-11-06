@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { __r2test, r2Transport } from "./r2-upload-transport";
+import { __r2test, putBlob, r2Transport } from "./r2-upload-transport";
 import type { TransportJob } from "./upload-store";
 
 type Put = { url: string; size: number; xhr: FakeXhr };
@@ -242,4 +242,25 @@ it("ignores malformed saved resume metadata instead of blocking a new upload", a
   initResponse = { status: 201, body: { id: "fresh", mode: "single", url: "https://r2.example/key" } };
   const result = await r2Transport.send(job(new File(["hello"], "new.txt")), () => {}, new AbortController().signal);
   expect(result.ok).toBe(true);
+});
+
+
+it("only times out stalled PUTs, not healthy slow parts that keep reporting progress", async () => {
+  vi.useFakeTimers();
+  let active!: FakeXhr;
+  class SlowXhr extends FakeXhr {
+    send(body: Blob) { active = this; expect(body.size).toBe(3); }
+  }
+  vi.stubGlobal("XMLHttpRequest", SlowXhr);
+  try {
+    const pending = putBlob("https://r2.example/slow", new Blob(["abc"]), {}, () => {}, new AbortController().signal);
+    const rejected = expect(pending).rejects.toThrow(/Connection paused/);
+    await vi.advanceTimersByTimeAsync(110_000);
+    active.upload.onprogress?.({ loaded: 1 });
+    await vi.advanceTimersByTimeAsync(110_000);
+    active.upload.onprogress?.({ loaded: 2 });
+    // More than three minutes have passed; the part is still allowed to make progress.
+    await vi.advanceTimersByTimeAsync(120_001);
+    await rejected;
+  } finally { vi.useRealTimers(); }
 });
