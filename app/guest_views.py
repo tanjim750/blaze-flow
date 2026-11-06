@@ -14,7 +14,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .http_range import ranged_file_response
+from .http_range import ranged_file_response, presigned_redirect_response
 from .throttles import GuestExchangeThrottle
 from .models import (
     Annotation, AnnotationElement, AnnotationRevision, FileStatus, FileVariant, GuestInvite, GuestInvitePermission,
@@ -690,6 +690,14 @@ def guest_attachment_download(request, project_id, content_id):
         return Response({'detail': 'This attachment is still being processed.'}, status=status.HTTP_409_CONFLICT)
     if not default_storage.exists(content.file.object_key):
         raise Http404('The stored attachment was not found.')
+    if request.query_params.get('download_link') == '1':
+        redirect = presigned_redirect_response(
+            default_storage, content.file.object_key, as_attachment=True,
+            filename=content.file.original_name, content_type=content.file.mime_type,
+        )
+        response = Response({'url': redirect.url if redirect is not None else None})
+        response['Cache-Control'] = 'private, no-store'
+        return response
     return ranged_file_response(
         request, content.file.object_key, as_attachment=True, filename=content.file.original_name,
         content_type=content.file.mime_type, checksum=content.file.checksum,

@@ -2,6 +2,7 @@ import hashlib
 import io
 import os
 import zipfile
+import uuid
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -9,7 +10,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import DirectUpload, DirectUploadState, File, FileSecurityScan, ProjectFile
+from .models import Project, DirectUpload, DirectUploadState, File, FileSecurityScan, ProjectFile
 from .services import direct_uploads
 from .services.subscriptions import enforce_workspace_storage_limit, SubscriptionError
 from .test_access_projects import WorkspaceAccessSetupMixin
@@ -155,11 +156,11 @@ class DirectUploadTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertIn('part=2', parts[1]['url'])
         self.assertEqual(self.client.post(self.url('api-direct-upload-parts', upload.id), {'part_numbers': [3]}, format='json').status_code, 400)
         self.s3.upload_part(upload.multipart_upload_id, 1, data[:body['part_size']])
-        # Only one part landed: complete refuses and cleans up.
+        # Only one part landed: complete refuses but preserves resumable bytes.
         bad = self.client.post(self.url('api-direct-upload-complete', upload.id))
         self.assertEqual(bad.status_code, 400)
         upload.refresh_from_db()
-        self.assertEqual(upload.state, DirectUploadState.FAILED)
+        self.assertEqual(upload.state, DirectUploadState.INITIALIZED)
 
         body = self.init('cut.mp4', size, 'video/mp4').json()
         upload = DirectUpload.objects.get(id=body['id'])
@@ -310,3 +311,68 @@ class DirectUploadArchiveTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(body['url_expires_in'], 900)
         parts = self.client.post(self.url('api-direct-upload-parts', body['id']), {'part_numbers': [1]}, format='json').json()
         self.assertEqual(parts['expires_in'], 900)
+
+
+@override_settings(STORAGE_DRIVER='s3', DIRECT_UPLOADS_ENABLED=True,
+                   DIRECT_UPLOAD_SINGLE_PUT_MAX_BYTES=1024, DIRECT_UPLOAD_PART_SIZE=5 * 1024 * 1024)
+class DirectUploadResumeTests(DirectUploadTests):
+    def test_reselect_same_file_reuses_session_and_quota(self):
+        body = self.init('cut.mp4', 6 * 1024 * 1024, 'video/mp4', last_modified=123).json()
+        again = self.init('cut.mp4', 6 * 1024 * 1024, 'video/mp4', last_modified=123).json()
+        self.assertEqual(again['id'], body['id'])
+        self.assertTrue(again['resumed'])
+        self.assertEqual(DirectUpload.objects.count(), 1)
+        self.assertEqual(self.s3.counter, 1)
+
+    def test_changed_date_size_or_destination_does_not_reuse(self):
+        original = self.init('cut.mp4', 6 * 1024 * 1024, 'video/mp4', last_modified=123).json()
+        changed = self.init('cut.mp4', 6 * 1024 * 1024, 'video/mp4', last_modified=124).json()
+        changed_size = self.init('cut.mp4', 7 * 1024 * 1024, 'video/mp4', last_modified=123).json()
+        self.assertNotEqual(original['id'], changed['id'])
+        self.assertNotEqual(original['id'], changed_size['id'])
+        upload = DirectUpload.objects.get(id=original['id'])
+        upload.project = Project.objects.create(id=uuid.uuid4(), workspace=self.workspace, created_by_user=self.owner, name="Other project", created_at=timezone.now(), updated_at=timezone.now())
+        upload.save(update_fields=['project'])
+        again = self.init('cut.mp4', 6 * 1024 * 1024, 'video/mp4', last_modified=123).json()
+        self.assertNotEqual(original['id'], again['id'])
+
+    def test_list_parts_uses_storage_and_ignores_incorrect_part_lengths(self):
+        body = self.init('cut.mp4', 6 * 1024 * 1024, 'video/mp4', last_modified=123).json()
+        upload = DirectUpload.objects.get(id=body['id'])
+        self.s3.upload_part(upload.multipart_upload_id, 1, b'x' * (5 * 1024 * 1024))
+        self.s3.upload_part(upload.multipart_upload_id, 2, b'x')
+        listed = self.client.get(self.url('api-direct-upload-parts', upload.id))
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()['parts'], [{'partNumber': 1, 'etag': '"e1"'}])
+        self.client.force_authenticate(self.member_user)
+        for name in ('api-direct-upload-parts', 'api-direct-upload-cancel'):
+            self.assertEqual(self.client.get(self.url(name, upload.id)).status_code, 404)
+        self.assertEqual(self.client.delete(self.url('api-direct-upload-cancel', upload.id)).status_code, 404)
+
+    def test_failed_abort_is_not_acknowledged_and_expiry_retries_it(self):
+        body = self.init('cut.mp4', 6 * 1024 * 1024, 'video/mp4', last_modified=123).json()
+        upload = DirectUpload.objects.get(id=body['id'])
+        with patch.object(self.s3, 'abort_multipart_upload', side_effect=RuntimeError('storage unavailable')):
+            self.assertEqual(self.client.delete(self.url('api-direct-upload-cancel', upload.id)).status_code, 400)
+        upload.refresh_from_db()
+        self.assertEqual(upload.state, DirectUploadState.INITIALIZED)
+        DirectUpload.objects.filter(id=upload.id).update(expires_at=timezone.now() - timedelta(seconds=1))
+        self.assertEqual(direct_uploads.expire_stale(), 1)
+        self.assertNotIn(upload.multipart_upload_id, self.s3.multipart)
+
+    def test_cancel_is_idempotent_and_cannot_race_finalization(self):
+        body = self.init('cut.mp4', 6 * 1024 * 1024, 'video/mp4').json()
+        upload = DirectUpload.objects.get(id=body['id'])
+        DirectUpload.objects.filter(id=upload.id).update(state=DirectUploadState.FINALIZING)
+        self.assertEqual(self.client.delete(self.url('api-direct-upload-cancel', upload.id)).status_code, 400)
+        self.assertIn(upload.multipart_upload_id, self.s3.multipart)
+        DirectUpload.objects.filter(id=upload.id).update(state=DirectUploadState.INITIALIZED)
+        self.assertEqual(self.client.delete(self.url('api-direct-upload-cancel', upload.id)).status_code, 204)
+        self.assertEqual(self.client.delete(self.url('api-direct-upload-cancel', upload.id)).status_code, 204)
+        self.assertNotIn(upload.multipart_upload_id, self.s3.multipart)
+
+    def test_expired_match_starts_a_new_session(self):
+        body = self.init('cut.mp4', 6 * 1024 * 1024, 'video/mp4', last_modified=123).json()
+        DirectUpload.objects.filter(id=body['id']).update(expires_at=timezone.now() - timedelta(seconds=1))
+        again = self.init('cut.mp4', 6 * 1024 * 1024, 'video/mp4', last_modified=123).json()
+        self.assertNotEqual(again['id'], body['id'])

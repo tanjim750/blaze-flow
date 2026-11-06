@@ -28,6 +28,10 @@ export type UploadItem = {
   error: string | null;
   /** False when the server refused deterministically (Retry would fail the same way). */
   retryable?: boolean;
+  /** Automatically retry a recoverable storage/network interruption. */
+  autoResume?: boolean;
+  hasUploadSession?: boolean;
+  resumed?: boolean;
   /** Scan / preview / proxy, once the bytes have landed. */
   processing: Processing | null;
   /** Link to the result once it is ready (set from the server's answer). */
@@ -87,6 +91,7 @@ export interface UploadTransport {
   id: string;
   supports: (request: UploadRequest) => boolean;
   send: (job: TransportJob, onProgress: (loaded: number, total: number) => void, signal: AbortSignal) => Promise<UploadResult>;
+  cancel?: (resume: unknown, direct: UploadRequest["direct"]) => Promise<void>;
 }
 
 /** Legacy function form (still accepted by the test seam). */
@@ -150,13 +155,13 @@ function emit() {
 // direct-to-R2 transport keeps its own record of the finished parts for that file, so a
 // multipart upload carries on from where it stopped instead of starting over.
 export const PARK_KEY = "bf.upload-tray.v1";
-/** The server keeps a direct upload open for 24h; after that a resume starts clean. */
-export const PARK_TTL_MS = 24 * 3600_000;
+/** The server keeps a direct upload open for seven days; after that a resume starts clean. */
+export const PARK_TTL_MS = 7 * 24 * 3600_000;
 export type ParkedUpload = {
   id: string; name: string; size: number; lastModified: number; type: string;
   url: string; fields: Record<string, string>; source: UploadSource; destination: string | null;
   direct?: { workspaceId: string }; uploadId: string | null; parts: { done: number; total: number } | null;
-  /** When it was first queued (the 24h clock). */
+  /** When it was first queued (the seven-day clock). */
   at: number;
 };
 const parkedAt = new Map<string, number>();
@@ -173,7 +178,7 @@ function persist() {
   for (const id of order) {
     const entry = entries.get(id)!;
     const { item, request } = entry;
-    if (!(isActive(item) || item.status === "paused")) continue;
+    if (!(isActive(item) || item.status === "paused" || (item.status === "failed" && entry.resume))) continue;
     if (!parkedAt.has(id)) parkedAt.set(id, now());
     const resume = entry.resume as { id?: unknown } | null | undefined;
     parked.push({
@@ -210,9 +215,9 @@ export function restoreParked() {
     const item: UploadItem = {
       id: row.id, name: row.name, size: row.size, source: row.source, destination: row.destination, status: "paused",
       loaded: 0, speed: 0, startedAt: null, finishedAt: null, error: null, processing: null, href: null, attempts: 0,
-      transport: null, parts: row.parts, lastModified: row.lastModified, pausedSince: now(), expired: now() - row.at > PARK_TTL_MS,
+      transport: null, parts: row.parts, hasUploadSession: Boolean(row.uploadId), lastModified: row.lastModified, pausedSince: now(), expired: now() - row.at > PARK_TTL_MS,
     };
-    entries.set(row.id, { item, request, controller: null, waiters: [], lastTick: null, resume: undefined });
+    entries.set(row.id, { item, request, controller: null, waiters: [], lastTick: null, resume: row.uploadId ? { workspaceId, id: row.uploadId, mode: "multipart" } : undefined });
     order = [...order, row.id];
   }
   emit();
@@ -231,7 +236,7 @@ export function resumeParked(id: string, file: File) {
   // undefined: the transport looks up the parts it saved for this file. null: start clean.
   entry.resume = expired ? null : undefined;
   if (expired) parkedAt.set(id, now());
-  patch(id, { status: "queued", pausedSince: null, expired: false, parts: expired ? null : entry.item.parts });
+  patch(id, { status: "queued", pausedSince: null, expired: false, resumed: !expired, parts: expired ? null : entry.item.parts });
   pump();
   return true;
 }
@@ -306,21 +311,25 @@ async function send(id: string) {
       {
         url: entry.request.url, file: entry.request.file, fields: entry.request.fields ?? {}, source: entry.request.source, direct: entry.request.direct,
         resume: entry.resume,
-        saveResume: (state) => { const current = entries.get(id); if (current) { current.resume = state; persist(); } },
-        reportParts: (parts) => patch(id, { parts }),
+        saveResume: (state) => { const current = entries.get(id); if (current) { current.resume = state; current.item = { ...current.item, hasUploadSession: Boolean(state) }; emit(); } },
+        reportParts: (parts) => patch(id, { parts, resumed: entry.item.resumed || (entry.item.loaded === 0 && parts.done > 0) }),
       },
       (loaded) => onProgress(id, loaded),
       controller.signal,
     );
   } catch (error) {
-    result = { ok: false, status: 0, error: error instanceof Error && error.message ? error.message : uploadError(0, null) };
+    result = { ok: false, status: 0, error: controller.signal.aborted ? "Cancelled." : error instanceof Error && error.message ? error.message : uploadError(0, null) };
   }
   const current = entries.get(id);
   if (!current) return;
   current.controller = null;
-  if (current.item.status === "cancelled") { settle(current, { ok: false, status: 0, error: "Cancelled." }); pump(); return; }
+  if (current.item.status === "cancelled") {
+    if (!result.ok && result.error !== "Cancelled.") patch(id, { status: "failed", error: result.error, retryable: false });
+    settle(current, { ok: false, status: 0, error: "Cancelled." }); pump(); return;
+  }
   if (!result.ok) {
-    patch(id, { status: "failed", error: result.error, finishedAt: now(), retryable: result.retryable !== false });
+    const autoResume = transport.id === "r2" && Boolean(current.resume) && result.retryable !== false && (result.status === 0 || result.status === 408 || result.status === 429 || result.status >= 500);
+    patch(id, { status: "failed", error: autoResume ? "Connection interrupted · resumes automatically" : result.error, autoResume, finishedAt: now(), retryable: result.retryable !== false });
     settle(current, result);
     pump();
     return;
@@ -378,20 +387,45 @@ async function follow(id: string, workspaceId: string, fileId: string) {
   }
 }
 
-export function cancelUpload(id: string) {
-  const entry = entries.get(id);
-  if (!entry || !isActive(entry.item)) return;
-  const wasQueued = entry.item.status === "queued";
-  patch(id, { status: "cancelled", error: null, finishedAt: now() });
-  entry.controller?.abort();
-  if (wasQueued) { settle(entry, { ok: false, status: 0, error: "Cancelled." }); pump(); }
+/** Mark the entire selection before aborting; otherwise cancelling a queued item pumps
+ * another item and starts a transfer while Cancel all is still iterating. */
+export async function cancelUploads(ids: string[]) {
+  const targets = ids.map((id) => entries.get(id)).filter((entry): entry is Entry => Boolean(entry && (isActive(entry.item) || entry.item.status === "paused" || (entry.item.status === "failed" && entry.resume))));
+  for (const entry of targets) entry.item = { ...entry.item, status: "cancelled", autoResume: false, error: null, finishedAt: now() };
+  emit();
+  await Promise.all(targets.map(async (entry) => {
+    if (entry.controller) { entry.controller.abort(); return; }
+    settle(entry, { ok: false, status: 0, error: "Cancelled." });
+    try {
+      await pickTransport(entry.request).cancel?.(entry.resume, entry.request.direct);
+      entry.resume = undefined;
+      entry.item = { ...entry.item, hasUploadSession: false };
+    } catch {
+      patch(entry.item.id, { status: "failed", retryable: false, error: "Cancellation not confirmed. Retry Cancel all to clean up saved parts." });
+    }
+  }));
+  emit(); pump();
+}
+export function cancelUpload(id: string) { return cancelUploads([id]); }
+export function cancelAllUploads() { return cancelUploads([...order]); }
+
+/** The File stays in memory while backgrounded. Only interrupted R2 sends are retried:
+ * never resend a successful file or restart an unresumable form upload automatically. */
+export function resumeInterruptedUploads() {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  for (const id of order) {
+    const entry = entries.get(id)!;
+    if (entry.item.status === "failed" && entry.item.autoResume && entry.request.file)
+      patch(id, { status: "queued", autoResume: false, resumed: true, error: null });
+  }
+  pump();
 }
 
 /** Send a failed (or cancelled) upload again. Its `onSuccess` runs if it lands this time. */
 export function retryUpload(id: string) {
   const entry = entries.get(id);
   if (!entry || (entry.item.status !== "failed" && entry.item.status !== "cancelled")) return;
-  patch(id, { status: "queued", error: null, processing: null, finishedAt: null, retryable: true });
+  patch(id, { status: "queued", error: null, autoResume: false, processing: null, finishedAt: null, retryable: true });
   pump();
 }
 

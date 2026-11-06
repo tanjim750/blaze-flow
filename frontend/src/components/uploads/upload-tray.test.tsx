@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __test, getUploads, startUpload, type Transport, type UploadResult } from "@/lib/upload-store";
 import { UploadTray } from "./upload-tray";
 
@@ -132,4 +132,18 @@ describe("UploadTray after a reload", () => {
     await act(async () => { fireEvent.drop(screen.getByTestId("upload-tray"), { dataTransfer: { files: [dropped], items: [] } }); });
     expect(getUploads()[0].status).toBe("uploading");
   });
+});
+
+
+it("confirms Cancel all once and never starts queued files while cancelling", async () => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  render(<UploadTray />);
+  act(() => { for (let i = 0; i < 7; i++) startUpload({ url: "/u", file: new File(["x"], `file-${i}.mov`), source: "files" }); });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel all" }));
+  expect(getUploads().filter((item) => item.status === "uploading")).toHaveLength(3);
+  confirm.mockReturnValue(true);
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Cancel all" })); });
+  expect(getUploads().every((item) => item.status === "cancelled")).toBe(true);
+  expect(resolvers).toHaveLength(3);
+  confirm.mockRestore();
 });

@@ -167,3 +167,20 @@ describe("pluggable transports", () => {
     expect(formatBytes(5 * 1024 * 1024)).toBe("5.0 MB");
   });
 });
+
+it("automatically resumes an interrupted R2 attempt only once when the page returns", async () => {
+  const { registerTransport, resumeInterruptedUploads } = await import("./upload-store");
+  let sends = 0;
+  registerTransport({ id: "r2", supports: () => true, send: async (job) => {
+    sends++;
+    job.saveResume({ id: "session", mode: "multipart" });
+    return sends === 1 ? { ok: false, status: 0, error: "offline" } : { ok: true, data: {} };
+  } });
+  const queued = startUpload({ url: "/u", file: file("cut.mov"), source: "files", direct: { workspaceId: "w" } });
+  await queued.done;
+  expect(getUploads()[0].autoResume).toBe(true);
+  resumeInterruptedUploads(); resumeInterruptedUploads();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(sends).toBe(2);
+  expect(getUploads()[0].status).toBe("ready");
+});

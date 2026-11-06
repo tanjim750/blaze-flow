@@ -1,3 +1,4 @@
+import { waitForTransferRecovery, transferDelay } from "./transfer-lifecycle";
 /**
  * Direct-to-R2 (any S3-compatible bucket) transport for the upload tray.
  *
@@ -20,8 +21,8 @@ const disabled = new Set<string>();
 // Per-session cache of GET uploads/config/ so the tray never POSTs an initialize the server
 // will refuse with 409 (which the browser logs as a console error on every upload).
 const configs = new Map<string, Promise<boolean>>();
-const STORAGE_KEY = "bf.direct-uploads.v1";
-const RESUME_TTL_MS = 20 * 3600_000; // server keeps an upload open 24h
+const STORAGE_KEY = "bf.direct-uploads.v2";
+const RESUME_TTL_MS = 7 * 24 * 3600_000;
 
 class HttpError extends Error { constructor(public status: number, message: string, public code?: string) { super(message); } }
 
@@ -30,6 +31,9 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`/api${path}`, {
     ...init, credentials: "include",
     headers: { Accept: "application/json", "Content-Type": "application/json", ...(csrf ? { "X-CSRFToken": csrf } : {}), ...(init.headers ?? {}) },
+  }).catch((error) => {
+    if (init.signal?.aborted) throw error;
+    throw new HttpError(0, "Connection paused. Your completed upload parts are saved.");
   });
   const data = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) throw new HttpError(response.status, uploadError(response.status, data), (data as { code?: string } | null)?.code);
@@ -50,7 +54,9 @@ function directEnabled(workspaceId: string): Promise<boolean> {
 }
 
 // -- resume across a page refresh (same file picked again) ------------------------------------
-const fingerprint = (workspaceId: string, file: File) => `${workspaceId}:${file.name}:${file.size}:${file.lastModified}`;
+// Include every destination relation: identical files in different folders are independent.
+const fingerprint = (workspaceId: string, file: File, fields: Record<string, string>) =>
+  JSON.stringify([workspaceId, ...["client_team_id", "project_id", "folder_id", "task_stage_id"].map((k) => fields[k] || null), file.name, file.size, file.lastModified]);
 function readSaved(): Record<string, Resume & { at: number }> {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}"); } catch { return {}; }
 }
@@ -70,20 +76,33 @@ export function putBlob(url: string, body: Blob, headers: Record<string, string>
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
-    xhr.upload.onprogress = (event) => onLoaded(event.loaded);
-    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve(xhr.getResponseHeader("ETag") ?? "") : reject(new HttpError(xhr.status, `Storage refused the upload (${xhr.status}).`)));
-    xhr.onerror = () => reject(new HttpError(0, "The connection to storage dropped. Retry to continue where it stopped."));
-    xhr.onabort = () => reject(new DOMException("Cancelled.", "AbortError"));
+    let lastActivity = Date.now(), stalled = false;
+    const resumeStalled = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastActivity > 30_000) {
+        stalled = true; xhr.abort();
+      }
+    };
+    const abort = () => xhr.abort();
+    const clean = () => {
+      signal.removeEventListener("abort", abort);
+      document.removeEventListener("visibilitychange", resumeStalled);
+      window.removeEventListener("online", resumeStalled);
+    };
+    xhr.timeout = 120_000;
+    xhr.ontimeout = () => { clean(); reject(new HttpError(0, "Connection paused. Resuming saved parts…")); };
+    xhr.upload.onprogress = (event) => { lastActivity = Date.now(); onLoaded(event.loaded); };
+    xhr.onload = () => { clean(); return (xhr.status >= 200 && xhr.status < 300 ? resolve(xhr.getResponseHeader("ETag") ?? "") : reject(new HttpError(xhr.status, `Storage refused the upload (${xhr.status}).`))); };
+    xhr.onerror = () => { clean(); reject(new HttpError(0, "The connection to storage dropped. Retry to continue where it stopped.")); };
+    xhr.onabort = () => { clean(); reject(stalled ? new HttpError(0, "Connection paused. Resuming saved parts…") : new DOMException("Cancelled.", "AbortError")); };
     if (signal.aborted) { reject(new DOMException("Cancelled.", "AbortError")); return; }
-    signal.addEventListener("abort", () => xhr.abort());
+    signal.addEventListener("abort", abort, { once: true });
+    document.addEventListener("visibilitychange", resumeStalled);
+    window.addEventListener("online", resumeStalled);
     xhr.send(body);
   });
 }
 
-const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
-  const timer = setTimeout(resolve, ms);
-  signal.addEventListener("abort", () => { clearTimeout(timer); reject(new DOMException("Cancelled.", "AbortError")); }, { once: true });
-});
+const sleep = transferDelay;
 
 /** How long to trust a part URL: the server's lifetime minus a safety margin for slow parts. */
 export function partUrlLifetimeMs(expiresIn: number | undefined) {
@@ -100,9 +119,10 @@ export async function withPartRetries<T>(run: (attempt: number) => Promise<T>, s
     try {
       return await run(attempt);
     } catch (error) {
-      const status = error instanceof HttpError ? error.status : -1;
+      const status = error instanceof HttpError ? error.status : error instanceof TypeError ? 0 : -1;
       const transient = status === 0 || status === 403 || status === 408 || status === 429 || status >= 500;
       if (signal.aborted || attempt >= delays.length || !transient) throw error;
+      await waitForTransferRecovery(signal);
       await sleep(delays[attempt], signal);
     }
   }
@@ -130,7 +150,7 @@ async function directSend(job: TransportJob, onProgress: (loaded: number, total:
   const workspaceId = job.direct!.workspaceId;
   const base = `/workspaces/${workspaceId}/uploads`;
   const file = job.file;
-  const key = fingerprint(workspaceId, file);
+  const key = fingerprint(workspaceId, file, job.fields);
   const saved = job.resume === undefined ? (readSaved()[key] as Resume | undefined) : undefined;
   let resume = (job.resume as Resume | undefined) ?? saved;
   const remember = (next: Resume) => { resume = next; job.saveResume(next); if (next.mode === "multipart") save(key, next); };
@@ -144,7 +164,7 @@ async function directSend(job: TransportJob, onProgress: (loaded: number, total:
   if (!resume && !(await directEnabled(workspaceId))) { disabled.add(workspaceId); return xhrTransport(job, onProgress, signal); }
   if (!resume) {
     try {
-      init = await api<Init>(`${base}/`, { method: "POST", body: JSON.stringify({ name: file.name, size: file.size, content_type: file.type, ...job.fields }), signal });
+      init = await api<Init>(`${base}/`, { method: "POST", body: JSON.stringify({ name: file.name, size: file.size, content_type: file.type, last_modified: file.lastModified, ...job.fields }), signal });
     } catch (error) {
       if (error instanceof HttpError && error.code === "direct_uploads_disabled") { disabled.add(workspaceId); return xhrTransport(job, onProgress, signal); }
       throw error;
@@ -152,9 +172,31 @@ async function directSend(job: TransportJob, onProgress: (loaded: number, total:
     remember({ workspaceId, id: init.id, mode: init.mode, partSize: init.part_size ?? file.size, completed: [] });
   }
   const current = resume!;
-  const cancel = () => { void api(`${base}/${current.id}/`, { method: "DELETE" }).catch(() => {}); save(key, null); };
+  const cancel = async () => {
+    await api(`${base}/${current.id}/`, { method: "DELETE" });
+    save(key, null);
+  };
 
   try {
+    if (current.mode === "multipart") {
+      // Reconcile with R2, not localStorage: a part can land even when its reply is lost.
+      // Also handles a retry whose completion response was lost while the tab slept.
+      if (resume !== undefined && !init) {
+        const status = await api<SessionStatus>(`${base}/${current.id}/`, { signal });
+        if (status.state === "COMPLETED" && status.project_file) {
+          save(key, null); job.saveResume(undefined);
+          return { ok: true, data: status.project_file };
+        }
+        if (status.state === "FINALIZING") {
+          const data = await awaitCompletion(`${base}/${current.id}/`, signal, new HttpError(503, "Still saving the file. Retry shortly."));
+          save(key, null); job.saveResume(undefined);
+          return { ok: true, data };
+        }
+      }
+      const listed = await api<{ parts: CompletedPart[] }>(`${base}/${current.id}/parts/`, { signal });
+      current.completed = listed.parts;
+      remember(current);
+    }
     if (current.mode === "single") {
       await putBlob(init!.url!, file, init!.headers ?? {}, (loaded) => onProgress(loaded, file.size), signal);
     } else {
@@ -212,9 +254,13 @@ async function directSend(job: TransportJob, onProgress: (loaded: number, total:
     job.saveResume(undefined);
     return { ok: true, data };
   } catch (error) {
-    if (signal.aborted || (error instanceof DOMException && error.name === "AbortError")) { cancel(); job.saveResume(undefined); return { ok: false, status: 0, error: "Cancelled." }; }
+    if (signal.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+      try { await cancel(); job.saveResume(undefined); }
+      catch { return { ok: false, status: 409, error: "Cancellation not confirmed. Retry Cancel all to clean up saved parts.", retryable: false }; }
+      return { ok: false, status: 0, error: "Cancelled." };
+    }
     // A refused finalize, or an upload the server no longer has open, cannot be resumed.
-    if (error instanceof HttpError && error.status >= 400 && error.status < 500) {
+    if (error instanceof HttpError && [400, 404, 410].includes(error.status)) {
       save(key, null); job.saveResume(undefined);
       // Resumed from a previous page whose upload has since closed: start over once.
       if (saved && current.id === saved.id) return directSend({ ...job, resume: null }, onProgress, signal);
@@ -228,6 +274,12 @@ export const r2Transport: UploadTransport = {
   id: "r2",
   supports: (request) => Boolean(request.direct) && !disabled.has(request.direct!.workspaceId),
   send: directSend,
+  cancel: async (resume, direct) => {
+    const value = resume as Resume | undefined;
+    if (!direct || !value?.id) return;
+    await api(`/workspaces/${direct.workspaceId}/uploads/${value.id}/`, { method: "DELETE" });
+    for (const [key, saved] of Object.entries(readSaved())) if (saved.id === value.id) save(key, null);
+  },
 };
 
 /** Test seam. */

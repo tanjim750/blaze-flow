@@ -2690,6 +2690,7 @@ class DirectUpload(models.Model):
     multipart_upload_id = models.CharField(max_length=1024, blank=True, default='')
     part_size = models.BigIntegerField(null=True, blank=True)
     client_sha256 = models.CharField(max_length=64, blank=True, default='')
+    client_last_modified = models.BigIntegerField(null=True, blank=True)
     state = models.CharField(max_length=16, choices=DirectUploadState.choices, default=DirectUploadState.INITIALIZED)
     error = models.TextField(blank=True, default='')
     project_file = models.ForeignKey(ProjectFile, on_delete=models.SET_NULL, db_column='project_file_id', null=True, blank=True, related_name='+')

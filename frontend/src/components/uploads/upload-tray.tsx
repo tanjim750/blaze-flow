@@ -4,13 +4,16 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Load
 import Link from "next/link";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import {
-  cancelUpload, clearFinished, restoreParked, resumeFromFiles, dismissUpload, etaSeconds, formatBytes, formatEta, formatRate, isActive, percent, retryUpload, trayCounts, trayTotals,
+  cancelUpload, cancelAllUploads, resumeInterruptedUploads, clearFinished, restoreParked, resumeFromFiles, dismissUpload, etaSeconds, formatBytes, formatEta, formatRate, isActive, percent, retryUpload, trayCounts, trayTotals,
   type UploadItem,
 } from "@/lib/upload-store";
 import { useUploads } from "@/lib/use-uploads";
 import { registerTransport } from "@/lib/upload-store";
 import { r2Transport } from "@/lib/r2-upload-transport";
 import { stagedFromDrop } from "@/lib/folder-upload";
+import { maintainTransferWakeLock } from "@/lib/transfer-lifecycle";
+import { subscribeDownloads, getDownloads, cancelAllDownloads } from "@/lib/download-store";
+import { useSyncExternalStore } from "react";
 import "./upload-tray.css";
 
 const size = formatBytes;
@@ -39,6 +42,7 @@ export function statusStats(item: UploadItem, ahead = 0): Stat[] {
     case "uploading": {
       const eta = etaSeconds(item);
       const stats: (Stat | null)[] = [
+        ...(item.resumed ? [{ text: "Resuming saved upload" }] : []),
         { text: `${percent(item)}%` }, { text: `${size(item.loaded)} of ${size(item.size)}`, kind: "size" },
         item.parts && item.parts.total > 1 ? { text: `${item.parts.done}/${item.parts.total} parts`, kind: "parts" } : null,
         item.speed > 0 ? { text: formatRate(item.speed), kind: "speed" } : null, eta !== null ? { text: formatEta(eta), kind: "eta" } : null,
@@ -58,9 +62,19 @@ export function statusStats(item: UploadItem, ahead = 0): Stat[] {
  */
 export function UploadTray() {
   const items = useUploads();
+  const downloads = useSyncExternalStore(subscribeDownloads, getDownloads, getDownloads);
   const [collapsed, setCollapsed] = useState(false);
   const counts = trayCounts(items);
   const busy = counts.active > 0;
+  const transfersBusy = busy || downloads.length > 0;
+  useEffect(() => maintainTransferWakeLock(transfersBusy), [transfersBusy]);
+  useEffect(() => {
+    const resume = () => { if (document.visibilityState === "visible") resumeInterruptedUploads(); };
+    window.addEventListener("online", resume);
+    document.addEventListener("visibilitychange", resume);
+    const timer = window.setInterval(resume, 30_000);
+    return () => { window.removeEventListener("online", resume); document.removeEventListener("visibilitychange", resume); window.clearInterval(timer); };
+  }, []);
 
   // Direct-to-R2 for Files uploads; it falls back to the form POST when the server has it off.
   useEffect(() => registerTransport(r2Transport), []);
@@ -84,25 +98,30 @@ export function UploadTray() {
 
   // Closing the tab mid-upload loses it: ask first.
   useEffect(() => {
-    if (!busy) return;
+    if (!transfersBusy) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [busy]);
+  }, [transfersBusy]);
 
   // Everything landed and nothing needs attention: get out of the way (it used to sit over
   // primary actions such as "Send comment" until "Clear finished" was clicked).
   const allDone = items.length > 0 && !busy && counts.processing === 0 && counts.failed === 0 && counts.paused === 0;
   useEffect(() => {
-    if (!allDone) return;
+    if (!allDone || downloads.length) return;
     const timer = window.setTimeout(clearFinished, AUTO_DISMISS_MS);
     return () => window.clearTimeout(timer);
-  }, [allDone, items.length]);
+  }, [allDone, items.length, downloads.length]);
 
-  if (!items.length) return null;
+  const cancellable = items.some((item) => isActive(item) || item.status === "paused" || (item.status === "failed" && item.hasUploadSession)) || downloads.length > 0;
+  const cancelAll = () => {
+    if (!window.confirm("Cancel all unfinished uploads and folder downloads? Saved upload parts will be deleted. Browser-managed downloads must be cancelled in your browser.")) return;
+    cancelAllDownloads(); void cancelAllUploads();
+  };
+  if (!items.length && !downloads.length) return null;
   const title = busy
     ? `Uploading ${counts.active} ${counts.active === 1 ? "file" : "files"}`
-    : counts.paused ? `${counts.paused} upload${counts.paused === 1 ? "" : "s"} paused` : counts.processing ? `Processing ${counts.processing}` : counts.failed ? `${counts.failed} upload${counts.failed === 1 ? "" : "s"} failed` : "Uploads complete";
+    : counts.paused ? `${counts.paused} upload${counts.paused === 1 ? "" : "s"} paused` : counts.processing ? `Processing ${counts.processing}` : counts.failed ? `${counts.failed} upload${counts.failed === 1 ? "" : "s"} failed` : downloads.length ? `Downloading ${downloads.length} folder${downloads.length === 1 ? "" : "s"}` : "Uploads complete";
   const totals = trayTotals(items);
   const overall = totals.percent;
   // Position in the queue: how many waiting uploads will start before each one.
@@ -120,7 +139,7 @@ export function UploadTray() {
             {busy || counts.processing ? <Loader2 className="ut-spin" /> : counts.failed ? <AlertTriangle /> : <CheckCircle2 />}
           </span>
           <span className="ut-title" role="status" aria-live="polite">{title}</span>
-          <span className="ut-badge" data-testid="upload-tray-count">{items.length}</span>
+          <span className="ut-badge" data-testid="upload-tray-count">{items.length + downloads.length}</span>
           {collapsed ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
           <span className="sr-only">{collapsed ? "Show uploads" : "Minimise uploads"}</span>
         </button>
@@ -131,6 +150,8 @@ export function UploadTray() {
           <button type="button" className="ut-close" onClick={clearFinished} aria-label="Close uploads" title="Close"><X aria-hidden="true" /></button>
         )}
       </header>
+      {cancellable && <div className="ut-transfer-actions"><button type="button" className="ut-clear" onClick={cancelAll}>Cancel all</button><small>Keep this tab open. Interrupted uploads resume when you return.</small></div>}
+      {downloads.length > 0 && <p className="ut-notice">Folder downloads: {downloads.map((item) => item.name).join(", ")}. Browser downloads are managed by your browser.</p>}
       {collapsed && busy && <i className="ut-overall" style={{ width: `${overall}%` }} aria-hidden="true" />}
       {!collapsed && busy && totals.size > 0 && (
         <div className="ut-summary" data-testid="upload-tray-summary">

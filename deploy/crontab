@@ -5,7 +5,7 @@
 #   check_operational_alerts  needs --workspace-id; run per workspace by hand or from a monitor.
 #   requeue_dead_letters      only after the delivery problem is fixed (manual).
 
-# Abandoned direct-to-R2 uploads: abort and release quota reservations.
+# Abandoned direct-to-R2 uploads (seven-day default TTL): abort and release quota reservations.
 */30 * * * * python manage.py expire_direct_uploads
 # Downgrade lapsed PRO subscriptions.
 15 2 * * * python manage.py process_expired_subscriptions

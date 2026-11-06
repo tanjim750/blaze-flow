@@ -82,3 +82,7 @@
 /* Paused after a reload: waiting for the same file to be picked again. */
 .ut-notice { flex: none; margin: 0; padding: 8px 14px; font-size: 12px; line-height: 1.4; color: var(--ut-muted, inherit); opacity: .85; overflow-wrap: anywhere; }
 .ut-row.is-paused .ut-bar i { opacity: .45; }
+
+.ut-transfer-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 14px; border-top: 1px solid var(--t-line-ffffff1a); }
+.ut-transfer-actions .ut-clear { flex: 0 0 auto; min-height: 36px; }
+.ut-transfer-actions small { flex: 1 1 180px; font-size: 11px; color: var(--muted); line-height: 1.5; }
