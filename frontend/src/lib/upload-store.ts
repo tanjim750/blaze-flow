@@ -537,7 +537,7 @@ export function xhrTransport(request: { url: string; file: File; fields: Record<
     };
     xhr.onerror = () => resolve({ ok: false, status: 0, error: uploadError(0, null) });
     xhr.onabort = () => resolve({ ok: false, status: 0, error: "Cancelled." });
-    if (signal.aborted) { xhr.abort(); return; }
+    if (signal.aborted) { resolve({ ok: false, status: 0, error: "Cancelled." }); return; }
     signal.addEventListener("abort", () => xhr.abort());
     xhr.send(body);
   });
