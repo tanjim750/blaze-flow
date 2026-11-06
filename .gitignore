@@ -47,4 +47,3 @@ stitch_blaze_flow_creative_operating_system/
 
 # Backup job secrets
 deploy/backup/backup.env
-.venv/
