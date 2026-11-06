@@ -1,4 +1,5 @@
 import hashlib
+from contextlib import contextmanager
 import html
 import io
 import logging
@@ -250,13 +251,57 @@ def _ffprobe_video_streams(file):
     return formats, len(videos)
 
 
+def _open_object_stream(object_key, *, byte_range=None):
+    """Open an object for sequential reads without buffering the whole S3/R2 body.
+
+    django-storages makes S3 files seekable by downloading the complete object to a temp
+    file. For malware scanning and magic-byte sniffing we only need a forward stream (or a
+    small ranged GET), so talk to GetObject directly when the backend looks like S3.
+    """
+    @contextmanager
+    def _stream():
+        storage = default_storage
+        connection = getattr(storage, 'connection', None)
+        client = getattr(getattr(connection, 'meta', None), 'client', None)
+        bucket_name = getattr(storage, 'bucket_name', None)
+        get_object = getattr(client, 'get_object', None)
+        if bucket_name and callable(get_object):
+            params = {'Bucket': bucket_name, 'Key': object_key}
+            if byte_range is not None:
+                start, end = byte_range
+                params['Range'] = f'bytes={start}-{end}'
+            body = get_object(**params)['Body']
+            try:
+                yield body
+            finally:
+                close = getattr(body, 'close', None)
+                if callable(close):
+                    close()
+            return
+        handle = storage.open(object_key, 'rb')
+        try:
+            if byte_range is not None:
+                start, end = byte_range
+                handle.seek(start)
+                data = handle.read(end - start + 1)
+                yield io.BytesIO(data)
+            else:
+                yield handle
+        finally:
+            handle.close()
+
+    return _stream()
+
+
 def verified_video(file):
     """Evidence that a file really is a video, or None.
 
     Both checks must pass: the leading bytes match a video container, and ffprobe finds a
     video stream in a video container format.
     """
-    with default_storage.open(file.object_key, 'rb') as stream:
+    # Bounded read only: on S3/R2, storage.open() may buffer the whole object to make it
+    # seekable, so never open a multi-GB object just to sniff magic bytes.
+    with _open_object_stream(file.object_key, byte_range=(0, 511)) as stream:
         header = stream.read(512)
     container = _sniff_video_container(header)
     if not container:
@@ -274,9 +319,28 @@ def verified_video(file):
 verified_large_video = verified_video
 
 
+def _file_size_bytes(file):
+    """Bytes on record for scan-limit checks, without downloading the object.
+
+    Prefer the DB value (set at upload / complete). If it is missing, fall back to a
+    storage size/HEAD call — never a full GET.
+    """
+    size = int(file.size_bytes or 0)
+    if size > 0:
+        return size
+    try:
+        return int(default_storage.size(file.object_key) or 0)
+    except Exception:
+        logger.warning(
+            'Could not resolve size for file=%s key=%s',
+            getattr(file, 'id', None), getattr(file, 'object_key', None),
+        )
+        return 0
+
+
 def _over_scan_limit(file):
     limit = getattr(settings, 'CLAMAV_MAX_STREAM_BYTES', None)
-    size = file.size_bytes or 0
+    size = _file_size_bytes(file)
     return bool(limit) and size > limit
 
 
@@ -288,14 +352,23 @@ def process_security_scan(*, file_id):
     if scan.status in {FileSecurityScanStatus.CLEAN, FileSecurityScanStatus.INFECTED}:
         return scan
     scanner = scanner_backend()
+    # Size first. Opening an S3/R2 object via django-storages can buffer the whole object
+    # to a temp file; a 20 GB zip used to OOM the outbox worker every few minutes because
+    # verified_video() ran before this check.
+    if _over_scan_limit(file):
+        evidence = False
+        # Only probe video bytes when the stored MIME claims video (skip path / mismatch block).
+        if (file.mime_type or '').startswith('video/'):
+            evidence = verified_video(file) or False
+            if evidence:
+                return _skip_verified_video(file_id=file_id, scanner=scanner, evidence=evidence)
+        return _handle_over_limit(file_id=file_id, file=file, scanner=scanner, evidence=evidence)
     # Only the bytes decide: the filename and the client's MIME claim are never trusted here.
     evidence = verified_video(file)
     if evidence:
         return _skip_verified_video(file_id=file_id, scanner=scanner, evidence=evidence)
-    if _over_scan_limit(file):
-        return _handle_over_limit(file_id=file_id, file=file, scanner=scanner, evidence=False)
     try:
-        with default_storage.open(file.object_key, 'rb') as stream:
+        with _open_object_stream(file.object_key) as stream:
             result = scanner.scan(stream)
     except Exception as exc:
         failed_at = timezone.now()
@@ -362,7 +435,11 @@ def _handle_over_limit(*, file_id, file, scanner, evidence=None):
     """
     limit = settings.CLAMAV_MAX_STREAM_BYTES
     if evidence is None:
-        evidence = verified_video(file)
+        # Do not open storage for oversized non-videos (the common huge-zip case).
+        if (file.mime_type or '').startswith('video/'):
+            evidence = verified_video(file)
+        else:
+            evidence = False
     now = timezone.now()
     with transaction.atomic():
         file = File.objects.select_for_update().get(id=file_id, deleted_at__isnull=True)
