@@ -236,3 +236,10 @@ it("aborts the server multipart session when a part is cancelled", async () => {
   expect(result).toMatchObject({ ok: false, error: "Cancelled." });
   expect(calls.some((c) => c.path === "/workspaces/ws/uploads/cancel/" && c.method === "DELETE")).toBe(true);
 });
+
+it("ignores malformed saved resume metadata instead of blocking a new upload", async () => {
+  localStorage.setItem("bf.direct-uploads.v2", "null");
+  initResponse = { status: 201, body: { id: "fresh", mode: "single", url: "https://r2.example/key" } };
+  const result = await r2Transport.send(job(new File(["hello"], "new.txt")), () => {}, new AbortController().signal);
+  expect(result.ok).toBe(true);
+});

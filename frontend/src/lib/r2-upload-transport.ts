@@ -58,7 +58,11 @@ function directEnabled(workspaceId: string): Promise<boolean> {
 const fingerprint = (workspaceId: string, file: File, fields: Record<string, string>) =>
   JSON.stringify([workspaceId, ...["client_team_id", "project_id", "folder_id", "task_stage_id"].map((k) => fields[k] || null), file.name, file.size, file.lastModified]);
 function readSaved(): Record<string, Resume & { at: number }> {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}"); } catch { return {}; }
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).filter(([, value]) => value && typeof value.id === "string" && value.mode === "multipart" && Number.isFinite(value.partSize) && value.partSize > 0 && Array.isArray(value.completed)));
+  } catch { return {}; }
 }
 function save(key: string, value: Resume | null) {
   try {
