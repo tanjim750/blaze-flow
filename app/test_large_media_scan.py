@@ -186,3 +186,41 @@ class LargeMediaScanTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(file.status, 'READY')
         self.assertIn('skipped (too large)', logs.output[0])
         self.assertEqual(processing_state(file)['label'], 'Ready · not scanned (too large)')
+
+
+    def test_oversized_non_video_marks_too_large_without_opening_storage(self):
+        """A huge zip must be marked too-large using DB size alone — never open/download it.
+
+        Regression for the outbox-worker OOM loop: django-storages S3 open buffers the whole
+        object, so verified_video() before the size check killed the worker on a 20 GB zip.
+        """
+        from .services.upload_processing import processing_state
+        file = self.upload_media('marker.png', PNG, 'image/png')
+        File.objects.filter(id=file.id).update(
+            mime_type='application/zip',
+            original_name='Archive.zip',
+            size_bytes=20 * 1024 * 1024 * 1024,
+        )
+        file.refresh_from_db()
+
+        def boom(*args, **kwargs):
+            raise AssertionError('storage must not be opened for an oversized non-video')
+
+        with override_settings(CLAMAV_MAX_STREAM_BYTES=25 * 1024 * 1024), \
+                patch.object(file_processing, '_open_object_stream', side_effect=boom), \
+                patch.object(file_processing.default_storage, 'open', side_effect=boom), \
+                patch.object(file_processing, 'verified_video', side_effect=boom) as verified:
+            with self.assertLogs('app.services.file_processing', level='WARNING') as logs:
+                scan = process_security_scan(file_id=file.id)
+
+        verified.assert_not_called()
+        self.assertEqual(SCANNED, [])
+        self.assertEqual(scan.status, 'CLEAN')
+        self.assertEqual(scan.result['scan_status'], NOT_SCANNED_TOO_LARGE)
+        self.assertTrue(scan.result['skipped'])
+        self.assertEqual(scan.result['size_bytes'], 20 * 1024 * 1024 * 1024)
+        file.refresh_from_db()
+        self.assertEqual(file.status, 'READY')
+        self.assertIn('skipped (too large)', logs.output[0])
+        self.assertEqual(processing_state(file)['label'], 'Ready · not scanned (too large)')
+        self.assertTrue(OutboxEvent.objects.filter(aggregate_id=str(file.id), topic=PREVIEW_TOPIC).exists())
