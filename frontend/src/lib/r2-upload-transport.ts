@@ -81,6 +81,7 @@ export function putBlob(url: string, body: Blob, headers: Record<string, string>
     xhr.open("PUT", url);
     Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
     let lastActivity = Date.now(), stalled = false;
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
     const resumeStalled = () => {
       if (document.visibilityState === "visible" && Date.now() - lastActivity > 30_000) {
         stalled = true; xhr.abort();
@@ -88,13 +89,18 @@ export function putBlob(url: string, body: Blob, headers: Record<string, string>
     };
     const abort = () => xhr.abort();
     const clean = () => {
+      clearTimeout(watchdog);
       signal.removeEventListener("abort", abort);
       document.removeEventListener("visibilitychange", resumeStalled);
       window.removeEventListener("online", resumeStalled);
     };
-    xhr.timeout = 120_000;
-    xhr.ontimeout = () => { clean(); reject(new HttpError(0, "Connection paused. Resuming saved parts…")); };
-    xhr.upload.onprogress = (event) => { lastActivity = Date.now(); onLoaded(event.loaded); };
+    // Timeout inactivity, not total duration: parallel 8 MiB parts on a slow connection
+    // can legitimately take much longer than two minutes while still making progress.
+    const armWatchdog = () => {
+      clearTimeout(watchdog);
+      watchdog = setTimeout(() => { stalled = true; xhr.abort(); }, 120_000);
+    };
+    xhr.upload.onprogress = (event) => { lastActivity = Date.now(); armWatchdog(); onLoaded(event.loaded); };
     xhr.onload = () => { clean(); return (xhr.status >= 200 && xhr.status < 300 ? resolve(xhr.getResponseHeader("ETag") ?? "") : reject(new HttpError(xhr.status, `Storage refused the upload (${xhr.status}).`))); };
     xhr.onerror = () => { clean(); reject(new HttpError(0, "The connection to storage dropped. Retry to continue where it stopped.")); };
     xhr.onabort = () => { clean(); reject(stalled ? new HttpError(0, "Connection paused. Resuming saved parts…") : new DOMException("Cancelled.", "AbortError")); };
@@ -102,6 +108,7 @@ export function putBlob(url: string, body: Blob, headers: Record<string, string>
     signal.addEventListener("abort", abort, { once: true });
     document.addEventListener("visibilitychange", resumeStalled);
     window.addEventListener("online", resumeStalled);
+    armWatchdog();
     xhr.send(body);
   });
 }
