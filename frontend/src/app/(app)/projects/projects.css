@@ -602,7 +602,6 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
 .pb-collection-head { padding: 22px 24px 8px; }
 .pb-collection-head h1 { margin: 0 0 6px; font-size: 24px; font-weight: 650; color: var(--text); }
 .pb-collection-head p { margin: 0; max-width: 70ch; color: var(--muted); font-size: 13px; line-height: 1.6; }
-.pb-files-home > .asset-library { flex: 1; min-height: 0; }
 .pb-more-tab { display: inline-flex; align-items: center; gap: 5px; padding: 9px 12px; border: 0; background: none; color: var(--muted); font-size: 12px; cursor: pointer; }
 .pb-more-tab.selected { color: var(--primary); }
 .pb-tabs-row { justify-content: flex-start; }
