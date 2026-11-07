@@ -93,7 +93,7 @@ export function EditorDashboard({ view, choice }: { view: EditorView; choice: La
         <div className="panel-title"><h2 id="my-cuts-title"><Clapperboard size={16} />My cuts in review</h2><small>{view.cuts.length} in review</small></div>
         <div className="review-list">
           {view.problems.cuts && <InlineProblem>{view.problems.cuts}</InlineProblem>}
-          {!view.problems.cuts && view.cuts.length === 0 && <EmptyState title="None of your cuts are in review" body="Cuts you uploaded or are assigned to show here while they're in review, revision or approval." action={{ href: "/files", label: "Open files" }} />}
+          {!view.problems.cuts && view.cuts.length === 0 && <EmptyState title="None of your cuts are in review" body="Cuts you uploaded or are assigned to show here while they're in review, revision or approval." action={{ href: "/projects?view=files", label: "Open All files" }} />}
           {view.cuts.map((cut) => <Link href={cut.href} className="review-row" key={cut.id} aria-label={`Open review: ${cut.title} ${cut.version}, ${cut.stage}`}>
             <DashboardPoster src={cut.poster} />
             <div className="review-description">

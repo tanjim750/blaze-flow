@@ -66,6 +66,12 @@ class GuestInviteCreateSerializer(serializers.Serializer):
     # Sharing one file: the link opens that file's review version (``&cut=``). Every
     # reviewable project upload already has one (auto-versioning), so no publish step.
     asset_file_id = serializers.UUIDField(required=False)
+    shared_folder_id = serializers.UUIDField(required=False)
+
+    def validate(self, attrs):
+        if attrs.get("asset_file_id") and attrs.get("shared_folder_id"):
+            raise serializers.ValidationError("Choose a file or a folder, not both.")
+        return attrs
 
 
 class GuestInviteUpdateSerializer(serializers.Serializer):
@@ -131,17 +137,16 @@ def _scoped_media_id(access):
 
 
 def _ensure_in_scope(access, media_version_id):
-    scoped = _scoped_media_id(access)
-    if scoped is not None and str(scoped) != str(media_version_id):
-        # Same answer as a missing cut, so a guest cannot probe the project's other files.
+    from .services.guest_scope import scoped_media
+    if not scoped_media(access).filter(id=media_version_id).exists():
         raise Http404('No such cut.')
 
 
 def _scoped_contents(access):
-    contents = ReviewCommentContent.objects.select_related('file')
-    if _scoped_media_id(access) is not None:
-        contents = contents.filter(review_comment__media_version_id=_scoped_media_id(access))
-    return contents
+    from .services.guest_scope import scoped_media
+    return ReviewCommentContent.objects.select_related('file').filter(
+        review_comment__media_version_id__in=scoped_media(access).values('id'),
+    )
 
 
 def _invite_data(invite, activity=None):
@@ -155,6 +160,7 @@ def _invite_data(invite, activity=None):
         'short_code': invite.short_code,
         'short_url': f'{settings.SHORT_LINK_BASE_URL}/{invite.short_code}' if invite.short_code else None,
         'media_version_id': str(invite.shared_media_version_id) if invite.shared_media_version_id else None,
+        'shared_folder_id': str(invite.shared_folder_id) if invite.shared_folder_id else None,
         'permissions': permissions,
         # Whether a guest on this link may approve or request changes.
         'allow_decisions': GUEST_DECISION_PERMISSION in permissions,
@@ -291,15 +297,16 @@ def guest_review(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     access = _guest_access(request, project, 'media.read')
     from app.services.preview_state import file_preview_status
-    media_qs = MediaVersion.objects.filter(project=project, status='ACTIVE').select_related('original_file')
-    if _scoped_media_id(access) is not None:
-        media_qs = media_qs.filter(id=_scoped_media_id(access))
+    from .services.guest_scope import scoped_media
+    from .models import ProjectFolder
+    media_qs = scoped_media(access).select_related('original_file')
+    shared_folder = ProjectFolder.objects.filter(id=access.guest_invite.shared_folder_id, project=project, deleted_at__isnull=True).first() if access.guest_invite.shared_folder_id else None
     media = list(media_qs.order_by('sequence_number', 'created_at'))
     from app.services.guest_access import granted_permissions
     granted = granted_permissions(access)
     latest = decisions_for(media)
     return Response({
-        'project': {'id': str(project.id), 'name': project.name, 'description': project.description},
+        'project': {'id': str(project.id), 'name': (shared_folder.name if shared_folder else 'Shared folder') if access.guest_invite.shared_folder_id else project.name, 'description': '' if access.guest_invite.shared_folder_id else project.description},
         'viewer': {
             'name': access.guest_session.name,
             # Decisions also need the cut to be watchable, hence media.read (checked above).
@@ -310,6 +317,7 @@ def guest_review(request, project_id):
             'can_read_annotations': 'annotation.read' in granted,
             'can_annotate': 'annotation.create' in granted,
             'scoped_to_file': _scoped_media_id(access) is not None,
+            'scoped_to_folder': access.guest_invite.shared_folder_id is not None,
             # Project-wide links that allow downloads may take whole folders as a zip.
             'can_download_folders': guest_can_download_folders(access),
             'expires_at': access.guest_invite.expires_at,

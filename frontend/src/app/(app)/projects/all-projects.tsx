@@ -111,7 +111,7 @@ export function AllProjects({ view, home = false }: { view: ProjectsView; home?:
     {access.renameProject && <>
       <DropdownMenuSeparator />
       <DropdownMenuItem onSelect={() => setConfirm({ title: `Archive ${project.name}?`, body: "It moves to Archived projects, where you can restore it.", action: "Archive", run: () => setProjectStatusAction(project.id, "ARCHIVED") })}><Archive size={14} />Archive</DropdownMenuItem>
-      <DropdownMenuItem className="ap-danger" onSelect={() => setConfirm({ title: `Delete ${project.name}?`, body: "It is removed from Projects, Files and Tasks. Its files stay in Archived projects.", action: "Delete", run: () => deleteCampaignAction(project.id) })}><Trash2 size={14} />Delete</DropdownMenuItem>
+      <DropdownMenuItem className="ap-danger" onSelect={() => setConfirm({ title: `Delete ${project.name}?`, body: "It is removed from Projects, All files and Tasks. Its files stay in Archived projects.", action: "Delete", run: () => deleteCampaignAction(project.id) })}><Trash2 size={14} />Delete</DropdownMenuItem>
     </>}
   </>;
 

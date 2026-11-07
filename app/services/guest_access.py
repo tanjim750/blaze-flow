@@ -64,15 +64,21 @@ GUEST_LINK_MAX_HOURS = GUEST_LINK_MAX_DAYS * 24
 
 
 @transaction.atomic
-def create_guest_invite(*, project, membership, permissions, label='', expires_in_hours=168, actor=None, shared_media_version_id=None):
+def create_guest_invite(*, project, membership, permissions, label='', expires_in_hours=168, actor=None, shared_media_version_id=None, shared_folder_id=None):
     requested = set(permissions)
     if not requested or not requested.issubset(GUEST_ALLOWED_PERMISSIONS):
         raise GuestAccessError('Select one or more supported guest permissions.')
+    if shared_folder_id is not None:
+        from app.models import ProjectFolder
+        if shared_media_version_id is not None or not ProjectFolder.objects.filter(
+            id=shared_folder_id, project=project, deleted_at__isnull=True,
+        ).exists():
+            raise GuestAccessError('Choose one folder in this project.')
     token = secrets.token_urlsafe(32)
     now = timezone.now()
     invite = GuestInvite.objects.create(
         id=uuid.uuid4(), project=project, label=label or '', token_hash=_hash(token),
-        short_code=generate_short_code(), shared_media_version_id=shared_media_version_id,
+        short_code=generate_short_code(), shared_media_version_id=shared_media_version_id, shared_folder_id=shared_folder_id,
         expires_at=now + timedelta(hours=min(int(expires_in_hours), GUEST_LINK_MAX_HOURS)),
         created_by_workspace_membership=membership, created_at=now, updated_at=now,
     )

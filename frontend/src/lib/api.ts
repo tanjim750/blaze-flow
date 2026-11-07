@@ -56,7 +56,7 @@ export type NotificationSettings = NotificationPreference & {
   in_app: Record<string, boolean> | null;
   kinds: { kind: string; label: string; description: string }[];
 };
-export type Project = { id: string; workspace_id: string; client_team_id: string | null; name: string; description: string | null; status: string; priority: string; start_at: string | null; due_at: string | null; created_at: string; updated_at: string;
+export type Project = { id: string; is_unsorted?: boolean; workspace_id: string; client_team_id: string | null; name: string; description: string | null; status: string; priority: string; start_at: string | null; due_at: string | null; created_at: string; updated_at: string;
   /** Brief & Specs. Every key is present (null when unset); absent on older backends. */
   deliverable_specs?: { aspect_ratio: string | null; target_length_seconds: number | null; platform: string | null; resolution: string | null; notes: string | null };
   /** Whether the viewer may edit this project. Only the detail route fills it in; null elsewhere. */
@@ -462,6 +462,7 @@ export type GuestAccess = {
   revoked_at: string | null; created_at: string;
 };
 export type GuestInvite = {
+  shared_folder_id?: string | null;
   id: string; project_id: string; label: string; permissions: GuestPermission[];
   /** Whether guests on this link may approve or request changes. Absent on older backends. */
   allow_decisions?: boolean;
@@ -478,7 +479,7 @@ export type GuestInvite = {
 
 export const listGuestInvites = (workspaceId: string, projectId: string) =>
   request<GuestInvite[]>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/`);
-export const createGuestInvite = (workspaceId: string, projectId: string, payload: { label?: string; permissions: GuestPermission[]; expires_in_hours: number; asset_file_id?: string }) =>
+export const createGuestInvite = (workspaceId: string, projectId: string, payload: { label?: string; permissions: GuestPermission[]; expires_in_hours: number; asset_file_id?: string; shared_folder_id?: string }) =>
   // `media_version_id` comes back when the link was made for one file (`asset_file_id`).
   request<GuestInvite & { token: string; media_version_id?: string }>(`/workspaces/${workspaceId}/projects/${projectId}/guest-invites/`, jsonBody(payload));
 /** Turns "Allow decisions" on or off for a link and everyone already using it. */

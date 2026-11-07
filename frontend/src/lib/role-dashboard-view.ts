@@ -407,7 +407,7 @@ export function buildOwnerDashboard(input: OwnerInput): OwnerDashboard {
       // R6: every number here comes from the same open-project set as Project health, so
       // "Open projects" always equals on track + at risk + on hold.
       { label: "Open projects", value: health.healthy + health.counts.overdue + health.counts.due_week + health.counts.on_hold, title: "Projects not completed or archived: draft, active and on hold" },
-      { label: "Waiting on approval", value: failed(input.files) || failed(input.stages) ? null : approvals.length, title: "Cuts in Client Review or Review on the Files board" },
+      { label: "Waiting on approval", value: failed(input.files) || failed(input.stages) ? null : approvals.length, title: "Cuts in the Client Review or Review stage" },
       { label: "Projects at risk", value: health.counts.overdue + health.counts.due_week, danger: health.counts.overdue > 0, title: "Overdue or due in the next 7 days" },
       { label: "Overdue tasks", value: overdueTasks, danger: true, title: "Across the whole team" },
     ],

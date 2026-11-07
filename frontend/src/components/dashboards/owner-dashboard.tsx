@@ -31,7 +31,7 @@ export function OwnerDashboard({ view, choice }: { view: OwnerView; choice: Layo
         </div>
         <div className="review-list">
           {view.problems.approvals && <InlineProblem>{view.problems.approvals}</InlineProblem>}
-          {!view.problems.approvals && view.approvals.length === 0 && <EmptyState title="No cuts waiting on approval" body="Cuts in Client Review or Review on the Files board show up here." action={{ href: "/files", label: "Open files" }} />}
+          {!view.problems.approvals && view.approvals.length === 0 && <EmptyState title="No cuts waiting on approval" body="Cuts in the Client Review or Review stage show up here." action={{ href: "/projects?view=files", label: "Open All files" }} />}
           {view.approvals.slice(0, 5).map((item) => <Link href={item.href} className="review-row" key={item.id} aria-label={`Open review: ${item.title} ${item.version}, ${item.stage}`}>
             <DashboardPoster src={item.poster} />
             <div className="review-description">
@@ -41,7 +41,7 @@ export function OwnerDashboard({ view, choice }: { view: OwnerView; choice: Layo
             <time title="Uploaded">{item.age}</time>
           </Link>)}
         </div>
-        {view.approvals.length > 5 && <FooterLink href="/files">All {view.approvals.length} in review</FooterLink>}
+        {view.approvals.length > 5 && <FooterLink href="/projects?view=files">All {view.approvals.length} in review</FooterLink>}
       </section>
 
       <section className="panel" aria-labelledby="health-title">

@@ -13,7 +13,7 @@ const ACTIONS = [
   { href: "/tasks", label: "New task", icon: Plus },
   { href: "/money", label: "New invoice", icon: ReceiptText },
   { href: "/clients", label: "Add client", icon: UserPlus },
-  { href: "/files", label: "Share review link", icon: Share2 },
+  { href: "/projects?view=files", label: "Share review link", icon: Share2 },
 ];
 
 function TaskRow({ task }: { task: SoloTask }) {
@@ -91,7 +91,7 @@ export function SoloDashboard({ view, choice }: { view: SoloView; choice: Layout
         <div className="panel-title"><h2 id="solo-review-title"><ClipboardCheck size={16} />Waiting on clients</h2><small>{view.awaiting.length} in client review</small></div>
         <div className="review-list">
           {view.problems.review && <InlineProblem>{view.problems.review}</InlineProblem>}
-          {!view.problems.review && view.awaiting.length === 0 && <EmptyState title="Nothing with clients" body="Cuts you send for client review or approval show up here." action={{ href: "/files", label: "Share a review link" }} />}
+          {!view.problems.review && view.awaiting.length === 0 && <EmptyState title="Nothing with clients" body="Cuts you send for client review or approval show up here." action={{ href: "/projects?view=files", label: "Share a review link" }} />}
           {view.awaiting.slice(0, 4).map((item) => <Link href={item.href} className="review-row" key={item.id} aria-label={`Open review: ${item.title} ${item.version}`}>
             <DashboardPoster src={item.poster} />
             <div className="review-description">

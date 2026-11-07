@@ -45,10 +45,10 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = (
-            'id', 'workspace_id', 'client_team_id', 'name', 'description', 'status', 'priority',
+            'id', 'is_unsorted', 'workspace_id', 'client_team_id', 'name', 'description', 'status', 'priority',
             'start_at', 'due_at', 'deliverable_specs', 'viewer_can_edit', 'created_at', 'updated_at',
         )
-        read_only_fields = ('id', 'workspace_id', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'is_unsorted', 'workspace_id', 'created_at', 'updated_at')
 
     def to_representation(self, instance):
         # Project.save() sanitises on write, but rows written by bulk update(), raw SQL or before

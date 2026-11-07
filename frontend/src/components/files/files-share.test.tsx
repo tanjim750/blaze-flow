@@ -20,6 +20,7 @@ const file = (id: string, name: string, extra: Partial<LibraryFile> = {}): Libra
 });
 
 beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
   replaceLibrary({ deletedIds: [], folders: [], files: [file("a", "alpha.mp4"), file("b", "bravo.mp4", { fileId: null })] });
   info.mockReset();
@@ -34,15 +35,19 @@ const openMenu = async (name: string) => {
 };
 
 describe("Share in an asset's ⋯ menu", () => {
-  it("shares a folder with a project-scoped internal URL, never a whole-project public link disguised as a folder", async () => {
+  it("shares a folder internally and sends its folder scope for public links", async () => {
     replaceLibrary({ deletedIds: [], files: [], folders: [{ id: "folder-1", name: "Deliverables", projectId: "project-1", clientId: null, parentFolderId: null, createdAt: "2026-09-12", createdBy: "Ada" }] });
     render(<AssetLibrary view={{ ...view, canShare: true }} projectId="project-1" compact />);
     const menu = await openMenu("Deliverables");
     await act(async () => { fireEvent.click(within(menu).getByRole("menuitem", { name: "Share" })); });
     const dialog = await screen.findByRole("dialog");
     expect((within(dialog).getByLabelText("Share link") as HTMLInputElement).value).toContain("/projects?campaign=project-1&folder=folder-1");
-    expect(within(dialog).getByRole("radio", { name: /Public/ })).toBeDisabled();
-    expect(within(dialog).getByText(/workspace-only/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("radio", { name: /Public/ })).toBeEnabled();
+    fireEvent.click(within(dialog).getByRole("radio", { name: /Public/ }));
+    expect(within(dialog).getByText("Guests can see only this folder and its contents.")).toBeInTheDocument();
+    expect(dialog.querySelector('input[name="folderId"]')).toHaveValue("folder-1");
+    expect(dialog.querySelector('input[name="projectId"]')).toHaveValue("project-1");
+    expect(dialog.querySelector('input[name="assetFileId"]')).toBeNull();
   });
 
   it("sits right after Open in review and opens the review share dialog for that file", async () => {

@@ -13,7 +13,6 @@ import {
 } from "@/components/icons";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
-import { unsortedFiles } from "@/lib/projects-home";
 import { AssetLibrary, FILES_SHARE_EVENT } from "@/components/asset-library";
 import { ProjectCrumbs } from "./project-crumbs";
 import { ProjectBrief } from "@/components/project-brief";
@@ -179,8 +178,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
   const [railClosed, setRailClosed] = useState(false);
   // Phones: the client tree is a sheet over the page instead of a column beside it.
   const params = useSearchParams();
-  const filesMode = params?.get("view") === "files" || params?.get("view") === "unsorted";
-  const unsorted = params?.get("view") === "unsorted";
+  const filesMode = params?.get("view") === "files";
   const allProjects = params?.get("view") === "all" || (!filesMode && !params?.get("campaign") && !params?.get("tab"));
   const fileQuery = new URLSearchParams(initialQuery);
   if (!filesMode) { fileQuery.delete("client"); fileQuery.delete("project"); }
@@ -223,10 +221,10 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
       <section className="pb-canvas pb-files-home">
         <header className="pb-collection-head">
           <button type="button" className="pb-sheet-open" onClick={() => setSheetOpen(true)}><Users size={14} />Clients</button>
-          <h1>{unsorted ? "Unsorted" : "All files"}</h1>
-          <p>{unsorted ? "Files without a project. Nothing has been moved. Use Move / assign to give them a home." : "Find files across your projects. To upload, open a project first."}</p>
+          <h1>All files</h1>
+          <p>Find files across your projects. To upload, open a project first.</p>
         </header>
-        <AssetLibrary compact view={unsorted ? unsortedFiles(filesView) : filesView} uploadsDisabled initialQuery={initialQuery} syncUrl />
+        <AssetLibrary compact view={filesView} uploadsDisabled initialQuery={initialQuery} syncUrl />
       </section> :
       <section className="pb-canvas">
         {view.notice && (
@@ -352,12 +350,12 @@ function ComingSoon({ tab, hasCampaign, briefFolder, onOpenFiles }: { tab: (type
       <h2>{brief ? "Brief & specs" : tab === "Client uploads" ? "Client uploads" : "Activity log"}</h2>
       <p>
         {brief
-          ? `A place for the brief, deliverable specs and due dates is on the way. Until then, keep brief documents in ${briefFolder ? `the “${briefFolder}” folder` : "this campaign’s Files"}.`
+          ? `A place for the brief, deliverable specs and due dates is on the way. Until then, keep brief documents in ${briefFolder ? `the “${briefFolder}” folder` : "this project’s Files tab"}.`
           : tab === "Client uploads"
             ? "This is sample content. On a real campaign you can create upload links here so clients can send files without an account."
             : "This is sample content, so there is no history to show. Real campaigns list uploads, reviews, approvals, task moves and client link visits here."}
       </p>
-      {brief && <button type="button" className="pb-soon-link" onClick={onOpenFiles}><FolderOpen size={14} />Open Files</button>}
+      {brief && <button type="button" className="pb-soon-link" onClick={onOpenFiles}><FolderOpen size={14} />Open project files</button>}
     </div>
   );
 }
@@ -368,6 +366,7 @@ export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNa
   const searchParams = useSearchParams();
   const allView = searchParams?.get("view") === "all" || (!searchParams?.get("view") && !searchParams?.get("campaign") && !searchParams?.get("tab"));
   const filesMode = searchParams?.get("view");
+  const unsortedProject = view.clients.flatMap((client) => client.campaigns).find((project) => project.isUnsorted);
   const toggle = (id: string) => setExpanded(expanded.includes(id) ? expanded.filter((value) => value !== id) : [...expanded, id]);
 
   return (
@@ -407,9 +406,9 @@ export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNa
           <Link href="/projects?view=files" role="treeitem" aria-level={1} aria-selected={filesMode === "files"} className={`fx-tree-row ${filesMode === "files" ? "is-selected" : ""}`} style={{ paddingLeft: 8 }}>
             <span className="fx-disclosure" aria-hidden="true" /><Library aria-hidden="true" /><span className="fx-tree-label">All files</span><span className="fx-count">{filesView?.files.length ?? ""}</span>
           </Link>
-          <Link href="/projects?view=unsorted" role="treeitem" aria-level={1} aria-selected={filesMode === "unsorted"} className={`fx-tree-row ${filesMode === "unsorted" ? "is-selected" : ""}`} style={{ paddingLeft: 8 }}>
-            <span className="fx-disclosure" aria-hidden="true" /><Folder aria-hidden="true" /><span className="fx-tree-label">Unsorted</span><span className="fx-count">{filesView?.files.filter((file) => !file.project_id).length ?? ""}</span>
-          </Link>
+          {unsortedProject && <Link href={`/projects?campaign=${unsortedProject.id}`} role="treeitem" aria-level={1} aria-selected={view.selectedCampaign?.id === unsortedProject.id && !filesMode} className={`fx-tree-row ${view.selectedCampaign?.id === unsortedProject.id && !filesMode ? "is-selected" : ""}`} style={{ paddingLeft: 8 }}>
+            <span className="fx-disclosure" aria-hidden="true" /><Folder aria-hidden="true" /><span className="fx-tree-label">Unsorted</span><span className="fx-count">{filesView?.files.filter((file) => file.project_id === unsortedProject.id).length ?? ""}</span>
+          </Link>}
         </div>
         {/* Same row as Files' "All files" (LibraryTree root row): fx-tree-* classes from files.css. */}
         <div role="tree" aria-label="All clients" className="fx-tree-list pb-all-clients">

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { guardRoute } from "@/lib/route-guard";
 import { loadProjectsView } from "@/lib/projects-view";
 import { loadSession } from "@/lib/session";
@@ -16,7 +17,11 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/project
   const session = await loadSession();
   const [loaded, filesView, tasksView] = await Promise.all([loadProjectsView({ clientId, campaignId, all: params.view === "all" || (!params.view && !campaignId) }), loadFilesView(), loadTasksView()]);
   // Collection screens must not highlight an arbitrary first project in the rail.
-  const collection = params.view === "all" || params.view === "files" || params.view === "unsorted" || (!campaignId && !params.tab);
+  if (params.view === "unsorted") {
+    const project = loaded.clients.flatMap((client) => client.campaigns).find((item) => item.isUnsorted);
+    redirect(project ? `/projects?campaign=${project.id}` : "/projects");
+  }
+  const collection = params.view === "all" || params.view === "files" || (!campaignId && !params.tab);
   const selection = collection ? { ...loaded, selectedClient: null, selectedCampaign: null } : loaded;
   const view = session.notice ? { ...selection, notice: session.notice } : selection;
   const tab = typeof params.tab === "string" ? params.tab : undefined;

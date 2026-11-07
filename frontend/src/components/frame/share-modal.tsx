@@ -26,10 +26,10 @@ export function presetFor(allowComments: boolean, allowDownloads: boolean): Gues
   return allowComments ? "comment" : "view";
 }
 
-export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId, projectId, assetFileId, canCreateLinks, publicScopeNote }: {
+export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId, projectId, assetFileId, folderId, canCreateLinks, publicScopeNote }: {
   open: boolean; onOpenChange: (open: boolean) => void; title: string; internalUrl: string;
   publicScopeNote?: string;
-  workspaceId?: string | null; projectId?: string | null; assetFileId?: string | null; canCreateLinks: boolean;
+  workspaceId?: string | null; projectId?: string | null; assetFileId?: string | null; folderId?: string | null; canCreateLinks: boolean;
 }) {
   const [access, setAccess] = useState<"private" | "public">("private");
   const [comments, setComments] = useState(true);
@@ -55,7 +55,7 @@ export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId
       <DialogContent className="frm-share">
         <DialogClose />
         <DialogTitle>Share “{title}”</DialogTitle>
-        <DialogDescription>{linkAccess === "private" ? "Only people in this workspace can open the link." : "Anyone with the link can open it as a guest."}</DialogDescription>
+        <DialogDescription>{linkAccess === "private" ? "Only people in this workspace can open the link." : folderId ? "Guests can see only this folder and its contents." : "Anyone with the link can open it as a guest."}</DialogDescription>
 
         {publicScopeNote && <p className="frm-share-scope-note">{publicScopeNote}</p>}
         <div className="frm-share-access" role="radiogroup" aria-label="Link access">
@@ -76,6 +76,7 @@ export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId
             <input type="hidden" name="preset" value={presetFor(comments, downloads)} />
             <input type="hidden" name="allowDecisions" value={approvals ? "on" : "off"} />
             <input type="hidden" name="expiresInDays" value={expires ? days : GUEST_LINK_MAX_DAYS} />
+            {folderId && <input type="hidden" name="folderId" value={folderId} />}
             {assetFileId && <input type="hidden" name="assetFileId" value={assetFileId} />}
             <ul className="frm-share-opts">
               <li><span>Allow comments</span><Switch checked={comments || downloads} onCheckedChange={setComments} label="Allow comments" /></li>
