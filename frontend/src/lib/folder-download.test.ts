@@ -52,7 +52,7 @@ describe("client-side folder zip", () => {
   });
 
   it("refreshes expired signed URLs once and retries the file", async () => {
-    const fetcher = vi.fn(async (url: string) => url.includes("sig=1") ? new Response("expired", { status: 403 }) : body("fresh"));
+    const fetcher = vi.fn(async (url: string) => url.includes("sig=1") ? new Response("expired", { status: 403 }) : body(url.includes("/a") ? "fresh" : "fresh!"));
     const refresh = vi.fn(async () => manifest({ entries: manifest().entries!.map((e) => ({ ...e, url: e.url.replace("sig=1", "sig=2") })) }));
     const result = await writeFolderZip({ manifest: manifest({ skipped: [] }), sink: memorySink().sink, refresh, fetcher: fetcher as unknown as typeof fetch });
     expect(refresh).toHaveBeenCalledTimes(1);
@@ -84,4 +84,24 @@ describe("downloadGuestFolder", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/guest/reviews/p/folders/f/download-link/");
     expect(fetchMock.mock.calls[0][1].headers["X-Guest-Access-Key"]).toBe("key");
   });
+});
+
+it("resumes an interrupted folder file with Range without writing duplicate ZIP bytes", async () => {
+  vi.useFakeTimers();
+  try {
+    const m = memorySink();
+    let reads = 0;
+    const broken = new ReadableStream<Uint8Array>({
+      pull(controller) { if (reads++ === 0) controller.enqueue(new TextEncoder().encode("he")); else controller.error(new TypeError("screen locked")); },
+    });
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response(broken, { headers: { ETag: '"file"' } }))
+      .mockResolvedValueOnce(new Response("llo", { status: 206, headers: { "Content-Range": "bytes 2-4/5", ETag: '"file"' } }));
+    const pending = writeFolderZip({ manifest: manifest({ file_count: 1, total_bytes: 5, entries: [manifest().entries![0]], skipped: [] }), sink: m.sink, fetcher });
+    await vi.advanceTimersByTimeAsync(1100);
+    expect((await pending).bytes).toBe(5);
+    expect(fetcher.mock.calls[1][1].headers.Range).toBe("bytes=2-");
+    const zip = pythonList(m.bytes());
+    if (zip) { expect(zip.bad).toBeNull(); expect(zip.a).toBe("hello"); }
+    expect(m.state().closed).toBe(true);
+  } finally { vi.useRealTimers(); }
 });

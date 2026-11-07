@@ -27,6 +27,7 @@ from .views import (
 
 class InitializeSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=512)
+    last_modified = serializers.IntegerField(min_value=0, max_value=9007199254740991, required=False, allow_null=True)
     size = serializers.IntegerField(min_value=1)
     content_type = serializers.CharField(max_length=255, allow_blank=True, required=False, default='')
     sha256 = serializers.RegexField(r'^[0-9a-fA-F]{64}$', required=False, allow_blank=True, default='')
@@ -102,17 +103,22 @@ def direct_upload_initialize(request, workspace_id):
         upload, extra = service.initialize(
             workspace=workspace, user=request.user, membership=membership, client_team=client_team, project=project,
             folder=folder, task_stage=_asset_stage(workspace, data)[0], name=data['name'], size=data['size'],
-            content_type=data['content_type'], sha256=data['sha256'],
+            content_type=data['content_type'], sha256=data['sha256'], last_modified=data.get('last_modified'),
         )
     except (ProjectFileError, SubscriptionError, service.DirectUploadError) as exc:
         return _bad(exc)
     return Response(_describe(upload, extra), status=status.HTTP_201_CREATED)
 
 
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def direct_upload_parts(request, workspace_id, upload_id):
     upload = _own_upload(request, workspace_id, upload_id)
+    if request.method == 'GET':
+        try:
+            return Response({'parts': service.list_parts(upload)})
+        except service.DirectUploadError as exc:
+            return _bad(exc)
     serializer = PartsSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     try:
@@ -149,5 +155,8 @@ def direct_upload_cancel(request, workspace_id, upload_id):
             'error': upload.error,
             'project_file': ProjectFileSerializer(item).data if item else None,
         })
-    service.cancel(upload)
+    try:
+        service.cancel(upload)
+    except service.DirectUploadError as exc:
+        return _bad(exc)
     return Response(status=status.HTTP_204_NO_CONTENT)

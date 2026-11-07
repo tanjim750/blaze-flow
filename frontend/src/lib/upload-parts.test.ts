@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { choosePartSize, MIN_PART_SIZE, partRanges, sendParts, type SendPart } from "./upload-parts";
 
 describe("upload parts", () => {
@@ -36,4 +36,11 @@ describe("upload parts", () => {
       onProgress: () => {}, onPartDone: () => {}, signal: new AbortController().signal,
     })).rejects.toThrow("part 2 failed");
   });
+});
+
+it("never starts a part if the upload was already cancelled", async () => {
+  const controller = new AbortController(); controller.abort();
+  const sendPart = vi.fn();
+  await expect(sendParts({ size: 10, partSize: 5, signal: controller.signal, sendPart, onProgress: () => {}, onPartDone: () => {} })).rejects.toMatchObject({ name: "AbortError" });
+  expect(sendPart).not.toHaveBeenCalled();
 });

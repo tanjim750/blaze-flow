@@ -220,6 +220,17 @@ export function uploadGuestAttachment(projectId: string, versionId: string, key:
  * send, so the caller fetches the bytes and hands the browser an object URL instead.
  */
 export async function downloadGuestAttachment(projectId: string, contentId: string, key: string, filename: string): Promise<string | null> {
+  // Only this small authorized JSON request depends on the page. R2 transfers belong
+  // to the browser's download manager, which can continue without a running tab.
+  const endpoint = `/api/guest/reviews/${projectId}/attachments/${contentId}/`;
+  try {
+    const signed = await fetch(`${endpoint}?download_link=1`, { headers: { "X-Guest-Access-Key": key } });
+    if (!signed.ok) return null;
+    const { url } = await signed.json() as { url: string | null };
+    if (url) {
+      const link = document.createElement("a"); link.href = url; link.download = filename; link.rel = "noreferrer"; link.click(); return url;
+    }
+  } catch { return null; }
   let response: Response;
   try {
     response = await fetch(`/api/guest/reviews/${projectId}/attachments/${contentId}/`, {

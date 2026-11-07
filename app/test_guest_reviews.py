@@ -267,6 +267,16 @@ class GuestReviewApiTests(WorkspaceAccessSetupMixin, TestCase):
         process_outbox_events()
         url = reverse('api-guest-attachment', args=[self.project_id, uploaded.json()['id']])
 
+        # Same permission checks, tiny JSON answer: R2 bytes go to the native download manager.
+        from unittest.mock import patch
+        from django.http import HttpResponseRedirect
+        with patch('app.guest_views.presigned_redirect_response', return_value=HttpResponseRedirect('https://bucket.example/signed-file')):
+            signed = self.client.get(f'{url}?download_link=1', **headers)
+            self.assertEqual(signed.status_code, 200)
+            self.assertEqual(signed.json()['url'], 'https://bucket.example/signed-file')
+            self.assertEqual(signed['Cache-Control'], 'private, no-store')
+            self.assertIn(self.client.get(f'{url}?download_link=1').status_code, (401, 403))
+
         ranged = self.client.get(url, HTTP_RANGE='bytes=0-8', **headers)
         self.assertEqual(ranged.status_code, 206)
         self.assertEqual(b''.join(ranged.streaming_content), b'%PDF-1.7\n')
