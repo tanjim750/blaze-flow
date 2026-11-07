@@ -597,3 +597,30 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
 .ap-btn.is-primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground, #fff); }
 .ap-btn.is-danger { background: var(--destructive, #e5484d); border-color: var(--destructive, #e5484d); color: #fff; }
 .ap-btn:disabled { opacity: .6; cursor: default; }
+
+/* Option B uses the existing flat theme and responsive client sheet. */
+.pb-collection-head { padding: 22px 24px 8px; }
+.pb-collection-head h1 { margin: 0 0 6px; font-size: 24px; font-weight: 650; color: var(--text); }
+.pb-collection-head p { margin: 0; max-width: 70ch; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.pb-more-tab { display: inline-flex; align-items: center; gap: 5px; padding: 9px 12px; border: 0; background: none; color: var(--muted); font-size: 12px; cursor: pointer; }
+.pb-more-tab.selected { color: var(--primary); }
+.pb-tabs-row { justify-content: flex-start; }
+.pb-home-clients { margin: 12px 16px 0; }
+.pb-client-uploads-dialog { width: min(900px, calc(100vw - 24px)); max-height: 85dvh; overflow: auto; padding: 24px; }
+.pb-client-uploads-dialog > h2 { margin: 0 44px 10px 0; font-size: 20px; font-weight: 650; line-height: 1.4; }
+.pb-client-uploads-dialog > p { margin: 0 0 20px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+@media (max-width: 480px) { .pb-client-uploads-dialog { padding: 20px 16px; } }
+.pb-from-client-empty { display: flex; align-items: center; gap: 12px; padding: 16px; margin: 0 0 20px; width: min(100%, 320px); text-align: left; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); cursor: pointer; }
+.pb-from-client-empty > svg:first-child { color: var(--primary); width: 22px; flex-shrink: 0; }
+.pb-from-client-empty span { min-width: 0; flex: 1; }
+.pb-from-client-empty strong { display: block; font-size: 13px; }
+.pb-from-client-empty small { display: block; margin-top: 4px; color: var(--bf-muted-foreground); font-size: 11px; line-height: 1.5; }
+.pb-from-client-empty > svg:last-child { width: 16px; flex-shrink: 0; color: var(--bf-muted-foreground); }
+.pb-client-link-tools { margin-bottom: 16px; }
+@media (max-width: 767px) {
+  .pb-collection-head { padding: 16px 16px 4px; }
+  .pb-collection-head .pb-sheet-open { margin-bottom: 12px; }
+  .pb-title-actions { flex-wrap: wrap; }
+  .pb-title-row { row-gap: 12px; }
+  .pb-more-tab { padding-inline: 8px; }
+}

@@ -6,6 +6,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from app.models import (
+    Project,
     ProjectAccessMode,
     Role,
     RolePermission,
@@ -116,7 +117,27 @@ def create_workspace(*, owner, name, slug, workspace_timezone):
     )
     membership.full_clean()
     membership.save()
+    ensure_unsorted_project(workspace=workspace)
     return workspace, membership
+
+
+@transaction.atomic
+def ensure_unsorted_project(*, workspace):
+    """One real default project, even for studios created after the data migration.
+
+    Serialize concurrent provisioning calls on the studio row; never reuse a project
+    merely because a user named it Unsorted.
+    """
+    Workspace.objects.select_for_update().get(id=workspace.id)
+    existing = Project.objects.filter(workspace=workspace, is_unsorted=True).first()
+    if existing:
+        return existing
+    now = timezone.now()
+    return Project.objects.create(
+        id=uuid.uuid4(), workspace=workspace, created_by_user_id=workspace.created_by_user_id,
+        name='Unsorted', description='Files that did not have a project. Move them when you are ready.',
+        status='ACTIVE', is_unsorted=True, created_at=now, updated_at=now,
+    )
 
 
 CLIENT_ROLE_NAME = 'Client'

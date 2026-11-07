@@ -45,7 +45,7 @@ export function Cover({ id, letter, projects }: { id: string; letter: string; pr
 
 type Confirm = { title: string; body: string; action: string; run: () => Promise<ActionState> } | null;
 
-export function AllProjects({ view }: { view: ProjectsView }) {
+export function AllProjects({ view, home = false }: { view: ProjectsView; home?: boolean }) {
   const router = useRouter();
   const clientId = useSearchParams()?.get("client");
   const access = view.access ?? FULL_TREE_ACCESS;
@@ -111,7 +111,7 @@ export function AllProjects({ view }: { view: ProjectsView }) {
     {access.renameProject && <>
       <DropdownMenuSeparator />
       <DropdownMenuItem onSelect={() => setConfirm({ title: `Archive ${project.name}?`, body: "It moves to Archived projects, where you can restore it.", action: "Archive", run: () => setProjectStatusAction(project.id, "ARCHIVED") })}><Archive size={14} />Archive</DropdownMenuItem>
-      <DropdownMenuItem className="ap-danger" onSelect={() => setConfirm({ title: `Delete ${project.name}?`, body: "It is removed from Projects, Files and Tasks. Its files stay in Archived projects.", action: "Delete", run: () => deleteCampaignAction(project.id) })}><Trash2 size={14} />Delete</DropdownMenuItem>
+      <DropdownMenuItem className="ap-danger" onSelect={() => setConfirm({ title: `Delete ${project.name}?`, body: "It is removed from Projects, All files and Tasks. Its files stay in Archived projects.", action: "Delete", run: () => deleteCampaignAction(project.id) })}><Trash2 size={14} />Delete</DropdownMenuItem>
     </>}
   </>;
 
@@ -121,7 +121,7 @@ export function AllProjects({ view }: { view: ProjectsView }) {
         <div>
           {client
             ? <><nav className="ap-crumbs" aria-label="Breadcrumb"><Link href="/projects?view=all">All clients</Link><ChevronRight size={14} /><span aria-current="page">{client.name}</span></nav><h1>{client.name}</h1><p>{plural(client.campaigns.length, "project")}</p></>
-            : <><h1>All clients</h1><p>{plural(view.clients.length, "client")} · {view.workspaceName}</p></>}
+            : <><h1>{home ? "Projects" : "All clients"}</h1><p>{plural(view.clients.length, "client")} · {view.workspaceName}</p></>}
         </div>
       </header>
       {(client ? client.campaigns : view.clients).length === 0 && <p className="ap-empty">{client ? "No projects for this client yet." : "No clients yet."}</p>}

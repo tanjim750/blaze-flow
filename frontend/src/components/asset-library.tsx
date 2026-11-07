@@ -111,6 +111,7 @@ function useAssetWrite(ownRefresh?: () => void, ownReport?: (message: string) =>
 const reviewHref = (file: LibraryFile) => file.fileId ? buildReviewHref({ mediaId: file.fileId }) : null;
 
 type Props = {
+  hideUploadControls?: boolean; uploadsDisabled?: boolean; onClientUploads?: () => void;
   view?: FilesView; projectId?: string | null; projectName?: string; clientId?: string | null; compact?: boolean;
   /** The page's query string. With `syncUrl`, folder, search, filters and sort live in the URL, so Back from review restores them. */
   initialQuery?: string; syncUrl?: boolean;
@@ -180,7 +181,7 @@ const VIEW_MODES = ["grid", "list"] as const;
 const DENSITIES = ["comfortable", "compact"] as const;
 const GROUPINGS = ["project", "type", "none"] as const;
 
-export function AssetLibrary({ view, projectId = null, projectName, clientId = null, compact = false, initialQuery = "", syncUrl = false, headerSlots, onFolderChange }: Props) {
+export function AssetLibrary({ view, projectId = null, projectName, clientId = null, compact = false, initialQuery = "", syncUrl = false, headerSlots, onFolderChange, hideUploadControls = false, uploadsDisabled = false, onClientUploads }: Props) {
   const initial = useMemo(() => parseFilesQuery(new URLSearchParams(initialQuery)), [initialQuery]);
   const router = useRouter();
   const [writeError, setWriteError] = useState<string | null>(null);
@@ -193,7 +194,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const [clientFilter, setClientFilter] = useState(initial.client); const [projectFilter, setProjectFilter] = useState(initial.project); const [kindFilter, setKindFilter] = useState<LibraryKind | "">(initial.kind as LibraryKind | ""); const [stageFilter, setStageFilter] = useState(initial.stage); const [fromClient, setFromClient] = useState(false); const [sort, setSort] = useState<SortKey>((initial.sort || "newest") as SortKey);
   const [mode, setMode] = useStoredChoice<ViewMode>("bf.files.view", "grid", VIEW_MODES);
   const [density, setDensity] = useStoredChoice<Density>("bf.files.density", "compact", DENSITIES);
-  const [groupBy, setGroupBy] = useStoredChoice<GroupBy>(compact ? "bf.files.group.project" : "bf.files.group", compact ? "type" : "project", GROUPINGS);
+  const [groupBy, setGroupBy] = useStoredChoice<GroupBy>(projectId ? "bf.files.group.project" : "bf.files.group", projectId ? "type" : "project", GROUPINGS);
   const [collapsed, setCollapsed] = useStoredSet("bf.files.collapsed");
   const [expandedFolders, setExpandedFolders] = useStoredSet("bf.files.tree");
   const [inspectorPref, setInspectorPref] = useStoredChoice<"open" | "closed">("bf.files.inspector.v2", "closed", ["open", "closed"] as const);
@@ -541,15 +542,16 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   });
 
   // Page-level shortcuts: N new folder, U upload, / search, ] details panel.
-  useDoParam("upload", () => setDialog("upload"));
-  useDoParam("upload-folder", () => folderPicker.current?.click());
-  useEffect(() => { const shortcuts = (event: KeyboardEvent) => { const target = event.target; if ((target instanceof Element && target.matches("input, select, textarea, [contenteditable=true]")) || event.metaKey || event.ctrlKey || event.altKey) return; if (target instanceof Element && target.closest("[role=dialog], [role=menu]")) return; const key = event.key.toLowerCase(); if (key === "u") { event.preventDefault(); setDialog("upload"); } if (key === "n") { event.preventDefault(); setDialog("folder"); } if (key === "/") { event.preventDefault(); searchRef.current?.focus(); } if (key === "]") { event.preventDefault(); document.dispatchEvent(new CustomEvent("bf-files-toggle-inspector")); } }; window.addEventListener("keydown", shortcuts); return () => window.removeEventListener("keydown", shortcuts); }, []);
+  useDoParam("upload", () => { if (!uploadsDisabled) setDialog("upload"); });
+  useDoParam("upload-folder", () => { if (!uploadsDisabled) folderPicker.current?.click(); });
+  useDoParam("new-folder", () => { if (!uploadsDisabled) setDialog("folder"); });
+  useEffect(() => { const shortcuts = (event: KeyboardEvent) => { const target = event.target; if ((target instanceof Element && target.matches("input, select, textarea, [contenteditable=true]")) || event.metaKey || event.ctrlKey || event.altKey) return; if (target instanceof Element && target.closest("[role=dialog], [role=menu]")) return; const key = event.key.toLowerCase(); if (key === "u" && !uploadsDisabled) { event.preventDefault(); setDialog("upload"); } if (key === "n" && !uploadsDisabled) { event.preventDefault(); setDialog("folder"); } if (key === "/") { event.preventDefault(); searchRef.current?.focus(); } if (key === "]") { event.preventDefault(); document.dispatchEvent(new CustomEvent("bf-files-toggle-inspector")); } }; window.addEventListener("keydown", shortcuts); return () => window.removeEventListener("keydown", shortcuts); }, [uploadsDisabled]);
   const toggleRef = useRef(toggleInspector);
   useEffect(() => { toggleRef.current = toggleInspector; });
   useEffect(() => { const listener = () => toggleRef.current(); document.addEventListener("bf-files-toggle-inspector", listener); return () => document.removeEventListener("bf-files-toggle-inspector", listener); }, []);
 
   /* ---------------------------------------------------------------- OS file drop (upload) */
-  const isOsDrag = (event: DragEvent) => !dragging && [...event.dataTransfer.types].includes("Files");
+  const isOsDrag = (event: DragEvent) => !uploadsDisabled && !dragging && [...event.dataTransfer.types].includes("Files");
   const osDragProps = {
     onDragOver: (event: DragEvent) => { if (!isOsDrag(event)) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; if (!osDrag) setOsDrag(true); },
     onDragLeave: (event: DragEvent) => { if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) setOsDrag(false); },
@@ -560,7 +562,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const relation = (entity: { clientId: string | null; projectId: string | null }) => relationLabel(entity, view);
   const locationLabel = (id: string | null) => { const folder = folders.find((item) => item.id === id) ?? null; return [rootLabel, ...folderTrail(folder, folders).map((item) => item.name)].join(" / "); };
   const folderItemCount = (folder: LibraryFolder) => files.filter((file) => file.folderId === folder.id && file.versioning.isLatest).length + folders.filter((item) => item.parentFolderId === folder.id).length;
-  const showRelation = !compact && groupBy !== "project";
+  const showRelation = !projectId && groupBy !== "project";
   const [shareOpen, setShareOpenRaw] = useState(false);
   // A file shared from its own ⋯ menu; null means the toolbar/selection share.
   const [shareFile, setShareFile] = useState<LibraryFile | null>(null);
@@ -568,7 +570,11 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   // Only people who may create client review links see Share on an item (clients and
   // read-only members never do); the offline sample library has nothing to share.
   const canShareItems = Boolean(view?.workspaceId) && view?.canShare !== false;
-  const shareEntity = (file: LibraryFile) => {
+  const shareEntity = (file: LibraryFile | LibraryFolder) => {
+    if (!("kind" in file)) {
+      setSelection({ selected: new Set([file.id]), anchor: file.id });
+      setShareFile(null); setShareOpenRaw(true); return;
+    }
     // Review links are made for review versions. A file that has not landed on the server
     // yet (still uploading or duplicating) has none, so say so instead of a dead dialog.
     if (!file.fileId || isProcessing(file)) {
@@ -590,7 +596,11 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const shareAsset = shareFile ?? (shareSingle && "kind" in shareSingle ? shareSingle : null);
   const shareAssetFileId = shareAsset?.fileId ? shareAsset.id : null;
   const shareProjectId = shareFile ? (shareFile.projectId ?? projectId) : projectId ?? shareSingle?.projectId ?? current?.projectId ?? (projectFilter || null);
-  const shareUrl = typeof window === "undefined" ? "" : shareFile ? `${window.location.origin}${reviewHref(shareFile) ?? ""}` : `${window.location.origin}${window.location.pathname}${current || shareSingle ? `?${new URLSearchParams({ folder: (shareSingle && !("kind" in shareSingle) ? shareSingle.id : current?.id) ?? "" })}` : ""}`;
+  const shareFolder = !shareAsset ? (shareSingle && !("kind" in shareSingle) ? shareSingle : current) : null;
+  const shareParams = new URLSearchParams(shareProjectId ? { campaign: shareProjectId } : { view: "files" });
+  if (shareFolder) shareParams.set("folder", shareFolder.id);
+  const shareUrl = typeof window === "undefined" ? "" : `${window.location.origin}${shareAsset ? reviewHref(shareAsset) ?? "" : `/projects?${shareParams}`}`;
+  const publicScopeNote = selected.size > 1 ? "Selection links are workspace-only. Share one folder or file for guest access." : undefined;
   const copySelectionLink = async () => {
     const links = [...selectedFiles.map((file) => reviewHref(file) ?? (file.folderId ? `/files?folder=${file.folderId}` : "/files")), ...selectedFolders.map((folder) => `/files?folder=${folder.id}`)].map((path) => `${window.location.origin}${path}`);
     toast[(await copyText(links.join("\n"))) ? "success" : "error"](links.length === 1 ? "Link copied" : `${links.length} links copied`);
@@ -610,7 +620,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
       renaming: renameField(entity, "item"),
       menu: <ItemMenu entity={entity} folders={folders} view={view} open={menuFor === entity.id} onOpenChange={(open) => setMenuFor(open ? entity.id : null)}
         returnFocus={() => itemRefs.current.get(entity.id)?.focus()}
-        onOpen={() => openEntity(entity)} onShare={isFile && canShareItems ? () => shareEntity(entity as LibraryFile) : undefined} onDetails={() => showDetails(entity)} onRename={() => setRenaming({ id: entity.id, where: "item" })}
+        onOpen={() => openEntity(entity)} onShare={canShareItems ? () => shareEntity(entity) : undefined} onDetails={() => showDetails(entity)} onRename={() => setRenaming({ id: entity.id, where: "item" })}
         onDuplicate={isFile ? () => duplicate(entity) : undefined} onDownload={isFile ? () => download(entity) : undefined}
         onDownloadManifest={!isFile ? () => downloadManifest(entity) : undefined}
         onDownloadFolder={!isFile && downloadFolder ? () => downloadFolder(entity as LibraryFolder) : undefined} onDelete={() => removeEntities([entity])} />,
@@ -654,7 +664,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
   const activeChips: { key: string; label: string; clear: () => void }[] = [
     ...(fromClient ? [{ key: "from-client", label: "From client", clear: () => setFromClient(false) }] : []),
     ...(clientFilter ? [{ key: "client", label: `Client: ${view?.clients.find((item) => item.id === clientFilter)?.name ?? "…"}`, clear: () => { setClientFilter(""); setProjectFilter(""); } }] : []),
-    ...(projectFilter ? [{ key: "project", label: `Campaign: ${projectName_(projectFilter) ?? "…"}`, clear: () => setProjectFilter("") }] : []),
+    ...(projectFilter ? [{ key: "project", label: `Project: ${projectName_(projectFilter) ?? "…"}`, clear: () => setProjectFilter("") }] : []),
     ...(kindFilter ? [{ key: "kind", label: `Type: ${kindFilter}`, clear: () => setKindFilter("") }] : []),
     ...(stageFilter ? [{ key: "stage", label: `Stage: ${stages.find((item) => item.id === stageFilter)?.name ?? "…"}`, clear: () => setStageFilter("") }] : []),
   ];
@@ -748,7 +758,7 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
               : <button type="button" className="fx-usearch-kbd" onClick={() => openQuickSearch(query)} aria-label="Search the whole app (⌘K)" title="Search the whole app"><kbd>⌘K</kbd></button>}
           </div>
   </>;
-  useRegisterPageSearch(!compact);
+  useRegisterPageSearch(true);
   // Folder crumbs continuing the page breadcrumb: every ancestor is a link-like button; the open
   // folder is the current page and is plain text.
   const folderCrumbs = current ? crumbs.map((folder) => <li key={folder.id}><ChevronRight aria-hidden="true" />
@@ -807,13 +817,13 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
             <button type="button" className={`fx-icon-btn fx-details-toggle${inspectorVisible ? " is-on" : ""}`} onClick={toggleInspector} aria-pressed={inspectorVisible} aria-label="Details" title="Details panel (])"><PanelRight aria-hidden="true" /></button>
             {downloadFolder && toolbarFolder && <button type="button" className="fx-icon-btn fx-download-folder" aria-label={`Download folder ${toolbarFolder.name}`} title={`Download “${toolbarFolder.name}” as zip`} onClick={() => downloadFolder(toolbarFolder)}><Download aria-hidden="true" /></button>}
             {!compact && <button type="button" className="fx-icon-btn fx-share-btn" aria-label="Share" title="Share" onClick={() => setShareOpen(true)}><ShareArrow /></button>}
-            <ToolbarMenu label="New" className={`fx-new${compact ? "" : " is-primary"}`} trigger={<><Plus aria-hidden="true" /><span>New</span></>}>
+            {!uploadsDisabled && !hideUploadControls && <ToolbarMenu label="New" className={`fx-new${compact ? "" : " is-primary"}`} trigger={<><Plus aria-hidden="true" /><span>New</span></>}>
               {(close) => <>
                 <button type="button" role="menuitem" onClick={() => { close(); setDialog("folder"); }}><FolderPlus aria-hidden="true" />New folder<kbd>N</kbd></button>
                 <button type="button" role="menuitem" onClick={() => { close(); setDialog("upload"); }}><Upload aria-hidden="true" />Upload files<kbd>U</kbd></button>
                 <button type="button" role="menuitem" onClick={() => { close(); folderPicker.current?.click(); }}><FolderOpen aria-hidden="true" />Upload folder</button>
               </>}
-            </ToolbarMenu>
+            </ToolbarMenu>}
           </div>
         </header>
         <div className="fx-toolbar is-secondary fx-chip-row" hidden={activeChips.length === 0}>
@@ -833,13 +843,17 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
               <DropdownMenuItem className="is-danger" onSelect={() => removeEntities([...selectedFiles, ...selectedFolders])}><Trash2 />Delete</DropdownMenuItem>
             </DropdownMenuContent></DropdownMenu>}
         />
-        <ShareModal key={shareFile?.id ?? "selection"} open={shareOpen} onOpenChange={setShareOpen} title={shareTitle} internalUrl={shareUrl}
-          workspaceId={view?.workspaceId ?? null} projectId={shareProjectId} assetFileId={shareAssetFileId} canCreateLinks={!offline} />
+        <ShareModal key={`${shareFile?.id ?? shareSingle?.id ?? current?.id ?? "project"}:${selected.size}`} open={shareOpen} onOpenChange={setShareOpen} title={shareTitle} internalUrl={shareUrl}
+          workspaceId={view?.workspaceId ?? null} projectId={shareProjectId} assetFileId={shareAssetFileId} folderId={shareFolder?.id} publicScopeNote={publicScopeNote} canCreateLinks={canShareItems && !publicScopeNote} />
 
         <div className={`fx-content${marquee.active ? " is-marquee" : ""}`} ref={contentRef} onPointerDown={marquee.onPointerDown}>
           {marquee.box && <div className="fx-marquee" data-testid="files-marquee" aria-hidden="true" style={marquee.box} />}
           {writeError && <p className="fx-notice" data-tone="danger" role="alert"><TriangleAlert />{writeError}<button type="button" className="fx-icon-btn is-xs" onClick={() => setWriteError(null)} aria-label="Dismiss error"><X /></button></p>}
-          {recursiveSearch && <p className="fx-results-note">Showing matches from every folder in {projectName || "Files"}.</p>}
+          {onClientUploads && clientId && projectId && !folderId && !query && !folders.some((folder) => !folder.parentFolderId && folder.name === "From client") && <button type="button" className="pb-from-client-empty" onClick={onClientUploads}>
+            <FolderOpen aria-hidden="true" /><span><strong>From client</strong><small>Client uploads appear here automatically</small></span><ChevronRight aria-hidden="true" />
+          </button>}
+          {onClientUploads && clientId && current?.name === "From client" && <button type="button" className="fx-btn is-sm pb-client-link-tools" onClick={onClientUploads}>Manage client upload links</button>}
+          {recursiveSearch && <p className="fx-results-note">Showing matches from every folder in {projectName || "All files"}.</p>}
           {mode === "list" && sections.length > 0 && <div className="fx-list-head" role="group" aria-label="Sort list">
             <span className="fx-col-check" />
             <SortHeader label="Name" active={sort === "name"} onClick={() => setSort(sort === "name" ? "newest" : "name")} />
@@ -882,8 +896,8 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
               </div>
             : <div className={`fx-dropzone${osDrag ? " is-over" : ""}`} data-testid="files-dropzone">
                 <CloudUploadArt />
-                <p>{current ? "This folder is empty. Drag files and folders here." : "Drag files and folders to begin."}</p>
-                <div className="fx-dropzone-actions"><button type="button" className="fx-btn is-primary is-sm" onClick={() => setDialog("upload")}>Upload</button><button type="button" className="fx-btn is-ghost is-sm" onClick={() => folderPicker.current?.click()}><FolderOpen aria-hidden="true" />Upload folder</button></div>
+                <p>{uploadsDisabled ? "No files here yet. Open a project to upload." : hideUploadControls ? "No files here yet. Use Upload above, or drag files and folders here." : current ? "This folder is empty. Drag files and folders here." : "Drag files and folders to begin."}</p>
+                {!uploadsDisabled && !hideUploadControls && <div className="fx-dropzone-actions"><button type="button" className="fx-btn is-primary is-sm" onClick={() => setDialog("upload")}>Upload</button><button type="button" className="fx-btn is-ghost is-sm" onClick={() => folderPicker.current?.click()}><FolderOpen aria-hidden="true" />Upload folder</button></div>}
               </div>)}
         </div>
         {osDrag && itemTotal > 0 && <div className="fx-os-drop" aria-hidden="true"><Upload /><strong>Upload to {current?.name ?? rootLabel}</strong><span>Release to stage these files</span></div>}
@@ -893,9 +907,9 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
       {inspector}
       <p className="fx-sr-only" role="status" aria-live="polite">{announcement}</p>
 
-      {dialog === "folder" && <FolderDialog view={view} folders={folders} defaultProjectId={projectId} defaultClientId={clientId} parentFolderId={folderId} close={() => setDialog(null)} />}
+      {!uploadsDisabled && dialog === "folder" && <FolderDialog view={view} folders={folders} defaultProjectId={projectId} defaultClientId={clientId} parentFolderId={folderId} close={() => setDialog(null)} />}
       <FolderInput inputRef={folderPicker} onPick={(list) => { if (list.length) { setDropped(list); setDialog("upload"); } }} />
-      {dialog === "upload" && <UploadDialog view={view} folders={folders} defaultProjectId={projectId} defaultClientId={clientId} currentFolderId={folderId} initialFiles={dropped} close={() => { setDialog(null); setDropped([]); }} />}
+      {!uploadsDisabled && dialog === "upload" && <UploadDialog view={view} folders={folders} defaultProjectId={projectId} defaultClientId={clientId} currentFolderId={folderId} initialFiles={dropped} close={() => { setDialog(null); setDropped([]); }} />}
       {preview && <PreviewDialog file={preview} close={() => setPreview(null)} />}
       {moveIds && <BulkAssignmentDialog view={view} folders={folders} selected={moveIds} close={() => setMoveIds(null)} done={() => { setMoveIds(null); setSelection({ selected: new Set(), anchor: null }); }} />}
     </div>
@@ -1021,9 +1035,9 @@ function FilterMenu({
           ]} />
 
         <p className="al-filter-group">Display</p>
-        <FilterField label="Group by" ariaLabel="Group by" value={groupBy} placeholder="Campaign" clearable={false}
+        <FilterField label="Group by" ariaLabel="Group by" value={groupBy} placeholder="Project" clearable={false}
           onChange={(value) => setGroupBy((value || "project") as GroupBy)}
-          options={[{ value: "project", label: "Campaign" }, { value: "type", label: "File type" }, { value: "none", label: "No grouping" }]} />
+          options={[{ value: "project", label: "Project" }, { value: "type", label: "File type" }, { value: "none", label: "No grouping" }]} />
         <FilterField label="Density" ariaLabel="Density" value={density} placeholder="Comfortable" clearable={false}
           onChange={(value) => setDensity((value || "comfortable") as Density)}
           options={[{ value: "comfortable", label: "Comfortable" }, { value: "compact", label: "Compact" }]} />
@@ -1129,7 +1143,7 @@ function ItemMenu({ entity, folders, view, open, onOpenChange, returnFocus, onOp
         {!isFile && <DropdownMenuItem onSelect={onOpen}><FolderOpen />Open</DropdownMenuItem>}
         {review && <DropdownMenuItem onSelect={onOpen}><Clapperboard />Open in review</DropdownMenuItem>}
         {isFile && !review && <DropdownMenuItem onSelect={onOpen}><Eye />Preview</DropdownMenuItem>}
-        {isFile && onShare && <DropdownMenuItem onSelect={onShare}><Share2 />Share</DropdownMenuItem>}
+        {onShare && <DropdownMenuItem onSelect={onShare}><Share2 />Share</DropdownMenuItem>}
         <DropdownMenuItem onSelect={onDetails}><Info />Details</DropdownMenuItem>
         <DropdownMenuItem onSelect={onRename}><Pencil />Rename</DropdownMenuItem>
         <AssignmentMenu entity={entity} folders={folders} view={view} />
@@ -1257,16 +1271,16 @@ function BulkAssignmentDialog({ view, folders, selected, close, done }: { view?:
     else updateLibrary(apply);
     done();
   };
-  return <Modal title={`Move / assign ${selected.size} item${selected.size === 1 ? "" : "s"}`} close={close}><form className="al-form" onSubmit={submit}><RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={project} setProject={setProject} /><label>Destination folder<Select name="folder" aria-label="Destination folder" defaultValue="" options={[{ value: "", label: "Project or Files root" }, ...destinations.map((folder) => ({ value: folder.id, label: folder.name }))]} /></label><label>Stage<Select aria-label="Stage" value={stage} onValueChange={setStage} options={[{ value: "", label: "Leave unchanged" }, ...(view?.stages ?? []).map((item) => ({ value: item.id, label: item.name }))]} /></label><button>Apply to {selected.size} item{selected.size === 1 ? "" : "s"}</button></form></Modal>;
+  return <Modal title={`Move / assign ${selected.size} item${selected.size === 1 ? "" : "s"}`} close={close}><form className="al-form" onSubmit={submit}><RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={project} setProject={setProject} /><label>Destination folder<Select name="folder" aria-label="Destination folder" defaultValue="" options={[{ value: "", label: "Project root" }, ...destinations.map((folder) => ({ value: folder.id, label: folder.name }))]} /></label><label>Stage<Select aria-label="Stage" value={stage} onValueChange={setStage} options={[{ value: "", label: "Leave unchanged" }, ...(view?.stages ?? []).map((item) => ({ value: item.id, label: item.name }))]} /></label><button>Apply to {selected.size} item{selected.size === 1 ? "" : "s"}</button></form></Modal>;
 }
 
-function FolderDialog({ view, folders, defaultProjectId, defaultClientId, parentFolderId, close }: { view?: FilesView; folders: LibraryFolder[]; defaultProjectId: string | null; defaultClientId: string | null; parentFolderId: string | null; close: () => void }) { const write = useAssetWrite(); const [client, setClient] = useState(realClientId(view, defaultClientId)); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const projects = (view?.groups ?? []).filter((group) => !client || group.clientId === client); const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget), project = String(data.get("project") || selectedProject || "") || null; const projectRow = view?.groups.find((item) => item.projectId === project); const draft = { id: newId("folder"), name: String(data.get("name")), clientId: (projectRow?.clientId ?? client) || null, projectId: project, parentFolderId, createdAt: new Date().toISOString(), createdBy: "You" }; const add = (state: LibraryState) => ({ ...state, folders: [...state.folders, draft] });
+function FolderDialog({ view, folders, defaultProjectId, defaultClientId, parentFolderId, close }: { view?: FilesView; folders: LibraryFolder[]; defaultProjectId: string | null; defaultClientId: string | null; parentFolderId: string | null; close: () => void }) { const write = useAssetWrite(); const [client, setClient] = useState(realClientId(view, defaultClientId)); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const projects = (view?.groups ?? []).filter((group) => !client || group.clientId === client); const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const data = new FormData(event.currentTarget), project = defaultProjectId ?? (String(data.get("project") || selectedProject || "") || null); const projectRow = view?.groups.find((item) => item.projectId === project); const draft = { id: newId("folder"), name: String(data.get("name")), clientId: (projectRow?.clientId ?? client) || null, projectId: project, parentFolderId, createdAt: new Date().toISOString(), createdBy: "You" }; const add = (state: LibraryState) => ({ ...state, folders: [...state.folders, draft] });
     if (view?.workspaceId) {
       write({ ids: [draft.id], optimistic: add, describe: `Creating ${draft.name}`,
         send: () => createAssetFolder(view.workspaceId!, { name: draft.name, client_team_id: draft.clientId, project_id: draft.projectId, parent_folder_id: draft.parentFolderId }),
         onSaved: (saved) => updateLibrary((state) => ({ ...state, folders: state.folders.map((item) => item.id === draft.id ? { ...draft, id: saved.id, createdAt: saved.created_at } : item) })) });
     } else { updateLibrary(add); }
-    close(); }; return <Modal title="Create folder" close={close}><form onSubmit={submit} className="al-form"><label>Folder name<input name="name" required autoFocus placeholder="Footage" /></label><RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={selectedProject} setProject={setSelectedProject} /><label>Inside folder<Select name="parent" aria-label="Inside folder" value={parentFolderId ?? ""} disabled options={[{ value: "", label: "Root Files area" }, ...folders.map((folder) => ({ value: folder.id, label: folder.name }))]} /></label><button>Create folder</button></form></Modal>; }
+    close(); }; return <Modal title="Create folder" close={close}><form onSubmit={submit} className="al-form"><label>Folder name<input name="name" required autoFocus placeholder="Footage" /></label><RelationFields lockedProjectId={defaultProjectId} view={view} projects={projects} client={client} setClient={setClient} selectedProject={selectedProject} setProject={setSelectedProject} /><label>Inside folder<Select name="parent" aria-label="Inside folder" value={parentFolderId ?? ""} disabled options={[{ value: "", label: "Project root" }, ...folders.map((folder) => ({ value: folder.id, label: folder.name }))]} /></label><button>Create folder</button></form></Modal>; }
 function UploadDialog({ view, folders, defaultProjectId, defaultClientId, currentFolderId, initialFiles = [], close }: { view?: FilesView; folders: LibraryFolder[]; defaultProjectId: string | null; defaultClientId: string | null; currentFolderId: string | null; initialFiles?: StagedFile[]; close: () => void }) {
   const write = useAssetWrite();
   const [client, setClient] = useState(realClientId(view, defaultClientId)); const [selectedProject, setSelectedProject] = useState(defaultProjectId ?? ""); const [uploads, setUploads] = useState<StagedFile[]>(() => initialFiles.filter((item) => item.file.size > 0)); const [stageId, setStageId] = useState(""); const [dragging, setDragging] = useState(false); const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle"); const [progress] = useState(0); const [failure, setFailure] = useState<string | null>(null); const cancelled = useRef(false);
@@ -1297,7 +1311,7 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
     event.preventDefault();
     if (!uploads.length) return;
     setStatus("uploading"); setFailure(null);
-    const data = new FormData(event.currentTarget), project = String(data.get("project") || selectedProject || "") || null, folder = String(data.get("folder") || currentFolderId || "") || null, projectRow = view?.groups.find((item) => item.projectId === project);
+    const data = new FormData(event.currentTarget), project = defaultProjectId ?? (String(data.get("project") || selectedProject || "") || null), folder = String(data.get("folder") || currentFolderId || "") || null, projectRow = view?.groups.find((item) => item.projectId === project);
     const destination = [projectRow?.projectName ?? null, "Files"].filter(Boolean).join(" · ");
     try {
       // Folder uploads: recreate the dropped folder tree under the destination first
@@ -1355,8 +1369,8 @@ function UploadDialog({ view, folders, defaultProjectId, defaultClientId, curren
       <fieldset className="al-destination" disabled={busy}>
         <legend>Destination</legend>
         {hasFolders && <p className="al-folder-note">Folders are recreated inside the folder you pick below, with every subfolder.</p>}
-        <RelationFields view={view} projects={projects} client={client} setClient={setClient} selectedProject={selectedProject} setProject={setSelectedProject} />
-        <div className="al-relations"><label>Folder (optional)<Select name="folder" aria-label="Folder" defaultValue={currentFolderId ?? ""} options={[{ value: "", label: "Root Files area" }, ...availableFolders.map((folder) => ({ value: folder.id, label: folder.name }))]} /></label><label>Stage<Select name="stage" aria-label="Stage" value={stageId} onValueChange={setStageId} options={[{ value: "", label: "No stage" }, ...(view?.stages ?? []).map((item) => ({ value: item.id, label: item.name }))]} /></label></div>
+        <RelationFields lockedProjectId={defaultProjectId} view={view} projects={projects} client={client} setClient={setClient} selectedProject={selectedProject} setProject={setSelectedProject} />
+        <div className="al-relations"><label>Folder (optional)<Select name="folder" aria-label="Folder" defaultValue={currentFolderId ?? ""} options={[{ value: "", label: "Project root" }, ...availableFolders.map((folder) => ({ value: folder.id, label: folder.name }))]} /></label><label>Stage<Select name="stage" aria-label="Stage" value={stageId} onValueChange={setStageId} options={[{ value: "", label: "No stage" }, ...(view?.stages ?? []).map((item) => ({ value: item.id, label: item.name }))]} /></label></div>
       </fieldset>
       {busy && <div className="al-progress" role="status" aria-live="polite"><div><span>Uploading {done} of {uploads.length}…</span><strong>{progress}%</strong></div><i><b style={{ width: `${progress}%` }} /></i></div>}
       {status === "error" && <p className="al-upload-error" role="alert">{failure ?? "The upload could not be completed."} The files it could not take are still staged below.</p>}
@@ -1372,7 +1386,7 @@ function FolderInput({ inputRef, onPick }: { inputRef: React.RefObject<HTMLInput
   return <input ref={(element) => { inputRef.current = element; if (element) { element.setAttribute("webkitdirectory", ""); element.setAttribute("directory", ""); } }} type="file" multiple hidden data-testid="folder-input" aria-label="Upload folder"
     onChange={(event) => { onPick(stagedFromInput(event.target.files)); event.target.value = ""; }} />;
 }
-function RelationFields({ view, projects, client, setClient, selectedProject, setProject }: { view?: FilesView; projects: FilesView["groups"]; client: string; setClient: (id: string) => void; selectedProject: string; setProject: (id: string) => void }) { return <div className="al-relations"><label>Client (optional)<Select aria-label="Client" value={client} onValueChange={(next) => { setClient(next); setProject(""); }} options={[{ value: "", label: "No client" }, ...(view?.clients ?? []).map((item) => ({ value: item.id, label: item.name }))]} /></label><label>Project (optional)<Select name="project" aria-label="Project" value={selectedProject} onValueChange={setProject} options={[{ value: "", label: "No project" }, ...projects.map((item) => ({ value: item.projectId, label: item.projectName }))]} /></label></div>; }
+function RelationFields({ view, projects, client, setClient, selectedProject, setProject, lockedProjectId }: { lockedProjectId?: string | null; view?: FilesView; projects: FilesView["groups"]; client: string; setClient: (id: string) => void; selectedProject: string; setProject: (id: string) => void }) { if (lockedProjectId) return <p className="al-destination-locked">Project: <strong>{view?.groups.find((group) => group.projectId === lockedProjectId)?.projectName ?? "This project"}</strong></p>; return <div className="al-relations"><label>Client (optional)<Select aria-label="Client" value={client} onValueChange={(next) => { setClient(next); setProject(""); }} options={[{ value: "", label: "No client" }, ...(view?.clients ?? []).map((item) => ({ value: item.id, label: item.name }))]} /></label><label>Project (optional)<Select name="project" aria-label="Project" value={selectedProject} onValueChange={setProject} options={[{ value: "", label: "No project" }, ...projects.map((item) => ({ value: item.projectId, label: item.projectName }))]} /></label></div>; }
 function Modal({ title, subtitle, icon, wide = false, close, children }: { title: string; subtitle?: string; icon?: React.ReactNode; wide?: boolean; close: () => void; children: React.ReactNode }) {
   const titleId = useId(); const panel = useRef<HTMLElement>(null);
   useEffect(() => { const previous = document.activeElement as HTMLElement | null; const first = panel.current?.querySelector<HTMLElement>("input:not([disabled]), button:not([disabled]), select:not([disabled])"); first?.focus(); return () => previous?.focus(); }, []);

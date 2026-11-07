@@ -106,7 +106,7 @@ export function ReviewQueuePanel({ items, total, problem, title = "Review queue"
     </div>
     <div className="review-list">
       {problem && <InlineProblem>{problem}</InlineProblem>}
-      {items.length === 0 && <EmptyState {...(empty ?? { title: "Nothing is waiting for review", body: "Cuts moved to In review or Approval show up here.", action: { href: "/files", label: "Open files" } })} />}
+      {items.length === 0 && <EmptyState {...(empty ?? { title: "Nothing is waiting for review", body: "Cuts moved to In review or Approval show up here.", action: { href: "/projects?view=files", label: "Open All files" } })} />}
       {items.map((item) => <Link href={item.href} className="review-row" key={item.id} aria-label={`Open review: ${item.title} ${item.version}, ${item.stage}`}>
         <DashboardPoster src={item.poster} />
         <div className="review-description">

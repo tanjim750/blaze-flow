@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { DO_EVENT, useDoParam } from "@/lib/do-param";
-import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AllProjects } from "./all-projects";
 import { Library } from "@/components/icons";
 import "@/components/files/files.css";
 import {
   Activity, Archive, ArrowUpRight, Building2, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, Ellipsis, FileText, Folder,
-  FolderInput, FolderOpen, Gauge, MessagesSquare, Pencil, Plus, RotateCcw, Share2, Sparkles, Trash2, TriangleAlert, UploadCloud, Users, Wallet, X,
+  FolderInput, FolderOpen, Gauge, MessagesSquare, Pencil, Plus, RotateCcw, Share2, Sparkles, Trash2, TriangleAlert, Users, Wallet, X,
 } from "@/components/icons";
 import type { ClientNode, ProjectsView } from "@/lib/projects-view";
 import type { FilesView } from "@/lib/files-view";
@@ -31,11 +31,8 @@ import { createCampaignAction, createClientAction, createFolderAction, deleteCam
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { planLabel, type PlanLimit } from "@/lib/plan-limit";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { startUpload } from "@/lib/upload-store";
-import { reviewHref } from "@/lib/open-in-review";
 import { ProjectActionsMenu, StatusPill } from "@/components/projects/project-actions-menu";
 import { ArchivePicker, ArchivedNotice, OpenProjectsContext, type OpenProject } from "@/components/projects/archive-picker";
-import { Select } from "@/components/ui/select";
 import { DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
 import { FULL_TREE_ACCESS } from "@/lib/permissions";
 
@@ -169,19 +166,27 @@ const TABS = ["Files", "Tasks", "Chat", "Brief & Specs", "Activity Log", "Client
 /** "Client uploads" also answers to `?tab=client-uploads` (what notifications and the feed link to). */
 const tabSlug = (value: string) => value.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, "");
 
-export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string }) {
+export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initialQuery = "" }: { view: ProjectsView; filesView: FilesView; tasksView: TasksView; initialTab?: string; initialQuery?: string }) {
   const router = useRouter();
   const [crumbSlot, setCrumbSlot] = useState<HTMLOListElement | null>(null);
-  const [searchSlot, setSearchSlot] = useState<HTMLDivElement | null>(null);
   const [filesFolder, setFilesFolder] = useState<string | null>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]>(
-    () => TABS.find((value) => value.toLowerCase() === initialTab?.toLowerCase() || (initialTab ? tabSlug(value) === tabSlug(initialTab) : false)) ?? "Files",
+    () => TABS.filter((value) => value !== "Client uploads").find((value) => value.toLowerCase() === initialTab?.toLowerCase() || (initialTab ? tabSlug(value) === tabSlug(initialTab) : false)) ?? "Files",
   );
   const [expanded, setExpanded] = useState<string[]>(view.selectedClient ? [view.selectedClient.id] : []);
-  const [uploading, setUploading] = useState(false);
+  const [clientUploadsOpen, setClientUploadsOpen] = useState(Boolean(initialTab && tabSlug(initialTab) === "client-uploads"));
   const [railClosed, setRailClosed] = useState(false);
   // Phones: the client tree is a sheet over the page instead of a column beside it.
-  const allProjects = useSearchParams()?.get("view") === "all";
+  const params = useSearchParams();
+  const filesMode = params?.get("view") === "files";
+  const allProjects = params?.get("view") === "all" || (!filesMode && !params?.get("campaign") && !params?.get("tab"));
+  const fileQuery = new URLSearchParams(initialQuery);
+  if (!filesMode) { fileQuery.delete("client"); fileQuery.delete("project"); }
+  const requestUpload = (kind: "upload" | "upload-folder" | "new-folder") => {
+    const pick = () => window.dispatchEvent(new CustomEvent(DO_EVENT, { detail: kind }));
+    if (tab === "Files") pick();
+    else { setTab("Files"); window.setTimeout(pick, 0); }
+  };
   const [sheetOpen, setSheetOpen] = useState(false);
   const campaignId = view.selectedCampaign?.id ?? null;
   const [unread, setUnread] = useState<{ project: string | null; count: number }>({ project: null, count: 0 });
@@ -210,9 +215,17 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
     <OpenProjectsContext.Provider value={openProjects}>
     <div className={`pb-layout${railClosed ? " is-rail-closed" : ""}${sheetOpen ? " is-sheet-open" : ""}`}>
       {sheetOpen && <button type="button" className="pb-sheet-backdrop" aria-label="Close clients" onClick={() => setSheetOpen(false)} />}
-      <ClientRail view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} onNavigate={() => setSheetOpen(false)} />
+      <ClientRail view={view} expanded={expanded} setExpanded={setExpanded} closed={railClosed} onToggle={() => setRailClosed(!railClosed)} onNavigate={() => setSheetOpen(false)} filesView={filesView} />
 
-      {allProjects ? <section className="pb-canvas"><AllProjects view={view} /></section> :
+      {allProjects ? <section className="pb-canvas"><button type="button" className="pb-sheet-open pb-home-clients" onClick={() => setSheetOpen(true)}><Users size={14} />Clients</button><AllProjects view={view} home={!params?.get("view")} /></section> : filesMode ?
+      <section className="pb-canvas pb-files-home">
+        <header className="pb-collection-head">
+          <button type="button" className="pb-sheet-open" onClick={() => setSheetOpen(true)}><Users size={14} />Clients</button>
+          <h1>All files</h1>
+          <p>Find files across your projects. To upload, open a project first.</p>
+        </header>
+        <AssetLibrary compact view={filesView} uploadsDisabled initialQuery={initialQuery} syncUrl />
+      </section> :
       <section className="pb-canvas">
         {view.notice && (
           <p className="pb-notice"><TriangleAlert size={14} /><span>{view.notice}</span></p>
@@ -222,13 +235,12 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
           <div className="pb-crumbs-row">
             <button type="button" className="pb-sheet-open" aria-expanded={sheetOpen} onClick={() => setSheetOpen(true)}><Users size={14} aria-hidden="true" />Clients</button>
             <ProjectCrumbs ref={setCrumbSlot} client={view.selectedClient} project={view.selectedCampaign} inFolder={Boolean(filesFolder) && tab === "Files"} />
-            {tab === "Files" && view.selectedCampaign && <div className="pb-crumbs-search" ref={setSearchSlot} />}
           </div>
 
           <div className="pb-title-row">
             <div className="pb-title">
               <span className="pb-monogram">{initials(view.selectedClient?.name ?? "Krewsys")}</span>
-              <h1>{view.selectedCampaign?.name ?? "No campaign selected"}</h1>
+              <h1>{view.selectedCampaign?.name ?? "No project selected"}</h1>
               {view.workspaceId && view.selectedCampaign && <StatusPill status={view.selectedCampaign.project?.status ?? view.selectedCampaign.status ?? "DRAFT"} />}
               {/* The client link is a quiet chip beside the title rather than a toolbar button. */}
               {view.selectedCampaign && <ProjectMoreActions view={view} campaignId={view.selectedCampaign.id} />}
@@ -238,15 +250,21 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
                 ? <ProjectActionsMenu projectId={view.selectedCampaign.id} name={view.selectedCampaign.name} status={view.selectedCampaign.project?.status ?? view.selectedCampaign.status ?? "DRAFT"} />
                 : <button className="pb-ghost-button pb-icon-only" type="button" aria-label="More actions" disabled><Ellipsis size={15} /></button>}
               <ShareMenu campaignId={view.selectedCampaign?.id ?? null} onShareFiles={() => { setTab("Files"); window.setTimeout(() => window.dispatchEvent(new Event(FILES_SHARE_EVENT)), 0); }} />
-              <button className="pb-ghost-button pb-folder-upload" type="button" disabled={!view.workspaceId || !view.selectedCampaign} aria-label="Upload folder" title="Upload folder into this project's Files"
-                onClick={() => { const pick = () => window.dispatchEvent(new CustomEvent(DO_EVENT, { detail: "upload-folder" })); if (tab === "Files") pick(); else { setTab("Files"); window.setTimeout(pick, 0); } }}><FolderOpen size={15} /><span>Upload folder</span></button>
-              <button className="pb-primary-button" type="button" disabled={!view.workspaceId || !view.selectedCampaign} onClick={() => setUploading(true)}><CloudUpload size={15} />Upload</button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild><button className="pb-primary-button" type="button" disabled={!view.workspaceId || !view.selectedCampaign}><CloudUpload size={15} />Upload<ChevronDown size={13} /></button></DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => requestUpload("upload")}><CloudUpload size={15} />Upload files</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => requestUpload("upload-folder")}><FolderOpen size={15} />Upload folder</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => requestUpload("new-folder")}><Plus size={15} />New folder</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 
           <div className="pb-tabs-row">
             <div className="pb-tabs" role="tablist">
-              {TABS.filter((value) => value !== "Pricing" || view.canSeeBilling).map((value) => (
+              {TABS.filter((value) => ["Files", "Tasks", "Chat"].includes(value)).map((value) => (
                 <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? "selected" : ""} onClick={() => setTab(value)}>
                   {value === "Files" && <FolderOpen size={14} />}
                   {value === "Chat" && <MessagesSquare size={14} />}
@@ -259,13 +277,21 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
                 </button>
               ))}
             </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><button type="button" className={`pb-more-tab${!["Files", "Tasks", "Chat"].includes(tab) ? " selected" : ""}`}>More<ChevronDown size={13} /></button></DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {(["Brief & Specs", "Activity Log", ...(view.canSeeBilling ? ["Pricing"] : [])] as (typeof TABS)[number][]).map((value) => <DropdownMenuItem key={value} onSelect={() => setTab(value)}>{value}</DropdownMenuItem>)}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setClientUploadsOpen(true)}>Client upload links</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {view.notice && <small>Demo content</small>}
           </div>
         </div>
 
 
         {tab === "Files" && view.selectedCampaign ? (
-          <AssetLibrary compact view={filesView} headerSlots={{ search: searchSlot, crumbs: crumbSlot }} onFolderChange={setFilesFolder} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null} />
+          <AssetLibrary key={view.selectedCampaign.id} compact view={filesView} hideUploadControls onClientUploads={view.selectedClient && view.selectedClient.id !== "unassigned" ? () => setClientUploadsOpen(true) : undefined} initialQuery={fileQuery.toString()} syncUrl headerSlots={{ search: null, crumbs: crumbSlot }} onFolderChange={setFilesFolder} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null} />
         ) : tab === "Chat" && view.selectedCampaign && view.workspaceId ? (
           <div className="pb-chat-preview"><ChatPreview workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} /></div>
         ) : tab === "Tasks" && view.selectedCampaign ? (
@@ -291,9 +317,14 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab }: { vi
           <ComingSoon tab={tab} hasCampaign={Boolean(view.selectedCampaign)} briefFolder={view.selectedCampaign?.folders.find((folder) => /brief/i.test(folder.name))?.name ?? null} onOpenFiles={() => setTab("Files")} />
         )}
       </section>}
-      {uploading && view.workspaceId && view.selectedCampaign && (
-        <UploadDialog workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} onClose={() => setUploading(false)} onUploaded={() => setUploading(false)} onLanded={() => router.refresh()} />
-      )}
+      {clientUploadsOpen && view.workspaceId && view.selectedCampaign && <Dialog open onOpenChange={setClientUploadsOpen}>
+        <DialogContent className="pb-client-uploads-dialog">
+          <DialogTitle>From client</DialogTitle>
+          <DialogDescription>Client uploads land in the From client folder in this project. Create or manage an upload link below.</DialogDescription>
+          <UploadLinksPanel workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} />
+          <DialogClose />
+        </DialogContent>
+      </Dialog>}
     </div>
     </OpenProjectsContext.Provider>
   );
@@ -304,8 +335,8 @@ function ComingSoon({ tab, hasCampaign, briefFolder, onOpenFiles }: { tab: (type
     return (
       <div className="pb-soon" role="status">
         <FolderOpen size={24} strokeWidth={1.75} aria-hidden="true" />
-        <h2>No campaign selected</h2>
-        <p>Pick a campaign in the client list, or add one with “Add Subfolder”.</p>
+        <h2>No project selected</h2>
+        <p>Pick a project in the client list, or create a project there.</p>
       </div>
     );
   }
@@ -319,63 +350,23 @@ function ComingSoon({ tab, hasCampaign, briefFolder, onOpenFiles }: { tab: (type
       <h2>{brief ? "Brief & specs" : tab === "Client uploads" ? "Client uploads" : "Activity log"}</h2>
       <p>
         {brief
-          ? `A place for the brief, deliverable specs and due dates is on the way. Until then, keep brief documents in ${briefFolder ? `the “${briefFolder}” folder` : "this campaign’s Files"}.`
+          ? `A place for the brief, deliverable specs and due dates is on the way. Until then, keep brief documents in ${briefFolder ? `the “${briefFolder}” folder` : "this project’s Files tab"}.`
           : tab === "Client uploads"
             ? "This is sample content. On a real campaign you can create upload links here so clients can send files without an account."
             : "This is sample content, so there is no history to show. Real campaigns list uploads, reviews, approvals, task moves and client link visits here."}
       </p>
-      {brief && <button type="button" className="pb-soon-link" onClick={onOpenFiles}><FolderOpen size={14} />Open Files</button>}
+      {brief && <button type="button" className="pb-soon-link" onClick={onOpenFiles}><FolderOpen size={14} />Open project files</button>}
     </div>
   );
 }
 
-function UploadDialog({ workspaceId, projectId, projectName, onClose, onUploaded, onLanded }: { workspaceId: string; projectId: string; projectName: string; onClose: () => void; onUploaded: () => void; onLanded: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  /**
-   * Hands the cut to the global upload queue and closes: the tray shows progress, then the
-   * scan and proxy, and keeps going if you leave this page. Failures stay there with Retry.
-   */
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const file = form.get("file");
-    if (!(file instanceof File) || !file.size) { setError("Choose a file to upload."); return; }
-    const fields: Record<string, string> = {};
-    form.forEach((value, key) => { if (key !== "file" && typeof value === "string") fields[key] = value; });
-    setBusy(true); setError("");
-    startUpload({
-      url: `/api/workspaces/${workspaceId}/projects/${projectId}/media-versions/`, file, fields, source: "project", destination: `${projectName} · new version`,
-      describe: (data) => {
-        const version = data as { id: string; file?: { id?: string } | null };
-        const fileId = version.file?.id ?? null;
-        return { workspaceId, fileId, href: fileId ? reviewHref({ mediaId: fileId }) : null };
-      },
-      onSuccess: () => onLanded(),
-    });
-    onUploaded();
-  }
-
-  return <dialog ref={dialog} open className="pb-upload-dialog" onCancel={onClose} onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.stopPropagation(); onClose(); } }} aria-modal="true" aria-labelledby="upload-title">
-    <button type="button" className="pb-upload-backdrop" onClick={onClose} tabIndex={-1} aria-hidden="true" />
-    <form onSubmit={submit} className="pb-upload-panel">
-      <header><div><p>New media version</p><h2 id="upload-title">Upload to {projectName}</h2></div><button type="button" onClick={onClose} aria-label="Close dialog"><X size={18} /></button></header>
-      <label className="pb-file-drop"><UploadCloud size={26} /><strong>Choose an asset</strong><span>PNG, JPEG, GIF, WebP, MP4, MOV, or WebM</span><input name="file" type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm" required /></label>
-      <label>Title<input name="title" placeholder="Spring campaign — hero cut" required /></label>
-      <label>Notes<textarea name="note" rows={3} placeholder="What changed in this version?" /></label>
-      <div className="pb-upload-options"><label>Priority<Select name="priority" aria-label="Priority" defaultValue="MEDIUM" options={[{ value: "LOW", label: "Low" }, { value: "MEDIUM", label: "Medium" }, { value: "HIGH", label: "High" }, { value: "URGENT", label: "Urgent" }]} /></label><label className="pb-check"><input name="allow_download" type="checkbox" value="true" />Allow downloads</label></div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      <footer><button type="button" onClick={onClose}>Cancel</button><button type="submit" disabled={busy}><CloudUpload size={15} />{busy ? "Uploading…" : "Upload asset"}</button></footer>
-    </form>
-  </dialog>;
-}
-
-export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNavigate }: { view: ProjectsView; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void; onNavigate?: () => void }) {
+export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNavigate, filesView }: { view: ProjectsView; expanded: string[]; setExpanded: (value: string[]) => void; closed: boolean; onToggle: () => void; onNavigate?: () => void; filesView?: FilesView }) {
   const [creating, setCreating] = useState(false);
   useDoParam("new", () => setCreating(true));
-  const allView = useSearchParams()?.get("view") === "all";
+  const searchParams = useSearchParams();
+  const allView = searchParams?.get("view") === "all" || (!searchParams?.get("view") && !searchParams?.get("campaign") && !searchParams?.get("tab"));
+  const filesMode = searchParams?.get("view");
+  const unsortedProject = view.clients.flatMap((client) => client.campaigns).find((project) => project.isUnsorted);
   const toggle = (id: string) => setExpanded(expanded.includes(id) ? expanded.filter((value) => value !== id) : [...expanded, id]);
 
   return (
@@ -396,7 +387,7 @@ export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNa
       </div>
       <div className="pb-rail-top">
         <div className="pb-rail-head">
-          <h2><Building2 size={16} />Clients</h2>
+          <h2><Building2 size={16} />Projects</h2>
           <button type="button" className="pb-new-button" data-mobile-primary="New" onClick={() => setCreating(!creating)} aria-expanded={creating}>
             <Plus size={13} />NEW
           </button>
@@ -411,6 +402,14 @@ export function ClientRail({ view, expanded, setExpanded, closed, onToggle, onNa
           />
         )}
 
+        <div role="tree" aria-label="Workspace files" className="fx-tree-list pb-all-clients">
+          <Link href="/projects?view=files" role="treeitem" aria-level={1} aria-selected={filesMode === "files"} className={`fx-tree-row ${filesMode === "files" ? "is-selected" : ""}`} style={{ paddingLeft: 8 }}>
+            <span className="fx-disclosure" aria-hidden="true" /><Library aria-hidden="true" /><span className="fx-tree-label">All files</span><span className="fx-count">{filesView?.files.length ?? ""}</span>
+          </Link>
+          {unsortedProject && <Link href={`/projects?campaign=${unsortedProject.id}`} role="treeitem" aria-level={1} aria-selected={view.selectedCampaign?.id === unsortedProject.id && !filesMode} className={`fx-tree-row ${view.selectedCampaign?.id === unsortedProject.id && !filesMode ? "is-selected" : ""}`} style={{ paddingLeft: 8 }}>
+            <span className="fx-disclosure" aria-hidden="true" /><Folder aria-hidden="true" /><span className="fx-tree-label">Unsorted</span><span className="fx-count">{filesView?.files.filter((file) => file.project_id === unsortedProject.id).length ?? ""}</span>
+          </Link>}
+        </div>
         {/* Same row as Files' "All files" (LibraryTree root row): fx-tree-* classes from files.css. */}
         <div role="tree" aria-label="All clients" className="fx-tree-list pb-all-clients">
           <Link href="/projects?view=all" role="treeitem" aria-level={1} aria-selected={allView} aria-current={allView ? "page" : undefined}
@@ -509,12 +508,12 @@ function ClientBranch({ client, view, open, onToggle }: { client: ClientNode; vi
               action={createCampaignAction}
               hidden={{ clientId: client.id }}
               placeholder="e.g. March 2026"
-              label="New subfolder name"
+              label="New project name"
               onClose={() => setAdding(false)}
             />
           ) : (
             <button type="button" className="pb-add-sub" onClick={() => setAdding(true)}>
-              <Plus size={13} />Add Subfolder <span>(e.g. March 2026)</span>
+              <Plus size={13} />New project <span>(e.g. March 2026)</span>
             </button>
           )}
 

@@ -133,7 +133,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
   // the task board with its filters, a project, the dashboard — not a fixed page. `?from=`
   // wins (it survives a refresh and a shared link); otherwise the shell remembered the
   // page the last review was opened from; otherwise the file's project or Files.
-  const fallbackBack = asset?.projectId ? `/projects?campaign=${asset.projectId}` : "/files";
+  const fallbackBack = asset?.projectId ? `/projects?campaign=${asset.projectId}` : "/projects?view=files";
   const [back, setBack] = useState(returnTo ?? fallbackBack);
   useEffect(() => {
     if (returnTo) return;
@@ -410,7 +410,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
           <div className="rv-crumbs"><strong>Nothing to review</strong></div>
         </header>
         <p className="rv-blank">
-          {view.notice ?? "Upload a video from Files or a project, then open it here to start a review."}
+          {view.notice ?? "Open a project, upload a video, then open it here to start a review."}
         </p>
       </div>
     );
@@ -644,7 +644,7 @@ export function ReviewWorkspace({ view, author, userId = null, initialShareOpen 
       {!view.target && (
         <p className="rv-banner is-local" role="status">
           <Info size={14} />
-          <span>This file isn&rsquo;t in a project yet. Move it into a project from Files and it becomes a review version automatically, ready for comments and approval.</span>
+          <span>This file isn&rsquo;t in a project yet. Open All files in Projects and move it into a project. It becomes a review version automatically, ready for comments and approval.</span>
         </p>
       )}
 

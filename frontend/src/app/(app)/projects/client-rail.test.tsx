@@ -30,12 +30,17 @@ beforeEach(() => Object.values(actions).forEach((fn) => fn.mockClear()));
 afterEach(() => cleanup());
 
 describe("ClientRail", () => {
-  it("puts an All clients row, styled like Files' All files, first in the tree", () => {
-    rail(view());
+  it("keeps All clients and adds All files and Unsorted before it", () => {
+    const v = view();
+    v.clients[1].campaigns = [{ id: "unsorted", name: "Unsorted", isUnsorted: true, assetCount: 0, folders: [] }];
+    rail(v);
     const row = screen.getByRole("treeitem", { name: /All clients/ });
     expect(row).toHaveAttribute("href", "/projects?view=all");
     expect(row).toHaveClass("fx-tree-row");
-    expect(row).not.toHaveClass("is-selected");
+    expect(row).toHaveClass("is-selected");
+    expect(screen.getAllByRole("treeitem").slice(0, 2).map((item) => item.textContent)).toEqual(["All files", "Unsorted"]);
+    expect(screen.getByRole("treeitem", { name: "All files" })).toHaveAttribute("href", "/projects?view=files");
+    expect(screen.getByRole("treeitem", { name: "Unsorted" })).toHaveAttribute("href", "/projects?campaign=unsorted");
     expect(row).toHaveTextContent("2");
   });
 

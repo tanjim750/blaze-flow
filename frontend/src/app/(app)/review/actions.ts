@@ -174,6 +174,7 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
   // An unticked checkbox is simply absent from the form.
   const allowDecisions = form.get("allowDecisions") === "on";
   const assetFileId = String(form.get("assetFileId") ?? "");
+  const folderId = String(form.get("folderId") ?? "");
 
   if (!workspaceId || !projectId) {
     return { error: "This review is showing demo content, so links cannot be created.", token: null };
@@ -188,6 +189,7 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
     permissions: invitePermissions(preset, allowDecisions),
     expires_in_hours: Math.round(days * 24),
     ...(assetFileId ? { asset_file_id: assetFileId } : {}),
+    ...(folderId ? { shared_folder_id: folderId } : {}),
   });
   if (!created.ok) return { error: created.error.detail, token: null };
 
@@ -200,10 +202,13 @@ export async function createGuestInviteAction(_prev: GuestInviteState, form: For
  * again. This issues a fresh link with the same label, access and remaining lifetime, then
  * revokes the old one.
  */
-export async function replaceGuestInviteAction(workspaceId: string, projectId: string, invite: { id: string; label: string; permissions: GuestPermission[]; expires_at: string }): Promise<GuestInviteState> {
+export async function replaceGuestInviteAction(workspaceId: string, projectId: string, invite: { id: string; label: string; permissions: GuestPermission[]; expires_at: string; shared_folder_id?: string | null; media_version_id?: string | null }): Promise<GuestInviteState> {
+  // A file link must never be silently replaced with a project-wide link.
+  if (invite.media_version_id) return { error: "Open the shared file to create a replacement link.", token: null };
   const hours = Math.max(1, Math.round((new Date(invite.expires_at).getTime() - Date.now()) / 3_600_000));
   const created = await createGuestInvite(workspaceId, projectId, {
     ...(invite.label ? { label: invite.label } : {}), permissions: invite.permissions, expires_in_hours: Math.min(hours, GUEST_LINK_MAX_DAYS * 24),
+    ...(invite.shared_folder_id ? { shared_folder_id: invite.shared_folder_id } : {}),
   });
   if (!created.ok) return { error: created.error.detail, token: null };
   const revoked = await revokeGuestInvite(workspaceId, projectId, invite.id);

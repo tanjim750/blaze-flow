@@ -20,6 +20,7 @@ from .permissions import REVIEW_DECISION_CREATE
 from .services.roles import create_role
 from .services.tasks import link_task_attachment
 from .test_access_projects import WorkspaceAccessSetupMixin
+from .testing import IsolatedCacheMixin
 
 GUEST_COMMENT = ['media.read', 'review.comment.read', 'review.comment.create', 'annotation.read']
 GUEST_DECIDE = GUEST_COMMENT + ['review.decision.create']
@@ -36,7 +37,7 @@ def _user(email, first='Test', last='User'):
     return model.objects.create_user(email=email, password='a-secure-test-password', first_name=first, last_name=last)
 
 
-class DecisionBase(WorkspaceAccessSetupMixin):
+class DecisionBase(IsolatedCacheMixin, WorkspaceAccessSetupMixin):
     def setUp(self):
         self.media_root = tempfile.mkdtemp(prefix='blazeflow-decisions-')
         self.settings_override = override_settings(MEDIA_ROOT=self.media_root)

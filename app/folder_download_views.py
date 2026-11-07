@@ -14,6 +14,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .guest_views import _guest_access, _scoped_media_id
+from .services.guest_scope import folder_ids, scoped_media
+from django.http import Http404
 from .models import FileStatus, GuestReviewAccessPermission, MediaVersion, Project, ProjectFile, ProjectFolder, Workspace
 from .permissions import PROJECT_FILE_READ
 from .services.audit import record_guest_audit, record_user_audit
@@ -61,7 +63,11 @@ def guest_folder_list(project, access):
     (directly or in a subfolder). Empty for file-scoped links or links without downloads."""
     if not guest_can_download_folders(access):
         return []
-    folders = {f.id: f for f in ProjectFolder.objects.filter(project=project, deleted_at__isnull=True)}
+    qs = ProjectFolder.objects.filter(project=project, deleted_at__isnull=True)
+    scope = folder_ids(access)
+    if scope is not None:
+        qs = qs.filter(id__in=scope)
+    folders = {f.id: f for f in qs}
     counts = {}
     files = guest_downloadable_files(project)(ProjectFile.objects.filter(project=project, folder__isnull=False, deleted_at__isnull=True, file__status=FileStatus.READY))
     for folder_id in files.values_list('folder_id', flat=True):
@@ -96,8 +102,11 @@ def guest_folder_download_link(request, project_id, folder_id):
     access = _guest_access(request, project, GUEST_DOWNLOAD_PERMISSION)
     if _scoped_media_id(access) is not None:
         raise PermissionDenied('This link is for one file, so it cannot download folders.')
+    scope = folder_ids(access)
+    if scope is not None and folder_id not in scope:
+        raise Http404("No such folder.")
     folder = _guest_folder(project, folder_id)
-    plan = plan_folder_zip(folder, file_filter=guest_downloadable_files(project))
+    plan = plan_folder_zip(folder, file_filter=lambda qs: qs.filter(file_id__in=scoped_media(access).filter(allow_download=True).values("original_file_id")))
     if request.query_params.get('retry') != '1':
         record_guest_audit(
             guest_session=access.guest_session, workspace=project.workspace, action='folder.downloaded',

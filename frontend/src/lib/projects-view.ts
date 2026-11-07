@@ -7,6 +7,7 @@ export type CampaignNode = {
   id: string; name: string; assetCount: number; folders: FolderNode[];
   /** API status (DRAFT, ACTIVE, ON_HOLD, COMPLETED). Absent on demo content. */
   status?: string;
+  isUnsorted?: boolean;
   /** The full project, loaded for the selected campaign only (the Brief tab reads it). */
   project?: Project | null;
   /** Why the brief could not be loaded, when it could not. */
@@ -93,7 +94,7 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
       .filter((project) => project.client_team_id === team.id)
       .map((project) => {
         claimed.add(project.id);
-        return { id: project.id, name: project.name, status: project.status, updatedAt: project.updated_at, assetCount: 0, folders: [] as FolderNode[] };
+        return { id: project.id, name: project.name, isUnsorted: project.is_unsorted, status: project.status, updatedAt: project.updated_at, assetCount: 0, folders: [] as FolderNode[] };
       });
     return { id: team.id, name: team.name, initial: team.name.charAt(0).toUpperCase(), assetCount: 0, campaigns, updatedAt: latest(campaigns.map((campaign) => campaign.updatedAt)) };
   });
@@ -102,7 +103,7 @@ export async function loadProjectsView(params: { clientId?: string; campaignId?:
   if (orphans.length) {
     clients.push({
       id: NO_CLIENT_ID, name: NO_CLIENT_LABEL, initial: "?", assetCount: 0, updatedAt: latest(orphans.map((project) => project.updated_at)),
-      campaigns: orphans.map((project) => ({ id: project.id, name: project.name, status: project.status, updatedAt: project.updated_at, assetCount: 0, folders: [] })),
+      campaigns: orphans.map((project) => ({ id: project.id, name: project.name, isUnsorted: project.is_unsorted, status: project.status, updatedAt: project.updated_at, assetCount: 0, folders: [] })),
     });
   }
 

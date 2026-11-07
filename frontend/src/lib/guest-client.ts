@@ -31,8 +31,8 @@ export type GuestMediaVersion = {
 /** `can_read_*`: whether the link may list notes and drawings; absent on older APIs (treated as allowed). */
 export type GuestViewer = {
   name: string; can_decide: boolean; can_comment: boolean; expires_at: string | null;
-  can_read_comments?: boolean; can_read_annotations?: boolean; can_annotate?: boolean; scoped_to_file?: boolean;
-  /** Whether this link may download whole folders as a zip (needs media.download, project-wide). */
+  can_read_comments?: boolean; can_read_annotations?: boolean; can_annotate?: boolean; scoped_to_file?: boolean; scoped_to_folder?: boolean;
+  /** Whether this link may download whole folders as a zip (needs media.download; honours folder scope). */
   can_download_folders?: boolean;
 };
 /** A folder the guest may download; `path` is "Parent / Child". */

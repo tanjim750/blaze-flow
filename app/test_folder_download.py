@@ -10,6 +10,7 @@ from .models import AuditLog, File, MediaVersion, Project, ProjectFile
 from .services import folder_zip
 from .services.folder_zip import FolderZipPlan, ZipEntry, safe_name
 from .test_access_projects import WorkspaceAccessSetupMixin
+from .testing import IsolatedCacheMixin
 
 
 class SafeNameTests(SimpleTestCase):
@@ -32,7 +33,7 @@ class SafeNameTests(SimpleTestCase):
         self.assertEqual(data['empty_dirs'], ['R/e'])
 
 
-class FolderDownloadApiTests(WorkspaceAccessSetupMixin, TestCase):
+class FolderDownloadApiTests(IsolatedCacheMixin, WorkspaceAccessSetupMixin, TestCase):
     def setUp(self):
         self.media_root = tempfile.mkdtemp(prefix='blazeflow-folder-zip-')
         self.override = override_settings(MEDIA_ROOT=self.media_root)
@@ -155,3 +156,92 @@ class FolderDownloadApiTests(WorkspaceAccessSetupMixin, TestCase):
         from .models import GuestReviewAccess
         GuestReviewAccess.objects.update(revoked_at=timezone.now())
         self.assertIn(self.client.post(reverse('api-guest-folder-download-link', args=[self.project.id, self.root]), **headers).status_code, (401, 403))
+
+
+class FolderScopedGuestTests(FolderDownloadApiTests):
+    def scoped_guest(self, folder=None, permissions=None):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(reverse('api-project-guest-invites', args=[self.workspace.id, self.project.id]), {
+            'shared_folder_id': folder or self.sub,
+            'permissions': permissions or ['media.read', 'media.download', 'review.comment.read', 'annotation.read'],
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.content)
+        self.client.force_authenticate(None)
+        exchanged = self.client.post(reverse('api-guest-exchange'), {
+            'token': response.json()['short_code'], 'name': 'Guest', 'email': 'guest@example.com',
+        }, format='json')
+        return {'HTTP_X_GUEST_ACCESS_KEY': exchanged.json()['access_key']}
+
+    def test_only_folder_descendants_are_visible_and_ancestor_names_are_hidden(self):
+        headers = self.scoped_guest()
+        review = self.client.get(reverse('api-guest-review', args=[self.project.id]), **headers).json()
+        self.assertEqual(review['project']['name'], 'Day 1')
+        self.assertEqual(review['project']['description'], '')
+        self.assertTrue(review['viewer']['scoped_to_folder'])
+        expected = set(MediaVersion.objects.filter(original_file_id__in=[self.b['file']['id'], self.pending['file']['id']]).values_list('id', flat=True))
+        self.assertEqual({m['id'] for m in review['media_versions']}, {str(i) for i in expected})
+        outside = MediaVersion.objects.get(original_file_id=self.a['file']['id'])
+        for route in ('api-guest-comments', 'api-guest-annotations', 'api-guest-playback'):
+            self.assertEqual(self.client.get(reverse(route, args=[self.project.id, outside.id]), **headers).status_code, 404)
+        for folder in (self.root, self.empty):
+            self.assertEqual(self.client.post(reverse('api-guest-folder-download-link', args=[self.project.id, folder]), **headers).status_code, 404)
+
+    def test_scoped_manifest_and_paths_do_not_include_ancestors_or_siblings(self):
+        MediaVersion.objects.filter(project=self.project).update(allow_download=True)
+        headers = self.scoped_guest()
+        review = self.client.get(reverse('api-guest-review', args=[self.project.id]), **headers).json()
+        self.assertEqual([row['path'] for row in review['folders']], ['Day 1'])
+        manifest = self.client.post(reverse('api-guest-folder-download-link', args=[self.project.id, self.sub]), **headers)
+        self.assertEqual(manifest.status_code, 200, manifest.content)
+        self.assertEqual([row['path'] for row in manifest.json()['entries']], ['Day 1/b.png'])
+
+    def test_moving_file_out_and_deleting_root_revokes_scope_not_widens_it(self):
+        from .models import ProjectFolder
+        from django.utils import timezone
+        headers = self.scoped_guest()
+        ProjectFile.objects.filter(id=self.b['id']).update(folder_id=self.root)
+        media = MediaVersion.objects.get(original_file_id=self.b['file']['id'])
+        self.assertEqual(self.client.get(reverse('api-guest-comments', args=[self.project.id, media.id]), **headers).status_code, 404)
+        ProjectFolder.objects.filter(id=self.sub).update(deleted_at=timezone.now())
+        review = self.client.get(reverse('api-guest-review', args=[self.project.id]), **headers).json()
+        self.assertEqual(review['media_versions'], [])
+        self.assertEqual(review['folders'], [])
+
+    def test_nested_folder_is_included_but_download_permission_is_still_required(self):
+        headers = self.scoped_guest(folder=self.root, permissions=['media.read'])
+        review = self.client.get(reverse('api-guest-review', args=[self.project.id]), **headers).json()
+        self.assertEqual(len(review['media_versions']), 3)
+        self.assertEqual(self.client.post(reverse('api-guest-folder-download-link', args=[self.project.id, self.sub]), **headers).status_code, 403)
+
+    def test_cannot_create_folder_link_for_other_project_or_combine_scopes(self):
+        import uuid
+        url = reverse('api-project-guest-invites', args=[self.workspace.id, self.project.id])
+        for payload in ({'shared_folder_id': str(uuid.uuid4())}, {'shared_folder_id': self.root, 'asset_file_id': self.a['id']}):
+            response = self.client.post(url, {'permissions': ['media.read'], **payload}, format='json')
+            self.assertEqual(response.status_code, 400, response.content)
+
+
+    def test_audio_and_pdf_use_ready_originals_and_signed_urls_recheck_folder_scope(self):
+        for mime in ('audio/mpeg', 'application/pdf'):
+            with self.subTest(mime=mime):
+                ProjectFile.objects.filter(id=self.b['id']).update(folder_id=self.sub)
+                File.objects.filter(id=self.b['file']['id']).update(mime_type=mime, status='READY')
+                headers = self.scoped_guest()
+                media = MediaVersion.objects.get(original_file_id=self.b['file']['id'])
+                playback = self.client.get(reverse('api-guest-playback', args=[self.project.id, media.id]), **headers)
+                self.assertEqual(playback.status_code, 200, playback.content)
+                self.assertEqual(playback.json()['mime_type'], mime)
+                url = playback.json()['url']
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response['Content-Type'], mime)
+                self.assertEqual(response['X-Frame-Options'], 'SAMEORIGIN')
+                self.assertTrue(b''.join(response.streaming_content))
+                ProjectFile.objects.filter(id=self.b['id']).update(folder_id=self.root)
+                self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_unready_original_audio_is_not_publicly_streamed(self):
+        File.objects.filter(id=self.b['file']['id']).update(mime_type='audio/mpeg', status='PENDING')
+        headers = self.scoped_guest()
+        media = MediaVersion.objects.get(original_file_id=self.b['file']['id'])
+        self.assertEqual(self.client.get(reverse('api-guest-playback', args=[self.project.id, media.id]), **headers).status_code, 409)

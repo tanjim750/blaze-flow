@@ -657,6 +657,9 @@ class Project(models.Model):
     # Structured deliverable specs for the Brief tab: aspect_ratio, target_length_seconds,
     # platform, resolution and notes. Shape is enforced by DeliverableSpecsSerializer.
     deliverable_specs = models.JSONField(default=dict, blank=True)
+    is_unsorted = models.BooleanField(default=False)
+    # Rollback journal for the one-time Unsorted backfill; never exposed by the API.
+    unsorted_migration_state = models.JSONField(default=dict, blank=True)
     # Billing (demo). What the client pays for the project as a whole; per-task prices are
     # added on top (see services/billing.py). Never serialised by ProjectSerializer: prices
     # only leave the API through the billing routes, which check billing.view.
@@ -1401,6 +1404,8 @@ class GuestInvite(models.Model):
     short_code = models.CharField(max_length=16, unique=True, null=True, blank=True)
     # A link shared for one file opens that file's review version.
     shared_media_version_id = models.UUIDField(null=True, blank=True)
+    # Keep the UUID after folder deletion so a scoped link can never become project-wide.
+    shared_folder_id = models.UUIDField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
     created_by_workspace_membership = models.ForeignKey(WorkspaceMembership, on_delete=models.DO_NOTHING, db_column='created_by_workspace_membership_id', related_name='+')

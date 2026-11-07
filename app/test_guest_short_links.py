@@ -15,6 +15,7 @@ from .models import GuestInvite
 from .services.guest_access import SHORT_CODE_LENGTH, generate_short_code, is_short_code
 from .services.guest_access import GuestAccessError
 from .test_access_projects import WorkspaceAccessSetupMixin
+from .testing import IsolatedCacheMixin
 
 CODE = re.compile(r'^[A-Za-z0-9]{8}$')
 
@@ -40,7 +41,7 @@ class ShortCodeUnitTests(TestCase):
         self.assertFalse(is_short_code('x' * 43))
 
 
-class ShortLinkApiTests(WorkspaceAccessSetupMixin, TestCase):
+class ShortLinkApiTests(IsolatedCacheMixin, WorkspaceAccessSetupMixin, TestCase):
     def setUp(self):
         self.media_root = tempfile.mkdtemp(prefix='bf-shortlinks-')
         self.override = override_settings(MEDIA_ROOT=self.media_root)

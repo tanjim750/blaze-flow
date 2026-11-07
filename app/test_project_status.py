@@ -26,12 +26,13 @@ class ProjectStatusTests(WorkspaceAccessSetupMixin, TestCase):
 
     def test_archive_list_and_unarchive(self):
         self.assertEqual(self.client.patch(self.url, {'status': 'ARCHIVED'}, format='json').status_code, 200)
-        self.assertEqual([row['id'] for row in self.client.get(self.list_url).json()], [])
+        default = str(Project.objects.get(workspace=self.workspace, is_unsorted=True).id)
+        self.assertEqual([row['id'] for row in self.client.get(self.list_url).json()], [default])
         archived = self.client.get(self.list_url, {'archived': '1'}).json()
         self.assertEqual([row['id'] for row in archived], [self.project_id])
         response = self.client.patch(self.url, {'status': 'ACTIVE'}, format='json')
         self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual([row['id'] for row in self.client.get(self.list_url).json()], [self.project_id])
+        self.assertEqual({row['id'] for row in self.client.get(self.list_url).json()}, {self.project_id, default})
 
     def test_unarchive_respects_the_plan_limit(self):
         self.client.patch(self.url, {'status': 'ARCHIVED'}, format='json')

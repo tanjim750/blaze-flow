@@ -178,5 +178,6 @@ class ChangePlanTests(TestCase):
         response = self.client.post(self.url, {'plan': 'FREE', 'reason': 'Trial over'}, format='json')
         self.assertEqual(response.status_code, 200)
         self.assertIn('projects', [w['code'] for w in response.json()['warnings']])
-        self.assertEqual(Project.objects.filter(workspace=self.workspace).count(), 2)
+        self.assertEqual(Project.objects.filter(workspace=self.workspace, is_unsorted=False).count(), 2)
+        self.assertEqual(Project.objects.filter(workspace=self.workspace, is_unsorted=True).count(), 1)
         self.assertNotEqual(owner.post(reverse('api-projects', args=[self.workspace.id]), {'name': 'C'}, format='json').status_code, 201)
