@@ -606,7 +606,10 @@ a.pb-crumb:focus-visible, button.pb-crumb:focus-visible { outline: 2px solid var
 .pb-more-tab.selected { color: var(--primary); }
 .pb-tabs-row { justify-content: flex-start; }
 .pb-home-clients { margin: 12px 16px 0; }
-.pb-client-uploads-dialog { width: min(900px, calc(100vw - 24px)); max-height: 85dvh; overflow: auto; }
+.pb-client-uploads-dialog { width: min(900px, calc(100vw - 24px)); max-height: 85dvh; overflow: auto; padding: 24px; }
+.pb-client-uploads-dialog > h2 { margin: 0 44px 10px 0; font-size: 20px; font-weight: 650; line-height: 1.4; }
+.pb-client-uploads-dialog > p { margin: 0 0 20px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+@media (max-width: 480px) { .pb-client-uploads-dialog { padding: 20px 16px; } }
 .pb-from-client-empty { display: flex; align-items: center; gap: 12px; padding: 16px; margin: 0 0 20px; width: min(100%, 320px); text-align: left; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); cursor: pointer; }
 .pb-from-client-empty > svg:first-child { color: var(--primary); width: 22px; flex-shrink: 0; }
 .pb-from-client-empty span { min-width: 0; flex: 1; }

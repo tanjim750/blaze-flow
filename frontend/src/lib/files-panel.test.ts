@@ -57,7 +57,7 @@ describe("groupSections (grouping)", () => {
 
   it("puts folders first, then campaigns A–Z, with Unsorted (including unknown projects) last", () => {
     const sections = groupSections([folder("f", "Footage")], files, "project", lookup);
-    expect(sections.map((section) => section.title)).toEqual(["Folders", "Atlas Reel", "Spring Launch", "Unsorted · not in review"]);
+    expect(sections.map((section) => section.title)).toEqual(["Folders", "Atlas Reel", "Spring Launch", "Unsorted"]);
     expect(sections[3].files.map((item) => item.id)).toEqual(["c", "d"]);
   });
 

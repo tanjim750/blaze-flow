@@ -1035,9 +1035,9 @@ function FilterMenu({
           ]} />
 
         <p className="al-filter-group">Display</p>
-        <FilterField label="Group by" ariaLabel="Group by" value={groupBy} placeholder="Campaign" clearable={false}
+        <FilterField label="Group by" ariaLabel="Group by" value={groupBy} placeholder="Project" clearable={false}
           onChange={(value) => setGroupBy((value || "project") as GroupBy)}
-          options={[{ value: "project", label: "Campaign" }, { value: "type", label: "File type" }, { value: "none", label: "No grouping" }]} />
+          options={[{ value: "project", label: "Project" }, { value: "type", label: "File type" }, { value: "none", label: "No grouping" }]} />
         <FilterField label="Density" ariaLabel="Density" value={density} placeholder="Comfortable" clearable={false}
           onChange={(value) => setDensity((value || "comfortable") as Density)}
           options={[{ value: "comfortable", label: "Comfortable" }, { value: "compact", label: "Compact" }]} />
