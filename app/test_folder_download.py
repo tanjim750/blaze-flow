@@ -10,6 +10,7 @@ from .models import AuditLog, File, MediaVersion, Project, ProjectFile
 from .services import folder_zip
 from .services.folder_zip import FolderZipPlan, ZipEntry, safe_name
 from .test_access_projects import WorkspaceAccessSetupMixin
+from .testing import IsolatedCacheMixin
 
 
 class SafeNameTests(SimpleTestCase):
@@ -32,7 +33,7 @@ class SafeNameTests(SimpleTestCase):
         self.assertEqual(data['empty_dirs'], ['R/e'])
 
 
-class FolderDownloadApiTests(WorkspaceAccessSetupMixin, TestCase):
+class FolderDownloadApiTests(IsolatedCacheMixin, WorkspaceAccessSetupMixin, TestCase):
     def setUp(self):
         self.media_root = tempfile.mkdtemp(prefix='blazeflow-folder-zip-')
         self.override = override_settings(MEDIA_ROOT=self.media_root)

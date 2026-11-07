@@ -11,9 +11,10 @@ from .models import (
 )
 from .services.outbox import process_outbox_events
 from .test_access_projects import WorkspaceAccessSetupMixin
+from .testing import IsolatedCacheMixin
 
 
-class GuestReviewApiTests(WorkspaceAccessSetupMixin, TestCase):
+class GuestReviewApiTests(IsolatedCacheMixin, WorkspaceAccessSetupMixin, TestCase):
     def setUp(self):
         self.media_root = tempfile.mkdtemp(prefix='blazeflow-guest-review-')
         self.settings_override = override_settings(MEDIA_ROOT=self.media_root)
