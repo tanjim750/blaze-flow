@@ -39,8 +39,11 @@ def forwards(apps, schema_editor):
         for folder in sorted(folders, key=lambda f: str(f.id)):
             parent = folder.parent_folder_id if folder.parent_folder_id in folder_ids else None
             name = folder.name
-            if (parent, name) in used:
-                name = f'{name[:215]} ({folder.id})'
+            suffix_number = 0
+            while (parent, name) in used:
+                suffix_number += 1
+                suffix = f' ({folder.id})' if suffix_number == 1 else f' ({folder.id}-{suffix_number})'
+                name = folder.name[:255 - len(suffix)] + suffix
             used.add((parent, name))
             Folder.objects.using(db).filter(id=folder.id).update(project_id=project.id, client_team_id=None, parent_folder_id=parent, name=name)
         for file in files:

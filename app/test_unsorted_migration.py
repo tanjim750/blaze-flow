@@ -59,6 +59,17 @@ class UnsortedMigrationTests(WorkspaceAccessSetupMixin, TestCase):
         self.assertEqual(root.name, duplicate.name)
         self.assertFalse(Project.objects.filter(id=project.id).exists())
 
+    def test_generated_collision_name_is_also_checked(self):
+        ids = [uuid.UUID(int=i) for i in (1, 2, 3)]
+        names = ['Source', f'Source ({ids[2]})', 'Source']
+        for fid, name in zip(ids, names):
+            ProjectFolder.objects.create(id=fid, workspace=self.workspace, name=name,
+                created_by_workspace_membership=self.owner_membership, created_at=self.now, updated_at=self.now)
+        migration.forwards(apps, self.schema)
+        self.assertEqual(len(set(ProjectFolder.objects.filter(id__in=ids).values_list('name', flat=True))), 3)
+        migration.backwards(apps, self.schema)
+        self.assertEqual(list(ProjectFolder.objects.filter(id__in=ids).order_by('id').values_list('name', flat=True)), names)
+
     def test_reverse_preserves_new_work(self):
         migration.forwards(apps, self.schema)
         project = Project.objects.get(workspace=self.workspace, is_unsorted=True)
