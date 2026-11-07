@@ -51,7 +51,7 @@ export function statusStats(item: UploadItem, ahead = 0): Stat[] {
     }
     case "processing": return [{ text: `${item.processing?.label ?? "Processing"}…` }];
     case "ready": return [{ text: item.processing?.label ?? "Done" }];
-    case "cancelled": return [{ text: "Cancelled" }];
+    case "cancelled": return [{ text: item.hasUploadSession ? "Stopping upload · cleaning up saved parts…" : "Cancelled" }];
     default: return [{ text: item.error ?? "Failed" }];
   }
 }
@@ -106,14 +106,14 @@ export function UploadTray() {
 
   // Everything landed and nothing needs attention: get out of the way (it used to sit over
   // primary actions such as "Send comment" until "Clear finished" was clicked).
-  const allDone = items.length > 0 && !busy && counts.processing === 0 && counts.failed === 0 && counts.paused === 0;
+  const allDone = items.length > 0 && !busy && counts.processing === 0 && counts.failed === 0 && counts.paused === 0 && !items.some((item) => item.status === "cancelled" && item.hasUploadSession);
   useEffect(() => {
     if (!allDone || downloads.length) return;
     const timer = window.setTimeout(clearFinished, AUTO_DISMISS_MS);
     return () => window.clearTimeout(timer);
   }, [allDone, items.length, downloads.length]);
 
-  const cancellable = items.some((item) => isActive(item) || item.status === "paused" || (item.status === "failed" && item.hasUploadSession)) || downloads.length > 0;
+  const cancellable = items.some((item) => isActive(item) || item.status === "paused" || ((item.status === "failed" || item.status === "cancelled") && item.hasUploadSession)) || downloads.length > 0;
   const cancelAll = () => {
     if (!window.confirm("Cancel all unfinished uploads and folder downloads? Saved upload parts will be deleted. Browser-managed downloads must be cancelled in your browser.")) return;
     cancelAllDownloads(); void cancelAllUploads();
@@ -181,7 +181,7 @@ export function UploadTray() {
                   {item.status === "ready" && item.href && <Link href={item.href} aria-label={`Open ${item.name}`} title="Open"><ExternalLink /></Link>}
                   {isActive(item)
                     ? <button type="button" onClick={() => cancelUpload(item.id)} aria-label={`Cancel ${item.name}`} title="Cancel"><X /></button>
-                    : item.status !== "processing" && <button type="button" onClick={() => dismissUpload(item.id)} aria-label={`Remove ${item.name} from the list`} title="Remove"><X /></button>}
+                    : item.status !== "processing" && !(item.status === "cancelled" && item.hasUploadSession) && <button type="button" onClick={() => dismissUpload(item.id)} aria-label={`Remove ${item.name} from the list`} title="Remove"><X /></button>}
                 </div>
               </div>
               <div className="ut-bar" role="progressbar" aria-valuenow={percent(item)} aria-valuemin={0} aria-valuemax={100} aria-label={`${item.name} progress`}>

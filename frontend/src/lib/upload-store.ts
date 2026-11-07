@@ -178,7 +178,7 @@ function persist() {
   for (const id of order) {
     const entry = entries.get(id)!;
     const { item, request } = entry;
-    if (!(isActive(item) || item.status === "paused" || (item.status === "failed" && entry.resume))) continue;
+    if (!(isActive(item) || item.status === "paused" || ((item.status === "failed" || item.status === "cancelled") && entry.resume))) continue;
     if (!parkedAt.has(id)) parkedAt.set(id, now());
     const resume = entry.resume as { id?: unknown } | null | undefined;
     parked.push({
@@ -390,11 +390,11 @@ async function follow(id: string, workspaceId: string, fileId: string) {
 /** Mark the entire selection before aborting; otherwise cancelling a queued item pumps
  * another item and starts a transfer while Cancel all is still iterating. */
 export async function cancelUploads(ids: string[]) {
-  const targets = ids.map((id) => entries.get(id)).filter((entry): entry is Entry => Boolean(entry && (isActive(entry.item) || entry.item.status === "paused" || (entry.item.status === "failed" && entry.resume))));
+  const targets = ids.map((id) => entries.get(id)).filter((entry): entry is Entry => Boolean(entry && (isActive(entry.item) || entry.item.status === "paused" || ((entry.item.status === "failed" || entry.item.status === "cancelled") && entry.resume))));
   for (const entry of targets) entry.item = { ...entry.item, status: "cancelled", autoResume: false, error: null, finishedAt: now() };
   emit();
   await Promise.all(targets.map(async (entry) => {
-    if (entry.controller) { entry.controller.abort(); return; }
+    if (entry.controller && !entry.controller.signal.aborted) { entry.controller.abort(); return; }
     settle(entry, { ok: false, status: 0, error: "Cancelled." });
     try {
       await pickTransport(entry.request).cancel?.(entry.resume, entry.request.direct);
@@ -431,7 +431,7 @@ export function retryUpload(id: string) {
 
 export function dismissUpload(id: string) {
   const entry = entries.get(id);
-  if (!entry || isActive(entry.item)) return;
+  if (!entry || isActive(entry.item) || (entry.item.status === "cancelled" && entry.item.hasUploadSession)) return;
   entries.delete(id);
   parkedAt.delete(id);
   order = order.filter((item) => item !== id);
@@ -442,7 +442,7 @@ export function dismissUpload(id: string) {
 export function clearFinished() {
   for (const id of order) {
     const item = entries.get(id)!.item;
-    if (item.status === "ready" || item.status === "cancelled" || item.status === "failed") entries.delete(id);
+    if (item.status === "ready" || (item.status === "cancelled" && !item.hasUploadSession) || item.status === "failed") entries.delete(id);
   }
   order = order.filter((id) => entries.has(id));
   emit();
@@ -495,7 +495,7 @@ export function trayCounts(items: UploadItem[]) {
     processing: items.filter((item) => item.status === "processing").length,
     paused: items.filter((item) => item.status === "paused").length,
     failed: items.filter((item) => item.status === "failed").length,
-    finished: items.filter((item) => item.status === "ready" || item.status === "cancelled" || item.status === "failed").length,
+    finished: items.filter((item) => item.status === "ready" || (item.status === "cancelled" && !item.hasUploadSession) || item.status === "failed").length,
   };
 }
 
