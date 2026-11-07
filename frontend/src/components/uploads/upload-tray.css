@@ -96,3 +96,19 @@
 .ut-confirm-keep { border: 1px solid var(--t-line-ffffff24); background: transparent; color: var(--text); }
 .ut-confirm-yes { border: 1px solid currentColor; background: transparent; color: var(--t-fg-ff9ba3); font-weight: 600; }
 @media (max-width: 640px) { .ut-confirm-actions button { min-height: 40px; } }
+
+/* "Cancel all" sits on the right, the helper text takes the space on its left. */
+.ut-transfer-actions .ut-cancel-all { margin-left: auto; }
+/* After "Yes, cancel all": rows fade, slide right and fold their height away; the tray follows when empty. */
+.ut-row.is-leaving { overflow: hidden; pointer-events: none; animation: ut-row-out 240ms var(--bf-ease-out, ease-out) forwards; }
+@keyframes ut-row-out {
+  0% { opacity: .6; transform: none; max-height: 140px; }
+  60% { opacity: 0; transform: translateX(24px); max-height: 140px; }
+  100% { opacity: 0; transform: translateX(24px); max-height: 0; padding-top: 0; padding-bottom: 0; border-top-width: 0; }
+}
+.ut.is-closing { pointer-events: none; animation: ut-out 200ms var(--bf-ease-out, ease-out) forwards; }
+@keyframes ut-out { to { opacity: 0; transform: translateY(10px); } }
+@media (prefers-reduced-motion: reduce) { .ut-row.is-leaving, .ut.is-closing { animation: none; opacity: 0; } }
+/* Every row is going: keep the tray's size and just fade the rows, the tray then fades as one. */
+.ut.is-emptying .ut-row.is-leaving { animation-name: ut-row-fade; }
+@keyframes ut-row-fade { to { opacity: 0; transform: translateX(24px); } }

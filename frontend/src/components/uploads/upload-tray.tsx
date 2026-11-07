@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Load
 import Link from "next/link";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import {
-  cancelUpload, cancelAllUploads, resumeInterruptedUploads, clearFinished, restoreParked, resumeFromFiles, dismissUpload, etaSeconds, formatBytes, formatEta, formatRate, isActive, percent, retryUpload, trayCounts, trayTotals,
+  cancelUpload, cancelAllUploads, getUploads, resumeInterruptedUploads, clearFinished, restoreParked, resumeFromFiles, dismissUpload, etaSeconds, formatBytes, formatEta, formatRate, isActive, percent, retryUpload, trayCounts, trayTotals,
   type UploadItem,
 } from "@/lib/upload-store";
 import { useUploads } from "@/lib/use-uploads";
@@ -19,6 +19,11 @@ import "./upload-tray.css";
 const size = formatBytes;
 /** How long "Uploads complete" stays up before the tray dismisses itself. */
 export const AUTO_DISMISS_MS = 5000;
+/** How long a cancelled row takes to fade and fold away (matches upload-tray.css). */
+export const LEAVE_MS = 240;
+/** Then, if nothing is left, the tray itself fades down (matches upload-tray.css). */
+export const CLOSE_MS = 200;
+const leaveMs = () => (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : LEAVE_MS);
 
 type Stat = { text: string; kind?: "parts" | "speed" | "eta" | "size" };
 
@@ -123,12 +128,31 @@ export function UploadTray() {
 
   const cancellable = items.some((item) => isActive(item) || item.status === "paused" || ((item.status === "failed" || item.status === "cancelled") && item.hasUploadSession)) || downloads.length > 0;
   const [confirmingCancel, setConfirmingCancel] = useState(false);
+  // Rows animating out after "Yes, cancel all". They are removed once both the exit animation
+  // and the server-side clean-up have finished; a row whose clean-up failed comes back as failed.
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
+  // Nothing left after the rows go: the tray fades down too instead of vanishing.
+  const [closing, setClosing] = useState(false);
   const cancelAll = () => {
     setConfirmingCancel(false);
-    cancelAllDownloads(); void cancelAllUploads();
+    const ids = items.filter((item) => isActive(item) || item.status === "paused" || ((item.status === "failed" || item.status === "cancelled") && item.hasUploadSession)).map((item) => item.id);
+    setLeaving(new Set(ids));
+    const emptiesTray = ids.length === items.length;
+    cancelAllDownloads();
+    const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    const animation = wait(leaveMs()).then(() => {
+      if (!emptiesTray) return;
+      setClosing(true);
+      return wait(leaveMs() && CLOSE_MS);
+    });
+    void Promise.all([cancelAllUploads(), animation]).then(() => {
+      const done = new Map(getUploads().map((item) => [item.id, item]));
+      for (const id of ids) { const item = done.get(id); if (item?.status === "cancelled" && !item.hasUploadSession) dismissUpload(id); }
+      setLeaving(new Set()); setClosing(false);
+    });
   };
   if (!items.length && !downloads.length) return null;
-  const title = busy
+  const title = leaving.size ? "Cancelling uploads…" : busy
     ? `Uploading ${counts.active} ${counts.active === 1 ? "file" : "files"}`
     : counts.paused ? `${counts.paused} upload${counts.paused === 1 ? "" : "s"} paused` : counts.processing ? `Processing ${counts.processing}` : counts.failed ? `${counts.failed} upload${counts.failed === 1 ? "" : "s"} failed` : downloads.length ? `Downloading ${downloads.length} folder${downloads.length === 1 ? "" : "s"}` : "Uploads complete";
   const totals = trayTotals(items);
@@ -138,7 +162,7 @@ export function UploadTray() {
   items.filter((item) => item.status === "queued").forEach((item, index) => ahead.set(item.id, index));
 
   return (
-    <section className={`ut ${collapsed ? "is-collapsed" : ""}`} aria-label="Uploads" data-testid="upload-tray"
+    <section className={`ut ${collapsed ? "is-collapsed" : ""} ${closing ? "is-closing" : ""} ${leaving.size > 0 && leaving.size >= items.length && !downloads.length ? "is-emptying" : ""}`} aria-label="Uploads" data-testid="upload-tray"
       onDragOver={(event) => { if (counts.paused) event.preventDefault(); }} onDrop={(event) => { void onDrop(event); }}>
       <input ref={picker} type="file" multiple hidden data-testid="upload-resume-input"
         onChange={(event) => { resumeWith(Array.from(event.target.files ?? []), resumeFor); event.target.value = ""; setResumeFor(null); }} />
@@ -152,14 +176,14 @@ export function UploadTray() {
           {collapsed ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
           <span className="sr-only">{collapsed ? "Show uploads" : "Minimise uploads"}</span>
         </button>
-        {counts.finished > 0 && !collapsed && (
+        {counts.finished > 0 && !collapsed && !leaving.size && (
           <button type="button" className="ut-clear" onClick={clearFinished} title="Clear finished uploads"><Trash2 aria-hidden="true" /><span>Clear finished</span></button>
         )}
-        {allDone && (
+        {allDone && !leaving.size && (
           <button type="button" className="ut-close" onClick={clearFinished} aria-label="Close uploads" title="Close"><X aria-hidden="true" /></button>
         )}
       </header>
-      {cancellable && !confirmingCancel && <div className="ut-transfer-actions"><button type="button" className="ut-clear ut-cancel-all" onClick={() => setConfirmingCancel(true)}>Cancel all</button><small>Keep this tab open. Interrupted uploads resume when you return.</small></div>}
+      {cancellable && !confirmingCancel && !leaving.size && <div className="ut-transfer-actions"><small>Keep this tab open. Interrupted uploads resume when you return.</small><button type="button" className="ut-clear ut-cancel-all" onClick={() => setConfirmingCancel(true)}>Cancel all</button></div>}
       {cancellable && confirmingCancel && (
         <div className="ut-confirm" role="alertdialog" aria-labelledby="ut-confirm-text" data-testid="upload-cancel-confirm">
           <p id="ut-confirm-text">Cancel all unfinished uploads and folder downloads? Saved upload parts will be deleted. Browser-managed downloads must be cancelled in your browser.</p>
@@ -171,7 +195,7 @@ export function UploadTray() {
       )}
       {downloads.length > 0 && <p className="ut-notice">Folder downloads: {downloads.map((item) => item.name).join(", ")}. Browser downloads are managed by your browser.</p>}
       {collapsed && busy && <i className="ut-overall" style={{ width: `${overall}%` }} aria-hidden="true" />}
-      {!collapsed && busy && totals.size > 0 && (
+      {!collapsed && busy && !leaving.size && totals.size > 0 && (
         <div className="ut-summary" data-testid="upload-tray-summary">
           <div className="ut-summary-top">
             <span>{size(totals.loaded)} of {size(totals.size)} · <b>{size(totals.remaining)} remaining</b></span>
@@ -186,7 +210,7 @@ export function UploadTray() {
       {!collapsed && (
         <ul className="ut-list" id="ut-list">
           {items.map((item) => (
-            <li key={item.id} className={`ut-row is-${item.status}`} data-testid="upload-row" data-status={item.status}>
+            <li key={item.id} className={`ut-row is-${item.status} ${leaving.has(item.id) ? "is-leaving" : ""}`} aria-hidden={leaving.has(item.id) || undefined} data-testid="upload-row" data-status={item.status}>
               <div className="ut-row-top">
                 <UploadCloud className="ut-file" aria-hidden="true" />
                 <div className="ut-name">
