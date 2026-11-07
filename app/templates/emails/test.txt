@@ -1,0 +1,4 @@
+{% autoescape off %}Email is working.
+
+This is a test message from {{ brand }} sent at {{ sent_at|date:"j M Y, H:i e" }}.
+Backend: {{ backend }}{% endautoescape %}

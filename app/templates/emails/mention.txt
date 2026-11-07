@@ -1,0 +1,7 @@
+{% autoescape off %}{{ actor_name }} mentioned you in a review comment.
+
+Comment: {{ excerpt }}
+
+Open review: {{ action_url }}
+
+You can turn off mention emails in your {{ brand }} notification settings.{% endautoescape %}

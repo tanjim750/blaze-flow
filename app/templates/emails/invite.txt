@@ -1,0 +1,9 @@
+{% autoescape off %}{{ inviter_name }} invited you to collaborate in {{ workspace_name }}{% if role_name %} as {{ role_name }}{% endif %} on {{ brand }}.
+
+Accept the invitation:
+
+{{ action_url }}
+
+This invitation expires on {{ expires_at|date:"j F Y" }}. Sign in or create an account with {{ email }} to accept.
+
+— {{ brand }}{% endautoescape %}

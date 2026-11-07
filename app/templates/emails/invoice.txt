@@ -1,0 +1,12 @@
+{% autoescape off %}{{ workspace_name }} sent you invoice {{ number }}{% if project_name %} for {{ project_name }}{% endif %}.
+
+Amount due: {{ currency }} {{ total }}
+{% if due_date %}Due: {{ due_date|date:"j F Y" }}
+{% endif %}
+View and pay it in your client portal:
+
+{{ action_url }}
+{% if notes %}
+Notes: {{ notes }}
+{% endif %}
+— {{ workspace_name }} via {{ brand }}{% endautoescape %}

@@ -1,12 +1,12 @@
-# Blaze Flow — Core Domain Features
+# Krewsys — Core Domain Features
 
-This document summarizes the features currently locked for the first five Blaze Flow domains.
+This document summarizes the currently planned Krewsys domains. It describes product intent; implemented behavior and delivery status are tracked in `docs/implementation-log.md`.
 
 ---
 
 ## 1. Identity & Authentication
 
-The Identity & Authentication domain manages the global identity of every registered Blaze Flow user. A user exists independently of any workspace and can authenticate using a password or a supported OAuth provider. Authentication credentials and external identities are separated from the core user profile so additional authentication methods can be introduced without changing the user model.
+The Identity & Authentication domain manages the global identity of every registered Krewsys user. A user exists independently of any workspace and can authenticate using a password or a supported OAuth provider. Django's custom user model is the authoritative identity and credential record; external OAuth identities remain separate records linked to it.
 
 ### Features
 
@@ -14,10 +14,10 @@ The Identity & Authentication domain manages the global identity of every regist
 Each user has one global account identified by a unique email address. The user profile stores core information such as first name, last name, avatar, timezone, account status, email verification time, and last login time.
 
 #### Email and Password Authentication
-Users can authenticate using their email address and password. Password credentials are maintained separately from the main user record, allowing an account to exist without password authentication when it was originally created through OAuth.
+Users authenticate with their email address and password. Passwords use Django's versioned password-hashing framework and are never stored in plaintext. OAuth-only accounts receive an unusable Django password until the user explicitly configures one.
 
 #### Google OAuth Authentication
-Google OAuth is supported through a generic OAuth identity model. A verified Google email can be automatically linked to an existing account with the same email, while a first-time Google login can create a new Blaze Flow user automatically.
+Google OAuth is supported through a generic OAuth identity model. A verified Google email can be automatically linked to an existing account with the same email, while a first-time Google login can create a new Krewsys user automatically.
 
 #### Multiple Authentication Methods
 A user created through Google OAuth can later configure a password and use either authentication method. Authentication mechanisms remain independent while resolving to the same global user identity.
@@ -35,7 +35,7 @@ External reviewers can participate through lightweight Guest Sessions without be
 
 ## 2. Workspace
 
-A Workspace is Blaze Flow's primary tenant and organizational boundary. Projects, teams, roles, workflows, and other collaborative resources operate within a workspace. The workspace stores only its core identity and lifecycle information, while optional business information is maintained separately through a workspace profile.
+A Workspace is Krewsys's primary tenant and organizational boundary. Projects, teams, roles, workflows, and other collaborative resources operate within a workspace. The workspace stores only its core identity and lifecycle information, while optional business information is maintained separately through a workspace profile.
 
 ### Features
 
@@ -61,7 +61,7 @@ Each workspace receives a globally unique slug suitable for routing and human-re
 
 ## 3. Workspace Membership & Principal Model
 
-The Workspace Membership domain defines which authorization principals participate in a workspace. A membership can represent either an individual registered user or an entire Client Team, allowing Blaze Flow to use the same authorization structure for internal collaborators and organizational client access.
+The Workspace Membership domain defines which authorization principals participate in a workspace. A membership can represent either an individual registered user or an entire Client Team, allowing Krewsys to use the same authorization structure for internal collaborators and organizational client access.
 
 ### Features
 
@@ -83,6 +83,9 @@ The primary owner is represented by a boolean ownership flag on a direct user me
 #### Membership Lifecycle
 Workspace memberships have their own lifecycle state, allowing access to be suspended or removed without deleting the underlying user or Client Team. Membership history can therefore remain available while effective authorization is disabled.
 
+#### Direct User Invitations
+Workspace member managers can invite a registered-user email into a direct membership with a selected role and project-access mode. Invitations use expiring single-use tokens, store only token hashes, and require the accepting account's normalized email to match the invitation.
+
 #### Project Access Mode
 A membership can use either `ALL` or `SELECTED` project access mode. `ALL` provides the membership with the workspace-level project boundary, while `SELECTED` relies on explicit Resource Access records.
 
@@ -95,7 +98,7 @@ The Roles & Permissions domain defines what an authorized workspace principal is
 ### Features
 
 #### Workspace-Specific Roles
-Roles belong to individual workspaces and can be created according to each organization's operational structure. Blaze Flow does not require predefined business roles such as Admin, Editor, or Client.
+Roles belong to individual workspaces and can be created according to each organization's operational structure. Krewsys does not require predefined business roles such as Admin, Editor, or Client.
 
 #### Reusable Permission Bundles
 A role groups multiple permission keys into a reusable authorization policy. The same role can then be assigned through workspace memberships instead of repeatedly configuring individual permissions.
@@ -207,7 +210,7 @@ Creating a Media Version requires explicitly selecting its initial Workflow Stag
 
 ## 8. Workflow Stages & Statuses
 
-The Workflow domain defines customizable review and production processes within a Workspace. Instead of hardcoding workflow stages into database enums, stages and their optional statuses are represented as data. This allows each workspace to adapt its workflow while Blaze Flow can still provision protected system stages.
+The Workflow domain defines customizable review and production processes within a Workspace. Instead of hardcoding workflow stages into database enums, stages and their optional statuses are represented as data. This allows each workspace to adapt its workflow while Krewsys can still provision protected system stages.
 
 ### Features
 
@@ -215,7 +218,7 @@ The Workflow domain defines customizable review and production processes within 
 Workflow Stages belong to a Workspace and can be arranged using `sort_order`. Each workspace can therefore maintain its own production and review workflow.
 
 #### System-Provisioned Stages
-Blaze Flow can provision standard stages such as Queued, In Progress, In Review, Revision, Approval, and Approved. These are regular database rows rather than enum values, allowing flexible ordering while preserving application-defined system behavior.
+Krewsys can provision standard stages such as Queued, In Progress, In Review, Revision, Approval, and Approved. These are regular database rows rather than enum values, allowing flexible ordering while preserving application-defined system behavior.
 
 #### Custom Workflow Stages
 Workspaces may create additional stages to match their own operational processes. Custom stages use the same workflow infrastructure as system-provisioned stages.
@@ -242,7 +245,7 @@ System-created stages and statuses can be distinguished through their creator in
 
 ## 9. Media Version Stage History
 
-The Media Version Stage History domain records the complete workflow timeline of every Media Version. Rather than storing only the current stage directly on the Media Version, Blaze Flow uses immutable stage-entry records as the canonical workflow history. The currently open entry represents the Media Version's present workflow position.
+The Media Version Stage History domain records the complete workflow timeline of every Media Version. Rather than storing only the current stage directly on the Media Version, Krewsys uses immutable stage-entry records as the canonical workflow history. The currently open entry represents the Media Version's present workflow position.
 
 ### Features
 
@@ -318,7 +321,7 @@ Comments are soft-deleted using deletion timestamps and actor references. This p
 
 ## 11. Review Comment Contents
 
-The Review Comment Contents domain allows a single review comment to contain one or more content items. Instead of limiting comments to plain text, Blaze Flow supports text, audio, images, and arbitrary file attachments within the same review message.
+The Review Comment Contents domain allows a single review comment to contain one or more content items. Instead of limiting comments to plain text, Krewsys supports text, audio, images, and arbitrary file attachments within the same review message.
 
 ### Features
 
@@ -350,7 +353,7 @@ A Review Comment must contain at least one content item. Empty comments are prev
 
 ## 12. Review Comment Revisions
 
-The Review Comment Revisions domain preserves historical versions of edited review comments. Before an existing comment is modified, its previous complete content state is captured as an immutable revision. This allows Blaze Flow to maintain review accountability without preventing users from correcting or refining their comments.
+The Review Comment Revisions domain preserves historical versions of edited review comments. Before an existing comment is modified, its previous complete content state is captured as an immutable revision. This allows Krewsys to maintain review accountability without preventing users from correcting or refining their comments.
 
 ### Features
 
@@ -414,7 +417,7 @@ An annotation can be linked to or unlinked from an appropriate Review Comment wi
 
 ## 14. Annotation Elements
 
-The Annotation Elements domain stores the individual graphical components that make up an Annotation. Elements use flexible JSON structures for geometry, style, and element-specific payloads so Blaze Flow can introduce new drawing tools without repeatedly changing the database schema.
+The Annotation Elements domain stores the individual graphical components that make up an Annotation. Elements use flexible JSON structures for geometry, style, and element-specific payloads so Krewsys can introduce new drawing tools without repeatedly changing the database schema.
 
 ### Features
 
@@ -547,7 +550,7 @@ The attachment relationship does not imply ownership of the underlying File. The
 
 ## 18. File & Storage Management
 
-The File & Storage domain provides Blaze Flow's centralized abstraction for uploaded and generated files. Logical File records are separated from storage-provider configuration and derived variants, allowing media and documents to be referenced consistently regardless of where their physical objects are stored.
+The File & Storage domain provides Krewsys's centralized abstraction for uploaded and generated files. Logical File records are separated from storage-provider configuration and derived variants, allowing media and documents to be referenced consistently regardless of where their physical objects are stored.
 
 ### Features
 
@@ -557,7 +560,7 @@ Application domains reference a generic File instead of directly depending on AW
 
 #### Multiple Storage Backends
 
-Blaze Flow can configure multiple platform-managed Storage Backends. Each backend identifies its provider and stores non-secret configuration required by the storage integration.
+Krewsys can configure multiple platform-managed Storage Backends. Each backend identifies its provider and stores non-secret configuration required by the storage integration.
 
 #### Application-Defined Providers
 
@@ -685,7 +688,7 @@ Optional address information is represented through structured fields including 
 
 #### Client Logo
 
-A Client Team may reference a File as its logo. Logo storage therefore uses the same centralized File infrastructure as the rest of Blaze Flow.
+A Client Team may reference a File as its logo. Logo storage therefore uses the same centralized File infrastructure as the rest of Krewsys.
 
 #### Extensible Metadata
 
@@ -715,7 +718,7 @@ Client Teams do not reference Projects directly. Project access is granted throu
 
 ## 21. Client Team Members
 
-The Client Team Members domain connects registered Blaze Flow Users to Client Teams. It represents organizational membership rather than authorization itself, allowing a User to participate in multiple client organizations while inheriting access through each team's authorization principal.
+The Client Team Members domain connects registered Krewsys Users to Client Teams. It represents organizational membership rather than authorization itself, allowing a User to participate in multiple client organizations while inheriting access through each team's authorization principal.
 
 ### Features
 
@@ -781,7 +784,7 @@ A `LINK` invite is not tied to a recipient email. The link may be shared with mu
 
 #### Secure Invite Tokens
 
-Raw invitation tokens are never persisted in the database. Blaze Flow stores only a secure token hash used to validate the presented invitation secret.
+Raw invitation tokens are never persisted in the database. Krewsys stores only a secure token hash used to validate the presented invitation secret.
 
 #### Mandatory Expiration
 
@@ -821,7 +824,7 @@ Client Team Invites do not contain roles, Project access, or permission grants. 
 
 #### New or Existing User Acceptance
 
-An invitation may be accepted by an existing Blaze Flow User or participate in onboarding a new User. Both ultimately resolve to the same Client Team Member model.
+An invitation may be accepted by an existing Krewsys User or participate in onboarding a new User. Both ultimately resolve to the same Client Team Member model.
 
 #### Removed Member Reactivation
 
@@ -839,13 +842,13 @@ Accepting a Client Team Invite does not create a direct `USER` Workspace Members
 
 ## 23. Guest Sessions
 
-The Guest Sessions domain provides lightweight identity for external reviewers who should not become registered Blaze Flow Users. A Guest Session represents a browser-recognizable reviewer identity within a Workspace and can participate in guest review access, comments, and annotations.
+The Guest Sessions domain provides lightweight identity for external reviewers who should not become registered Krewsys Users. A Guest Session represents a browser-recognizable reviewer identity within a Workspace and can participate in guest review access, comments, and annotations.
 
 ### Features
 
 #### Lightweight Guest Identity
 
-Guests can participate without creating a full Blaze Flow account. A Guest Session provides sufficient identity for attributing review activity while avoiding normal user authentication requirements.
+Guests can participate without creating a full Krewsys account. A Guest Session provides sufficient identity for attributing review activity while avoiding normal user authentication requirements.
 
 #### Workspace Scope
 
@@ -1085,7 +1088,7 @@ Possessing a permission does not automatically guarantee an operation is allowed
 
 ## 28. Action-Level Audit Logs
 
-The Action-Level Audit domain records meaningful business and security actions performed through Blaze Flow. Instead of capturing every database field mutation, the MVP records explicit application actions such as project creation, invite revocation, or team-member removal. Audit actions are declared at the DRF/ViewSet layer and persisted through a shared audit mechanism.
+The Action-Level Audit domain records meaningful business and security actions performed through Krewsys. Instead of capturing every database field mutation, the MVP records explicit application actions such as project creation, invite revocation, or team-member removal. Audit actions are declared at the DRF/ViewSet layer and persisted through a shared audit mechanism.
 
 ### Features
 
@@ -1153,13 +1156,13 @@ Field-level old/new database mutation tracking is explicitly outside the MVP sco
 
 ## 29. User Subscription
 
-The User Subscription domain manages Blaze Flow subscription state at the registered User level. Subscription ownership does not belong directly to a Workspace; instead, a Workspace's effective resource limits and capabilities are determined from its primary owner's subscription. For the MVP, plan configuration and resource limits remain in environment/application configuration rather than database tables.
+The User Subscription domain manages Krewsys subscription state at the registered User level. Subscription ownership does not belong directly to a Workspace; instead, a Workspace's effective resource limits and capabilities are determined from its primary owner's subscription. For the MVP, plan configuration and resource limits remain in environment/application configuration rather than database tables.
 
 ### Features
 
 #### User-Level Subscription
 
-Every subscription belongs to a registered User. This reflects the Blaze Flow commercial model where the subscribing account owns the plan rather than each Workspace maintaining an independent subscription.
+Every subscription belongs to a registered User. This reflects the Krewsys commercial model where the subscribing account owns the plan rather than each Workspace maintaining an independent subscription.
 
 #### Owner-Based Workspace Entitlements
 
@@ -1195,7 +1198,7 @@ Subscriptions can maintain `started_at`, `current_period_start`, and `current_pe
 
 #### External Provider Support
 
-Optional `provider` and `provider_subscription_id` fields allow Blaze Flow to associate a subscription with an external billing provider without making the core subscription schema dependent on one specific provider.
+Optional `provider` and `provider_subscription_id` fields allow Krewsys to associate a subscription with an external billing provider without making the core subscription schema dependent on one specific provider.
 
 #### Single Current Subscription
 

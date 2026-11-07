@@ -1,0 +1,2 @@
+/* Light mode: hover chip sits over the thumbnail, keep it dark. */
+:root.light .tb-card-open { color: #d7c9ff; }

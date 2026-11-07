@@ -1,0 +1,9 @@
+{% extends "emails/base.html" %}
+{% block preheader %}Join {{ workspace_name }} on {{ brand }}.{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;color:#ffffff;">Join {{ workspace_name }}</h1>
+<p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#c9c6d6;">{{ inviter_name }} invited you to collaborate in <strong style="color:#ffffff;">{{ workspace_name }}</strong>{% if role_name %} as {{ role_name }}{% endif %} on {{ brand }}.</p>
+{% include "emails/_button.html" with url=action_url label="Accept invitation" %}
+<p style="margin:20px 0 0 0;font-size:13px;color:#8a879a;">This invitation expires on {{ expires_at|date:"j F Y" }}. Sign in or create an account with {{ email }} to accept.</p>
+{% endblock %}
+{% block footer %}You received this because someone invited {{ email }} to {{ brand }}. If you weren't expecting it, ignore this email.{% endblock %}

@@ -1,6 +1,6 @@
-# 🔥 Blaze Flow
+# 🔥 Krewsys
 
-**Blaze Flow** is an all-in-one creative agency management platform designed to bring projects, clients, video reviews, tasks, files, team collaboration, billing, and workflows into one centralized workspace.
+**Krewsys** is an all-in-one creative agency management platform designed to bring projects, clients, video reviews, tasks, files, team collaboration, billing, and workflows into one centralized workspace.
 
 ## ✨ Core Features
 
@@ -20,11 +20,11 @@
 
 Creative agencies often depend on multiple disconnected tools for project management, client communication, creative review, file sharing, and business operations.
 
-Blaze Flow aims to reduce this **tool sprawl** by providing a unified platform where agencies can manage their workflow from project creation to client approval.
+Krewsys aims to reduce this **tool sprawl** by providing a unified platform where agencies can manage their workflow from project creation to client approval.
 
 ## 🏗️ Architecture
 
-Blaze Flow follows a **workspace-based multi-tenant architecture** with structured access control for:
+Krewsys follows a **workspace-based multi-tenant architecture** with structured access control for:
 
 * Internal team members
 * Client members
@@ -35,11 +35,32 @@ The platform is designed with modularity and scalability in mind so individual b
 
 ## 🚧 Status
 
-Blaze Flow is currently under active development.
+Krewsys is currently under active development.
 
 > More technical documentation, architecture details, setup instructions, and API documentation will be added as development progresses.
 
+## Developer documentation
+
+Start with the [developer guide](docs/DEVELOPMENT.md) for setup, architecture, conventions, and the contribution workflow. Delivery decisions and completed foundation work are recorded in the [implementation log](docs/implementation-log.md).
+
+## Frontend
+
+The Next.js application lives in `frontend/`. Run the Django API on port 8000, then start the UI with:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The development server proxies `/api/*` to `http://127.0.0.1:8000`. Set `BLAZEFLOW_API_URL` when the backend uses another origin.
+
+Architecture, routes, and known limitations are documented in the [frontend guide](docs/frontend.md).
+
 ---
 
-**Blaze Flow** — One workspace for creative work, collaboration, and agency operations.
+**Krewsys** — One workspace for creative work, collaboration, and agency operations.
 
+## Production deployment
+
+See [docs/deploy.md](docs/deploy.md) for the production stack (`docker-compose.prod.yml`, gunicorn, Next.js standalone, workers, scheduler) and step-by-step server setup. `docker-compose.yml` is for local development only.

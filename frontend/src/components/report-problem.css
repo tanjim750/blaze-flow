@@ -1,0 +1,20 @@
+.report-dialog { width: min(520px, calc(100vw - 32px)); padding: var(--bf-space-6); }
+.report-dialog h2 { font-size: var(--bf-text-lg); font-weight: var(--bf-weight-semibold); margin: 0 0 var(--bf-space-1); }
+.report-dialog > p { color: var(--bf-muted-foreground); font-size: var(--bf-text-sm); margin: 0 0 var(--bf-space-4); }
+.report-form { display: grid; gap: var(--bf-space-3); }
+.report-form label { display: grid; gap: var(--bf-space-1-5); font-size: var(--bf-text-sm); color: var(--bf-muted-foreground); }
+.report-form input:not([type="checkbox"]), .report-form select, .report-form textarea {
+  background: var(--bf-input); color: var(--bf-foreground); border: 1px solid var(--bf-border); border-radius: var(--bf-radius-md);
+  padding: var(--bf-space-2) var(--bf-space-3); font: inherit; font-size: var(--bf-text-base); min-height: var(--bf-control-height-md);
+}
+.report-form textarea { resize: vertical; }
+.report-form :focus-visible { outline: var(--bf-focus-width) solid var(--bf-ring); outline-offset: var(--bf-focus-offset); }
+.report-form .report-check { display: flex; align-items: flex-start; gap: var(--bf-space-2); }
+.report-check input { margin-top: 3px; accent-color: var(--bf-primary); }
+.report-error { color: var(--bf-destructive); font-size: var(--bf-text-sm); margin: 0; }
+.report-actions { display: flex; justify-content: flex-end; gap: var(--bf-space-2); }
+.report-actions button { min-height: var(--bf-control-height-md); padding: 0 var(--bf-space-4); border-radius: var(--bf-radius-md); font: inherit; font-weight: var(--bf-weight-medium); cursor: pointer; }
+.report-cancel { background: transparent; color: var(--bf-foreground); border: 1px solid var(--bf-border); }
+.report-send { background: var(--bf-primary); color: var(--bf-primary-foreground); border: 0; }
+.report-send:hover { background: var(--bf-primary-hover); }
+.report-send:disabled { opacity: .6; cursor: progress; }

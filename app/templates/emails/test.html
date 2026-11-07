@@ -1,0 +1,6 @@
+{% extends "emails/base.html" %}
+{% block content %}
+<h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;color:#ffffff;">Email is working</h1>
+<p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#c9c6d6;">This is a test message from {{ brand }} sent at {{ sent_at|date:"j M Y, H:i e" }}. If you can read it, outgoing email is configured correctly.</p>
+<p style="margin:0;font-size:13px;color:#8a879a;">Backend: {{ backend }}</p>
+{% endblock %}

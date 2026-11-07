@@ -1,0 +1,38 @@
+/* Public pay link page. Standalone chrome: no sidebar, topbar or session. */
+.pay-shell { min-height: 100vh; display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 40px 20px 28px; color: var(--t-fg-e4e1e6); background: radial-gradient(ellipse at top, var(--t-bg-1d1930) 0%, var(--t-bg-12151d) 60%); }
+.pay-studio { width: min(560px, 100%); display: flex; align-items: center; gap: 11px; }
+.pay-studio div { display: grid; }
+.pay-studio strong { font-size: 15px; }
+.pay-studio small { color: var(--t-fg-9a96a8); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.pay-monogram { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--t-bg-7c5cff); color: #fff; font-weight: 750; }
+.pay-card { width: min(560px, 100%); display: grid; gap: 18px; padding: 28px; background: var(--t-bg-1a1e28); border: 1px solid var(--t-line-262b37); border-radius: 16px; box-shadow: 0 30px 80px var(--t-shadow-00000066); }
+.pay-amount { display: grid; gap: 4px; }
+.pay-amount small { color: var(--t-fg-9a96a8); font-size: 12px; font-weight: 600; }
+.pay-amount strong { font-size: 34px; letter-spacing: -.03em; line-height: 1.1; }
+.pay-amount span { color: var(--t-fg-9a96a8); font-size: 13px; }
+.pay-lines { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pay-lines td, .pay-lines th { padding: 9px 0; border-bottom: 1px solid var(--t-line-262b37); text-align: left; font-weight: 500; }
+.pay-lines td:last-child, .pay-lines th + td { text-align: right; white-space: nowrap; padding-left: 12px; }
+.pay-lines tfoot th { color: var(--t-fg-9a96a8); }
+.pay-lines .is-balance th, .pay-lines .is-balance td { font-weight: 700; color: var(--t-fg-e4e1e6); border-bottom: 0; }
+.pay-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 18px; border: 0; border-radius: 11px; background: var(--t-bg-7c5cff); color: #fff; font: 650 15px var(--font-geist-sans), sans-serif; cursor: pointer; }
+.pay-button:hover:not(:disabled) { background: var(--t-bg-6a4cf0); }
+.pay-button:disabled { opacity: .6; cursor: progress; }
+.pay-button svg, .pay-banner svg, .pay-secure svg { width: 16px; height: 16px; flex: none; }
+.pay-banner { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 11px 14px; border-radius: 10px; font-size: 13px; line-height: 1.45; border: 1px solid var(--t-line-262b37); background: var(--t-bg-151922); }
+.pay-banner.tone-success { border-color: var(--t-line-1f5a37); background: var(--t-bg-12301f); color: var(--t-fg-9ef0bf); }
+.pay-banner.tone-warning { border-color: var(--t-line-5a4a1f); background: var(--t-bg-2b2412); color: var(--t-fg-ffd98a); }
+.pay-banner.tone-info { border-color: color-mix(in srgb, var(--t-line-7c5cff) 45%, var(--t-line-262b37)); color: var(--t-fg-cfc4ff); }
+.pay-muted { margin: 0; color: var(--t-fg-9a96a8); font-size: 12px; line-height: 1.55; }
+.pay-secure { display: flex; gap: 6px; align-items: flex-start; }
+.pay-error { margin: 0; color: var(--t-fg-ff7b8a); font-size: 13px; }
+.pay-foot { color: var(--t-fg-9a96a8); font-size: 12px; text-align: center; }
+.pay-closed { justify-items: center; text-align: center; gap: 12px; margin-top: 8vh; }
+.pay-closed h1 { margin: 0; font-size: 22px; }
+.pay-closed p { margin: 0; line-height: 1.6; }
+.pay-closed-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: var(--t-bg-3a1c24); color: var(--t-fg-ffc2cc); }
+.pay-spin { animation: pay-spin 1s linear infinite; }
+@keyframes pay-spin { to { transform: rotate(360deg); } }
+@media (max-width: 480px) { .pay-shell { padding: 24px 14px; } .pay-card { padding: 20px 16px; } .pay-amount strong { font-size: 28px; } }
+.pay-hint { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--t-line-7c5cff) 30%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--t-bg-7c5cff) 8%, transparent); color: var(--t-fg-c9c4d6); font-size: 12.5px; line-height: 1.5; }
+.pay-hint svg { width: 15px; height: 15px; flex: none; margin-top: 2px; color: var(--t-fg-a99bff); }

@@ -1,0 +1,8 @@
+/* Light mode: stage chip sits over the thumbnail, keep dark-mode colours. */
+:root.light .pb-stage { color: #dfdbe9; }
+:root.light .pb-stage.tone-review { color: #ffc750; }
+:root.light .pb-stage.tone-approved { color: #39dca2; }
+:root.light .pb-stage.tone-grading { color: #7fb4ff; }
+:root.light .pb-stage.tone-retouch { color: #d0b9ff; }
+:root.light .pb-stage.tone-vfx { color: #b7a1ff; }
+:root.light .pb-stage.tone-offline { color: #c9c4d8; }

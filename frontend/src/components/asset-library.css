@@ -1,0 +1,4 @@
+/*
+ * The Files panel's styles moved to `components/files/files.css`, which `asset-library.tsx`
+ * imports itself. This file stays so the pages that import it keep building; it has no rules.
+ */

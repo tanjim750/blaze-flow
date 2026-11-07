@@ -1,0 +1,1 @@
+{% autoescape off %}{{ inviter_name }} invited you to {{ workspace_name }} on {{ brand }}{% endautoescape %}

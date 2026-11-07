@@ -1,0 +1,1 @@
+{% autoescape off %}Invoice {{ number }} from {{ workspace_name }}{% endautoescape %}

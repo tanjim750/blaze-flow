@@ -18,6 +18,35 @@ Run containers in the background:
 docker compose up -d
 ```
 
+## Optional ClamAV
+
+Start the malware profile and select the production scanner adapter:
+
+```bash
+docker compose --profile malware up -d clamav
+```
+
+Set this in `.env`, then restart `web` and `worker`:
+
+```env
+FILE_SECURITY_SCANNER=app.services.file_processing.ClamAVTcpScanner
+CLAMAV_HOST=clamav
+CLAMAV_PORT=3310
+```
+
+Wait for ClamAV signatures and health logs before accepting uploads.
+
+## S3-compatible private storage
+
+Set `STORAGE_DRIVER=s3`, `AWS_STORAGE_BUCKET_NAME`, and the relevant region/endpoint credentials in `.env`. Rebuild after dependency changes:
+
+```bash
+docker compose build web worker
+docker compose up -d web worker
+```
+
+Never commit access keys. Prefer workload/IAM credentials in production.
+
 Stop containers:
 
 ```bash

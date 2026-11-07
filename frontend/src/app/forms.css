@@ -1,0 +1,8 @@
+.form-error {
+  color: var(--t-fg-ff9ba3) !important;
+  background: var(--t-bg-3b171d);
+  border: 1px solid var(--t-line-792932);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+}

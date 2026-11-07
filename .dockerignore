@@ -1,6 +1,7 @@
 .git
 .gitignore
 .DS_Store
+._*
 __pycache__/
 *.py[cod]
 *.sqlite3
@@ -8,3 +9,13 @@ __pycache__/
 .venv/
 venv/
 env/
+media/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/coverage/
+stitch_blaze_flow_creative_operating_system/
+.env.*
+!.env.example
+!.env.production.example
+staticfiles/

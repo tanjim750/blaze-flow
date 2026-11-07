@@ -1,0 +1,114 @@
+/* Global upload tray: bottom-right card on desktop, bottom sheet on phones. */
+.ut { --ut-gap: 16px; position: fixed; right: var(--ut-gap); bottom: var(--ut-gap); z-index: 90; box-sizing: border-box; width: min(400px, calc(100vw - 2 * var(--ut-gap))); max-height: min(70vh, 560px, calc(100dvh - 2 * var(--ut-gap))); display: flex; flex-direction: column;
+  border: 1px solid var(--t-line-ffffff1a); border-radius: 14px; background: linear-gradient(160deg, var(--t-bg-212027fa), var(--t-bg-16161cfa));
+  box-shadow: 0 18px 50px var(--t-shadow-00000099); color: var(--text, #eee); overflow: hidden; animation: ut-in var(--bf-duration-normal, .2s) var(--bf-ease-out, ease-out); }
+@keyframes ut-in { from { opacity: 0; transform: translateY(10px); } }
+.ut-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 12px; border-bottom: 1px solid var(--t-line-ffffff0f); }
+.ut.is-collapsed .ut-head { border-bottom: 0; }
+.ut-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 4px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.ut-toggle > svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.ut-icon svg { width: 18px; height: 18px; color: var(--bf-violet-300, var(--t-fg-b69aff)); }
+.ut-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 600; }
+.ut-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--bf-primary, var(--t-bg-7c5cff)); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.ut-clear { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.ut-clear:hover { background: var(--t-bg-ffffff0f); color: var(--text); }
+.ut-clear svg { width: 13px; height: 13px; }
+.ut-overall { display: block; height: 2px; background: var(--bf-primary, var(--t-bg-7c5cff)); transition: width .3s linear; }
+/* Only the list scrolls; header and summary never shrink, so the first row is never clipped. */
+.ut-list { flex: 1 1 auto; min-height: 0; list-style: none; margin: 0; padding: 4px 0 6px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scroll-padding-top: 4px; }
+.ut-row { padding: 10px 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+.ut-row + .ut-row { border-top: 1px solid var(--t-line-ffffff0a); }
+.ut-row-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ut-file { width: 18px; height: 18px; flex: none; color: var(--muted); }
+.ut-name { flex: 1; min-width: 0; display: grid; }
+/* Long names get two lines (breaking anywhere) before they are cut. */
+.ut-name strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.ut-name small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 11px; }
+.ut-actions { flex: none; display: flex; gap: 2px; align-self: flex-start; }
+.ut-actions :is(button, a) { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+.ut-actions :is(button, a):hover { background: var(--t-bg-ffffff12); color: var(--text); }
+.ut-actions svg { width: 15px; height: 15px; }
+.ut-bar { height: 4px; border-radius: 999px; background: var(--t-bg-ffffff14); overflow: hidden; }
+.ut-bar i { display: block; height: 100%; border-radius: inherit; background: var(--bf-primary, var(--t-bg-7c5cff)); transition: width .25s linear; }
+.ut-row.is-processing .ut-bar i { background: linear-gradient(90deg, var(--t-bg-7c5cff), var(--t-bg-b69aff), var(--t-bg-7c5cff)); background-size: 200% 100%; animation: ut-shimmer 1.4s linear infinite; }
+.ut-row.is-ready .ut-bar i { background: var(--t-bg-3fb950); }
+.ut-row.is-failed .ut-bar i { background: var(--t-bg-f85149); }
+.ut-row.is-cancelled { opacity: .6; }
+@keyframes ut-shimmer { to { background-position: -200% 0; } }
+.ut-status { display: flex; align-items: flex-start; min-width: 0; gap: 6px; margin: 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ut-status svg { width: 13px; height: 13px; flex: none; margin-top: 2px; }
+.ut-stats { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; column-gap: 5px; row-gap: 1px; line-height: 18px; }
+.ut-stat { white-space: nowrap; }
+.ut-stat + .ut-stat::before { content: "·"; margin-right: 5px; opacity: .7; }
+.ut-error { flex: 1; min-width: 0; line-height: 18px; overflow-wrap: anywhere; }
+.ut-row.is-ready .ut-status svg { color: var(--t-fg-3fb950); }
+.ut-row.is-failed .ut-status { color: var(--t-fg-ff9ba3); }
+.ut-retry, .ut-open { flex: none; padding: 2px 8px; border: 1px solid var(--t-line-ffffff24); border-radius: 6px; background: transparent; color: var(--text); font-size: 12px; text-decoration: none; cursor: pointer; }
+.ut-spin { animation: ut-spin 1s linear infinite; }
+@keyframes ut-spin { to { transform: rotate(360deg); } }
+@media (max-width: 640px) {
+  /* Full width minus margins, clear of the home indicator. */
+  .ut { --ut-gap: 8px; left: var(--ut-gap); right: var(--ut-gap); bottom: calc(var(--ut-gap) + env(safe-area-inset-bottom)); width: auto; max-height: min(65dvh, calc(100dvh - 2 * var(--ut-gap) - env(safe-area-inset-bottom))); border-radius: 14px; }
+  .ut-row { padding: 10px 12px; }
+  .ut-stat.is-parts { display: none; }
+  .ut-actions :is(button, a) { width: 40px; height: 40px; }
+  .ut-retry, .ut-open { min-height: 36px; padding: 0 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ut, .ut-bar i, .ut-overall { animation: none; transition: none; }
+  .ut-spin, .ut-row.is-processing .ut-bar i { animation: none; }
+}
+
+/* Whole-tray summary (bytes moved / left, combined speed, ETA). */
+.ut-summary { flex: none; display: grid; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--t-line-ffffff0f); font-size: 12px; color: var(--muted); }
+.ut-summary-top { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
+.ut-summary-top span { min-width: 0; overflow-wrap: anywhere; }
+.ut-summary-top b { color: var(--text, var(--t-fg-eeeeee)); font-weight: 600; }
+.ut-summary-top strong { color: var(--text, var(--t-fg-eeeeee)); font-variant-numeric: tabular-nums; }
+.ut-summary small { font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.ut-close { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+.ut-close:hover { background: var(--t-bg-ffffff0f); color: var(--text); }
+.ut-close svg { width: 15px; height: 15px; }
+/* The review sidebar keeps its comment composer bottom-right: sit bottom-left there instead. */
+@media (min-width: 761px) { body:has([data-review-composer]) .ut { right: auto; left: 20px; } }
+/* Very narrow phones: drop the speed too; % · size · time left is what matters. */
+@media (max-width: 360px) { .ut-stat.is-speed { display: none; } }
+/* Medium widths: the parts count is the first thing to go. */
+@container (max-width: 340px) { .ut-stat.is-parts { display: none; } }
+.ut-list { container-type: inline-size; }
+/* Narrow headers keep the title readable: "Clear finished" becomes an icon button. */
+@media (max-width: 420px) { .ut-clear span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .ut-clear { width: 36px; justify-content: center; padding: 0; } }
+
+/* Paused after a reload: waiting for the same file to be picked again. */
+.ut-notice { flex: none; margin: 0; padding: 8px 14px; font-size: 12px; line-height: 1.4; color: var(--ut-muted, inherit); opacity: .85; overflow-wrap: anywhere; }
+.ut-row.is-paused .ut-bar i { opacity: .45; }
+
+.ut-transfer-actions { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; padding: 8px 14px; border-top: 1px solid var(--t-line-ffffff1a); }
+.ut-transfer-actions .ut-clear { flex: 0 0 auto; min-height: 36px; white-space: nowrap; }
+.ut-transfer-actions small { flex: 1 1 auto; min-width: 0; font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+/* "Cancel all" keeps its label on phones (the icon-only rule above is for "Clear finished"). */
+@media (max-width: 420px) { .ut-transfer-actions .ut-clear { width: auto; padding: 0 10px; } .ut-transfer-actions .ut-clear span { position: static; width: auto; height: auto; clip: auto; } }
+.ut-confirm { flex: none; display: grid; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--t-line-ffffff1a); font-size: 12px; color: var(--text); }
+.ut-confirm p { margin: 0; line-height: 1.45; overflow-wrap: anywhere; }
+.ut-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.ut-confirm-actions button { min-height: 32px; padding: 0 12px; border-radius: 7px; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.ut-confirm-keep { border: 1px solid var(--t-line-ffffff24); background: transparent; color: var(--text); }
+.ut-confirm-yes { border: 1px solid currentColor; background: transparent; color: var(--t-fg-ff9ba3); font-weight: 600; }
+@media (max-width: 640px) { .ut-confirm-actions button { min-height: 40px; } }
+
+/* "Cancel all" sits on the right, the helper text takes the space on its left. */
+.ut-transfer-actions .ut-cancel-all { margin-left: auto; }
+/* After "Yes, cancel all": rows fade, slide right and fold their height away; the tray follows when empty. */
+.ut-row.is-leaving { overflow: hidden; pointer-events: none; animation: ut-row-out 240ms var(--bf-ease-out, ease-out) forwards; }
+@keyframes ut-row-out {
+  0% { opacity: .6; transform: none; max-height: 140px; }
+  60% { opacity: 0; transform: translateX(24px); max-height: 140px; }
+  100% { opacity: 0; transform: translateX(24px); max-height: 0; padding-top: 0; padding-bottom: 0; border-top-width: 0; }
+}
+.ut.is-closing { pointer-events: none; animation: ut-out 200ms var(--bf-ease-out, ease-out) forwards; }
+@keyframes ut-out { to { opacity: 0; transform: translateY(10px); } }
+@media (prefers-reduced-motion: reduce) { .ut-row.is-leaving, .ut.is-closing { animation: none; opacity: 0; } }
+/* Every row is going: keep the tray's size and just fade the rows, the tray then fades as one. */
+.ut.is-emptying .ut-row.is-leaving { animation-name: ut-row-fade; }
+@keyframes ut-row-fade { to { opacity: 0; transform: translateX(24px); } }

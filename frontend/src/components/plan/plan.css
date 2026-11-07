@@ -1,0 +1,35 @@
+/* Plan prompts: Solo's "Upgrade to Starter" card, compact note and sidebar card. Theme tokens only. */
+.plan-upgrade { display: flex; gap: 16px; padding: 22px; border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 7%, var(--surface)), var(--surface) 60%); color: var(--text); }
+.plan-upgrade-icon { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; color: var(--primary); background: color-mix(in oklab, var(--primary) 14%, transparent); }
+.plan-upgrade-body { display: grid; gap: 8px; min-width: 0; }
+.plan-upgrade-kicker { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.plan-upgrade h2 { font-size: 17px; font-weight: 650; line-height: 1.3; }
+.plan-upgrade-body > p { font-size: 13.5px; line-height: 1.5; color: var(--muted); max-width: 60ch; }
+.plan-upgrade ul { display: grid; gap: 6px; margin: 4px 0 6px; font-size: 13px; }
+.plan-upgrade li { display: flex; gap: 8px; align-items: center; }
+.plan-upgrade li svg { color: var(--primary); flex: none; }
+.plan-upgrade-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.plan-upgrade-actions span { font-size: 12.5px; color: var(--muted); }
+.plan-upgrade-cta { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 9px; background: var(--primary); color: #fff; font-size: 13.5px; font-weight: 600; text-decoration: none; }
+.plan-upgrade-cta:hover { background: var(--primary-2); }
+.plan-upgrade-cta:focus-visible, .plan-upgrade-link:focus-visible, .plan-sidebar-card:focus-visible { outline: none; box-shadow: var(--premium-ring); }
+.plan-upgrade.is-compact { align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; flex-wrap: wrap; }
+.plan-upgrade.is-compact > svg { color: var(--primary); flex: none; }
+.plan-upgrade.is-compact p { font-size: 13px; color: var(--muted); flex: 1; min-width: 140px; }
+.plan-upgrade.is-compact strong { color: var(--text); }
+.plan-upgrade-link { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; font-size: 13px; font-weight: 600; color: var(--primary); text-decoration: none; }
+.plan-upgrade-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.plan-sidebar-card { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; padding: 10px 12px; border: 1px dashed color-mix(in oklab, var(--primary) 45%, var(--border)); border-radius: 10px; color: var(--text); text-decoration: none; background: color-mix(in oklab, var(--primary) 6%, transparent); }
+.plan-sidebar-card > svg:first-child { color: var(--primary); flex: none; }
+.plan-sidebar-card span { display: grid; min-width: 0; flex: 1; }
+.plan-sidebar-card strong { font-size: 12.5px; font-weight: 600; }
+.plan-sidebar-card small { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-sidebar-arrow { color: var(--muted); flex: none; }
+.plan-sidebar-card:hover { border-style: solid; }
+@media (max-width: 520px) {
+  .plan-upgrade { flex-direction: column; padding: 18px; gap: 12px; }
+}
+@media (min-width: 901px) {
+  .is-collapsed .plan-sidebar-card { justify-content: center; padding: 10px 0; }
+  .is-collapsed .plan-sidebar-card span, .is-collapsed .plan-sidebar-arrow { display: none; }
+}

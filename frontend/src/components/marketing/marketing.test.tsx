@@ -1,0 +1,161 @@
+import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import MarketingHome from "@/app/(pro)/welcome/page";
+import PricingPage from "@/app/(pro)/pricing/page";
+import PrivacyPage from "@/app/(pro)/privacy/page";
+import TermsPage from "@/app/(pro)/terms/page";
+import CookiesPage from "@/app/(pro)/cookies/page";
+import FeaturesPage from "@/app/(pro)/features/page";
+import ContactPage from "@/app/(pro)/contact/page";
+import { siteConfig } from "@/lib/site-config";
+import { buildMailto } from "@/components/pro/pro-pages";
+import { DemoVideo } from "./demo-video";
+
+vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
+afterEach(cleanup);
+
+// jsdom has no IntersectionObserver; motion's whileInView needs one to mount. An inert one
+// means nothing ever "enters the viewport", which is fine: the content is in the DOM either way.
+class InertObserver { observe() {} unobserve() {} disconnect() {} takeRecords() { return []; } }
+globalThis.IntersectionObserver ??= InertObserver as unknown as typeof IntersectionObserver;
+
+function mockMotion(reduce: boolean) {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: reduce && query.includes("reduce"), media: query, onchange: null,
+    addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+  }));
+}
+
+describe("marketing homepage", () => {
+  beforeEach(() => {
+    mockMotion(true);
+    Object.defineProperty(HTMLMediaElement.prototype, "play", { configurable: true, value: vi.fn().mockResolvedValue(undefined) });
+  });
+
+  it("leads with a short, plain headline and the brand from siteConfig", () => {
+    render(<MarketingHome />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^client review for video studios$/i);
+    expect(screen.getAllByText(new RegExp(siteConfig.name)).length).toBeGreaterThan(0);
+  });
+
+  it("sends every trial call to action to the existing sign-up page", () => {
+    render(<MarketingHome />);
+    const trial = screen.getAllByRole("link", { name: /free trial/i });
+    expect(trial.length).toBeGreaterThan(1);
+    for (const link of trial) expect(link).toHaveAttribute("href", "/sign-up");
+    for (const link of screen.getAllByRole("link", { name: /^log in$/i })) expect(link).toHaveAttribute("href", "/sign-in");
+  });
+
+  it("features AI spelling checks, the client portal and the money totals first, with real captures", () => {
+    const { container } = render(<MarketingHome />);
+    const h2s = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(h2s.slice(0, 3)).toEqual([expect.stringMatching(/spelling mistakes/i), expect.stringMatching(/portal/i), expect.stringMatching(/owe/i)]);
+    // Real figures from the demo studio's Money page (reduced motion shows the final values).
+    for (const sum of ["£8,330", "£760", "£19,180", "£8,150"]) expect(screen.getByText(sum)).toBeInTheDocument();
+    const images = [...container.querySelectorAll("img")];
+    expect(images.length).toBeGreaterThanOrEqual(12);
+    for (const image of images) expect(decodeURIComponent(image.getAttribute("src") ?? "")).toMatch(/\/marketing\//);
+    expect(images.filter((image) => image.getAttribute("loading") !== "lazy" && !image.closest(".mk-slides"))).toEqual([]);
+    expect(container.querySelectorAll(".mk-slides img")).toHaveLength(5);
+  });
+
+  it("shows the three plans with the 14-day trial, and keeps the FAQ", () => {
+    render(<MarketingHome />);
+    expect(screen.getAllByText("$39.99").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("To confirm")).toHaveLength(3);
+    expect(screen.getAllByText(/14-day free trial/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Do my clients need an account?")).toBeInTheDocument();
+  });
+});
+
+describe("DemoVideo", () => {
+  beforeEach(() => vi.stubGlobal("IntersectionObserver", undefined));
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+  it("renders the HD screenshots as a crossfading slideshow, no video", () => {
+    mockMotion(false);
+    const { container } = render(<DemoVideo label="Product tour" />);
+    expect(container.querySelector("video")).toBeNull();
+    const imgs = container.querySelectorAll(".mk-slides img");
+    expect(imgs).toHaveLength(5);
+    expect(imgs[0]).toHaveClass("is-active");
+    expect(imgs[0]).toHaveAttribute("width", "2880");
+  });
+
+  it("advances slides over time", () => {
+    vi.useFakeTimers();
+    mockMotion(false);
+    const { container } = render(<DemoVideo label="Product tour" />);
+    act(() => { vi.advanceTimersByTime(4000); });
+    expect(container.querySelectorAll(".mk-slides img")[1]).toHaveClass("is-active");
+  });
+
+  it("stays still for prefers-reduced-motion, with a Play control", () => {
+    mockMotion(true);
+    render(<DemoVideo label="Product tour" />);
+    expect(screen.getByRole("button", { name: "Play product demo" })).toBeInTheDocument();
+  });
+});
+
+describe("pricing", () => {
+  it("shows three plans from site-config, Pro highlighted, each marked to confirm", () => {
+    const { container } = render(<PricingPage />);
+    const cards = container.querySelectorAll(".pro-plan");
+    expect(cards).toHaveLength(siteConfig.plans.length);
+    expect(siteConfig.plans.map((p) => [p.name, p.monthly])).toEqual([["Starter", 19.99], ["Pro", 39.99], ["Scale", 119.99]]);
+    expect(siteConfig.pricing.currency).toBe("USD");
+    for (const plan of siteConfig.plans) {
+      const card = container.querySelector(`[data-plan="${plan.id}"]`) as HTMLElement;
+      expect(within(card).getByRole("heading", { level: 2, name: new RegExp(`^${plan.name}`) })).toBeInTheDocument();
+      expect(within(card).getByText(`${siteConfig.pricing.symbol}${plan.monthly}`)).toBeInTheDocument();
+      expect(within(card).getByText("To confirm")).toBeInTheDocument();
+    }
+    expect(container.querySelectorAll(".pro-plan.is-featured")).toHaveLength(1);
+    expect(container.querySelector(".pro-plan.is-featured")).toHaveAttribute("data-plan", "pro");
+    expect(siteConfig.plans.find((p) => p.id === "pro")?.monthly).toBe(siteConfig.pricing.proMonthly);
+    expect(screen.getAllByText(/14-day free trial/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/unlimited clients on every plan/i)).toBeInTheDocument();
+    expect(screen.getAllByText("To confirm").length).toBeGreaterThan(3);
+    expect(screen.queryByRole("button", { name: /yearly/i })).toBeNull();
+    expect(siteConfig.yearlyBilling).toBe(false);
+  });
+});
+
+describe("legal pages", () => {
+  it.each([["privacy", PrivacyPage], ["terms", TermsPage], ["cookies", CookiesPage]])("%s opens with the draft / not-legal-advice banner", (_name, Page) => {
+    render(<Page />);
+    const banner = screen.getByTestId("legal-draft-banner");
+    expect(banner).toHaveTextContent(/draft for review/i);
+    expect(banner).toHaveTextContent(/not legal advice/i);
+    expect(screen.getAllByRole("link", { name: siteConfig.contactEmail }).length).toBeGreaterThan(0);
+  });
+
+  it("privacy mentions UK GDPR and the ICO", () => {
+    render(<PrivacyPage />);
+    expect(screen.getAllByText(/UK GDPR/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "ico.org.uk" })).toBeInTheDocument();
+  });
+});
+
+describe("features and contact", () => {
+  it("renders the features page", () => {
+    render(<FeaturesPage />);
+    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /one window/i })).toBeInTheDocument();
+    for (const t of ["Upload", "Review", "AI typo check", "Client portal", "Money"]) expect(screen.getAllByText(new RegExp(t)).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { level: 2, name: /every tile is the app/i })).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: /playhead/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /move card to/i })).toBeInTheDocument();
+    expect(screen.getAllByText("£8,330").length).toBeGreaterThan(0);
+  });
+
+  it("contact shows the address and composes a mailto without sending anything", () => {
+    render(<ContactPage />);
+    expect(screen.getAllByRole("link", { name: siteConfig.contactEmail }).length).toBeGreaterThan(0);
+    const href = buildMailto({ name: "Ada", email: "ada@studio.example", company: "", topic: "Demo request", message: "Hi there" });
+    expect(href.startsWith(`mailto:${siteConfig.contactEmail}?subject=`)).toBe(true);
+    expect(decodeURIComponent(href)).toContain("Demo request");
+    expect(decodeURIComponent(href)).toContain("Email: ada@studio.example");
+    expect(decodeURIComponent(href)).not.toContain("Company:");
+  });
+});

@@ -1,0 +1,9 @@
+{% extends "emails/base.html" %}
+{% block preheader %}{{ media_title }} is ready for your approval{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;color:#ffffff;">Ready for your approval</h1>
+<p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;color:#c9c6d6;">Hi {{ client_name }}, <strong>{{ media_title }}</strong> for {{ project_name }} from {{ studio_name }} is ready for your review. Watch it, then approve it or ask for changes.</p>
+{% include "emails/_button.html" with url=action_url label="Review now" %}
+{% if expires_label %}<p style="margin:12px 0 0 0;font-size:13px;color:#8f8ba3;">This link expires on {{ expires_label }}.</p>{% endif %}
+{% endblock %}
+{% block footer %}You got this because {{ studio_name }} shared work with you on {{ brand }}.{% endblock %}
