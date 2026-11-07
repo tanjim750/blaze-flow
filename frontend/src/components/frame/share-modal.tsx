@@ -26,8 +26,9 @@ export function presetFor(allowComments: boolean, allowDownloads: boolean): Gues
   return allowComments ? "comment" : "view";
 }
 
-export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId, projectId, assetFileId, canCreateLinks }: {
+export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId, projectId, assetFileId, canCreateLinks, publicScopeNote }: {
   open: boolean; onOpenChange: (open: boolean) => void; title: string; internalUrl: string;
+  publicScopeNote?: string;
   workspaceId?: string | null; projectId?: string | null; assetFileId?: string | null; canCreateLinks: boolean;
 }) {
   const [access, setAccess] = useState<"private" | "public">("private");
@@ -41,10 +42,11 @@ export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId
   const [state, create, pending] = useActionState(createGuestInviteAction, emptyGuestInviteState);
   const scoped = Boolean(workspaceId && projectId);
   const publicAllowed = canCreateLinks && scoped;
+  const linkAccess = publicAllowed ? access : "private";
   // The short link (/r/<code>) is what gets shared; it opens the shared file's cut by itself.
   // The long ?token= form is only a fallback for an older backend without short codes.
   const publicUrl = state.shortUrl ?? (state.token && typeof window !== "undefined" ? `${window.location.origin}/guest-review?token=${state.token}${state.mediaVersionId ? `&cut=${state.mediaVersionId}` : ""}` : "");
-  const link = access === "public" ? publicUrl : internalUrl;
+  const link = linkAccess === "public" ? publicUrl : internalUrl;
 
   const copy = async () => { if (link && await copyText(link)) { setCopied(true); window.setTimeout(() => setCopied(false), 1600); } };
 
@@ -53,19 +55,20 @@ export function ShareModal({ open, onOpenChange, title, internalUrl, workspaceId
       <DialogContent className="frm-share">
         <DialogClose />
         <DialogTitle>Share “{title}”</DialogTitle>
-        <DialogDescription>{access === "private" ? "Only people in this workspace can open the link." : "Anyone with the link can open it as a guest."}</DialogDescription>
+        <DialogDescription>{linkAccess === "private" ? "Only people in this workspace can open the link." : "Anyone with the link can open it as a guest."}</DialogDescription>
 
+        {publicScopeNote && <p className="frm-share-scope-note">{publicScopeNote}</p>}
         <div className="frm-share-access" role="radiogroup" aria-label="Link access">
-          <button type="button" role="radio" aria-checked={access === "private"} className={access === "private" ? "is-on" : ""} onClick={() => setAccess("private")}><Lock /> Private</button>
-          <button type="button" role="radio" aria-checked={access === "public"} className={access === "public" ? "is-on" : ""} onClick={() => setAccess("public")} disabled={!publicAllowed} title={publicAllowed ? undefined : scoped ? "Only owners and editors can create public links" : "Open a project to create a public link"}><Globe /> Public</button>
+          <button type="button" role="radio" aria-checked={linkAccess === "private"} className={linkAccess === "private" ? "is-on" : ""} onClick={() => setAccess("private")}><Lock /> Private</button>
+          <button type="button" role="radio" aria-checked={linkAccess === "public"} className={linkAccess === "public" ? "is-on" : ""} onClick={() => setAccess("public")} disabled={!publicAllowed} title={publicScopeNote ?? (publicAllowed ? undefined : scoped ? "Only owners and editors can create public links" : "Open a project to create a public link")}><Globe /> Public</button>
         </div>
 
         <div className="frm-share-link">
-          <input readOnly value={link || (access === "public" ? "Create a link below" : "")} aria-label="Share link" onFocus={(e) => e.currentTarget.select()} />
+          <input readOnly value={link || (linkAccess === "public" ? "Create a link below" : "")} aria-label="Share link" onFocus={(e) => e.currentTarget.select()} />
           <button type="button" onClick={copy} disabled={!link}>{copied ? <Check /> : <Copy />}<span>{copied ? "Copied" : "Copy"}</span></button>
         </div>
 
-        {access === "public" && (
+        {linkAccess === "public" && (
           <form action={create} className="frm-share-form">
             <input type="hidden" name="workspaceId" value={workspaceId ?? ""} />
             <input type="hidden" name="projectId" value={projectId ?? ""} />

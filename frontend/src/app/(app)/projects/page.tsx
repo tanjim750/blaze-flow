@@ -14,13 +14,13 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/project
   const campaignId = typeof params.campaign === "string" ? params.campaign : undefined;
   // Redirects to /sign-in when the API says we are unauthenticated.
   const session = await loadSession();
-  const [loaded, filesView, tasksView] = await Promise.all([loadProjectsView({ clientId, campaignId, all: params.view === "all" }), loadFilesView(), loadTasksView()]);
+  const [loaded, filesView, tasksView] = await Promise.all([loadProjectsView({ clientId, campaignId, all: params.view === "all" || (!params.view && !campaignId) }), loadFilesView(), loadTasksView()]);
   const view = session.notice ? { ...loaded, notice: session.notice } : loaded;
   const tab = typeof params.tab === "string" ? params.tab : undefined;
 
   return (
     <>
-      <ProjectsBrowser view={view} filesView={filesView} tasksView={tasksView} initialTab={tab} />
+      <ProjectsBrowser key={`${params.view ?? "home"}:${campaignId ?? ""}`} view={view} filesView={filesView} tasksView={tasksView} initialTab={tab} initialQuery={new URLSearchParams(Object.entries(params).filter((entry): entry is [string, string] => typeof entry[1] === "string")).toString()} />
     </>
   );
 }

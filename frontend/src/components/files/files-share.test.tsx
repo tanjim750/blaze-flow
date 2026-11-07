@@ -34,6 +34,17 @@ const openMenu = async (name: string) => {
 };
 
 describe("Share in an asset's ⋯ menu", () => {
+  it("shares a folder with a project-scoped internal URL, never a whole-project public link disguised as a folder", async () => {
+    replaceLibrary({ deletedIds: [], files: [], folders: [{ id: "folder-1", name: "Deliverables", projectId: "project-1", clientId: null, parentFolderId: null, createdAt: "2026-09-12", createdBy: "Ada" }] });
+    render(<AssetLibrary view={{ ...view, canShare: true }} projectId="project-1" compact />);
+    const menu = await openMenu("Deliverables");
+    await act(async () => { fireEvent.click(within(menu).getByRole("menuitem", { name: "Share" })); });
+    const dialog = await screen.findByRole("dialog");
+    expect((within(dialog).getByLabelText("Share link") as HTMLInputElement).value).toContain("/projects?campaign=project-1&folder=folder-1");
+    expect(within(dialog).getByRole("radio", { name: /Public/ })).toBeDisabled();
+    expect(within(dialog).getByText(/workspace-only/)).toBeInTheDocument();
+  });
+
   it("sits right after Open in review and opens the review share dialog for that file", async () => {
     render(<AssetLibrary view={{ ...view, canShare: true }} />);
     const menu = await openMenu("alpha.mp4");

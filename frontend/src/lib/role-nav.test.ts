@@ -8,14 +8,14 @@ const labels = (w: Parameters<typeof navFor>[0]) => { const n = navFor(w); retur
 
 describe("role sidebars", () => {
   it("owners keep the whole studio", () => {
-    expect(labels(owner)).toEqual(["Files", "Projects", "Tasks", "Chat", "Clients", "Team & Roles", "Money", "Analytics", "Settings", "Help"]);
+    expect(labels(owner)).toEqual(["Projects", "Tasks", "Chat", "Clients", "Team & Roles", "Money", "Analytics", "Settings", "Help"]);
     const analytics = navFor(owner).primary.find((l) => l.label === "Analytics");
     expect(analytics).toMatchObject({ href: "/", icon: "analytics", key: "analytics" });
   });
   it("editors get their own work, their pay, and no studio admin", () => {
     const l = labels(editor);
-    expect(l).toEqual(["Files", "Projects", "My tasks", "Chat", "My work", "My pay", "My profile", "Help"]);
-    expect(navFor(editor).primary[2].href).toBe("/tasks?assignee=m1");
+    expect(l).toEqual(["Projects", "My tasks", "Chat", "My work", "My pay", "My profile", "Help"]);
+    expect(navFor(editor).primary[1].href).toBe("/tasks?assignee=m1");
     expect(labels({ ...editor, billing: { view: false, manage: false, rates_view: false } })).not.toContain("My pay");
   });
   it("clients get the portal and nothing internal", () => {
@@ -56,16 +56,16 @@ describe("route guards", () => {
 
 describe("workspace sidebar order", () => {
   const custom = ["analytics", "chat", "files", "projects", "tasks", "clients", "team", "money"];
-  it("defaults to Files first and lands there after sign-in", () => {
-    expect(DEFAULT_NAV_ORDER[0]).toBe("files");
-    expect(landingFor(owner)).toBe("/files");
-    expect(landingFor(editor)).toBe("/files");
+  it("defaults to Projects and lands there after sign-in", () => {
+    expect(DEFAULT_NAV_ORDER[0]).toBe("projects");
+    expect(landingFor(owner)).toBe("/projects");
+    expect(landingFor(editor)).toBe("/projects");
   });
   it("applies the owner's order to every team role, keeping role hiding", () => {
-    expect(navFor({ ...owner, nav_order: custom }).primary.map((l) => l.label)).toEqual(["Analytics", "Chat", "Files", "Projects", "Tasks", "Clients", "Team & Roles", "Money"]);
+    expect(navFor({ ...owner, nav_order: custom }).primary.map((l) => l.label)).toEqual(["Analytics", "Chat", "Projects", "Tasks", "Clients", "Team & Roles", "Money"]);
     expect(navFor({ ...owner, nav_order: custom, billing: { view: false, manage: false, rates_view: false } }).primary.map((l) => l.label)).not.toContain("Money");
-    expect(navFor({ ...editor, nav_order: custom }).primary.map((l) => l.label)).toEqual(["My work", "Chat", "Files", "Projects", "My tasks", "My pay"]);
-    expect(landingFor({ ...owner, nav_order: custom })).toBe("/");
+    expect(navFor({ ...editor, nav_order: custom }).primary.map((l) => l.label)).toEqual(["My work", "Chat", "Projects", "My tasks", "My pay"]);
+    expect(landingFor({ ...owner, nav_order: custom })).toBe("/projects");
   });
   it("leaves the client portal menu alone", () => {
     expect(navFor({ ...client, nav_order: custom }).primary).toEqual(navFor(client).primary);
@@ -73,6 +73,7 @@ describe("workspace sidebar order", () => {
   it("ignores unknown or repeated keys and appends missing ones", () => {
     expect(effectiveNavOrder(["money", "bogus", "money"])).toEqual(["money", ...DEFAULT_NAV_ORDER.filter((k) => k !== "money")]);
     expect(effectiveNavOrder(undefined)).toEqual(DEFAULT_NAV_ORDER);
-    expect(sortNav([{ href: "/x", label: "X", icon: "help" }, { href: "/files", label: "Files", icon: "files", key: "files" }], [])[0].label).toBe("Files");
+    expect(effectiveNavOrder(["files", "projects"])).not.toContain("files");
+    expect(sortNav([{ href: "/x", label: "X", icon: "help" }, { href: "/projects", label: "Projects", icon: "projects", key: "projects" }], [])[0].label).toBe("Projects");
   });
 });

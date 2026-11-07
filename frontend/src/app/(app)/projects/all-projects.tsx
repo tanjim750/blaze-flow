@@ -45,7 +45,7 @@ export function Cover({ id, letter, projects }: { id: string; letter: string; pr
 
 type Confirm = { title: string; body: string; action: string; run: () => Promise<ActionState> } | null;
 
-export function AllProjects({ view }: { view: ProjectsView }) {
+export function AllProjects({ view, home = false }: { view: ProjectsView; home?: boolean }) {
   const router = useRouter();
   const clientId = useSearchParams()?.get("client");
   const access = view.access ?? FULL_TREE_ACCESS;
@@ -121,7 +121,7 @@ export function AllProjects({ view }: { view: ProjectsView }) {
         <div>
           {client
             ? <><nav className="ap-crumbs" aria-label="Breadcrumb"><Link href="/projects?view=all">All clients</Link><ChevronRight size={14} /><span aria-current="page">{client.name}</span></nav><h1>{client.name}</h1><p>{plural(client.campaigns.length, "project")}</p></>
-            : <><h1>All clients</h1><p>{plural(view.clients.length, "client")} · {view.workspaceName}</p></>}
+            : <><h1>{home ? "Projects" : "All clients"}</h1><p>{plural(view.clients.length, "client")} · {view.workspaceName}</p></>}
         </div>
       </header>
       {(client ? client.campaigns : view.clients).length === 0 && <p className="ap-empty">{client ? "No projects for this client yet." : "No clients yet."}</p>}

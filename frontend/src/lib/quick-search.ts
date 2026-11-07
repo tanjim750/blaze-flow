@@ -24,7 +24,7 @@ export function quickActions(role: DashboardRole): SearchItem[] {
     ];
   }
   const actions: SearchItem[] = [
-    { id: "action:upload", title: "Upload files", subtitle: "Add to the Files library", href: "/files?do=upload" },
+    { id: "action:upload", title: "Upload files", subtitle: "Open a project, then choose Upload", href: "/projects" },
     { id: "action:task", title: "New task", subtitle: "Add a task to the board", href: "/tasks?do=new-task" },
   ];
   if (role === "owner") actions.unshift({ id: "action:project", title: "New client or project", subtitle: "Open the client list with the form ready", href: "/projects?do=new" });

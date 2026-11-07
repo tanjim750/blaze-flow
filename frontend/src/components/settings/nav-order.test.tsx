@@ -14,21 +14,21 @@ const rows = () => screen.getAllByRole("listitem").map((li) => li.querySelector(
 describe("NavOrderForm", () => {
   it("moves an item with the keyboard and saves the new order", async () => {
     render(<NavOrderForm initial={[]} canEdit />);
-    expect(rows()[0]).toBe("Files");
-    const handle = screen.getByRole("button", { name: /^Analytics, position 8/ });
+    expect(rows()[0]).toBe("Projects");
+    const handle = screen.getByRole("button", { name: /^Analytics, position 7/ });
     fireEvent.keyDown(handle, { key: "Home" });
     expect(rows()[0]).toBe("Analytics");
     fireEvent.keyDown(screen.getByRole("button", { name: /^Analytics, position 1/ }), { key: "ArrowDown" });
-    expect(rows().slice(0, 2)).toEqual(["Files", "Analytics"]);
+    expect(rows().slice(0, 2)).toEqual(["Projects", "Analytics"]);
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save order" })); });
-    expect(saveNavOrderAction).toHaveBeenCalledWith(["files", "analytics", "projects", "tasks", "chat", "clients", "team", "money"]);
+    expect(saveNavOrderAction).toHaveBeenCalledWith(["projects", "analytics", "tasks", "chat", "clients", "team", "money"]);
   });
   it("resets to the default order", async () => {
     render(<NavOrderForm initial={["money", "files"]} canEdit />);
     expect(rows()[0]).toBe("Money");
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Reset to default/ })); });
     expect(saveNavOrderAction).toHaveBeenCalledWith(null);
-    await waitFor(() => expect(rows()[0]).toBe("Files"));
+    await waitFor(() => expect(rows()[0]).toBe("Projects"));
   });
   it("is read-only for anyone but the owner", () => {
     render(<NavOrderForm initial={[]} canEdit={false} />);

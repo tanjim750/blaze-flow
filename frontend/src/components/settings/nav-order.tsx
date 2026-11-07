@@ -79,7 +79,7 @@ export function NavOrderForm({ initial, canEdit }: { initial: string[]; canEdit:
             aria-describedby="nav-order-help" onKeyDown={(event) => onKey(event, key)} disabled={pending}><GripVertical aria-hidden /></button>
           : null}
         <strong>{NAV_KEY_LABELS[key]}</strong>
-        {index === 0 && <small className="nav-order-first">Opens after sign-in</small>}
+        {key === "projects" && <small className="nav-order-first">Opens after sign-in</small>}
         {canEdit && <span className="nav-order-moves">
           <button type="button" onClick={() => move(key, index - 1)} disabled={pending || index === 0} aria-label={`Move ${NAV_KEY_LABELS[key]} up`}><ArrowUp aria-hidden /></button>
           <button type="button" onClick={() => move(key, index + 1)} disabled={pending || index === order.length - 1} aria-label={`Move ${NAV_KEY_LABELS[key]} down`}><ArrowDown aria-hidden /></button>

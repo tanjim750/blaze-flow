@@ -45,6 +45,31 @@ const row = (name: RegExp) => screen.getByRole("row", { name });
 const selectedNames = () => screen.getAllByRole("row").filter((item) => item.getAttribute("aria-selected") === "true").map((item) => item.getAttribute("aria-label")?.split(",")[0]);
 
 describe("Files panel interactions", () => {
+  it("collection views have no upload controls and ignore upload shortcuts and quick actions", () => {
+    render(<AssetLibrary view={view} compact uploadsDisabled />);
+    expect(screen.queryByRole("button", { name: "New" })).toBeNull();
+    fireEvent.keyDown(window, { key: "u" });
+    fireEvent(window, new CustomEvent("bf:do", { detail: "upload" }));
+    fireEvent(window, new CustomEvent("bf:do", { detail: "new-folder" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("project header quick actions reuse the library uploader, locked to that project", () => {
+    render(<AssetLibrary view={{ ...view, groups: [{ projectId: "p1", projectName: "Summer", clientId: null, files: [], folders: [] }] }} projectId="p1" compact hideUploadControls />);
+    expect(screen.queryByRole("button", { name: "New" })).toBeNull();
+    fireEvent(window, new CustomEvent("bf:do", { detail: "upload" }));
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Upload files");
+    expect(screen.getByText("Summer")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Project")).toBeNull();
+  });
+
+  it("keeps an empty From client entry before the first client upload", () => {
+    const open = vi.fn();
+    render(<AssetLibrary view={view} projectId="p1" compact hideUploadControls onClientUploads={open} />);
+    fireEvent.click(screen.getByRole("button", { name: /From client.*automatically/ }));
+    expect(open).toHaveBeenCalledOnce();
+  });
+
   it("selects with a click, Cmd+click or the checkbox, and extends with Shift+click", () => {
     render(<AssetLibrary view={view} />);
     // Sort by name so the visible order is alpha, bravo, charlie.
