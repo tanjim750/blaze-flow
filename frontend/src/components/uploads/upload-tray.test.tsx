@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { __test, getUploads, startUpload, type Transport, type UploadResult } from "@/lib/upload-store";
-import { UploadTray } from "./upload-tray";
+import { CLOSE_MS, LEAVE_MS, UploadTray, summaryLine } from "./upload-tray";
 
 let resolvers: ((result: UploadResult) => void)[] = [];
 const transport: Transport = (_request, _progress, signal) => new Promise((resolve) => { resolvers.push(resolve); signal.addEventListener("abort", () => resolve({ ok: false, status: 0, error: "Cancelled." })); });
@@ -131,5 +131,76 @@ describe("UploadTray after a reload", () => {
     const dropped = new File(["abc"], "drop.mov", { lastModified: 7 });
     await act(async () => { fireEvent.drop(screen.getByTestId("upload-tray"), { dataTransfer: { files: [dropped], items: [] } }); });
     expect(getUploads()[0].status).toBe("uploading");
+  });
+});
+
+
+it("asks inline before Cancel all and never starts queued files while cancelling", async () => {
+  render(<UploadTray />);
+  act(() => { for (let i = 0; i < 7; i++) startUpload({ url: "/u", file: new File(["x"], `file-${i}.mov`), source: "files" }); });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel all" }));
+  expect(screen.getByTestId("upload-cancel-confirm")).toHaveTextContent("Saved upload parts will be deleted");
+  expect(getUploads().filter((item) => item.status === "uploading")).toHaveLength(3);
+  fireEvent.click(screen.getByRole("button", { name: "Keep uploading" }));
+  expect(screen.queryByTestId("upload-cancel-confirm")).toBeNull();
+  expect(getUploads().filter((item) => item.status === "uploading")).toHaveLength(3);
+  fireEvent.click(screen.getByRole("button", { name: "Cancel all" }));
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Yes, cancel all" })); });
+  expect(getUploads().every((item) => item.status === "cancelled")).toBe(true);
+  expect(resolvers).toHaveLength(3);
+});
+
+it("aborts every transfer, animates the rows out, then removes them and closes the tray", async () => {
+  let aborted = 0;
+  __test.setTransport((_request, _progress, signal) => new Promise((resolve) => signal.addEventListener("abort", () => { aborted++; resolve({ ok: false, status: 0, error: "Cancelled." }); })));
+  const { container } = render(<UploadTray />);
+  act(() => { for (let i = 0; i < 4; i++) startUpload({ url: "/u", file: new File(["x"], `f-${i}.mov`), source: "files" }); });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel all" }));
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Yes, cancel all" })); });
+  expect(aborted).toBe(3);
+  expect(container.querySelectorAll(".ut-row.is-leaving")).toHaveLength(4);
+  expect(screen.getByTestId("upload-tray")).not.toHaveClass("is-closing");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, LEAVE_MS + 20)); });
+  expect(screen.getByTestId("upload-tray")).toHaveClass("is-closing");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, CLOSE_MS + 50)); });
+  expect(getUploads()).toHaveLength(0);
+  expect(screen.queryByTestId("upload-tray")).toBeNull();
+});
+
+it("removes only the cancelled rows and keeps finished ones and the tray", async () => {
+  const { container } = render(<UploadTray />);
+  act(() => { startUpload({ url: "/u", file: new File(["x"], "done.mov"), source: "files" }); startUpload({ url: "/u", file: new File(["x"], "live.mov"), source: "files" }); });
+  await act(async () => { resolvers[0]({ ok: true, data: {} }); });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel all" }));
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Yes, cancel all" })); });
+  expect(container.querySelectorAll(".ut-row.is-leaving")).toHaveLength(1);
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, LEAVE_MS + 50)); });
+  expect(getUploads().map((item) => item.name)).toEqual(["done.mov"]);
+  expect(screen.getByTestId("upload-tray")).not.toHaveClass("is-closing");
+});
+
+it("keeps Cancel all on one line next to the helper text", () => {
+  render(<UploadTray />);
+  act(() => { startUpload({ url: "/u", file: new File(["x"], "a.mov"), source: "files" }); });
+  const button = screen.getByRole("button", { name: "Cancel all" });
+  expect(button).toHaveClass("ut-cancel-all");
+  const row = button.closest(".ut-transfer-actions")!;
+  expect(row.lastElementChild).toBe(button);
+  expect(row.firstElementChild!.tagName).toBe("SMALL");
+});
+
+describe("summaryLine", () => {
+  const item = (over: object) => ({ status: "uploading", resumed: false, ...over }) as never;
+  it("says Starting… only before any bytes are sent", () => {
+    expect(summaryLine([item({})], { speed: 0, eta: null, loaded: 0 })).toBe("Starting…");
+  });
+  it("says Resuming… for a resumed upload with bytes already done", () => {
+    expect(summaryLine([item({ resumed: true })], { speed: 0, eta: null, loaded: 72 })).toBe("Resuming…");
+  });
+  it("never says Starting… once bytes are done", () => {
+    expect(summaryLine([item({})], { speed: 0, eta: null, loaded: 72 })).not.toMatch(/Starting/);
+  });
+  it("shows speed and time left once measured", () => {
+    expect(summaryLine([item({})], { speed: 1024 * 1024, eta: 60, loaded: 72 })).toMatch(/·/);
   });
 });

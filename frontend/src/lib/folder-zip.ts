@@ -1,3 +1,6 @@
+import { readDownloadChunk, transferDelay, waitForTransferRecovery } from "./transfer-lifecycle";
+import { trackDownload } from "./download-store";
+
 /**
  * "Download folder", built in the browser. The server only answers what goes in the zip and
  * hands out short-lived signed storage URLs; each file is fetched straight from R2 and written
@@ -169,12 +172,37 @@ export async function writeFolderZip({ manifest, sink, refresh, onProgress, sign
       if (!response.ok || !response.body) { skipped.push({ path: entry.path, reason: `couldn’t be fetched (HTTP ${response.status})` }); continue; }
       anyOk = true;
       await zip.begin(entry.path, { modified: entry.modified ? new Date(entry.modified) : new Date() });
-      const reader = response.body.getReader();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        await zip.data(value); doneBytes += value.length; progress(entry.path);
-      }
+      let reader = response.body.getReader();
+      let received = 0, retries = 0;
+      const etag = response.headers.get("ETag");
+      try {
+        for (;;) {
+          let chunk: ReadableStreamReadResult<Uint8Array>;
+          try {
+            chunk = await readDownloadChunk(reader, signal);
+            if (chunk.done && received !== entry.size) throw new Error("Download ended before the whole file arrived");
+          } catch (error) {
+            if (signal?.aborted || (error as Error).name === "AbortError" || retries >= 3) throw error;
+            await reader.cancel().catch(() => {});
+            await waitForTransferRecovery(signal);
+            await transferDelay([1000, 4000, 10000][retries++], signal);
+            // URLs may have expired while locked. Re-authorize before reconnecting.
+            if (refresh) urls = new Map(((await refresh()).entries ?? []).map((item) => [item.path, item.url]));
+            const next = await fetcher(urls.get(entry.path) ?? entry.url, {
+              signal, credentials: "omit", cache: "no-store",
+              headers: { Range: `bytes=${received}-`, ...(etag ? { "If-Match": etag } : {}) },
+            });
+            const range = next.headers.get("Content-Range");
+            if (next.status !== 206 || range !== `bytes ${received}-${entry.size - 1}/${entry.size}` || !next.body || (etag && next.headers.get("ETag") !== etag))
+              throw new FolderZipError("Storage could not safely resume this folder download. Please start it again.");
+            reader = next.body.getReader();
+            continue;
+          }
+          if (chunk.done) break;
+          if (received + chunk.value.length > entry.size) throw new FolderZipError("The downloaded file changed size. Please start again.");
+          await zip.data(chunk.value); received += chunk.value.length; doneBytes += chunk.value.length; progress(entry.path);
+        }
+      } finally { await reader.cancel().catch(() => {}); }
       await zip.end(); filesDone += 1;
     }
     if (skipped.length) {
@@ -201,7 +229,7 @@ export const percent = (p: FolderZipProgress) => (p.totalBytes ? Math.min(100, M
  * The whole flow for one folder: pick where to save (inside the click), load the manifest,
  * check size limits for the Blob fallback, then write the zip.
  */
-export async function downloadFolderZip({ folderName, loadManifest, onProgress, signal, onManifest }: {
+async function runFolderDownload({ folderName, loadManifest, onProgress, signal, onManifest }: {
   folderName: string; loadManifest: (retry: boolean) => Promise<FolderZipManifest>;
   onProgress?: (progress: FolderZipProgress) => void; onManifest?: (manifest: FolderZipManifest) => void; signal?: AbortSignal;
 }): Promise<{ manifest: FolderZipManifest; skipped: { path: string; reason: string }[] } | null> {
@@ -217,4 +245,11 @@ export async function downloadFolderZip({ folderName, loadManifest, onProgress, 
   }
   const { skipped } = await writeFolderZip({ manifest, sink: disk ?? blobSink(manifest.name), refresh: () => loadManifest(true), onProgress, signal });
   return { manifest, skipped };
+}
+
+/** Keep all page-managed downloads cancellable from the global transfer tray. */
+export async function downloadFolderZip(options: Parameters<typeof runFolderDownload>[0]) {
+  const tracked = trackDownload(options.folderName, options.signal);
+  try { return await runFolderDownload({ ...options, signal: tracked.signal }); }
+  finally { tracked.finish(); }
 }

@@ -131,7 +131,7 @@ def _presign(client, method, **params):
     return client.generate_presigned_url(method, Params=params, ExpiresIn=_expires())
 
 
-def initialize(*, workspace, user, membership, client_team, project, folder, task_stage, name, size, content_type, sha256=''):
+def initialize(*, workspace, user, membership, client_team, project, folder, task_stage, name, size, content_type, sha256='', last_modified=None):
     if not direct_uploads_enabled():
         raise DirectUploadError('Direct uploads are not enabled.')
     if size <= 0:
@@ -145,6 +145,20 @@ def initialize(*, workspace, user, membership, client_team, project, folder, tas
     client, bucket = _client()
     multipart = size > settings.DIRECT_UPLOAD_SINGLE_PUT_MAX_BYTES
     with transaction.atomic():
+        # Serialize both matching and quota reservations for this workspace. Never resume
+        # somebody else's bytes, or bytes aimed at another folder/project/task stage.
+        Workspace.objects.select_for_update().get(pk=workspace.pk)
+        if last_modified is not None and multipart:
+            existing = DirectUpload.objects.filter(
+                workspace=workspace, created_by_user=user, client_team=client_team,
+                project=project, folder=folder, task_stage=task_stage,
+                original_name=clean_name, expected_size=size, declared_mime_type=declared,
+                client_last_modified=last_modified, client_sha256=(sha256 or '').lower(),
+                mode=DirectUploadMode.MULTIPART, state=DirectUploadState.INITIALIZED,
+                expires_at__gt=timezone.now(),
+            ).exclude(multipart_upload_id='').order_by('-created_at').first()
+            if existing:
+                return existing, {'resumed': True}
         # Under the workspace row lock, so concurrent initializes cannot oversubscribe.
         enforce_workspace_storage_limit(workspace=workspace, additional_bytes=size, lock=True)
         upload = DirectUpload.objects.create(
@@ -153,20 +167,20 @@ def initialize(*, workspace, user, membership, client_team, project, folder, tas
             original_name=clean_name, declared_mime_type=declared, expected_size=size, reserved_bytes=size,
             mode=DirectUploadMode.MULTIPART if multipart else DirectUploadMode.SINGLE,
             part_size=choose_part_size(size) if multipart else None,
-            client_sha256=(sha256 or '')[:64].lower(),
+            client_sha256=(sha256 or '')[:64].lower(), client_last_modified=last_modified,
             expires_at=timezone.now() + timedelta(seconds=settings.DIRECT_UPLOAD_TTL_SECONDS),
         )
-    if multipart:
-        try:
-            created = client.create_multipart_upload(Bucket=bucket, Key=object_key, ContentType=declared)
-        except Exception as exc:
-            _fail(upload, f'Could not start the upload: {exc.__class__.__name__}')
-            raise DirectUploadError('Storage refused to start the upload. Try again.') from exc
-        upload.multipart_upload_id = created['UploadId']
-        upload.save(update_fields=['multipart_upload_id', 'updated_at'])
-        return upload, {}
-    url = _presign(client, 'put_object', Bucket=bucket, Key=object_key, ContentType=declared)
-    return upload, {'url': url, 'method': 'PUT', 'headers': {'Content-Type': declared}}
+        if multipart:
+            try:
+                created = client.create_multipart_upload(Bucket=bucket, Key=object_key, ContentType=declared)
+            except Exception as exc:
+                _fail(upload, f'Could not start the upload: {exc.__class__.__name__}')
+                raise DirectUploadError('Storage refused to start the upload. Try again.') from exc
+            upload.multipart_upload_id = created['UploadId']
+            upload.save(update_fields=['multipart_upload_id', 'updated_at'])
+            return upload, {}
+        url = _presign(client, 'put_object', Bucket=bucket, Key=object_key, ContentType=declared)
+        return upload, {'url': url, 'method': 'PUT', 'headers': {'Content-Type': declared}}
 
 
 def part_urls(upload, part_numbers):
@@ -199,6 +213,27 @@ def _listed_parts(client, bucket, upload):
         if not page.get('IsTruncated'):
             return parts
         marker = page['NextPartNumberMarker']
+
+
+def list_parts(upload):
+    """The bucket is authoritative, including parts whose success reply was lost."""
+    _require_open(upload)
+    if upload.mode != DirectUploadMode.MULTIPART:
+        raise DirectUploadError('This upload is a single PUT.')
+    client, bucket = _client()
+    try:
+        parts = _listed_parts(client, bucket, upload)
+    except Exception as exc:
+        if getattr(exc, 'response', {}).get('Error', {}).get('Code') == 'NoSuchUpload':
+            _fail(upload, 'The saved upload is no longer in storage.', state=DirectUploadState.EXPIRED)
+        raise DirectUploadError('Could not check saved parts. Try again.') from exc
+    total = -(-upload.expected_size // upload.part_size)
+    return [
+        {'partNumber': p['PartNumber'], 'etag': p['ETag']}
+        for p in parts
+        if 1 <= p['PartNumber'] <= total
+        and p['Size'] == min(upload.part_size, upload.expected_size - (p['PartNumber'] - 1) * upload.part_size)
+    ]
 
 
 def _delete_object(client, bucket, upload):
@@ -246,15 +281,19 @@ def complete(upload):
         if locked.state == DirectUploadState.COMPLETED and locked.project_file_id:
             return locked.project_file
         _require_open(locked)
+        client, bucket = _client()
+        parts = _listed_parts(client, bucket, locked) if locked.mode == DirectUploadMode.MULTIPART else []
+        if locked.mode == DirectUploadMode.MULTIPART:
+            total = -(-locked.expected_size // locked.part_size)
+            expected = {n: min(locked.part_size, locked.expected_size - (n - 1) * locked.part_size) for n in range(1, total + 1)}
+            if {p['PartNumber']: p['Size'] for p in parts} != expected:
+                raise DirectUploadError('Some parts are missing. Resume the upload before saving.')
         locked.state = DirectUploadState.FINALIZING
         locked.save(update_fields=['state', 'updated_at'])
     upload = locked
     client, bucket = _client()
     try:
         if upload.mode == DirectUploadMode.MULTIPART:
-            parts = _listed_parts(client, bucket, upload)
-            if sum(p['Size'] for p in parts) != upload.expected_size:
-                raise DirectUploadError('Some parts are missing. Retry the upload.')
             client.complete_multipart_upload(
                 Bucket=bucket, Key=upload.object_key, UploadId=upload.multipart_upload_id,
                 MultipartUpload={'Parts': [{'PartNumber': p['PartNumber'], 'ETag': p['ETag']} for p in sorted(parts, key=lambda p: p['PartNumber'])]},
@@ -298,16 +337,36 @@ def complete(upload):
 def cancel(upload, state=DirectUploadState.CANCELLED):
     if upload.state in (DirectUploadState.COMPLETED, DirectUploadState.CANCELLED, DirectUploadState.EXPIRED):
         return upload
-    client, bucket = _client()
-    _delete_object(client, bucket, upload)
-    _fail(upload, '', state=state)
+    with transaction.atomic():
+        upload = DirectUpload.objects.select_for_update().get(pk=upload.pk)
+        if upload.state in (DirectUploadState.COMPLETED, DirectUploadState.CANCELLED, DirectUploadState.EXPIRED):
+            return upload
+        if upload.state == DirectUploadState.FINALIZING and state != DirectUploadState.EXPIRED:
+            raise DirectUploadError('This file is already being saved. It cannot be cancelled now.')
+        client, bucket = _client()
+        try:
+            if upload.mode == DirectUploadMode.MULTIPART and upload.multipart_upload_id:
+                try:
+                    client.abort_multipart_upload(Bucket=bucket, Key=upload.object_key, UploadId=upload.multipart_upload_id)
+                except Exception as exc:
+                    if getattr(exc, 'response', {}).get('Error', {}).get('Code') != 'NoSuchUpload':
+                        raise
+            client.delete_object(Bucket=bucket, Key=upload.object_key)
+        except Exception as exc:
+            # Leave the row open/reserved so expiry retries instead of leaking orphaned parts.
+            raise DirectUploadError('Storage could not cancel the upload yet. Try again.') from exc
+        _fail(upload, '', state=state)
     return upload
 
 
 def expire_stale(now=None):
     now = now or timezone.now()
     count = 0
-    for upload in DirectUpload.objects.filter(state__in=[DirectUploadState.INITIALIZED, DirectUploadState.FINALIZING], expires_at__lte=now):
-        cancel(upload, state=DirectUploadState.EXPIRED)
-        count += 1
+    for upload in DirectUpload.objects.filter(state__in=[DirectUploadState.INITIALIZED, DirectUploadState.FINALIZING, DirectUploadState.FAILED], expires_at__lte=now):
+        try:
+            cancel(upload, state=DirectUploadState.EXPIRED)
+            count += 1
+        except DirectUploadError:
+            # One unavailable object must not prevent cleanup of the remaining sessions.
+            continue
     return count

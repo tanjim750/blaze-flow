@@ -40,6 +40,7 @@ export async function sendParts(options: {
   sendPart: SendPart; onProgress: (loaded: number) => void; onPartDone: (part: CompletedPart, done: number, total: number) => void;
   signal: AbortSignal;
 }): Promise<CompletedPart[]> {
+  if (options.signal.aborted) throw new DOMException("Cancelled.", "AbortError");
   const ranges = partRanges(options.size, options.partSize);
   const done = new Map((options.completed ?? []).map((part) => [part.partNumber, part]));
   const inFlight = new Map<number, number>();

@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { __r2test, r2Transport } from "./r2-upload-transport";
+import { __r2test, putBlob, r2Transport } from "./r2-upload-transport";
 import type { TransportJob } from "./upload-store";
 
 type Put = { url: string; size: number; xhr: FakeXhr };
 let puts: Put[] = [];
+let storageParts: { partNumber: number; etag: string }[] = [];
 let failPart: number | null = null;
 let failTimes = 1;
 let putStatus: number | null = null;
@@ -23,6 +24,7 @@ class FakeXhr {
     queueMicrotask(() => {
       const part = Number(new URL(this.url).searchParams.get("part"));
       if (failPart !== null && part === failPart) { failTimes -= 1; if (failTimes <= 0) failPart = null; if (putStatus) { this.status = putStatus; this.onload?.(); } else this.onerror?.(); return; }
+      if (part) storageParts = [...storageParts.filter((p) => p.partNumber !== part), { partNumber: part, etag: '"etag"' }];
       this.upload.onprogress?.({ loaded: body.size }); this.status = 200; this.onload?.();
     });
   }
@@ -40,10 +42,11 @@ function fetchMock(input: string, init: RequestInit) {
   const json = (status: number, data: unknown) => Promise.resolve(new Response(status === 204 ? null : JSON.stringify(data), { status }));
   if (path.endsWith("/uploads/config/")) return json(200, { enabled: configEnabled });
   if (path.endsWith("/uploads/") && init.method === "POST") return json(initResponse.status, initResponse.body);
+  if (path.endsWith("/parts/") && !init.method) return json(200, { parts: storageParts });
   if (path.endsWith("/parts/")) return json(200, { parts: (body as { part_numbers: number[] }).part_numbers.map((n) => ({ part_number: n, url: `https://r2.example/key?part=${n}` })) });
   if (path.endsWith("/complete/") && refuseComplete) return json(refuseComplete.status, refuseComplete.body);
   if (path.endsWith("/complete/")) return completeFails ? json(completeFails, {}) : json(201, { id: "pf-1" });
-  if (/\/uploads\/[^/]+\/$/.test(path) && (init.method ?? "GET") === "GET") return json(200, statusQueue.shift() ?? { state: "FINALIZING", project_file: null });
+  if (/\/uploads\/[^/]+\/$/.test(path) && (init.method ?? "GET") === "GET") return json(200, statusQueue.shift() ?? { state: completeFails ? "FINALIZING" : "INITIALIZED", project_file: null });
   if (init.method === "DELETE") return json(204, null);
   return json(404, {});
 }
@@ -55,7 +58,7 @@ const job = (file: File, resume: unknown = undefined): TransportJob & { saved: u
 const MB = 1024 * 1024;
 
 beforeEach(() => {
-  puts = []; calls.length = 0; configEnabled = true; failPart = null; failTimes = 1; putStatus = null; onPut = null; refuseComplete = null; completeFails = 0; statusQueue = []; __r2test.reset(); __r2test.setRetryDelays([0, 0, 0]);
+  puts = []; storageParts = []; calls.length = 0; configEnabled = true; failPart = null; failTimes = 1; putStatus = null; onPut = null; refuseComplete = null; completeFails = 0; statusQueue = []; __r2test.reset(); __r2test.setRetryDelays([0, 0, 0]);
   vi.stubGlobal("XMLHttpRequest", FakeXhr);
   vi.stubGlobal("fetch", vi.fn(fetchMock));
 });
@@ -106,7 +109,7 @@ describe("r2 transport", () => {
     const result = await r2Transport.send(job(file), () => {}, new AbortController().signal);
     expect(result.ok).toBe(true);
     // Initial batch plus one forced re-issue per failed attempt for part 2.
-    const partCalls = calls.filter((c) => c.path.endsWith("/parts/"));
+    const partCalls = calls.filter((c) => c.path.endsWith("/parts/") && c.method === "POST");
     expect(partCalls.length).toBe(3);
     expect(partCalls.slice(1).every((c) => (c.body as { part_numbers: number[] }).part_numbers[0] === 2)).toBe(true);
   });
@@ -116,7 +119,7 @@ describe("r2 transport", () => {
     const file = new File([new Uint8Array(11 * MB)], "c.mp4", { type: "video/mp4" });
     const result = await r2Transport.send(job(file), () => {}, new AbortController().signal);
     expect(result.ok).toBe(true);
-    expect(calls.filter((c) => c.path.endsWith("/parts/"))).toHaveLength(1);
+    expect(calls.filter((c) => c.path.endsWith("/parts/") && c.method === "POST")).toHaveLength(1);
   });
 
   it("re-requests part URLs once they are about to expire", async () => {
@@ -128,7 +131,7 @@ describe("r2 transport", () => {
     onPut = () => { clock += 20 * 60_000; }; // each part takes longer than the URL lifetime
     const result = await r2Transport.send(job(file), () => {}, new AbortController().signal);
     expect(result.ok).toBe(true);
-    expect(calls.filter((c) => c.path.endsWith("/parts/")).length).toBeGreaterThan(1);
+    expect(calls.filter((c) => c.path.endsWith("/parts/") && c.method === "POST").length).toBeGreaterThan(1);
   });
 
   it("marks a deterministic refusal at /complete as not retryable", async () => {
@@ -200,4 +203,64 @@ describe("r2 transport", () => {
       expect(await timedOut).toMatchObject({ ok: false, status: 502 });
     } finally { vi.useRealTimers(); }
   });
+});
+
+it("resumes server-listed parts even if the browser never saved their successful replies", async () => {
+  initResponse = { status: 201, body: { id: "recovered", mode: "multipart", part_size: 5 * MB, part_count: 3 } };
+  storageParts = [{ partNumber: 1, etag: '"server-etag"' }, { partNumber: 2, etag: '"server-etag"' }];
+  const file = new File([new Uint8Array(11 * MB)], "reselected.mov", { lastModified: 123 });
+  const result = await r2Transport.send(job(file), () => {}, new AbortController().signal);
+  expect(result.ok).toBe(true);
+  expect(puts.map((p) => new URL(p.url).searchParams.get("part"))).toEqual(["3"]);
+  expect(calls.find((c) => c.path.endsWith("/uploads/") && c.method === "POST")?.body).toMatchObject({ last_modified: 123, project_id: "p1" });
+});
+
+it("does not reuse a saved session for the same file in a different destination", async () => {
+  initResponse = { status: 201, body: { id: "first", mode: "multipart", part_size: 5 * MB, part_count: 3 } };
+  const file = new File([new Uint8Array(11 * MB)], "cut.mov", { lastModified: 77 });
+  failPart = 2; failTimes = 4;
+  await r2Transport.send(job(file), () => {}, new AbortController().signal);
+  initResponse = { status: 201, body: { id: "second", mode: "multipart", part_size: 5 * MB, part_count: 3 } };
+  storageParts = [];
+  const next = job(file); next.fields = { project_id: "p2" };
+  await r2Transport.send(next, () => {}, new AbortController().signal);
+  expect(calls.filter((c) => c.path.endsWith("/uploads/") && c.method === "POST")).toHaveLength(2);
+  expect(calls.some((c) => c.path === "/workspaces/ws/uploads/first/" && c.method === "GET")).toBe(false);
+});
+
+it("aborts the server multipart session when a part is cancelled", async () => {
+  initResponse = { status: 201, body: { id: "cancel", mode: "multipart", part_size: 5 * MB, part_count: 3 } };
+  const controller = new AbortController();
+  onPut = () => controller.abort();
+  const result = await r2Transport.send(job(new File([new Uint8Array(11 * MB)], "cancel.mov")), () => {}, controller.signal);
+  expect(result).toMatchObject({ ok: false, error: "Cancelled." });
+  expect(calls.some((c) => c.path === "/workspaces/ws/uploads/cancel/" && c.method === "DELETE")).toBe(true);
+});
+
+it("ignores malformed saved resume metadata instead of blocking a new upload", async () => {
+  localStorage.setItem("bf.direct-uploads.v2", "null");
+  initResponse = { status: 201, body: { id: "fresh", mode: "single", url: "https://r2.example/key" } };
+  const result = await r2Transport.send(job(new File(["hello"], "new.txt")), () => {}, new AbortController().signal);
+  expect(result.ok).toBe(true);
+});
+
+
+it("only times out stalled PUTs, not healthy slow parts that keep reporting progress", async () => {
+  vi.useFakeTimers();
+  const active: FakeXhr[] = [];
+  class SlowXhr extends FakeXhr {
+    send(body: Blob) { active.push(this); expect(body.size).toBe(3); }
+  }
+  vi.stubGlobal("XMLHttpRequest", SlowXhr);
+  try {
+    const pending = putBlob("https://r2.example/slow", new Blob(["abc"]), {}, () => {}, new AbortController().signal);
+    const rejected = expect(pending).rejects.toThrow(/Connection paused/);
+    await vi.advanceTimersByTimeAsync(110_000);
+    active[0].upload.onprogress?.({ loaded: 1 });
+    await vi.advanceTimersByTimeAsync(110_000);
+    active[0].upload.onprogress?.({ loaded: 2 });
+    // More than three minutes have passed; the part is still allowed to make progress.
+    await vi.advanceTimersByTimeAsync(120_001);
+    await rejected;
+  } finally { vi.useRealTimers(); }
 });

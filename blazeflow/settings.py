@@ -488,10 +488,10 @@ if CLAMAV_PORT < 1 or CLAMAV_TIMEOUT_SECONDS <= 0 or CLAMAV_MAX_STREAM_BYTES < 1
 # Direct browser-to-bucket uploads (presigned PUT / multipart). Off unless explicitly enabled,
 # and only ever active with STORAGE_DRIVER=s3; the bucket needs a narrow CORS rule first.
 DIRECT_UPLOADS_ENABLED = os.environ.get('DIRECT_UPLOADS_ENABLED', 'false').lower() in {'1', 'true', 'yes'}
-DIRECT_UPLOAD_SINGLE_PUT_MAX_BYTES = int(os.environ.get('DIRECT_UPLOAD_SINGLE_PUT_MAX_BYTES', str(64 * 1024 * 1024)))
-DIRECT_UPLOAD_PART_SIZE = int(os.environ.get('DIRECT_UPLOAD_PART_SIZE', str(16 * 1024 * 1024)))
+DIRECT_UPLOAD_SINGLE_PUT_MAX_BYTES = int(os.environ.get('DIRECT_UPLOAD_SINGLE_PUT_MAX_BYTES', str(8 * 1024 * 1024)))
+DIRECT_UPLOAD_PART_SIZE = int(os.environ.get('DIRECT_UPLOAD_PART_SIZE', str(8 * 1024 * 1024)))
 DIRECT_UPLOAD_URL_EXPIRE_SECONDS = int(os.environ.get('DIRECT_UPLOAD_URL_EXPIRE_SECONDS', '900'))
-DIRECT_UPLOAD_TTL_SECONDS = int(os.environ.get('DIRECT_UPLOAD_TTL_SECONDS', str(24 * 3600)))
+DIRECT_UPLOAD_TTL_SECONDS = int(os.environ.get('DIRECT_UPLOAD_TTL_SECONDS', str(7 * 24 * 3600)))
 
 # Private file downloads/playback: after the permission check, 302 to a presigned bucket
 # GET instead of streaming bytes through gunicorn (only with STORAGE_DRIVER=s3).

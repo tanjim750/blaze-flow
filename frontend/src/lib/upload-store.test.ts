@@ -167,3 +167,37 @@ describe("pluggable transports", () => {
     expect(formatBytes(5 * 1024 * 1024)).toBe("5.0 MB");
   });
 });
+
+it("automatically resumes an interrupted R2 attempt only once when the page returns", async () => {
+  const { registerTransport, resumeInterruptedUploads } = await import("./upload-store");
+  let sends = 0;
+  registerTransport({ id: "r2", supports: () => true, send: async (job) => {
+    sends++;
+    job.saveResume({ id: "session", mode: "multipart" });
+    return sends === 1 ? { ok: false, status: 0, error: "offline" } : { ok: true, data: {} };
+  } });
+  const queued = startUpload({ url: "/u", file: file("cut.mov"), source: "files", direct: { workspaceId: "w" } });
+  await queued.done;
+  expect(getUploads()[0].autoResume).toBe(true);
+  resumeInterruptedUploads(); resumeInterruptedUploads();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(sends).toBe(2);
+  expect(getUploads()[0].status).toBe("ready");
+});
+
+it("does not clear cancelled R2 rows before server cleanup is confirmed", async () => {
+  const { registerTransport, cancelAllUploads, clearFinished } = await import("./upload-store");
+  let confirmCleanup!: () => void;
+  registerTransport({ id: "r2", supports: () => true, send: (job, _progress, signal) => {
+    job.saveResume({ id: "session", mode: "multipart" });
+    return new Promise((resolve) => signal.addEventListener("abort", () => {
+      confirmCleanup = () => { job.saveResume(undefined); resolve({ ok: false, status: 0, error: "Cancelled." }); };
+    }));
+  } });
+  startUpload({ url: "/u", file: file("cut.mov"), source: "files", direct: { workspaceId: "w" } });
+  await cancelAllUploads(); clearFinished();
+  expect(getUploads()).toHaveLength(1);
+  expect(getUploads()[0].hasUploadSession).toBe(true);
+  confirmCleanup(); await new Promise((resolve) => setTimeout(resolve, 0));
+  clearFinished(); expect(getUploads()).toHaveLength(0);
+});
