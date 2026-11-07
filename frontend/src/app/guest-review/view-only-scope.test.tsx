@@ -24,6 +24,26 @@ describe("view-only guest links", () => {
   // Unmount so the player's playback retry timer cannot fire after the jsdom env is torn down.
   afterEach(() => { cleanup(); });
 
+  it.each([
+    ["image/png", "reference.png", "img"],
+    ["image/jpeg", "reference.jpg", "img"],
+    ["audio/mpeg", "voiceover.mp3", ".rvp-audio"],
+    ["application/pdf", "brief.pdf", "iframe"],
+  ])("renders %s through the scoped signed stream", async (mime, title, selector) => {
+    seed();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/guest/reviews/p1/")) return new Response(review({ scoped_to_folder: true, can_read_comments: false, can_read_annotations: false }, [{ id: "m1", title, version_number: 1, open_notes: 0, decision: null }]), { status: 200 });
+      if (url.includes("/playback/")) return new Response(JSON.stringify({ url: "/api/guest/reviews/p1/media-versions/m1/stream/?t=scoped", mime_type: mime }), { status: 200 });
+      return new Response(DENIED, { status: 403 });
+    });
+    const { container } = render(<GuestReviewer token="Abc12345" />);
+    await waitFor(() => expect(container.querySelector(selector)).not.toBeNull());
+    const media = container.querySelector("img, iframe, video");
+    expect(media?.getAttribute("src")).toContain("/stream/?t=scoped");
+    expect(screen.queryByText("Preview not available")).toBeNull();
+  });
+
   it("does not ask for notes or drawings the link cannot read, and shows no error banner", async () => {
     seed();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

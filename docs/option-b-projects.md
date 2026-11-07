@@ -18,6 +18,9 @@ The guest review page lists only review versions inside the shared folder and it
 subfolders. It shows the folder name instead of the project's name and private brief.
 Download folder paths do not include ancestor names. Existing reviewable-file and
 per-file download rules still apply; this is not a new arbitrary-file public hosting API.
+The guest player chooses the same image/audio/PDF/video surface as internal review. Images
+use their ready preview; audio and PDF use the scanned ready original through the same
+expiring, scope-checked signed stream (not a public storage URL).
 Replacing a folder link preserves its folder scope. A file link cannot be replaced with a
 project-wide link; users are directed to create a new link from that file instead.
 
@@ -45,3 +48,13 @@ project-wide link; users are directed to create a new link from that file instea
 
 Normal-merge base: `1584da7` (PR #150). No conflicts occurred; the live tray animation,
 right-aligned Cancel all button, abort confirmation and resumable transport were preserved.
+
+## Studios created later
+
+Studio creation now provisions its real Unsorted project in the same transaction as its
+owner/roles. The idempotent helper locks the studio row before checking/creating the
+flagged project, so concurrent provisioning cannot create duplicates on PostgreSQL.
+A user-created project named Unsorted is not mistaken for the default. This does not
+rerun migration 0067 or its data-move journal. No new schema migration is needed. The system Unsorted project does not consume a paid
+project slot; project creation limits and downgrade warnings count user-created projects.
+Clientless projects (including Unsorted) do not show a From client placeholder card.

@@ -14,6 +14,7 @@ import { nestNotes, type ReviewNote } from "@/lib/review-notes";
 import {
   changeMessageProblem, decisionLine, guestBarActions, MESSAGE_MAX_LENGTH, openNotesWarning, overrideWarning,
 } from "@/lib/review-decisions";
+import { reviewSurface } from "@/lib/open-in-review";
 import { timecode } from "@/lib/timecode";
 import { RichBrief } from "@/components/brief/rich-brief";
 import { briefIsEmpty, briefToPlainText } from "@/lib/rich-brief";
@@ -239,6 +240,7 @@ export function GuestReviewer({ token, cut = null }: { token: string; cut?: stri
                 key={version.id}
                 handle={player}
                 sources={sources}
+                surface={reviewSurface(playback?.data?.mime_type ?? "video/mp4", version.title)}
                 title={version.title}
                 notes={notes}
                 annotations={annotations}

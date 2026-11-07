@@ -14,6 +14,8 @@ migration = import_module('app.migrations.0067_unsorted_projects')
 class UnsortedMigrationTests(WorkspaceAccessSetupMixin, TestCase):
     def setUp(self):
         super().setUp()
+        # These fixtures represent studios from BEFORE runtime provisioning existed.
+        Project.objects.filter(is_unsorted=True).delete()
         self.schema = SimpleNamespace(connection=connection)
         self.now = timezone.now()
 
@@ -86,6 +88,7 @@ class HistoricalUnsortedMigrationTests(WorkspaceAccessSetupMixin, TransactionTes
         from django.db.migrations.executor import MigrationExecutor
         before = [('app', '0066_option_b_scope_and_unsorted')]
         after = [('app', '0067_unsorted_projects')]
+        Project.objects.filter(is_unsorted=True).delete()
         executor = MigrationExecutor(connection)
         executor.migrate(before)
         try:
@@ -100,3 +103,23 @@ class HistoricalUnsortedMigrationTests(WorkspaceAccessSetupMixin, TransactionTes
             self.assertEqual(Project.objects.filter(workspace_id=self.workspace.id, is_unsorted=True).count(), 1)
         finally:
             MigrationExecutor(connection).migrate(after)
+
+
+class UnsortedProvisioningTests(WorkspaceAccessSetupMixin, TestCase):
+    def test_new_studio_has_exactly_one_real_unsorted_project(self):
+        project = Project.objects.get(workspace=self.workspace, is_unsorted=True)
+        self.assertEqual(project.name, 'Unsorted')
+        self.assertEqual(project.created_by_user, self.owner)
+        self.assertIsNone(project.client_team_id)
+        self.assertEqual(project.unsorted_migration_state, {})
+
+    def test_provisioning_is_idempotent_and_does_not_reuse_user_named_project(self):
+        from .services.workspaces import ensure_unsorted_project
+        project = ensure_unsorted_project(workspace=self.workspace)
+        self.assertEqual(ensure_unsorted_project(workspace=self.workspace).id, project.id)
+        Project.objects.filter(id=project.id).delete()
+        named = Project.objects.create(id=uuid.uuid4(), workspace=self.workspace, created_by_user=self.owner,
+            name='Unsorted', created_at=timezone.now(), updated_at=timezone.now())
+        default = ensure_unsorted_project(workspace=self.workspace)
+        self.assertNotEqual(default.id, named.id)
+        self.assertEqual(Project.objects.filter(workspace=self.workspace, is_unsorted=True).count(), 1)

@@ -225,7 +225,7 @@ def enforce_project_creation_limit(*, workspace):
     owner = _primary_owner_user(workspace=workspace)
     plan = get_effective_plan(user=owner) if owner else SubscriptionPlan.FREE
     limit = get_plan_limit(plan, 'max_projects_per_workspace')
-    existing = Project.objects.filter(workspace=workspace).exclude(status=ProjectStatus.ARCHIVED).count()
+    existing = Project.objects.filter(workspace=workspace, is_unsorted=False).exclude(status=ProjectStatus.ARCHIVED).count()
     if existing >= limit:
         raise SubscriptionError(
             f"The workspace owner's {plan} plan allows up to {limit} project(s) per workspace. "

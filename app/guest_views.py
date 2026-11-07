@@ -6,6 +6,7 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 from django.http import Http404
 from django.urls import reverse
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
@@ -351,7 +352,12 @@ def _playback_token(access, media, kind):
 
 def _playable_variant(media):
     from app.services.preview_state import playable_variant
-    return playable_variant(media.original_file)
+    file = media.original_file
+    # Audio waveform and PDF cover variants are images, not playable media. Use the
+    # scanned, ready original through the same expiring and scope-checked stream.
+    if (file.mime_type.startswith('audio/') or file.mime_type == 'application/pdf'):
+        return file if file.status == FileStatus.READY and file.deleted_at is None else None
+    return playable_variant(file)
 
 
 @api_view(['GET'])
@@ -397,6 +403,7 @@ def guest_playback(request, project_id, media_version_id):
     })
 
 
+@xframe_options_sameorigin
 @api_view(['GET', 'HEAD'])
 @authentication_classes([])
 @permission_classes([AllowAny])

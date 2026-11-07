@@ -218,3 +218,29 @@ class FolderScopedGuestTests(FolderDownloadApiTests):
         for payload in ({'shared_folder_id': str(uuid.uuid4())}, {'shared_folder_id': self.root, 'asset_file_id': self.a['id']}):
             response = self.client.post(url, {'permissions': ['media.read'], **payload}, format='json')
             self.assertEqual(response.status_code, 400, response.content)
+
+
+    def test_audio_and_pdf_use_ready_originals_and_signed_urls_recheck_folder_scope(self):
+        for mime in ('audio/mpeg', 'application/pdf'):
+            with self.subTest(mime=mime):
+                ProjectFile.objects.filter(id=self.b['id']).update(folder_id=self.sub)
+                File.objects.filter(id=self.b['file']['id']).update(mime_type=mime, status='READY')
+                headers = self.scoped_guest()
+                media = MediaVersion.objects.get(original_file_id=self.b['file']['id'])
+                playback = self.client.get(reverse('api-guest-playback', args=[self.project.id, media.id]), **headers)
+                self.assertEqual(playback.status_code, 200, playback.content)
+                self.assertEqual(playback.json()['mime_type'], mime)
+                url = playback.json()['url']
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response['Content-Type'], mime)
+                self.assertEqual(response['X-Frame-Options'], 'SAMEORIGIN')
+                self.assertTrue(b''.join(response.streaming_content))
+                ProjectFile.objects.filter(id=self.b['id']).update(folder_id=self.root)
+                self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_unready_original_audio_is_not_publicly_streamed(self):
+        File.objects.filter(id=self.b['file']['id']).update(mime_type='audio/mpeg', status='PENDING')
+        headers = self.scoped_guest()
+        media = MediaVersion.objects.get(original_file_id=self.b['file']['id'])
+        self.assertEqual(self.client.get(reverse('api-guest-playback', args=[self.project.id, media.id]), **headers).status_code, 409)

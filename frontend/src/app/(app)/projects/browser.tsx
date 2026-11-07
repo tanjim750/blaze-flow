@@ -291,7 +291,7 @@ export function ProjectsBrowser({ view, filesView, tasksView, initialTab, initia
 
 
         {tab === "Files" && view.selectedCampaign ? (
-          <AssetLibrary key={view.selectedCampaign.id} compact view={filesView} hideUploadControls onClientUploads={() => setClientUploadsOpen(true)} initialQuery={fileQuery.toString()} syncUrl headerSlots={{ search: null, crumbs: crumbSlot }} onFolderChange={setFilesFolder} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null} />
+          <AssetLibrary key={view.selectedCampaign.id} compact view={filesView} hideUploadControls onClientUploads={view.selectedClient && view.selectedClient.id !== "unassigned" ? () => setClientUploadsOpen(true) : undefined} initialQuery={fileQuery.toString()} syncUrl headerSlots={{ search: null, crumbs: crumbSlot }} onFolderChange={setFilesFolder} projectId={view.selectedCampaign.id} projectName={view.selectedCampaign.name} clientId={view.selectedClient && view.selectedClient.id !== "unassigned" ? view.selectedClient.id : null} />
         ) : tab === "Chat" && view.selectedCampaign && view.workspaceId ? (
           <div className="pb-chat-preview"><ChatPreview workspaceId={view.workspaceId} projectId={view.selectedCampaign.id} /></div>
         ) : tab === "Tasks" && view.selectedCampaign ? (

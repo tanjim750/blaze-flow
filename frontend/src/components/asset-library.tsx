@@ -849,10 +849,10 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
         <div className={`fx-content${marquee.active ? " is-marquee" : ""}`} ref={contentRef} onPointerDown={marquee.onPointerDown}>
           {marquee.box && <div className="fx-marquee" data-testid="files-marquee" aria-hidden="true" style={marquee.box} />}
           {writeError && <p className="fx-notice" data-tone="danger" role="alert"><TriangleAlert />{writeError}<button type="button" className="fx-icon-btn is-xs" onClick={() => setWriteError(null)} aria-label="Dismiss error"><X /></button></p>}
-          {onClientUploads && projectId && !folderId && !query && !folders.some((folder) => !folder.parentFolderId && folder.name === "From client") && <button type="button" className="pb-from-client-empty" onClick={onClientUploads}>
+          {onClientUploads && clientId && projectId && !folderId && !query && !folders.some((folder) => !folder.parentFolderId && folder.name === "From client") && <button type="button" className="pb-from-client-empty" onClick={onClientUploads}>
             <FolderOpen aria-hidden="true" /><span><strong>From client</strong><small>Client uploads appear here automatically</small></span><ChevronRight aria-hidden="true" />
           </button>}
-          {onClientUploads && current?.name === "From client" && <button type="button" className="fx-btn is-sm pb-client-link-tools" onClick={onClientUploads}>Manage client upload links</button>}
+          {onClientUploads && clientId && current?.name === "From client" && <button type="button" className="fx-btn is-sm pb-client-link-tools" onClick={onClientUploads}>Manage client upload links</button>}
           {recursiveSearch && <p className="fx-results-note">Showing matches from every folder in {projectName || "All files"}.</p>}
           {mode === "list" && sections.length > 0 && <div className="fx-list-head" role="group" aria-label="Sort list">
             <span className="fx-col-check" />

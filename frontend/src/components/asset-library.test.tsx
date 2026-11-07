@@ -38,6 +38,18 @@ beforeEach(() => {
 afterEach(() => { cleanup(); window.localStorage.clear(); replaceLibrary(empty); uploadAssetFile.mockReset(); deleteAssetFile.mockReset(); duplicateAssetFile.mockReset(); });
 
 describe("AssetLibrary", () => {
+  it("hides From client on clientless projects, including Unsorted", () => {
+    replaceLibrary(empty);
+    render(<AssetLibrary view={{ ...view, workspaceId: null }} projectId="unsorted" projectName="Unsorted" clientId={null} compact onClientUploads={() => {}} />);
+    expect(screen.queryByRole("button", { name: /Client uploads appear here automatically/ })).toBeNull();
+  });
+
+  it("keeps From client on a project with a client", () => {
+    replaceLibrary(empty);
+    render(<AssetLibrary view={{ ...view, workspaceId: null }} projectId="project" clientId="client" compact onClientUploads={() => {}} />);
+    expect(screen.getByRole("button", { name: /Client uploads appear here automatically/ })).toBeInTheDocument();
+  });
+
 
   describe("click to open, checkbox / marquee to select", () => {
     const file = (id: string, name: string) => ({ id, fileId: null, name, versioning: { assetId: null, assetName: name, versionNumber: 1, versionCount: 1, isLatest: true }, kind: "video" as const, mimeType: "video/mp4", size: 10, durationMs: null, status: "READY" as const, url: null, preview: null, uploadedBy: "Ada", uploadedAt: "2026-09-10", folderId: null, clientId: null, projectId: null, stageId: null });

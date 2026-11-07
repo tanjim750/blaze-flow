@@ -530,7 +530,7 @@ def _plan_warnings(*, owner, workspace, plan):
     limit = get_plan_limit(plan, 'max_storage_bytes')
     if storage > limit:
         warnings.append({'code': 'storage', 'detail': f'Storage is over the new limit ({storage} of {limit} bytes). Existing files are kept; new uploads are refused.'})
-    projects = Project.objects.filter(workspace=workspace).exclude(status=ProjectStatus.ARCHIVED).count()
+    projects = Project.objects.filter(workspace=workspace, is_unsorted=False).exclude(status=ProjectStatus.ARCHIVED).count()
     limit = get_plan_limit(plan, 'max_projects_per_workspace')
     if projects > limit:
         warnings.append({'code': 'projects', 'detail': f'{projects} active projects, the new plan allows {limit}. Nothing is archived; new projects are refused.'})

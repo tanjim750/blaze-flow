@@ -63,9 +63,9 @@ describe("Files panel interactions", () => {
     expect(screen.queryByLabelText("Project")).toBeNull();
   });
 
-  it("keeps an empty From client entry before the first client upload", () => {
+  it("keeps an empty From client entry on a client project before the first upload", () => {
     const open = vi.fn();
-    render(<AssetLibrary view={view} projectId="p1" compact hideUploadControls onClientUploads={open} />);
+    render(<AssetLibrary view={view} projectId="p1" clientId="client" compact hideUploadControls onClientUploads={open} />);
     fireEvent.click(screen.getByRole("button", { name: /From client.*automatically/ }));
     expect(open).toHaveBeenCalledOnce();
   });
