@@ -247,18 +247,18 @@ it("ignores malformed saved resume metadata instead of blocking a new upload", a
 
 it("only times out stalled PUTs, not healthy slow parts that keep reporting progress", async () => {
   vi.useFakeTimers();
-  let active!: FakeXhr;
+  const active: FakeXhr[] = [];
   class SlowXhr extends FakeXhr {
-    send(body: Blob) { active = this; expect(body.size).toBe(3); }
+    send(body: Blob) { active.push(this); expect(body.size).toBe(3); }
   }
   vi.stubGlobal("XMLHttpRequest", SlowXhr);
   try {
     const pending = putBlob("https://r2.example/slow", new Blob(["abc"]), {}, () => {}, new AbortController().signal);
     const rejected = expect(pending).rejects.toThrow(/Connection paused/);
     await vi.advanceTimersByTimeAsync(110_000);
-    active.upload.onprogress?.({ loaded: 1 });
+    active[0].upload.onprogress?.({ loaded: 1 });
     await vi.advanceTimersByTimeAsync(110_000);
-    active.upload.onprogress?.({ loaded: 2 });
+    active[0].upload.onprogress?.({ loaded: 2 });
     // More than three minutes have passed; the part is still allowed to make progress.
     await vi.advanceTimersByTimeAsync(120_001);
     await rejected;
