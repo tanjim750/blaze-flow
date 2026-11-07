@@ -363,14 +363,34 @@ export function AssetLibrary({ view, projectId = null, projectName, clientId = n
     setSort("newest"); setSearchEverywhere(false);
   };
 
-  // Mirrors folder, search, filters and sort into /files?…, replacing the entry so Back
-  // from review returns to exactly this view (and a refresh keeps it).
+  // Mirrors folder, search, filters and sort into the URL so Back from review returns to
+  // exactly this view (and a refresh keeps it).
   useEffect(() => {
     if (!syncUrl) return;
     const params = writeFilesQuery({ folder: folderId, q: query, all: searchEverywhere, client: clientFilter, project: projectFilter, kind: kindFilter, stage: stageFilter, sort: sort === "newest" ? "" : sort }, new URLSearchParams(window.location.search));
     const next = `${window.location.pathname}${params.size ? `?${params.toString()}` : ""}`;
-    if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(window.history.state, "", next);
+    if (next === `${window.location.pathname}${window.location.search}`) return;
+    // Opening a folder is a real step: push it so Back returns to the previous folder.
+    // Search, filters and sort only replace, so typing doesn't flood the history.
+    // State must be null (not window.history.state): Next.js skips syncing its router for
+    // entries carrying its own __NA marker, then reverts the URL on its next commit.
+    const folderChanged = (new URLSearchParams(window.location.search).get("folder") || null) !== folderId;
+    if (folderChanged) window.history.pushState(null, "", next);
+    else window.history.replaceState(null, "", next);
   }, [syncUrl, folderId, query, searchEverywhere, clientFilter, projectFilter, kindFilter, stageFilter, sort]);
+
+  // Back/Forward: restore the folder (and view) from the URL without pushing a new entry.
+  useEffect(() => {
+    if (!syncUrl) return;
+    const onPop = () => {
+      const next = parseFilesQuery(new URLSearchParams(window.location.search));
+      setFolderIdRaw(next.folder); setQuery(next.q); setSearchEverywhere(next.all);
+      setClientFilter(next.client); setProjectFilter(next.project); setKindFilter(next.kind as LibraryKind | ""); setStageFilter(next.stage); setSort((next.sort || "newest") as SortKey);
+      setSelection({ selected: new Set(), anchor: null }); setFocusedId(null); setTreeDrawer(false);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [syncUrl]);
 
   /* ---------------------------------------------------------------- entity actions */
   // A double-click is two clicks: the first already opened the file, so the second (and the
