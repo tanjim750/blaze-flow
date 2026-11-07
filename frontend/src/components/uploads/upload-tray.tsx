@@ -56,6 +56,14 @@ export function statusStats(item: UploadItem, ahead = 0): Stat[] {
   }
 }
 
+/** The line under the overall bar: real speed/time left, or what is actually happening before a rate exists. */
+export function summaryLine(items: UploadItem[], totals: Pick<ReturnType<typeof trayTotals>, "speed" | "eta" | "loaded">) {
+  if (totals.speed > 0) return [formatRate(totals.speed), totals.eta !== null ? formatEta(totals.eta) : null].filter(Boolean).join(" · ");
+  if (items.some((item) => item.status === "uploading" && item.resumed)) return "Resuming…";
+  if (totals.loaded > 0) return "Uploading · measuring speed…";
+  return items.some((item) => item.status === "uploading") ? "Starting…" : "Waiting to upload…";
+}
+
 /**
  * The global upload tray: bottom-right on desktop, a bottom sheet on phones. Mounted once in
  * the root layout, so it (and the uploads) persist across client-side navigation.
@@ -114,8 +122,9 @@ export function UploadTray() {
   }, [allDone, items.length, downloads.length]);
 
   const cancellable = items.some((item) => isActive(item) || item.status === "paused" || ((item.status === "failed" || item.status === "cancelled") && item.hasUploadSession)) || downloads.length > 0;
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const cancelAll = () => {
-    if (!window.confirm("Cancel all unfinished uploads and folder downloads? Saved upload parts will be deleted. Browser-managed downloads must be cancelled in your browser.")) return;
+    setConfirmingCancel(false);
     cancelAllDownloads(); void cancelAllUploads();
   };
   if (!items.length && !downloads.length) return null;
@@ -150,7 +159,16 @@ export function UploadTray() {
           <button type="button" className="ut-close" onClick={clearFinished} aria-label="Close uploads" title="Close"><X aria-hidden="true" /></button>
         )}
       </header>
-      {cancellable && <div className="ut-transfer-actions"><button type="button" className="ut-clear" onClick={cancelAll}>Cancel all</button><small>Keep this tab open. Interrupted uploads resume when you return.</small></div>}
+      {cancellable && !confirmingCancel && <div className="ut-transfer-actions"><button type="button" className="ut-clear ut-cancel-all" onClick={() => setConfirmingCancel(true)}>Cancel all</button><small>Keep this tab open. Interrupted uploads resume when you return.</small></div>}
+      {cancellable && confirmingCancel && (
+        <div className="ut-confirm" role="alertdialog" aria-labelledby="ut-confirm-text" data-testid="upload-cancel-confirm">
+          <p id="ut-confirm-text">Cancel all unfinished uploads and folder downloads? Saved upload parts will be deleted. Browser-managed downloads must be cancelled in your browser.</p>
+          <div className="ut-confirm-actions">
+            <button type="button" className="ut-confirm-keep" onClick={() => setConfirmingCancel(false)} autoFocus>Keep uploading</button>
+            <button type="button" className="ut-confirm-yes" onClick={cancelAll}>Yes, cancel all</button>
+          </div>
+        </div>
+      )}
       {downloads.length > 0 && <p className="ut-notice">Folder downloads: {downloads.map((item) => item.name).join(", ")}. Browser downloads are managed by your browser.</p>}
       {collapsed && busy && <i className="ut-overall" style={{ width: `${overall}%` }} aria-hidden="true" />}
       {!collapsed && busy && totals.size > 0 && (
@@ -160,7 +178,7 @@ export function UploadTray() {
             <strong>{totals.percent}%</strong>
           </div>
           <div className="ut-bar" role="progressbar" aria-label="Total upload progress" aria-valuenow={totals.percent} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${totals.percent}%` }} /></div>
-          <small>{[totals.speed > 0 ? formatRate(totals.speed) : "Starting…", totals.eta !== null ? formatEta(totals.eta) : null].filter(Boolean).join(" · ")}</small>
+          <small data-testid="upload-tray-summary-status">{summaryLine(items, totals)}</small>
         </div>
       )}
       {!collapsed && notice && <p className="ut-notice" role="alert">{notice}</p>}

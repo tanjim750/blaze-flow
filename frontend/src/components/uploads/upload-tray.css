@@ -83,6 +83,16 @@
 .ut-notice { flex: none; margin: 0; padding: 8px 14px; font-size: 12px; line-height: 1.4; color: var(--ut-muted, inherit); opacity: .85; overflow-wrap: anywhere; }
 .ut-row.is-paused .ut-bar i { opacity: .45; }
 
-.ut-transfer-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 14px; border-top: 1px solid var(--t-line-ffffff1a); }
-.ut-transfer-actions .ut-clear { flex: 0 0 auto; min-height: 36px; }
-.ut-transfer-actions small { flex: 1 1 180px; font-size: 11px; color: var(--muted); line-height: 1.5; }
+.ut-transfer-actions { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; padding: 8px 14px; border-top: 1px solid var(--t-line-ffffff1a); }
+.ut-transfer-actions .ut-clear { flex: 0 0 auto; min-height: 36px; white-space: nowrap; }
+.ut-transfer-actions small { flex: 1 1 auto; min-width: 0; font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+/* "Cancel all" keeps its label on phones (the icon-only rule above is for "Clear finished"). */
+@media (max-width: 420px) { .ut-transfer-actions .ut-clear { width: auto; padding: 0 10px; } .ut-transfer-actions .ut-clear span { position: static; width: auto; height: auto; clip: auto; } }
+.ut-confirm { flex: none; display: grid; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--t-line-ffffff1a); font-size: 12px; color: var(--text); }
+.ut-confirm p { margin: 0; line-height: 1.45; overflow-wrap: anywhere; }
+.ut-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.ut-confirm-actions button { min-height: 32px; padding: 0 12px; border-radius: 7px; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.ut-confirm-keep { border: 1px solid var(--t-line-ffffff24); background: transparent; color: var(--text); }
+.ut-confirm-yes { border: 1px solid currentColor; background: transparent; color: var(--t-fg-ff9ba3); font-weight: 600; }
+@media (max-width: 640px) { .ut-confirm-actions button { min-height: 40px; } }
