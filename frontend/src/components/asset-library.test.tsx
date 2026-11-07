@@ -396,6 +396,40 @@ describe("AssetLibrary", () => {
     search.remove(); crumbs.remove();
   });
 
+  it("pushes a history entry per folder, restores folders on Back, and only replaces for search", async () => {
+    replaceLibrary({
+      deletedIds: [], files: [],
+      folders: [
+        { id: "a", name: "Footage", clientId: null, projectId: null, parentFolderId: null, createdAt: "2026-09-10", createdBy: "Ada" },
+        { id: "b", name: "Day 1", clientId: null, projectId: null, parentFolderId: "a", createdAt: "2026-09-10", createdBy: "Ada" },
+      ],
+    });
+    window.history.replaceState(null, "", "/projects?campaign=p1");
+    const start = window.history.length;
+    const onFolderChange = vi.fn();
+    render(<AssetLibrary view={view} syncUrl onFolderChange={onFolderChange} initialQuery="campaign=p1&folder=b" />);
+    await waitFor(() => expect(window.location.search).toBe("?campaign=p1&folder=b"));
+    const afterMount = window.history.length;
+    expect(afterMount).toBe(start + 1);
+    fireEvent.click(screen.getAllByRole("button", { name: "Footage" })[0]);
+    await waitFor(() => expect(window.location.search).toBe("?campaign=p1&folder=a"));
+    expect(window.history.length).toBe(afterMount + 1);
+    // Typing a search replaces the entry rather than adding one.
+    fireEvent.change(screen.getByPlaceholderText(/^Search (here…|everything)$/), { target: { value: "x" } });
+    await waitFor(() => expect(window.location.search).toContain("q=x"));
+    expect(window.history.length).toBe(afterMount + 1);
+    // Back (simulated): the URL changes, popstate fires, the library follows without pushing.
+    window.history.replaceState(null, "", "/projects?campaign=p1&folder=b");
+    fireEvent(window, new PopStateEvent("popstate"));
+    await waitFor(() => expect(onFolderChange).toHaveBeenLastCalledWith("b"));
+    expect(window.history.length).toBe(afterMount + 1);
+    expect(window.location.search).toBe("?campaign=p1&folder=b");
+    window.history.replaceState(null, "", "/projects?campaign=p1");
+    fireEvent(window, new PopStateEvent("popstate"));
+    await waitFor(() => expect(onFolderChange).toHaveBeenLastCalledWith(null));
+    expect(window.location.search).toBe("?campaign=p1");
+  });
+
   it("says nothing matches a search instead of offering an upload", () => {
     replaceLibrary({
       deletedIds: [], folders: [],

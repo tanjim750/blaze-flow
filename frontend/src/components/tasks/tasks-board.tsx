@@ -88,7 +88,7 @@ export function TasksBoard({ view, projectId = null, compact = false, initialQue
     if (openTaskId) params.set("task", openTaskId); else params.delete("task");
     const query = params.toString();
     const next = `${window.location.pathname}${query ? `?${query}` : ""}`;
-    if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(window.history.state, "", next);
+    if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", next);
   }, [filters, openTaskId, syncUrl]);
 
   // --- What is shown -------------------------------------------------------------------
